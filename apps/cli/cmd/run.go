@@ -233,12 +233,12 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	for _, arg := range args {
 		info, err := os.Stat(arg)
 		if err == nil && info.IsDir() {
-			filepath.Walk(arg, func(path string, info os.FileInfo, err error) error {
+			_ = filepath.Walk(arg, func(path string, info os.FileInfo, err error) error {
 				if err != nil {
 					return err
 				}
 				if info.IsDir() && !watchedDirs[path] {
-					watcher.Add(path)
+					_ = watcher.Add(path)
 					watchedDirs[path] = true
 				}
 				return nil

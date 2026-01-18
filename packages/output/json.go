@@ -69,7 +69,6 @@ type JSONAssertion struct {
 type JSONFormatter struct {
 	writer  io.Writer
 	results []JSONTest
-	files   []string
 }
 
 type JSONOption func(*JSONFormatter)

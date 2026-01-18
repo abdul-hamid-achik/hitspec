@@ -9,7 +9,6 @@ import (
 type Parser struct {
 	lexer    *Lexer
 	curToken Token
-	errors   []*ParseError
 	file     string
 }
 
