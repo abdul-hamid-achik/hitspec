@@ -61,3 +61,19 @@ release:
   draft: false
   prerelease: auto
   name_template: "v{{.Version}}"
+
+brews:
+  - name: hitspec
+    repository:
+      owner: abdul-hamid-achik
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/abdul-hamid-achik/hitspec"
+    description: "Plain text API tests. No magic."
+    license: "MIT"
+    install: |
+      bin.install "hitspec"
+    test: |
+      system "#{bin}/hitspec", "version"
+    skip_upload: "{{ if .Env.HOMEBREW_TAP_TOKEN }}false{{ else }}true{{ end }}"
