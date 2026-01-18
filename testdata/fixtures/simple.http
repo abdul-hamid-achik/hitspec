@@ -1,0 +1,43 @@
+@baseUrl = https://httpbin.org
+
+### Simple GET request
+# @name simpleGet
+
+GET {{baseUrl}}/get
+
+>>>
+expect status 200
+<<<
+
+### GET with headers
+# @name getWithHeaders
+
+GET {{baseUrl}}/headers
+Accept: application/json
+X-Custom-Header: test-value
+
+>>>
+expect status 200
+expect body.headers exists
+<<<
+
+### POST with JSON body
+# @name postJson
+
+POST {{baseUrl}}/post
+Content-Type: application/json
+
+{
+  "name": "Test",
+  "value": 123
+}
+
+>>>
+expect status 200
+expect body.json.name == "Test"
+expect body.json.value == 123
+<<<
+
+>>>capture
+origin from body.origin
+<<<
