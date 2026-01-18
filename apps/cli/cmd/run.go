@@ -287,7 +287,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 					// Flush output
 					if flushable, ok := formatter.(Flushable); ok {
-						flushable.Flush(duration)
+						_ = flushable.Flush(duration)
 					}
 
 					fmt.Fprintf(cmd.OutOrStdout(), "\nWatching for changes... (press Ctrl+C to stop)\n")
