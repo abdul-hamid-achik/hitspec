@@ -87,16 +87,17 @@ type RunResult struct {
 }
 
 type RequestResult struct {
-	Name       string
-	Passed     bool
-	Skipped    bool
-	SkipReason string
-	Duration   time.Duration
-	Request    *http.Request
-	Response   *http.Response
-	Assertions []*assertions.Result
-	Captures   map[string]any
-	Error      error
+	Name         string
+	Passed       bool
+	Skipped      bool
+	SkipReason   string
+	Duration     time.Duration
+	Request      *http.Request
+	Response     *http.Response
+	Assertions   []*assertions.Result
+	DBAssertions []*DBAssertionResult
+	Captures     map[string]any
+	Error        error
 }
 
 func (r *Runner) RunFile(path string) (*RunResult, error) {
@@ -483,6 +484,23 @@ func (r *Runner) executeRequest(req *parser.Request, baseDir string, parallel bo
 		}
 	} else {
 		result.Passed = resp.IsSuccess()
+	}
+
+	// Execute database assertions if configured
+	if len(req.DBAssertions) > 0 && req.Metadata != nil && req.Metadata.DBConnection != "" {
+		dbResults, err := r.executeDBAssertions(req.DBAssertions, req.Metadata.DBConnection, r.resolver.Resolve)
+		if err != nil {
+			result.Error = err
+			result.Passed = false
+		} else {
+			result.DBAssertions = dbResults
+			for _, dbResult := range dbResults {
+				if !dbResult.Passed {
+					result.Passed = false
+					break
+				}
+			}
+		}
 	}
 
 	if len(req.Captures) > 0 {

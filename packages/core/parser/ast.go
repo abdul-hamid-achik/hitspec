@@ -13,32 +13,42 @@ type Variable struct {
 }
 
 type Request struct {
-	Name        string
-	Description string
-	Tags        []string
-	Method      string
-	URL         string
-	Headers     []*Header
-	QueryParams []*QueryParam
-	Body        *Body
-	Assertions  []*Assertion
-	Captures    []*Capture
-	Metadata    *RequestMetadata
-	Line        int
+	Name         string
+	Description  string
+	Tags         []string
+	Method       string
+	URL          string
+	Headers      []*Header
+	QueryParams  []*QueryParam
+	Body         *Body
+	Assertions   []*Assertion
+	DBAssertions []*DBAssertion
+	Captures     []*Capture
+	Metadata     *RequestMetadata
+	Line         int
+}
+
+type DBAssertion struct {
+	Query    string
+	Column   string
+	Operator AssertionOperator
+	Expected interface{}
+	Line     int
 }
 
 type RequestMetadata struct {
-	Skip        string
-	Only        bool
-	Timeout     int
-	Retry       int
-	RetryDelay  int
-	RetryOn     []int
-	Depends     []string
-	Auth        *AuthConfig
-	Condition   *Condition
-	PreHooks    []*Hook
-	PostHooks   []*Hook
+	Skip         string
+	Only         bool
+	Timeout      int
+	Retry        int
+	RetryDelay   int
+	RetryOn      []int
+	Depends      []string
+	Auth         *AuthConfig
+	Condition    *Condition
+	PreHooks     []*Hook
+	PostHooks    []*Hook
+	DBConnection string
 }
 
 type AuthConfig struct {

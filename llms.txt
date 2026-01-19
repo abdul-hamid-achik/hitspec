@@ -121,7 +121,7 @@ Types: `null`, `boolean`, `number`, `string`, `array`, `object`
 | `{{$urlDecode(value)}}` | URL decode |
 | `{{$json(value)}}` | JSON passthrough |
 
-## Metadata Directives (12)
+## Metadata Directives (13)
 
 | Directive | Description |
 |-----------|-------------|
@@ -137,6 +137,7 @@ Types: `null`, `boolean`, `number`, `string`, `array`, `object`
 | `# @auth type args` | Authentication method |
 | `# @before script.sh` | Run script before request |
 | `# @after script.sh` | Run script after request (always runs) |
+| `# @db connection` | Database connection for db assertions |
 
 ## Hooks (Setup/Teardown)
 
@@ -160,6 +161,36 @@ expect status 200
 - Multiple hooks are executed in order of declaration
 - Paths are relative to the .http file location
 - Variables are resolved in hook commands
+
+## Database Assertions
+
+Verify database state after HTTP requests:
+
+```http
+### Verify database state
+# @name checkDb
+# @db sqlite://./test.db
+
+GET {{baseUrl}}/api/users
+
+>>>db
+query SELECT COUNT(*) as count FROM users WHERE active = true
+expect count > 0
+<<<
+
+>>>
+expect status 200
+<<<
+```
+
+Supported databases: PostgreSQL, MySQL, SQLite
+
+Connection string formats:
+- `sqlite://./test.db` or `sqlite:./test.db`
+- `postgres://user:pass@localhost:5432/dbname`
+- `mysql://user:pass@localhost:3306/dbname`
+
+Operators: `==`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `exists`, `!exists`
 
 ## Authentication (6 types)
 

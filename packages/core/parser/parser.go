@@ -161,6 +161,7 @@ func (p *Parser) parseRequest() (*Request, error) {
 
 	if p.curToken.Type != TokenAssertionStart &&
 		p.curToken.Type != TokenCaptureStart &&
+		p.curToken.Type != TokenDBStart &&
 		p.curToken.Type != TokenRequestSeparator &&
 		p.curToken.Type != TokenEOF {
 		body, err := p.parseBody()
@@ -178,6 +179,15 @@ func (p *Parser) parseRequest() (*Request, error) {
 			return nil, err
 		}
 		req.Assertions = assertions
+		p.skipNewlines()
+	}
+
+	if p.curToken.Type == TokenDBStart {
+		dbAssertions, err := p.parseDBBlock()
+		if err != nil {
+			return nil, err
+		}
+		req.DBAssertions = dbAssertions
 		p.skipNewlines()
 	}
 
@@ -259,6 +269,8 @@ func (p *Parser) parseAnnotation(req *Request) error {
 	case "after":
 		hook := &Hook{Type: HookExec, Command: value, Always: true}
 		req.Metadata.PostHooks = append(req.Metadata.PostHooks, hook)
+	case "db":
+		req.Metadata.DBConnection = value
 	}
 
 	return nil
@@ -849,4 +861,143 @@ func (p *Parser) parseCapture() (*Capture, error) {
 		Path:   path,
 		Line:   line,
 	}, nil
+}
+
+func (p *Parser) parseDBBlock() ([]*DBAssertion, error) {
+	p.nextToken()
+	p.skipNewlines()
+
+	var assertions []*DBAssertion
+	var currentQuery string
+	var queryLine int
+
+	for p.curToken.Type != TokenAssertionEnd && p.curToken.Type != TokenEOF {
+		line := p.curToken.Line
+
+		// Read the line
+		lineContent := p.curToken.Value
+		for p.curToken.Type != TokenNewline && p.curToken.Type != TokenEOF && p.curToken.Type != TokenAssertionEnd {
+			p.nextToken()
+			if p.curToken.Type != TokenNewline && p.curToken.Type != TokenEOF && p.curToken.Type != TokenAssertionEnd {
+				lineContent += " " + p.curToken.Value
+			}
+		}
+		lineContent = strings.TrimSpace(lineContent)
+
+		if strings.HasPrefix(lineContent, "query ") {
+			currentQuery = strings.TrimPrefix(lineContent, "query ")
+			currentQuery = strings.TrimSpace(currentQuery)
+			queryLine = line
+		} else if strings.HasPrefix(lineContent, "expect ") && currentQuery != "" {
+			// Parse the expect line: expect column operator expected
+			expectPart := strings.TrimPrefix(lineContent, "expect ")
+			expectPart = strings.TrimSpace(expectPart)
+
+			assertion, err := p.parseDBExpectLine(expectPart, currentQuery, queryLine)
+			if err != nil {
+				return nil, err
+			}
+			assertions = append(assertions, assertion)
+		}
+
+		if p.curToken.Type == TokenNewline {
+			p.nextToken()
+		}
+		p.skipNewlines()
+	}
+
+	if p.curToken.Type == TokenAssertionEnd {
+		p.nextToken()
+	}
+
+	return assertions, nil
+}
+
+func (p *Parser) parseDBExpectLine(line string, query string, queryLine int) (*DBAssertion, error) {
+	// Parse: column operator expected
+	// Example: count > 0, name == "John"
+	parts := strings.Fields(line)
+	if len(parts) < 2 {
+		return nil, &ParseError{
+			File:    p.file,
+			Line:    queryLine,
+			Message: "invalid db expect syntax: " + line,
+		}
+	}
+
+	column := parts[0]
+	operator := OpEquals
+	var expected interface{}
+
+	if len(parts) >= 3 {
+		// Parse operator
+		switch parts[1] {
+		case "==":
+			operator = OpEquals
+		case "!=":
+			operator = OpNotEquals
+		case ">":
+			operator = OpGreaterThan
+		case ">=":
+			operator = OpGreaterOrEqual
+		case "<":
+			operator = OpLessThan
+		case "<=":
+			operator = OpLessOrEqual
+		case "contains":
+			operator = OpContains
+		case "exists":
+			operator = OpExists
+		case "!exists":
+			operator = OpNotExists
+		}
+
+		// Parse expected value
+		expectedStr := strings.Join(parts[2:], " ")
+		expected = parseValue(expectedStr)
+	} else if len(parts) == 2 {
+		// Shorthand: column expected (implies ==)
+		expected = parseValue(parts[1])
+	}
+
+	return &DBAssertion{
+		Query:    query,
+		Column:   column,
+		Operator: operator,
+		Expected: expected,
+		Line:     queryLine,
+	}, nil
+}
+
+func parseValue(s string) interface{} {
+	s = strings.TrimSpace(s)
+
+	// Check for quoted string
+	if (strings.HasPrefix(s, "\"") && strings.HasSuffix(s, "\"")) ||
+		(strings.HasPrefix(s, "'") && strings.HasSuffix(s, "'")) {
+		return s[1 : len(s)-1]
+	}
+
+	// Check for number
+	if i, err := strconv.Atoi(s); err == nil {
+		return i
+	}
+	if f, err := strconv.ParseFloat(s, 64); err == nil {
+		return f
+	}
+
+	// Check for boolean
+	if s == "true" {
+		return true
+	}
+	if s == "false" {
+		return false
+	}
+
+	// Check for null
+	if s == "null" {
+		return nil
+	}
+
+	return s
 }
