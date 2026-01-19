@@ -121,7 +121,7 @@ Types: `null`, `boolean`, `number`, `string`, `array`, `object`
 | `{{$urlDecode(value)}}` | URL decode |
 | `{{$json(value)}}` | JSON passthrough |
 
-## Metadata Directives (10)
+## Metadata Directives (12)
 
 | Directive | Description |
 |-----------|-------------|
@@ -135,6 +135,31 @@ Types: `null`, `boolean`, `number`, `string`, `array`, `object`
 | `# @retryDelay 1000` | Delay between retries (ms) |
 | `# @depends login, setup` | Dependencies (request names) |
 | `# @auth type args` | Authentication method |
+| `# @before script.sh` | Run script before request |
+| `# @after script.sh` | Run script after request (always runs) |
+
+## Hooks (Setup/Teardown)
+
+Run shell scripts before and after requests for setup and cleanup:
+
+```http
+### Test with hooks
+# @name testWithHooks
+# @before ./scripts/setup.sh
+# @after ./scripts/cleanup.sh
+
+GET {{baseUrl}}/api/test
+
+>>>
+expect status 200
+<<<
+```
+
+- `@before` hooks run before the HTTP request is made
+- `@after` hooks always run, even if the request fails (for cleanup)
+- Multiple hooks are executed in order of declaration
+- Paths are relative to the .http file location
+- Variables are resolved in hook commands
 
 ## Authentication (6 types)
 

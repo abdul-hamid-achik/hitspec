@@ -315,3 +315,156 @@ func TestHasAnyTag(t *testing.T) {
 		assert.Equal(t, tt.expected, result)
 	}
 }
+
+func TestRunner_Hooks(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	t.Run("before hook runs before request", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		markerFile := filepath.Join(tmpDir, "before_marker.txt")
+
+		// Create a setup script
+		setupScript := filepath.Join(tmpDir, "setup.sh")
+		err := os.WriteFile(setupScript, []byte("#!/bin/bash\necho 'before' > "+markerFile), 0755)
+		require.NoError(t, err)
+
+		content := `### Test with before hook
+# @before ./setup.sh
+
+GET ` + server.URL + `/test
+
+>>>
+expect status 200
+<<<`
+
+		testFile := filepath.Join(tmpDir, "test.http")
+		err = os.WriteFile(testFile, []byte(content), 0644)
+		require.NoError(t, err)
+
+		r := NewRunner(&Config{})
+		result, err := r.RunFile(testFile)
+
+		require.NoError(t, err)
+		assert.True(t, result.Results[0].Passed)
+
+		// Verify before hook was executed
+		data, err := os.ReadFile(markerFile)
+		require.NoError(t, err)
+		assert.Contains(t, string(data), "before")
+	})
+
+	t.Run("after hook runs after request", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		markerFile := filepath.Join(tmpDir, "after_marker.txt")
+
+		// Create a cleanup script
+		cleanupScript := filepath.Join(tmpDir, "cleanup.sh")
+		err := os.WriteFile(cleanupScript, []byte("#!/bin/bash\necho 'after' > "+markerFile), 0755)
+		require.NoError(t, err)
+
+		content := `### Test with after hook
+# @after ./cleanup.sh
+
+GET ` + server.URL + `/test
+
+>>>
+expect status 200
+<<<`
+
+		testFile := filepath.Join(tmpDir, "test.http")
+		err = os.WriteFile(testFile, []byte(content), 0644)
+		require.NoError(t, err)
+
+		r := NewRunner(&Config{})
+		result, err := r.RunFile(testFile)
+
+		require.NoError(t, err)
+		assert.True(t, result.Results[0].Passed)
+
+		// Verify after hook was executed
+		data, err := os.ReadFile(markerFile)
+		require.NoError(t, err)
+		assert.Contains(t, string(data), "after")
+	})
+
+	t.Run("after hook runs even on failed assertion", func(t *testing.T) {
+		failServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+		}))
+		defer failServer.Close()
+
+		tmpDir := t.TempDir()
+		markerFile := filepath.Join(tmpDir, "cleanup_marker.txt")
+
+		// Create a cleanup script
+		cleanupScript := filepath.Join(tmpDir, "cleanup.sh")
+		err := os.WriteFile(cleanupScript, []byte("#!/bin/bash\necho 'cleanup' > "+markerFile), 0755)
+		require.NoError(t, err)
+
+		content := `### Test with after hook on failure
+# @after ./cleanup.sh
+
+GET ` + failServer.URL + `/test
+
+>>>
+expect status 200
+<<<`
+
+		testFile := filepath.Join(tmpDir, "test.http")
+		err = os.WriteFile(testFile, []byte(content), 0644)
+		require.NoError(t, err)
+
+		r := NewRunner(&Config{})
+		result, err := r.RunFile(testFile)
+
+		require.NoError(t, err)
+		assert.False(t, result.Results[0].Passed) // Request failed
+
+		// Verify after hook was still executed
+		data, err := os.ReadFile(markerFile)
+		require.NoError(t, err)
+		assert.Contains(t, string(data), "cleanup")
+	})
+
+	t.Run("multiple hooks execute in order", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		orderFile := filepath.Join(tmpDir, "order.txt")
+
+		// Create setup scripts
+		setup1 := filepath.Join(tmpDir, "setup1.sh")
+		err := os.WriteFile(setup1, []byte("#!/bin/bash\necho '1' >> "+orderFile), 0755)
+		require.NoError(t, err)
+
+		setup2 := filepath.Join(tmpDir, "setup2.sh")
+		err = os.WriteFile(setup2, []byte("#!/bin/bash\necho '2' >> "+orderFile), 0755)
+		require.NoError(t, err)
+
+		content := `### Test with multiple hooks
+# @before ./setup1.sh
+# @before ./setup2.sh
+
+GET ` + server.URL + `/test
+
+>>>
+expect status 200
+<<<`
+
+		testFile := filepath.Join(tmpDir, "test.http")
+		err = os.WriteFile(testFile, []byte(content), 0644)
+		require.NoError(t, err)
+
+		r := NewRunner(&Config{})
+		result, err := r.RunFile(testFile)
+
+		require.NoError(t, err)
+		assert.True(t, result.Results[0].Passed)
+
+		// Verify hooks executed in order
+		data, err := os.ReadFile(orderFile)
+		require.NoError(t, err)
+		assert.Equal(t, "1\n2\n", string(data))
+	})
+}

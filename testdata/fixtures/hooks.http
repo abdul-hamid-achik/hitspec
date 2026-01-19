@@ -1,0 +1,10 @@
+### Test hooks
+# @name testWithHooks
+# @before ./scripts/setup.sh
+# @after ./scripts/cleanup.sh
+
+GET https://httpbin.org/get
+
+>>>
+expect status 200
+<<<

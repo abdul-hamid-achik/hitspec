@@ -436,6 +436,27 @@ func (r *Runner) executeRequest(req *parser.Request, baseDir string, parallel bo
 		Captures: make(map[string]any),
 	}
 
+	// Execute pre-hooks
+	if req.Metadata != nil && len(req.Metadata.PreHooks) > 0 {
+		if err := r.executePreHooks(req.Metadata.PreHooks, baseDir, r.resolver.Resolve); err != nil {
+			result.Error = err
+			result.Passed = false
+			return result
+		}
+	}
+
+	// Defer post-hooks execution (always runs, even on failure)
+	if req.Metadata != nil && len(req.Metadata.PostHooks) > 0 {
+		defer func() {
+			if err := r.executePostHooks(req.Metadata.PostHooks, baseDir, r.resolver.Resolve); err != nil {
+				// Only set error if no previous error
+				if result.Error == nil {
+					result.Error = err
+				}
+			}
+		}()
+	}
+
 	start := time.Now()
 
 	httpReq := http.BuildRequestFromASTWithBaseDir(req, r.resolver.Resolve, baseDir)

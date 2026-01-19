@@ -253,6 +253,12 @@ func (p *Parser) parseAnnotation(req *Request) error {
 			return err
 		}
 		req.Metadata.Auth = auth
+	case "before":
+		hook := &Hook{Type: HookExec, Command: value}
+		req.Metadata.PreHooks = append(req.Metadata.PreHooks, hook)
+	case "after":
+		hook := &Hook{Type: HookExec, Command: value, Always: true}
+		req.Metadata.PostHooks = append(req.Metadata.PostHooks, hook)
 	}
 
 	return nil
