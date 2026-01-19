@@ -84,7 +84,6 @@ hitspec run api.http
 
 | Document | Description |
 |----------|-------------|
-| [Syntax Reference](docs/README.md) | Complete .http file syntax, all operators, directives, functions |
 | [CLI Reference](docs/cli.md) | All commands and flags |
 | [Environment Configuration](docs/environments.md) | Setting up environments |
 | [Examples](examples/) | Example test files |
@@ -179,6 +178,237 @@ See the [examples](examples/) directory:
 
 - [Basic CRUD](examples/basic/crud.http) - GET, POST, PUT, DELETE operations
 - [Petstore API](examples/petstore/petstore.http) - Real-world API example with dependencies
+
+---
+
+## Complete Syntax Reference
+
+### Variables
+
+```http
+@baseUrl = https://api.example.com
+@token = your-api-token
+@userId = 123
+```
+
+Use `{{variableName}}` syntax:
+
+```http
+GET {{baseUrl}}/users/{{userId}}
+Authorization: Bearer {{token}}
+```
+
+### All Built-in Functions
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `$uuid()` | Generate UUID v4 | `{{$uuid()}}` → `550e8400-e29b-41d4-a716-446655440000` |
+| `$timestamp()` | Unix timestamp (seconds) | `{{$timestamp()}}` → `1705612800` |
+| `$timestampMs()` | Unix timestamp (milliseconds) | `{{$timestampMs()}}` → `1705612800000` |
+| `$now()` | Current datetime (RFC3339) | `{{$now()}}` → `2024-01-18T12:00:00Z` |
+| `$isodate()` | ISO date (YYYY-MM-DD) | `{{$isodate()}}` → `2024-01-18` |
+| `$date(format)` | Custom date format | `{{$date(2006-01-02)}}` → `2024-01-18` |
+| `$random(min, max)` | Random integer | `{{$random(1, 100)}}` → `42` |
+| `$randomString(len)` | Random alphanumeric | `{{$randomString(8)}}` → `aB3kL9mN` |
+| `$randomEmail()` | Random email | `{{$randomEmail()}}` → `user_abc123@example.com` |
+| `$randomAlphanumeric(len)` | Random alphanumeric | `{{$randomAlphanumeric(10)}}` → `K8mNp2qRsT` |
+| `$base64(value)` | Base64 encode | `{{$base64(hello)}}` → `aGVsbG8=` |
+| `$base64Decode(value)` | Base64 decode | `{{$base64Decode(aGVsbG8=)}}` → `hello` |
+| `$md5(value)` | MD5 hash | `{{$md5(hello)}}` → `5d41402abc4b2a76...` |
+| `$sha256(value)` | SHA256 hash | `{{$sha256(hello)}}` → `2cf24dba5fb0a30e...` |
+| `$urlEncode(value)` | URL encode | `{{$urlEncode(hello world)}}` → `hello%20world` |
+| `$urlDecode(value)` | URL decode | `{{$urlDecode(hello%20world)}}` → `hello world` |
+| `$json(value)` | JSON passthrough | `{{$json({"key": "value"})}}` |
+
+### Query Parameters
+
+Inline in URL:
+```http
+GET {{baseUrl}}/search?query=test&limit=10
+```
+
+Explicit syntax:
+```http
+GET {{baseUrl}}/search
+? query = test
+? limit = 10
+```
+
+### Request Bodies
+
+**JSON Body:**
+```http
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "email": "john@example.com"
+}
+```
+
+**Form URL-Encoded:**
+```http
+POST {{baseUrl}}/login
+Content-Type: application/x-www-form-urlencoded
+
+& username = john
+& password = secret123
+```
+
+**Multipart Form Data:**
+```http
+POST {{baseUrl}}/upload
+
+>>>multipart
+name = John Doe
+avatar < @./photo.jpg
+<<<
+```
+
+**GraphQL:**
+```http
+POST {{baseUrl}}/graphql
+Content-Type: application/json
+
+>>>graphql
+query GetUser($id: ID!) {
+  user(id: $id) {
+    id
+    name
+  }
+}
+
+>>>variables
+{
+  "id": "123"
+}
+<<<
+```
+
+### All Assertion Operators
+
+#### Equality & Comparison
+| Operator | Syntax | Description |
+|----------|--------|-------------|
+| `==` | `expect status == 200` | Equals |
+| `!=` | `expect body.error != null` | Not equals |
+| `>` | `expect body.count > 0` | Greater than |
+| `>=` | `expect body.count >= 1` | Greater than or equal |
+| `<` | `expect duration < 1000` | Less than |
+| `<=` | `expect duration <= 500` | Less than or equal |
+
+#### String Operators
+| Operator | Syntax | Description |
+|----------|--------|-------------|
+| `contains` | `expect body contains "success"` | Contains substring |
+| `!contains` | `expect body !contains "error"` | Does not contain |
+| `startsWith` | `expect body.url startsWith "https"` | Starts with prefix |
+| `endsWith` | `expect body.email endsWith ".com"` | Ends with suffix |
+| `matches` | `expect body.id matches /^\d+$/` | Matches regex |
+
+#### Existence & Type
+| Operator | Syntax | Description |
+|----------|--------|-------------|
+| `exists` | `expect body.id exists` | Value is not null |
+| `!exists` | `expect body.error !exists` | Value is null |
+| `type` | `expect body.items type array` | Check value type (`null`, `boolean`, `number`, `string`, `array`, `object`) |
+
+#### Length & Arrays
+| Operator | Syntax | Description |
+|----------|--------|-------------|
+| `length` | `expect body.items length 10` | Array/string length equals |
+| `includes` | `expect body.tags includes "admin"` | Array contains value |
+| `!includes` | `expect body.tags !includes "test"` | Array does not contain |
+| `in` | `expect status in [200, 201, 204]` | Value is in array |
+| `!in` | `expect status !in [400, 404, 500]` | Value is not in array |
+| `each` | `expect body.items each type object` | Apply assertion to each element |
+
+#### Schema Validation
+| Operator | Syntax | Description |
+|----------|--------|-------------|
+| `schema` | `expect body schema ./schema.json` | Validate against JSON Schema |
+
+### Assertion Subjects
+
+| Subject | Description | Example |
+|---------|-------------|---------|
+| `status` | HTTP status code | `expect status 200` |
+| `duration` | Response time (ms) | `expect duration < 1000` |
+| `header <name>` | Response header | `expect header Content-Type contains json` |
+| `body` | Full response body | `expect body contains "success"` |
+| `body.<path>` | JSON path | `expect body.user.name == "John"` |
+| `body[n]` | Array index | `expect body[0].id exists` |
+
+### All Metadata Directives
+
+| Directive | Description | Example |
+|-----------|-------------|---------|
+| `@name` | Request identifier | `# @name createUser` |
+| `@description` | Human-readable description | `# @description Creates a user` |
+| `@tags` | Tags for filtering | `# @tags smoke, auth` |
+| `@skip` | Skip request | `# @skip Temporarily disabled` |
+| `@only` | Run only this request | `# @only` |
+| `@timeout` | Timeout in ms | `# @timeout 5000` |
+| `@retry` | Retry attempts | `# @retry 3` |
+| `@retryDelay` | Delay between retries (ms) | `# @retryDelay 1000` |
+| `@retryOn` | Status codes that trigger retry | `# @retryOn 500, 502, 503` |
+| `@depends` | Dependencies | `# @depends login, setupData` |
+| `@if` | Conditional execution | `# @if {{runTests}}` |
+| `@unless` | Conditional skip | `# @unless {{skipAuth}}` |
+
+### Authentication Methods
+
+```http
+# Bearer Token
+# @auth bearer {{token}}
+
+# Basic Auth
+# @auth basic {{username}}, {{password}}
+
+# API Key (Header)
+# @auth apiKey X-API-Key, {{apiKey}}
+
+# API Key (Query String)
+# @auth apiKeyQuery api_key, {{apiKey}}
+
+# Digest Auth
+# @auth digest {{username}}, {{password}}
+
+# AWS Signature v4
+# @auth aws {{accessKey}}, {{secretKey}}, {{region}}, {{service}}
+```
+
+### Captures
+
+Capture values from responses for use in subsequent requests:
+
+```http
+### Login
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{"username": "john", "password": "secret"}
+
+>>>capture
+token from body.access_token
+userId from body.user.id
+<<<
+
+### Get Profile
+# @depends login
+GET {{baseUrl}}/users/{{login.userId}}
+Authorization: Bearer {{login.token}}
+```
+
+**Capture Sources:**
+| Source | Syntax | Description |
+|--------|--------|-------------|
+| Body JSON path | `token from body.access_token` | Capture from response body |
+| Header | `contentType from header Content-Type` | Capture from response header |
+| Status | `code from status` | Capture status code |
+| Duration | `time from duration` | Capture response time (ms) |
 
 ## Development
 
