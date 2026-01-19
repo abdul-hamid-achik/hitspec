@@ -13,19 +13,25 @@ type Variable struct {
 }
 
 type Request struct {
-	Name         string
-	Description  string
-	Tags         []string
-	Method       string
-	URL          string
-	Headers      []*Header
-	QueryParams  []*QueryParam
-	Body         *Body
-	Assertions   []*Assertion
-	DBAssertions []*DBAssertion
-	Captures     []*Capture
-	Metadata     *RequestMetadata
-	Line         int
+	Name          string
+	Description   string
+	Tags          []string
+	Method        string
+	URL           string
+	Headers       []*Header
+	QueryParams   []*QueryParam
+	Body          *Body
+	Assertions    []*Assertion
+	DBAssertions  []*DBAssertion
+	ShellCommands []*ShellCommand
+	Captures      []*Capture
+	Metadata      *RequestMetadata
+	Line          int
+}
+
+type ShellCommand struct {
+	Command string
+	Line    int
 }
 
 type DBAssertion struct {

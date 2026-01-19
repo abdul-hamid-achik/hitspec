@@ -121,7 +121,7 @@ Types: `null`, `boolean`, `number`, `string`, `array`, `object`
 | `{{$urlDecode(value)}}` | URL decode |
 | `{{$json(value)}}` | JSON passthrough |
 
-## Metadata Directives (14)
+## Metadata Directives (14) + Blocks
 
 | Directive | Description |
 |-----------|-------------|
@@ -214,6 +214,30 @@ Format: `@waitFor <url> <expectedStatus> <timeoutMs> <intervalMs>`
 - `expectedStatus`: HTTP status code to wait for (default: 200)
 - `timeoutMs`: Maximum wait time in milliseconds (default: 30000)
 - `intervalMs`: Polling interval in milliseconds (default: 1000)
+
+## Shell Commands
+
+Run shell commands after a request:
+
+```http
+### Run shell commands
+POST {{baseUrl}}/api/process
+
+>>>
+expect status 200
+<<<
+
+>>>shell
+echo "Processing complete"
+./scripts/notify.sh {{response.id}}
+<<<
+```
+
+- Commands execute after HTTP assertions
+- Variables are resolved before execution
+- Prefix with `-` to ignore errors: `-rm temp.txt`
+- Commands run via `sh -c`
+- Working directory is the .http file location
 
 ## Authentication (6 types)
 

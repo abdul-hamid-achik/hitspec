@@ -96,6 +96,7 @@ type RequestResult struct {
 	Response     *http.Response
 	Assertions   []*assertions.Result
 	DBAssertions []*DBAssertionResult
+	ShellResults []*ShellResult
 	Captures     map[string]any
 	Error        error
 }
@@ -510,6 +511,16 @@ func (r *Runner) executeRequest(req *parser.Request, baseDir string, parallel bo
 				}
 			}
 		}
+	}
+
+	// Execute shell commands if configured
+	if len(req.ShellCommands) > 0 {
+		shellResults, err := r.executeShellCommands(req.ShellCommands, baseDir, r.resolver.Resolve)
+		if err != nil {
+			result.Error = err
+			result.Passed = false
+		}
+		result.ShellResults = shellResults
 	}
 
 	if len(req.Captures) > 0 {

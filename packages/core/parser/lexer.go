@@ -41,6 +41,7 @@ const (
 	TokenGraphQLStart
 	TokenVariablesStart
 	TokenDBStart
+	TokenShellStart
 	TokenIdentifier
 	TokenLeftBracket
 	TokenRightBracket
@@ -382,6 +383,8 @@ func (l *Lexer) readBlockStart() Token {
 		return Token{Type: TokenVariablesStart, Value: blockType, Line: line, Column: col}
 	case "db":
 		return Token{Type: TokenDBStart, Value: blockType, Line: line, Column: col}
+	case "shell":
+		return Token{Type: TokenShellStart, Value: blockType, Line: line, Column: col}
 	default:
 		return Token{Type: TokenAssertionStart, Value: blockType, Line: line, Column: col}
 	}

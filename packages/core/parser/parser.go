@@ -162,6 +162,7 @@ func (p *Parser) parseRequest() (*Request, error) {
 	if p.curToken.Type != TokenAssertionStart &&
 		p.curToken.Type != TokenCaptureStart &&
 		p.curToken.Type != TokenDBStart &&
+		p.curToken.Type != TokenShellStart &&
 		p.curToken.Type != TokenRequestSeparator &&
 		p.curToken.Type != TokenEOF {
 		body, err := p.parseBody()
@@ -188,6 +189,15 @@ func (p *Parser) parseRequest() (*Request, error) {
 			return nil, err
 		}
 		req.DBAssertions = dbAssertions
+		p.skipNewlines()
+	}
+
+	if p.curToken.Type == TokenShellStart {
+		shellCommands, err := p.parseShellBlock()
+		if err != nil {
+			return nil, err
+		}
+		req.ShellCommands = shellCommands
 		p.skipNewlines()
 	}
 
@@ -1026,4 +1036,49 @@ func parseValue(s string) interface{} {
 	}
 
 	return s
+}
+
+func (p *Parser) parseShellBlock() ([]*ShellCommand, error) {
+	p.nextToken()
+	p.skipNewlines()
+
+	var commands []*ShellCommand
+
+	for p.curToken.Type != TokenAssertionEnd && p.curToken.Type != TokenEOF {
+		line := p.curToken.Line
+
+		// Build the command by reading from current token to end of line
+		var cmdBuilder strings.Builder
+		for p.curToken.Type != TokenNewline && p.curToken.Type != TokenEOF && p.curToken.Type != TokenAssertionEnd {
+			if cmdBuilder.Len() > 0 && p.curToken.Type == TokenWhitespace {
+				cmdBuilder.WriteString(" ")
+			} else if p.curToken.Type == TokenVariableRef {
+				cmdBuilder.WriteString("{{")
+				cmdBuilder.WriteString(p.curToken.Value)
+				cmdBuilder.WriteString("}}")
+			} else if p.curToken.Type != TokenWhitespace {
+				cmdBuilder.WriteString(p.curToken.Value)
+			}
+			p.nextTokenRaw()
+		}
+
+		cmd := strings.TrimSpace(cmdBuilder.String())
+		if cmd != "" {
+			commands = append(commands, &ShellCommand{
+				Command: cmd,
+				Line:    line,
+			})
+		}
+
+		if p.curToken.Type == TokenNewline {
+			p.nextToken()
+		}
+		p.skipNewlines()
+	}
+
+	if p.curToken.Type == TokenAssertionEnd {
+		p.nextToken()
+	}
+
+	return commands, nil
 }

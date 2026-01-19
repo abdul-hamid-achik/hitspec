@@ -316,6 +316,127 @@ func TestHasAnyTag(t *testing.T) {
 	}
 }
 
+func TestRunner_Shell(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	t.Run("executes shell commands after request", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		markerFile := filepath.Join(tmpDir, "shell_marker.txt")
+
+		content := `### Test with shell commands
+GET ` + server.URL + `/test
+
+>>>
+expect status 200
+<<<
+
+>>>shell
+echo "executed" > ` + markerFile + `
+<<<`
+
+		testFile := filepath.Join(tmpDir, "test.http")
+		err := os.WriteFile(testFile, []byte(content), 0644)
+		require.NoError(t, err)
+
+		r := NewRunner(&Config{})
+		result, err := r.RunFile(testFile)
+
+		require.NoError(t, err)
+		assert.True(t, result.Results[0].Passed)
+
+		// Verify shell command was executed
+		data, err := os.ReadFile(markerFile)
+		require.NoError(t, err)
+		assert.Contains(t, string(data), "executed")
+	})
+
+	t.Run("fails on shell command error", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		content := `### Test with failing shell
+GET ` + server.URL + `/test
+
+>>>
+expect status 200
+<<<
+
+>>>shell
+exit 1
+<<<`
+
+		testFile := filepath.Join(tmpDir, "test.http")
+		err := os.WriteFile(testFile, []byte(content), 0644)
+		require.NoError(t, err)
+
+		r := NewRunner(&Config{})
+		result, err := r.RunFile(testFile)
+
+		require.NoError(t, err)
+		assert.False(t, result.Results[0].Passed)
+		assert.NotNil(t, result.Results[0].Error)
+	})
+
+	t.Run("ignores errors with dash prefix", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		content := `### Test with ignored error
+GET ` + server.URL + `/test
+
+>>>
+expect status 200
+<<<
+
+>>>shell
+-exit 1
+<<<`
+
+		testFile := filepath.Join(tmpDir, "test.http")
+		err := os.WriteFile(testFile, []byte(content), 0644)
+		require.NoError(t, err)
+
+		r := NewRunner(&Config{})
+		result, err := r.RunFile(testFile)
+
+		require.NoError(t, err)
+		assert.True(t, result.Results[0].Passed)
+	})
+
+	t.Run("resolves variables in commands", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		markerFile := filepath.Join(tmpDir, "var_marker.txt")
+
+		content := `@testValue = hello
+
+### Test with variables
+GET ` + server.URL + `/test
+
+>>>
+expect status 200
+<<<
+
+>>>shell
+echo "{{testValue}}" > ` + markerFile + `
+<<<`
+
+		testFile := filepath.Join(tmpDir, "test.http")
+		err := os.WriteFile(testFile, []byte(content), 0644)
+		require.NoError(t, err)
+
+		r := NewRunner(&Config{})
+		result, err := r.RunFile(testFile)
+
+		require.NoError(t, err)
+		assert.True(t, result.Results[0].Passed)
+
+		data, err := os.ReadFile(markerFile)
+		require.NoError(t, err)
+		assert.Contains(t, string(data), "hello")
+	})
+}
+
 func TestRunner_WaitFor(t *testing.T) {
 	t.Run("waits for service to be ready", func(t *testing.T) {
 		requestCount := 0
