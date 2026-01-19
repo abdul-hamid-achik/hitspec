@@ -12,18 +12,66 @@ type Config struct {
 	Timeout            int               `json:"timeout,omitempty"`           // milliseconds
 	Retries            int               `json:"retries,omitempty"`
 	RetryDelay         int               `json:"retryDelay,omitempty"`        // milliseconds
-	FollowRedirects    bool              `json:"followRedirects,omitempty"`
+	FollowRedirects    *bool             `json:"followRedirects,omitempty"`
 	MaxRedirects       int               `json:"maxRedirects,omitempty"`
-	ValidateSSL        bool              `json:"validateSSL,omitempty"`
+	ValidateSSL        *bool             `json:"validateSSL,omitempty"`
 	Proxy              string            `json:"proxy,omitempty"`
 	Headers            map[string]string `json:"headers,omitempty"`           // Default headers for all requests
 	Reporters          []string          `json:"reporters,omitempty"`         // Output reporters
 	OutputDir          string            `json:"outputDir,omitempty"`         // Directory for output files
-	Parallel           bool              `json:"parallel,omitempty"`
+	Parallel           *bool             `json:"parallel,omitempty"`
 	Concurrency        int               `json:"concurrency,omitempty"`       // Number of parallel requests
-	Bail               bool              `json:"bail,omitempty"`
-	Verbose            bool              `json:"verbose,omitempty"`
-	NoColor            bool              `json:"noColor,omitempty"`
+	Bail               *bool             `json:"bail,omitempty"`
+	Verbose            *bool             `json:"verbose,omitempty"`
+	NoColor            *bool             `json:"noColor,omitempty"`
+}
+
+// boolPtr returns a pointer to a bool value
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+// BoolPtr is exported version of boolPtr for external use
+func BoolPtr(b bool) *bool {
+	return &b
+}
+
+// getBool returns the value of a bool pointer, or the default if nil
+func getBool(b *bool, defaultVal bool) bool {
+	if b == nil {
+		return defaultVal
+	}
+	return *b
+}
+
+// GetFollowRedirects returns the follow redirects setting, defaulting to true
+func (c *Config) GetFollowRedirects() bool {
+	return getBool(c.FollowRedirects, true)
+}
+
+// GetValidateSSL returns the validate SSL setting, defaulting to true
+func (c *Config) GetValidateSSL() bool {
+	return getBool(c.ValidateSSL, true)
+}
+
+// GetParallel returns the parallel setting, defaulting to false
+func (c *Config) GetParallel() bool {
+	return getBool(c.Parallel, false)
+}
+
+// GetBail returns the bail setting, defaulting to false
+func (c *Config) GetBail() bool {
+	return getBool(c.Bail, false)
+}
+
+// GetVerbose returns the verbose setting, defaulting to false
+func (c *Config) GetVerbose() bool {
+	return getBool(c.Verbose, false)
+}
+
+// GetNoColor returns the no color setting, defaulting to false
+func (c *Config) GetNoColor() bool {
+	return getBool(c.NoColor, false)
 }
 
 // ConfigFilenames contains the possible config file names
@@ -105,14 +153,25 @@ func (c *Config) Merge(other *Config) *Config {
 		result.Concurrency = other.Concurrency
 	}
 
-	// Boolean flags - only override if explicitly set (use pointers in actual impl)
-	// For simplicity, we just copy them
-	result.FollowRedirects = other.FollowRedirects
-	result.ValidateSSL = other.ValidateSSL
-	result.Parallel = other.Parallel
-	result.Bail = other.Bail
-	result.Verbose = other.Verbose
-	result.NoColor = other.NoColor
+	// Boolean flags - only override if explicitly set in other config
+	if other.FollowRedirects != nil {
+		result.FollowRedirects = other.FollowRedirects
+	}
+	if other.ValidateSSL != nil {
+		result.ValidateSSL = other.ValidateSSL
+	}
+	if other.Parallel != nil {
+		result.Parallel = other.Parallel
+	}
+	if other.Bail != nil {
+		result.Bail = other.Bail
+	}
+	if other.Verbose != nil {
+		result.Verbose = other.Verbose
+	}
+	if other.NoColor != nil {
+		result.NoColor = other.NoColor
+	}
 
 	// Merge headers
 	if len(other.Headers) > 0 {

@@ -28,20 +28,25 @@ type Runner struct {
 }
 
 type Config struct {
-	Environment    string
-	Verbose        bool
-	Timeout        time.Duration
-	FollowRedirect bool
-	Bail           bool
-	NameFilter     string
-	TagsFilter     []string
-	Parallel       bool
-	Concurrency    int
+	Environment     string
+	Verbose         bool
+	Timeout         time.Duration
+	FollowRedirect  bool
+	Bail            bool
+	NameFilter      string
+	TagsFilter      []string
+	Parallel        bool
+	Concurrency     int
+	ValidateSSL     bool
+	Proxy           string
+	DefaultHeaders  map[string]string
 }
 
 func NewRunner(cfg *Config) *Runner {
 	if cfg == nil {
-		cfg = &Config{}
+		cfg = &Config{
+			ValidateSSL: true, // Default to validating SSL
+		}
 	}
 
 	clientOpts := []http.ClientOption{}
@@ -49,10 +54,25 @@ func NewRunner(cfg *Config) *Runner {
 		clientOpts = append(clientOpts, http.WithTimeout(cfg.Timeout))
 	}
 	clientOpts = append(clientOpts, http.WithFollowRedirects(cfg.FollowRedirect))
+	clientOpts = append(clientOpts, http.WithValidateSSL(cfg.ValidateSSL))
+
+	if cfg.Proxy != "" {
+		clientOpts = append(clientOpts, http.WithProxy(cfg.Proxy))
+	}
+
+	if len(cfg.DefaultHeaders) > 0 {
+		clientOpts = append(clientOpts, http.WithDefaultHeaders(cfg.DefaultHeaders))
+	}
+
+	resolver := env.NewResolver()
+	// Set up warning function to print to stderr
+	resolver.SetWarnFunc(func(format string, args ...any) {
+		fmt.Fprintf(os.Stderr, "warning: "+format+"\n", args...)
+	})
 
 	return &Runner{
 		client:   http.NewClient(clientOpts...),
-		resolver: env.NewResolver(),
+		resolver: resolver,
 		config:   cfg,
 	}
 }
@@ -304,7 +324,14 @@ func (r *Runner) topologicalSort(requests []*parser.Request) ([]*parser.Request,
 
 	// Check for cycles
 	if len(sortedNames) != len(requests) {
-		return nil, fmt.Errorf("circular dependency detected in requests")
+		// Find which requests are part of the cycle (have remaining in-degree > 0)
+		var cycleMembers []string
+		for name, degree := range inDegree {
+			if degree > 0 {
+				cycleMembers = append(cycleMembers, name)
+			}
+		}
+		return nil, fmt.Errorf("circular dependency detected involving requests: %v", cycleMembers)
 	}
 
 	// Map sorted names back to requests, preserving original order for requests

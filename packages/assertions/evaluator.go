@@ -453,12 +453,43 @@ func EvaluateAllWithBaseDir(resp *http.Response, assertions []*parser.Assertion,
 	return results
 }
 
+// validatePathWithinBase checks that the resolved path stays within the base directory
+// to prevent path traversal attacks
+func validatePathWithinBase(path, baseDir string) error {
+	if baseDir == "" {
+		return nil
+	}
+
+	// Clean and resolve both paths
+	cleanBase, err := filepath.Abs(baseDir)
+	if err != nil {
+		return fmt.Errorf("failed to resolve base directory: %v", err)
+	}
+
+	cleanPath, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("failed to resolve path: %v", err)
+	}
+
+	// Ensure the path starts with the base directory
+	if !strings.HasPrefix(cleanPath, cleanBase+string(filepath.Separator)) && cleanPath != cleanBase {
+		return fmt.Errorf("path traversal detected: %s is outside allowed directory %s", path, baseDir)
+	}
+
+	return nil
+}
+
 func (e *Evaluator) schema(actual, expected any) (bool, string) {
 	schemaPath := fmt.Sprintf("%v", expected)
 
 	// Resolve schema path relative to base directory
 	if !filepath.IsAbs(schemaPath) && e.baseDir != "" {
 		schemaPath = filepath.Join(e.baseDir, schemaPath)
+	}
+
+	// Validate path doesn't escape base directory (prevent path traversal)
+	if err := validatePathWithinBase(schemaPath, e.baseDir); err != nil {
+		return false, err.Error()
 	}
 
 	// Read schema file

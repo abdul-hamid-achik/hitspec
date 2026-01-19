@@ -3,9 +3,12 @@ package http
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,12 +17,26 @@ import (
 	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
 )
 
+const (
+	// DefaultTimeout is the default HTTP request timeout
+	DefaultTimeout = 30 * time.Second
+	// DefaultMaxRedirects is the maximum number of redirects to follow
+	DefaultMaxRedirects = 10
+	// DefaultMaxIdleConns is the maximum number of idle connections in the pool
+	DefaultMaxIdleConns = 100
+	// DefaultMaxIdleConnsPerHost is the maximum number of idle connections per host
+	DefaultMaxIdleConnsPerHost = 10
+	// DefaultIdleConnTimeout is how long idle connections stay in the pool
+	DefaultIdleConnTimeout = 90 * time.Second
+)
+
 type Client struct {
 	httpClient     *http.Client
 	timeout        time.Duration
 	followRedirect bool
 	maxRedirects   int
 	validateSSL    bool
+	proxyURL       string
 	defaultHeaders map[string]string
 }
 
@@ -33,9 +50,9 @@ type ClientOption func(*Client)
 
 func NewClient(opts ...ClientOption) *Client {
 	c := &Client{
-		timeout:        30 * time.Second,
+		timeout:        DefaultTimeout,
 		followRedirect: true,
-		maxRedirects:   10,
+		maxRedirects:   DefaultMaxRedirects,
 		validateSSL:    true,
 		defaultHeaders: make(map[string]string),
 	}
@@ -45,9 +62,24 @@ func NewClient(opts ...ClientOption) *Client {
 	}
 
 	transport := &http.Transport{
-		MaxIdleConns:        100,
-		MaxIdleConnsPerHost: 10,
-		IdleConnTimeout:     90 * time.Second,
+		MaxIdleConns:        DefaultMaxIdleConns,
+		MaxIdleConnsPerHost: DefaultMaxIdleConnsPerHost,
+		IdleConnTimeout:     DefaultIdleConnTimeout,
+	}
+
+	// Configure TLS verification
+	if !c.validateSSL {
+		transport.TLSClientConfig = &tls.Config{
+			InsecureSkipVerify: true,
+		}
+	}
+
+	// Configure proxy if specified
+	if c.proxyURL != "" {
+		proxyURL, err := neturl.Parse(c.proxyURL)
+		if err == nil {
+			transport.Proxy = http.ProxyURL(proxyURL)
+		}
 	}
 
 	redirectPolicy := func(req *http.Request, via []*http.Request) error {
@@ -93,6 +125,29 @@ func WithDefaultHeader(key, value string) ClientOption {
 	}
 }
 
+// WithDefaultHeaders sets multiple default headers for all requests
+func WithDefaultHeaders(headers map[string]string) ClientOption {
+	return func(c *Client) {
+		for k, v := range headers {
+			c.defaultHeaders[k] = v
+		}
+	}
+}
+
+// WithValidateSSL enables or disables SSL certificate validation
+func WithValidateSSL(validate bool) ClientOption {
+	return func(c *Client) {
+		c.validateSSL = validate
+	}
+}
+
+// WithProxy sets the proxy URL for all requests
+func WithProxy(proxyURL string) ClientOption {
+	return func(c *Client) {
+		c.proxyURL = proxyURL
+	}
+}
+
 func (c *Client) Do(req *Request) (*Response, error) {
 	ctx := context.Background()
 	if req.Timeout > 0 {
@@ -115,6 +170,11 @@ func (c *Client) Do(req *Request) (*Response, error) {
 }
 
 func (c *Client) doRequest(ctx context.Context, req *Request, authHeader string) (*Response, error) {
+	// Validate URL before making request
+	if err := ValidateURL(req.URL); err != nil {
+		return nil, err
+	}
+
 	var body io.Reader
 	var contentType string
 
@@ -291,6 +351,52 @@ func (c *Client) Delete(url string, headers map[string]string) (*Response, error
 	})
 }
 
+// validatePathWithinBase checks that the resolved path stays within the base directory
+// to prevent path traversal attacks
+func validatePathWithinBase(path, baseDir string) error {
+	if baseDir == "" {
+		return nil
+	}
+
+	// Clean and resolve both paths
+	cleanBase, err := filepath.Abs(baseDir)
+	if err != nil {
+		return fmt.Errorf("failed to resolve base directory: %v", err)
+	}
+
+	cleanPath, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("failed to resolve path: %v", err)
+	}
+
+	// Ensure the path starts with the base directory
+	if !strings.HasPrefix(cleanPath, cleanBase+string(filepath.Separator)) && cleanPath != cleanBase {
+		return fmt.Errorf("path traversal detected: %s is outside allowed directory %s", path, baseDir)
+	}
+
+	return nil
+}
+
+// ValidateURL checks that a URL is well-formed and uses an allowed scheme
+func ValidateURL(rawURL string) error {
+	u, err := neturl.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %v", err)
+	}
+
+	// Check for valid scheme
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("unsupported URL scheme: %s (only http and https are allowed)", u.Scheme)
+	}
+
+	// Check for valid host
+	if u.Host == "" {
+		return fmt.Errorf("URL must have a host")
+	}
+
+	return nil
+}
+
 // BuildMultipartBody creates a multipart form data body from multipart fields
 func BuildMultipartBody(fields []*parser.MultipartField, baseDir string) (*bytes.Buffer, string, error) {
 	body := &bytes.Buffer{}
@@ -302,6 +408,11 @@ func BuildMultipartBody(fields []*parser.MultipartField, baseDir string) (*bytes
 			filePath := field.Path
 			if !filepath.IsAbs(filePath) && baseDir != "" {
 				filePath = filepath.Join(baseDir, filePath)
+			}
+
+			// Validate path doesn't escape base directory (prevent path traversal)
+			if err := validatePathWithinBase(filePath, baseDir); err != nil {
+				return nil, "", err
 			}
 
 			file, err := os.Open(filePath)

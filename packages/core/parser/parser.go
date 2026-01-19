@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -223,14 +224,20 @@ func (p *Parser) parseAnnotation(req *Request) error {
 	case "timeout":
 		if v, err := strconv.Atoi(value); err == nil {
 			req.Metadata.Timeout = v
+		} else if value != "" {
+			fmt.Fprintf(os.Stderr, "warning: invalid timeout value %q (expected integer): %v\n", value, err)
 		}
 	case "retry":
 		if v, err := strconv.Atoi(value); err == nil {
 			req.Metadata.Retry = v
+		} else if value != "" {
+			fmt.Fprintf(os.Stderr, "warning: invalid retry value %q (expected integer): %v\n", value, err)
 		}
 	case "retrydelay":
 		if v, err := strconv.Atoi(value); err == nil {
 			req.Metadata.RetryDelay = v
+		} else if value != "" {
+			fmt.Fprintf(os.Stderr, "warning: invalid retryDelay value %q (expected integer): %v\n", value, err)
 		}
 	case "depends":
 		deps := strings.Split(value, ",")

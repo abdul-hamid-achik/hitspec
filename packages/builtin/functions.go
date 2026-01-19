@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -127,9 +128,13 @@ func funcRandom(args []string) any {
 	if len(args) >= 2 {
 		if v, err := strconv.Atoi(args[0]); err == nil {
 			min = v
+		} else {
+			fmt.Fprintf(os.Stderr, "warning: random() min argument %q is not a valid integer\n", args[0])
 		}
 		if v, err := strconv.Atoi(args[1]); err == nil {
 			max = v
+		} else {
+			fmt.Fprintf(os.Stderr, "warning: random() max argument %q is not a valid integer\n", args[1])
 		}
 	}
 	return rand.Intn(max-min+1) + min
@@ -140,6 +145,8 @@ func funcRandomString(args []string) any {
 	if len(args) >= 1 {
 		if v, err := strconv.Atoi(args[0]); err == nil {
 			length = v
+		} else {
+			fmt.Fprintf(os.Stderr, "warning: randomString() length argument %q is not a valid integer\n", args[0])
 		}
 	}
 	return randomString(length, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
@@ -156,6 +163,8 @@ func funcRandomAlphanumeric(args []string) any {
 	if len(args) >= 1 {
 		if v, err := strconv.Atoi(args[0]); err == nil {
 			length = v
+		} else {
+			fmt.Fprintf(os.Stderr, "warning: randomAlphanumeric() length argument %q is not a valid integer\n", args[0])
 		}
 	}
 	return randomString(length, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")

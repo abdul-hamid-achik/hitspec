@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/abdul-hamid-achik/hitspec/packages/core/config"
 	"github.com/abdul-hamid-achik/hitspec/packages/core/runner"
 	"github.com/abdul-hamid-achik/hitspec/packages/output"
 	"github.com/fsnotify/fsnotify"
@@ -33,19 +34,21 @@ const (
 )
 
 var (
-	envFlag        string
-	nameFlag       string
-	tagsFlag       string
-	verboseFlag    bool
-	bailFlag       bool
-	timeoutFlag    int
-	noColorFlag    bool
-	dryRunFlag     bool
-	outputFlag     string
-	outputFileFlag string
-	parallelFlag   bool
+	envFlag         string
+	nameFlag        string
+	tagsFlag        string
+	verboseFlag     bool
+	bailFlag        bool
+	timeoutFlag     int
+	noColorFlag     bool
+	dryRunFlag      bool
+	outputFlag      string
+	outputFileFlag  string
+	parallelFlag    bool
 	concurrencyFlag int
-	watchFlag      bool
+	watchFlag       bool
+	proxyFlag       string
+	insecureFlag    bool
 )
 
 func init() {
@@ -62,6 +65,8 @@ func init() {
 	runCmd.Flags().BoolVarP(&parallelFlag, "parallel", "p", false, "Run requests in parallel (when no dependencies)")
 	runCmd.Flags().IntVar(&concurrencyFlag, "concurrency", 5, "Number of concurrent requests when running in parallel")
 	runCmd.Flags().BoolVarP(&watchFlag, "watch", "w", false, "Watch files for changes and re-run tests")
+	runCmd.Flags().StringVar(&proxyFlag, "proxy", "", "Proxy URL for HTTP requests")
+	runCmd.Flags().BoolVarP(&insecureFlag, "insecure", "k", false, "Disable SSL certificate validation")
 }
 
 // Formatter interface for all output formatters
@@ -143,16 +148,33 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Load config from file (if present) and apply CLI overrides
+	fileConfig, _ := config.LoadConfig("")
+
+	// Determine proxy and validateSSL from config file, allowing CLI flags to override
+	proxy := fileConfig.Proxy
+	if proxyFlag != "" {
+		proxy = proxyFlag
+	}
+
+	validateSSL := fileConfig.GetValidateSSL()
+	if insecureFlag {
+		validateSSL = false
+	}
+
 	cfg := &runner.Config{
 		Environment:    envFlag,
 		Verbose:        verboseFlag,
 		Timeout:        time.Duration(timeoutFlag) * time.Millisecond,
-		FollowRedirect: true,
+		FollowRedirect: fileConfig.GetFollowRedirects(),
 		Bail:           bailFlag,
 		NameFilter:     nameFlag,
 		TagsFilter:     tagsFilter,
 		Parallel:       parallelFlag,
 		Concurrency:    concurrencyFlag,
+		ValidateSSL:    validateSSL,
+		Proxy:          proxy,
+		DefaultHeaders: fileConfig.Headers,
 	}
 
 	r := runner.NewRunner(cfg)

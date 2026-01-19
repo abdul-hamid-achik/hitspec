@@ -5,16 +5,25 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/abdul-hamid-achik/hitspec/packages/builtin"
 )
 
 var variablePattern = regexp.MustCompile(`\{\{([^}]+)\}\}`)
 
+// WarnFunc is a function type for handling warnings
+type WarnFunc func(format string, args ...any)
+
+// Resolver handles variable resolution with thread-safe access to variables and captures.
+// It supports environment variables, built-in functions, captures from previous requests,
+// and user-defined variables.
 type Resolver struct {
+	mu        sync.RWMutex
 	variables map[string]any
 	captures  map[string]any
 	funcs     *builtin.Registry
+	warnFunc  WarnFunc
 }
 
 func NewResolver() *Resolver {
@@ -25,23 +34,47 @@ func NewResolver() *Resolver {
 	}
 }
 
+// SetWarnFunc sets a function to be called when warnings occur (e.g., unresolved variables)
+func (r *Resolver) SetWarnFunc(fn WarnFunc) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.warnFunc = fn
+}
+
+func (r *Resolver) warn(format string, args ...any) {
+	r.mu.RLock()
+	fn := r.warnFunc
+	r.mu.RUnlock()
+	if fn != nil {
+		fn(format, args...)
+	}
+}
+
 func (r *Resolver) SetVariables(vars map[string]any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	for k, v := range vars {
 		r.variables[k] = v
 	}
 }
 
 func (r *Resolver) SetVariable(name string, value any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.variables[name] = value
 }
 
 func (r *Resolver) SetCapture(requestName, captureName string, value any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	key := requestName + "." + captureName
 	r.captures[key] = value
 	r.captures[captureName] = value
 }
 
 func (r *Resolver) GetCapture(name string) (any, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	v, ok := r.captures[name]
 	return v, ok
 }
@@ -56,6 +89,7 @@ func (r *Resolver) Resolve(input string) string {
 			if val := os.Getenv(envVar); val != "" {
 				return val
 			}
+			r.warn("unresolved environment variable: $%s", envVar)
 			return match
 		}
 
@@ -63,17 +97,23 @@ func (r *Resolver) Resolve(input string) string {
 			if result, ok := r.funcs.Call(expr); ok {
 				return fmt.Sprintf("%v", result)
 			}
+			r.warn("unresolved function call: %s", expr)
 			return match
 		}
 
+		r.mu.RLock()
 		if val, ok := r.captures[expr]; ok {
+			r.mu.RUnlock()
 			return fmt.Sprintf("%v", val)
 		}
 
 		if val, ok := r.variables[expr]; ok {
+			r.mu.RUnlock()
 			return fmt.Sprintf("%v", val)
 		}
+		r.mu.RUnlock()
 
+		r.warn("unresolved variable: %s", expr)
 		return match
 	})
 }
@@ -87,6 +127,8 @@ func (r *Resolver) ResolveAll(values map[string]string) map[string]string {
 }
 
 func (r *Resolver) HasVariable(name string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	if _, ok := r.captures[name]; ok {
 		return true
 	}
@@ -97,6 +139,8 @@ func (r *Resolver) HasVariable(name string) bool {
 }
 
 func (r *Resolver) GetVariable(name string) (any, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	if v, ok := r.captures[name]; ok {
 		return v, true
 	}
@@ -107,6 +151,8 @@ func (r *Resolver) GetVariable(name string) (any, bool) {
 }
 
 func (r *Resolver) Clone() *Resolver {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	clone := NewResolver()
 	for k, v := range r.variables {
 		clone.variables[k] = v
