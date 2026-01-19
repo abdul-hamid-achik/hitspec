@@ -548,7 +548,7 @@ func (l *Lexer) readWhitespace() Token {
 
 func (l *Lexer) readIdentifier() string {
 	var builder strings.Builder
-	for isLetter(l.ch) || isDigit(l.ch) || l.ch == '_' || l.ch == '-' {
+	for isLetter(l.ch) || isDigit(l.ch) || l.ch == '_' || l.ch == '-' || l.ch == '.' {
 		builder.WriteByte(l.ch)
 		l.readChar()
 	}

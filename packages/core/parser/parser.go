@@ -307,6 +307,35 @@ func (p *Parser) parseAnnotation(req *Request) error {
 			}
 			req.Metadata.WaitFor = cfg
 		}
+	case "stress.weight":
+		if req.Metadata.Stress == nil {
+			req.Metadata.Stress = &StressMetadata{}
+		}
+		if v, err := strconv.Atoi(value); err == nil {
+			req.Metadata.Stress.Weight = v
+		}
+	case "stress.think":
+		if req.Metadata.Stress == nil {
+			req.Metadata.Stress = &StressMetadata{}
+		}
+		if v, err := strconv.Atoi(value); err == nil {
+			req.Metadata.Stress.Think = v
+		}
+	case "stress.skip":
+		if req.Metadata.Stress == nil {
+			req.Metadata.Stress = &StressMetadata{}
+		}
+		req.Metadata.Stress.Skip = true
+	case "stress.setup":
+		if req.Metadata.Stress == nil {
+			req.Metadata.Stress = &StressMetadata{}
+		}
+		req.Metadata.Stress.Setup = true
+	case "stress.teardown":
+		if req.Metadata.Stress == nil {
+			req.Metadata.Stress = &StressMetadata{}
+		}
+		req.Metadata.Stress.Teardown = true
 	}
 
 	return nil

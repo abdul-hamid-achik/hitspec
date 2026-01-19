@@ -34,4 +34,5 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(llmsCmd)
+	rootCmd.AddCommand(stressCmd)
 }

@@ -56,6 +56,16 @@ type RequestMetadata struct {
 	PostHooks    []*Hook
 	DBConnection string
 	WaitFor      *WaitForConfig
+	Stress       *StressMetadata
+}
+
+// StressMetadata holds stress test configuration for a request
+type StressMetadata struct {
+	Weight   int  // Relative weight for request selection (default 1)
+	Think    int  // Think time in ms after this request
+	Skip     bool // Exclude from stress testing
+	Setup    bool // Run once before test starts
+	Teardown bool // Run once after test ends
 }
 
 type WaitForConfig struct {

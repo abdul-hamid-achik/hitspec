@@ -26,6 +26,23 @@ type Config struct {
 	Verbose            *bool                        `json:"verbose,omitempty" yaml:"verbose,omitempty"`
 	NoColor            *bool                        `json:"noColor,omitempty" yaml:"noColor,omitempty"`
 	Environments       map[string]map[string]any    `json:"environments,omitempty" yaml:"environments,omitempty"` // Inline environments
+	Stress             *StressConfig                `json:"stress,omitempty" yaml:"stress,omitempty"`             // Stress test configuration
+}
+
+// StressConfig holds stress testing configuration
+type StressConfig struct {
+	Profiles map[string]*StressProfile `json:"profiles,omitempty" yaml:"profiles,omitempty"`
+}
+
+// StressProfile defines a named stress test profile
+type StressProfile struct {
+	Duration   string            `json:"duration,omitempty" yaml:"duration,omitempty"`     // e.g., "5m", "30s"
+	Rate       float64           `json:"rate,omitempty" yaml:"rate,omitempty"`             // requests per second
+	VUs        int               `json:"vus,omitempty" yaml:"vus,omitempty"`               // virtual users
+	MaxVUs     int               `json:"maxVUs,omitempty" yaml:"maxVUs,omitempty"`         // max concurrent requests
+	ThinkTime  string            `json:"thinkTime,omitempty" yaml:"thinkTime,omitempty"`   // e.g., "1s", "500ms"
+	RampUp     string            `json:"rampUp,omitempty" yaml:"rampUp,omitempty"`         // e.g., "30s"
+	Thresholds map[string]string `json:"thresholds,omitempty" yaml:"thresholds,omitempty"` // e.g., "p95": "200ms", "errors": "1%"
 }
 
 // boolPtr returns a pointer to a bool value

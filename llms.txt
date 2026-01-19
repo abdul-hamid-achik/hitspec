@@ -291,6 +291,9 @@ hitspec validate <file|dir>
 # List all requests
 hitspec list <file|dir>
 
+# Stress test
+hitspec stress <file> [flags]
+
 # Initialize project
 hitspec init
 
@@ -743,4 +746,158 @@ GET {{baseUrl}}/users
 expect status 200
 expect body type array
 <<<
+```
+
+## Stress Testing
+
+Artillery-style load testing using the same .http files.
+
+### Basic Usage
+
+```bash
+# Simple constant rate test (10 req/s for 30s)
+hitspec stress api.http --duration 30s --rate 10
+
+# Virtual users mode with think time
+hitspec stress api.http --duration 2m --vus 50 --think-time 1s
+
+# With ramp-up
+hitspec stress api.http --duration 5m --rate 200 --ramp-up 30s
+
+# Using config profile
+hitspec stress api.http --profile load --env staging
+
+# With thresholds for CI/CD
+hitspec stress api.http -d 1m -r 100 --threshold "p95<200ms,errors<0.1%"
+```
+
+### Stress Flags
+
+| Flag | Short | Default | Description |
+|------|-------|---------|-------------|
+| `--duration` | `-d` | `30s` | Test duration (e.g., 30s, 5m, 1h) |
+| `--rate` | `-r` | `10` | Target requests per second |
+| `--vus` | `-u` | `0` | Virtual users (alternative to rate) |
+| `--max-vus` | | `100` | Max concurrent requests |
+| `--think-time` | `-t` | `0s` | Think time between requests per VU |
+| `--ramp-up` | | `0s` | Ramp-up time to reach target |
+| `--threshold` | | | Pass/fail thresholds |
+| `--profile` | `-p` | | Load profile from config |
+| `--no-progress` | | `false` | Disable real-time display |
+| `--json` | | `false` | Output results as JSON |
+
+### Thresholds
+
+Thresholds define pass/fail criteria for CI/CD integration:
+
+```bash
+# Latency thresholds
+hitspec stress api.http --threshold "p95<200ms"
+hitspec stress api.http --threshold "p99<500ms"
+
+# Error rate threshold
+hitspec stress api.http --threshold "errors<1%"
+
+# Multiple thresholds
+hitspec stress api.http --threshold "p95<200ms,errors<0.1%"
+```
+
+Supported thresholds:
+- `p50`, `p95`, `p99` - Latency percentiles (e.g., `p95<200ms`)
+- `max` - Maximum latency (e.g., `max<1s`)
+- `errors` - Error rate (e.g., `errors<1%` or `errors<0.01`)
+- `rps` - Minimum RPS (e.g., `rps>50`)
+
+### Stress Annotations
+
+Control per-request behavior in stress tests:
+
+```http
+### Create User
+# @name createUser
+# @stress.weight 3
+# @stress.think 500
+
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{"name": "Test User"}
+
+>>>
+expect status 201
+<<<
+```
+
+| Annotation | Description |
+|------------|-------------|
+| `# @stress.weight N` | Relative selection weight (default 1) |
+| `# @stress.think N` | Think time in ms after this request |
+| `# @stress.skip` | Exclude from stress testing |
+| `# @stress.setup` | Run once before test starts |
+| `# @stress.teardown` | Run once after test ends |
+
+### Config Profiles
+
+Define reusable profiles in `hitspec.yaml`:
+
+```yaml
+stress:
+  profiles:
+    smoke:
+      duration: 30s
+      rate: 5
+      thresholds:
+        p95: 500ms
+        errors: 1%
+    load:
+      duration: 5m
+      rate: 50
+      rampUp: 30s
+      thresholds:
+        p95: 200ms
+        errors: 0.1%
+    spike:
+      duration: 1m
+      vus: 100
+      thinkTime: 100ms
+```
+
+Usage:
+```bash
+hitspec stress api.http --profile load
+hitspec stress api.http --profile smoke --env staging
+```
+
+### Output Example
+
+Real-time progress:
+```
+hitspec stress v0.9.0
+
+Stress Testing: api.http
+Target: 100 req/s | Duration: 5m | Max VUs: 100
+
+Progress ━━━━━━━━━━━━━━━━━━━ 2m 15s / 5m 00s
+
+Requests: 1,247 total | 1,240 success | 7 errors (0.56%)
+Rate: 98.4 req/s | Active VUs: 12
+
+Latency: p50: 45ms | p95: 142ms | p99: 312ms | max: 1.2s
+```
+
+Summary:
+```
+STRESS TEST SUMMARY
+────────────────────────────────────
+Duration:   5m 0.24s
+Total:      29,847 requests (99.5 req/s)
+Success:    29,712 (99.5%)
+Failed:     135 (0.5%)
+
+LATENCY (ms)
+  p50: 52  | p95: 234 | p99: 892 | max: 2,341
+
+THRESHOLDS
+  ✓ p95 < 300ms    (actual: 234ms)
+  ✓ errors < 1%    (actual: 0.5%)
 ```
