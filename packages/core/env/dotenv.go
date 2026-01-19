@@ -9,6 +9,8 @@ import (
 
 // LoadDotEnv parses a .env file and returns key-value pairs.
 // Supports: KEY=value, KEY="quoted value", KEY='single quoted', # comments
+// Note: This does NOT export to OS environment. Use LoadAndExportDotEnv if you
+// need ${VAR} syntax to work in config files loaded after the .env file.
 func LoadDotEnv(path string) (map[string]string, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -57,4 +59,23 @@ func LoadDotEnv(path string) (map[string]string, error) {
 	}
 
 	return result, nil
+}
+
+// LoadAndExportDotEnv parses a .env file, returns key-value pairs,
+// and exports them to the OS environment for ${VAR} resolution.
+// Variables are only exported if not already set in the OS environment.
+func LoadAndExportDotEnv(path string) (map[string]string, error) {
+	vars, err := LoadDotEnv(path)
+	if err != nil {
+		return nil, err
+	}
+
+	// Export to OS environment (only if not already set)
+	for k, v := range vars {
+		if os.Getenv(k) == "" {
+			_ = os.Setenv(k, v) // Error ignored: only fails for invalid key names
+		}
+	}
+
+	return vars, nil
 }

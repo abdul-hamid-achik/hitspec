@@ -37,9 +37,10 @@ func NewResolver() *Resolver {
 }
 
 // LoadDotEnv loads variables from a .env file for variable interpolation.
-// Variables loaded from the .env file take precedence over OS environment variables.
+// Variables are also exported to the OS environment so ${VAR} syntax works
+// in config files loaded after the .env file.
 func (r *Resolver) LoadDotEnv(path string) error {
-	vars, err := LoadDotEnv(path)
+	vars, err := LoadAndExportDotEnv(path)
 	if err != nil {
 		return err
 	}
