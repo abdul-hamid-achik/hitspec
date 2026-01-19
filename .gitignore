@@ -1,7 +1,7 @@
 # Binaries
 bin/
-hitspec
-cli
+/hitspec
+/cli
 *.exe
 *.exe~
 *.dll

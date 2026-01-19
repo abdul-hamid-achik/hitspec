@@ -285,8 +285,8 @@ Authorization: Bearer {{login.token}}
 # Run tests
 hitspec run <file|dir> [flags]
 
-# Stress testing mode
-hitspec run <file> --stress [stress-flags]
+# Stress testing mode (supports files, directories, or multiple files)
+hitspec run <file|dir|files...> --stress [stress-flags]
 
 # Validate syntax without executing
 hitspec validate <file|dir>
