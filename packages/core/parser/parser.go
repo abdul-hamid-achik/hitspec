@@ -271,6 +271,32 @@ func (p *Parser) parseAnnotation(req *Request) error {
 		req.Metadata.PostHooks = append(req.Metadata.PostHooks, hook)
 	case "db":
 		req.Metadata.DBConnection = value
+	case "waitfor":
+		parts := strings.Fields(value)
+		if len(parts) >= 1 {
+			cfg := &WaitForConfig{
+				URL:      parts[0],
+				Status:   200,      // default
+				Timeout:  30000,    // default 30s
+				Interval: 1000,     // default 1s
+			}
+			if len(parts) >= 2 {
+				if status, err := strconv.Atoi(parts[1]); err == nil {
+					cfg.Status = status
+				}
+			}
+			if len(parts) >= 3 {
+				if timeout, err := strconv.Atoi(parts[2]); err == nil {
+					cfg.Timeout = timeout
+				}
+			}
+			if len(parts) >= 4 {
+				if interval, err := strconv.Atoi(parts[3]); err == nil {
+					cfg.Interval = interval
+				}
+			}
+			req.Metadata.WaitFor = cfg
+		}
 	}
 
 	return nil

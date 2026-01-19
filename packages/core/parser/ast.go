@@ -49,6 +49,14 @@ type RequestMetadata struct {
 	PreHooks     []*Hook
 	PostHooks    []*Hook
 	DBConnection string
+	WaitFor      *WaitForConfig
+}
+
+type WaitForConfig struct {
+	URL      string
+	Status   int
+	Timeout  int // ms
+	Interval int // ms
 }
 
 type AuthConfig struct {

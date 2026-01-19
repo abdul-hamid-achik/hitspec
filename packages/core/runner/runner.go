@@ -437,6 +437,15 @@ func (r *Runner) executeRequest(req *parser.Request, baseDir string, parallel bo
 		Captures: make(map[string]any),
 	}
 
+	// Wait for service readiness if configured
+	if req.Metadata != nil && req.Metadata.WaitFor != nil {
+		if err := r.waitForService(req.Metadata.WaitFor, r.resolver.Resolve); err != nil {
+			result.Error = err
+			result.Passed = false
+			return result
+		}
+	}
+
 	// Execute pre-hooks
 	if req.Metadata != nil && len(req.Metadata.PreHooks) > 0 {
 		if err := r.executePreHooks(req.Metadata.PreHooks, baseDir, r.resolver.Resolve); err != nil {

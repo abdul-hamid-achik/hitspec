@@ -121,7 +121,7 @@ Types: `null`, `boolean`, `number`, `string`, `array`, `object`
 | `{{$urlDecode(value)}}` | URL decode |
 | `{{$json(value)}}` | JSON passthrough |
 
-## Metadata Directives (13)
+## Metadata Directives (14)
 
 | Directive | Description |
 |-----------|-------------|
@@ -138,6 +138,7 @@ Types: `null`, `boolean`, `number`, `string`, `array`, `object`
 | `# @before script.sh` | Run script before request |
 | `# @after script.sh` | Run script after request (always runs) |
 | `# @db connection` | Database connection for db assertions |
+| `# @waitFor url status timeout interval` | Poll until service ready |
 
 ## Hooks (Setup/Teardown)
 
@@ -191,6 +192,28 @@ Connection string formats:
 - `mysql://user:pass@localhost:3306/dbname`
 
 Operators: `==`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `exists`, `!exists`
+
+## Service Readiness
+
+Wait for a service to be ready before sending the request:
+
+```http
+### Wait for API to be ready
+# @waitFor {{baseUrl}}/health 200 30000 1000
+
+GET {{baseUrl}}/api/data
+
+>>>
+expect status 200
+<<<
+```
+
+Format: `@waitFor <url> <expectedStatus> <timeoutMs> <intervalMs>`
+
+- `url`: URL to poll (variables are resolved)
+- `expectedStatus`: HTTP status code to wait for (default: 200)
+- `timeoutMs`: Maximum wait time in milliseconds (default: 30000)
+- `intervalMs`: Polling interval in milliseconds (default: 1000)
 
 ## Authentication (6 types)
 

@@ -316,6 +316,70 @@ func TestHasAnyTag(t *testing.T) {
 	}
 }
 
+func TestRunner_WaitFor(t *testing.T) {
+	t.Run("waits for service to be ready", func(t *testing.T) {
+		requestCount := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestCount++
+			if r.URL.Path == "/health" {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		content := `### Wait for health check
+# @waitFor ` + server.URL + `/health 200 5000 100
+
+GET ` + server.URL + `/api
+
+>>>
+expect status 200
+<<<`
+
+		tmpDir := t.TempDir()
+		testFile := filepath.Join(tmpDir, "test.http")
+		err := os.WriteFile(testFile, []byte(content), 0644)
+		require.NoError(t, err)
+
+		r := NewRunner(&Config{})
+		result, err := r.RunFile(testFile)
+
+		require.NoError(t, err)
+		assert.True(t, result.Results[0].Passed)
+		assert.GreaterOrEqual(t, requestCount, 2) // At least health check + actual request
+	})
+
+	t.Run("times out if service not ready", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}))
+		defer server.Close()
+
+		content := `### Wait for service that never becomes ready
+# @waitFor ` + server.URL + `/health 200 500 100
+
+GET ` + server.URL + `/api
+
+>>>
+expect status 200
+<<<`
+
+		tmpDir := t.TempDir()
+		testFile := filepath.Join(tmpDir, "test.http")
+		err := os.WriteFile(testFile, []byte(content), 0644)
+		require.NoError(t, err)
+
+		r := NewRunner(&Config{})
+		result, err := r.RunFile(testFile)
+
+		require.NoError(t, err)
+		assert.False(t, result.Results[0].Passed)
+		assert.Contains(t, result.Results[0].Error.Error(), "not ready")
+	})
+}
+
 func TestRunner_Hooks(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
