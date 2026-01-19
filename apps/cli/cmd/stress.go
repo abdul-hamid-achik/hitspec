@@ -50,6 +50,7 @@ var (
 	stressThresholdFlag  string
 	stressProfileFlag    string
 	stressEnvFlag        string
+	stressEnvFileFlag    string
 	stressNoProgressFlag bool
 	stressNoColorFlag    bool
 	stressVerboseFlag    bool
@@ -68,6 +69,7 @@ func init() {
 	stressCmd.Flags().StringVar(&stressThresholdFlag, "threshold", "", "Pass/fail thresholds (e.g., \"p95<200ms,errors<0.1%\")")
 	stressCmd.Flags().StringVarP(&stressProfileFlag, "profile", "p", "", "Load stress profile from config")
 	stressCmd.Flags().StringVarP(&stressEnvFlag, "env", "e", "", "Environment to use")
+	stressCmd.Flags().StringVar(&stressEnvFileFlag, "env-file", "", "Path to .env file for variable interpolation")
 	stressCmd.Flags().BoolVar(&stressNoProgressFlag, "no-progress", false, "Disable real-time progress display")
 	stressCmd.Flags().BoolVar(&stressNoColorFlag, "no-color", false, "Disable colored output")
 	stressCmd.Flags().BoolVarP(&stressVerboseFlag, "verbose", "v", false, "Verbose output with per-request breakdown")
@@ -128,11 +130,18 @@ func stressCommand(cmd *cobra.Command, args []string) error {
 	)
 
 	// Create runner
-	runner := stress.NewRunner(cfg,
+	runnerOpts := []stress.RunnerOption{
 		stress.WithHTTPClient(client),
 		stress.WithResolver(resolver),
 		stress.WithReporter(reporter),
-	)
+	}
+	if stressEnvFlag != "" {
+		runnerOpts = append(runnerOpts, stress.WithEnvironment(stressEnvFlag))
+	}
+	if stressEnvFileFlag != "" {
+		runnerOpts = append(runnerOpts, stress.WithEnvFile(stressEnvFileFlag))
+	}
+	runner := stress.NewRunner(cfg, runnerOpts...)
 
 	// Load file
 	if err := runner.LoadFile(filePath); err != nil {

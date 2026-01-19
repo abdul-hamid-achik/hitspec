@@ -21,6 +21,10 @@ type Runner struct {
 	metrics   *Metrics
 	reporter  *Reporter
 
+	// Environment configuration
+	envName    string
+	envFile    string
+
 	// Parsed requests
 	file        *parser.File
 	baseDir     string
@@ -50,6 +54,20 @@ func WithResolver(resolver *env.Resolver) RunnerOption {
 func WithReporter(reporter *Reporter) RunnerOption {
 	return func(r *Runner) {
 		r.reporter = reporter
+	}
+}
+
+// WithEnvironment sets the environment name
+func WithEnvironment(envName string) RunnerOption {
+	return func(r *Runner) {
+		r.envName = envName
+	}
+}
+
+// WithEnvFile sets the .env file path
+func WithEnvFile(envFile string) RunnerOption {
+	return func(r *Runner) {
+		r.envFile = envFile
 	}
 }
 
@@ -91,8 +109,15 @@ func (r *Runner) LoadFile(path string) error {
 	r.file = file
 	r.baseDir = filepath.Dir(path)
 
+	// Load dotenv file if specified
+	if r.envFile != "" {
+		if err := r.resolver.LoadDotEnv(r.envFile); err != nil {
+			r.reporter.Info("warning: failed to load env file: %v", err)
+		}
+	}
+
 	// Load environment variables
-	environment, err := env.LoadEnvironment(r.baseDir, "", nil)
+	environment, err := env.LoadEnvironment(r.baseDir, r.envName, nil)
 	if err != nil {
 		// Non-fatal, just log it
 		r.reporter.Info("warning: failed to load environment: %v", err)
