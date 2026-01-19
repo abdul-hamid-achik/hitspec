@@ -2,7 +2,22 @@ package env
 
 import (
 	"os"
+	"regexp"
 )
+
+var envVarPattern = regexp.MustCompile(`\$\{([^}]+)\}`)
+
+// resolveEnvVars replaces ${VAR} patterns with actual environment variable values
+func resolveEnvVars(value any) any {
+	str, ok := value.(string)
+	if !ok {
+		return value
+	}
+	return envVarPattern.ReplaceAllStringFunc(str, func(match string) string {
+		varName := match[2 : len(match)-1] // Extract VAR from ${VAR}
+		return os.Getenv(varName)
+	})
+}
 
 type Environment struct {
 	Name      string
@@ -19,7 +34,7 @@ func LoadEnvironment(dir, envName string, configEnvs map[string]map[string]any) 
 	if configEnvs != nil {
 		if vars, ok := configEnvs[envName]; ok {
 			for k, v := range vars {
-				env.Variables[k] = v
+				env.Variables[k] = resolveEnvVars(v)
 			}
 		}
 	}

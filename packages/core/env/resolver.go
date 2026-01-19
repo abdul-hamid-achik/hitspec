@@ -145,7 +145,18 @@ func (r *Resolver) Resolve(input string) string {
 			r.mu.RUnlock()
 			return fmt.Sprintf("%v", val)
 		}
+
+		// Check dotenv file
+		if val, ok := r.dotenv[expr]; ok {
+			r.mu.RUnlock()
+			return val
+		}
 		r.mu.RUnlock()
+
+		// Fallback to OS environment variable
+		if val := os.Getenv(expr); val != "" {
+			return val
+		}
 
 		r.warn("unresolved variable: %s", expr)
 		return match
