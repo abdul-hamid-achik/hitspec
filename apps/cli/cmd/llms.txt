@@ -339,6 +339,43 @@ File: `.hitspec.env.json`
 
 Use: `hitspec run tests/ --env prod`
 
+## Configuration File (hitspec.yaml)
+
+Unified configuration file combining settings and environments:
+
+File: `hitspec.yaml`
+```yaml
+# Settings
+defaultEnvironment: dev
+timeout: 30000
+retries: 0
+followRedirects: true
+validateSSL: true
+headers:
+  User-Agent: hitspec/1.0
+verbose: false
+
+# Environments (inline, same as .hitspec.env.json)
+environments:
+  dev:
+    baseUrl: https://api-dev.example.com
+    token: dev-token
+  prod:
+    baseUrl: https://api.example.com
+    token: "${PROD_TOKEN}"
+```
+
+Supported config files (searched in order):
+1. `hitspec.yaml` / `hitspec.yml`
+2. `.hitspec.yaml` / `.hitspec.yml`
+3. `.hitspec.config.json` / `hitspec.config.json`
+4. `.hitspecrc` / `.hitspecrc.json`
+
+Environment variable precedence (later overrides earlier):
+1. `environments:` in hitspec.yaml
+2. `.hitspec.env.json`
+3. `.hitspec.env.local.json`
+
 ## Syntax Rules
 
 - `###` starts a new request (request separator)

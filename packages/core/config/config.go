@@ -4,26 +4,29 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Config represents the hitspec configuration
 type Config struct {
-	DefaultEnvironment string            `json:"defaultEnvironment,omitempty"`
-	Timeout            int               `json:"timeout,omitempty"`           // milliseconds
-	Retries            int               `json:"retries,omitempty"`
-	RetryDelay         int               `json:"retryDelay,omitempty"`        // milliseconds
-	FollowRedirects    *bool             `json:"followRedirects,omitempty"`
-	MaxRedirects       int               `json:"maxRedirects,omitempty"`
-	ValidateSSL        *bool             `json:"validateSSL,omitempty"`
-	Proxy              string            `json:"proxy,omitempty"`
-	Headers            map[string]string `json:"headers,omitempty"`           // Default headers for all requests
-	Reporters          []string          `json:"reporters,omitempty"`         // Output reporters
-	OutputDir          string            `json:"outputDir,omitempty"`         // Directory for output files
-	Parallel           *bool             `json:"parallel,omitempty"`
-	Concurrency        int               `json:"concurrency,omitempty"`       // Number of parallel requests
-	Bail               *bool             `json:"bail,omitempty"`
-	Verbose            *bool             `json:"verbose,omitempty"`
-	NoColor            *bool             `json:"noColor,omitempty"`
+	DefaultEnvironment string                       `json:"defaultEnvironment,omitempty" yaml:"defaultEnvironment,omitempty"`
+	Timeout            int                          `json:"timeout,omitempty" yaml:"timeout,omitempty"`           // milliseconds
+	Retries            int                          `json:"retries,omitempty" yaml:"retries,omitempty"`
+	RetryDelay         int                          `json:"retryDelay,omitempty" yaml:"retryDelay,omitempty"`     // milliseconds
+	FollowRedirects    *bool                        `json:"followRedirects,omitempty" yaml:"followRedirects,omitempty"`
+	MaxRedirects       int                          `json:"maxRedirects,omitempty" yaml:"maxRedirects,omitempty"`
+	ValidateSSL        *bool                        `json:"validateSSL,omitempty" yaml:"validateSSL,omitempty"`
+	Proxy              string                       `json:"proxy,omitempty" yaml:"proxy,omitempty"`
+	Headers            map[string]string            `json:"headers,omitempty" yaml:"headers,omitempty"`           // Default headers for all requests
+	Reporters          []string                     `json:"reporters,omitempty" yaml:"reporters,omitempty"`       // Output reporters
+	OutputDir          string                       `json:"outputDir,omitempty" yaml:"outputDir,omitempty"`       // Directory for output files
+	Parallel           *bool                        `json:"parallel,omitempty" yaml:"parallel,omitempty"`
+	Concurrency        int                          `json:"concurrency,omitempty" yaml:"concurrency,omitempty"`   // Number of parallel requests
+	Bail               *bool                        `json:"bail,omitempty" yaml:"bail,omitempty"`
+	Verbose            *bool                        `json:"verbose,omitempty" yaml:"verbose,omitempty"`
+	NoColor            *bool                        `json:"noColor,omitempty" yaml:"noColor,omitempty"`
+	Environments       map[string]map[string]any    `json:"environments,omitempty" yaml:"environments,omitempty"` // Inline environments
 }
 
 // boolPtr returns a pointer to a bool value
@@ -74,8 +77,12 @@ func (c *Config) GetNoColor() bool {
 	return getBool(c.NoColor, false)
 }
 
-// ConfigFilenames contains the possible config file names
+// ConfigFilenames contains the possible config file names (searched in order)
 var ConfigFilenames = []string{
+	"hitspec.yaml",
+	"hitspec.yml",
+	".hitspec.yaml",
+	".hitspec.yml",
 	".hitspec.config.json",
 	"hitspec.config.json",
 	".hitspecrc",
@@ -113,8 +120,16 @@ func loadConfigFromFile(path string) (*Config, error) {
 	}
 
 	config := DefaultConfig()
-	if err := json.Unmarshal(data, config); err != nil {
-		return nil, err
+
+	ext := filepath.Ext(path)
+	if ext == ".yaml" || ext == ".yml" {
+		if err := yaml.Unmarshal(data, config); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := json.Unmarshal(data, config); err != nil {
+			return nil, err
+		}
 	}
 
 	return config, nil
@@ -186,6 +201,21 @@ func (c *Config) Merge(other *Config) *Config {
 	// Merge reporters
 	if len(other.Reporters) > 0 {
 		result.Reporters = other.Reporters
+	}
+
+	// Merge environments
+	if len(other.Environments) > 0 {
+		if result.Environments == nil {
+			result.Environments = make(map[string]map[string]any)
+		}
+		for envName, vars := range other.Environments {
+			if result.Environments[envName] == nil {
+				result.Environments[envName] = make(map[string]any)
+			}
+			for k, v := range vars {
+				result.Environments[envName][k] = v
+			}
+		}
 	}
 
 	return &result

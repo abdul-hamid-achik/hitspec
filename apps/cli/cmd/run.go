@@ -165,19 +165,20 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	cfg := &runner.Config{
-		Environment:    envFlag,
-		EnvFile:        envFileFlag,
-		Verbose:        verboseFlag,
-		Timeout:        time.Duration(timeoutFlag) * time.Millisecond,
-		FollowRedirect: fileConfig.GetFollowRedirects(),
-		Bail:           bailFlag,
-		NameFilter:     nameFlag,
-		TagsFilter:     tagsFilter,
-		Parallel:       parallelFlag,
-		Concurrency:    concurrencyFlag,
-		ValidateSSL:    validateSSL,
-		Proxy:          proxy,
-		DefaultHeaders: fileConfig.Headers,
+		Environment:        envFlag,
+		EnvFile:            envFileFlag,
+		Verbose:            verboseFlag,
+		Timeout:            time.Duration(timeoutFlag) * time.Millisecond,
+		FollowRedirect:     fileConfig.GetFollowRedirects(),
+		Bail:               bailFlag,
+		NameFilter:         nameFlag,
+		TagsFilter:         tagsFilter,
+		Parallel:           parallelFlag,
+		Concurrency:        concurrencyFlag,
+		ValidateSSL:        validateSSL,
+		Proxy:              proxy,
+		DefaultHeaders:     fileConfig.Headers,
+		ConfigEnvironments: fileConfig.Environments,
 	}
 
 	r := runner.NewRunner(cfg)

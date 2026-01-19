@@ -28,19 +28,20 @@ type Runner struct {
 }
 
 type Config struct {
-	Environment     string
-	EnvFile         string
-	Verbose         bool
-	Timeout         time.Duration
-	FollowRedirect  bool
-	Bail            bool
-	NameFilter      string
-	TagsFilter      []string
-	Parallel        bool
-	Concurrency     int
-	ValidateSSL     bool
-	Proxy           string
-	DefaultHeaders  map[string]string
+	Environment        string
+	EnvFile            string
+	Verbose            bool
+	Timeout            time.Duration
+	FollowRedirect     bool
+	Bail               bool
+	NameFilter         string
+	TagsFilter         []string
+	Parallel           bool
+	Concurrency        int
+	ValidateSSL        bool
+	Proxy              string
+	DefaultHeaders     map[string]string
+	ConfigEnvironments map[string]map[string]any
 }
 
 func NewRunner(cfg *Config) *Runner {
@@ -115,7 +116,7 @@ func (r *Runner) RunFile(path string) (*RunResult, error) {
 		return nil, fmt.Errorf("parsing file: %w", err)
 	}
 
-	environment, err := env.LoadEnvironment(filepath.Dir(path), r.config.Environment)
+	environment, err := env.LoadEnvironment(filepath.Dir(path), r.config.Environment, r.config.ConfigEnvironments)
 	if err != nil {
 		return nil, fmt.Errorf("loading environment: %w", err)
 	}
