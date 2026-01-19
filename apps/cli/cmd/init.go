@@ -1,12 +1,12 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 var forceInit bool
@@ -17,9 +17,8 @@ var initCmd = &cobra.Command{
 	Long: `Initialize a new hitspec project in the current directory.
 
 This creates:
-  - .hitspec.config.json  - Configuration file
-  - .hitspec.env.json     - Environment variables
-  - example.http          - Example test file
+  - hitspec.yaml   - Configuration file with environments
+  - example.http   - Example test file
 
 Examples:
   hitspec init
@@ -37,21 +36,21 @@ func initCommand(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	configFile := filepath.Join(cwd, ".hitspec.config.json")
-	envFile := filepath.Join(cwd, ".hitspec.env.json")
+	configFile := filepath.Join(cwd, "hitspec.yaml")
 	exampleFile := filepath.Join(cwd, "example.http")
 
 	if !forceInit {
-		for _, f := range []string{configFile, envFile, exampleFile} {
+		for _, f := range []string{configFile, exampleFile} {
 			if _, err := os.Stat(f); err == nil {
 				return fmt.Errorf("file already exists: %s (use --force to overwrite)", f)
 			}
 		}
 	}
 
-	config := map[string]any{
+	// Combined config with environments (single file, proper YAML format)
+	configContent := map[string]any{
 		"defaultEnvironment": "dev",
-		"timeout":            30000,
+		"timeout":            "30s",
 		"retries":            0,
 		"followRedirects":    true,
 		"maxRedirects":       10,
@@ -59,33 +58,24 @@ func initCommand(cmd *cobra.Command, args []string) error {
 		"headers": map[string]string{
 			"User-Agent": "hitspec/1.0",
 		},
-		"verbose": false,
-		"colors":  true,
+		"environments": map[string]map[string]string{
+			"dev": {
+				"baseUrl": "http://localhost:3000",
+			},
+			"staging": {
+				"baseUrl": "https://staging.api.example.com",
+			},
+			"prod": {
+				"baseUrl": "https://api.example.com",
+			},
+		},
 	}
 
-	configJSON, _ := json.MarshalIndent(config, "", "  ")
-	if err := os.WriteFile(configFile, configJSON, 0644); err != nil {
+	configYAML, _ := yaml.Marshal(configContent)
+	if err := os.WriteFile(configFile, configYAML, 0644); err != nil {
 		return fmt.Errorf("failed to create config file: %w", err)
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Created: %s\n", configFile)
-
-	envConfig := map[string]map[string]string{
-		"dev": {
-			"baseUrl": "http://localhost:3000",
-		},
-		"staging": {
-			"baseUrl": "https://staging.api.example.com",
-		},
-		"prod": {
-			"baseUrl": "https://api.example.com",
-		},
-	}
-
-	envJSON, _ := json.MarshalIndent(envConfig, "", "  ")
-	if err := os.WriteFile(envFile, envJSON, 0644); err != nil {
-		return fmt.Errorf("failed to create env file: %w", err)
-	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Created: %s\n", envFile)
 
 	exampleContent := `@baseUrl = {{baseUrl}}
 

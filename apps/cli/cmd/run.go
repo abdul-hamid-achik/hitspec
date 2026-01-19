@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -52,9 +53,10 @@ var (
 	envFileFlag     string
 	nameFlag        string
 	tagsFlag        string
-	verboseFlag     bool
+	verboseFlag     int // 0=off, 1=-v, 2=-vv, 3=-vvv
+	quietFlag       bool
 	bailFlag        bool
-	timeoutFlag     int
+	timeoutFlag     string
 	noColorFlag     bool
 	dryRunFlag      bool
 	outputFlag      string
@@ -64,6 +66,7 @@ var (
 	watchFlag       bool
 	proxyFlag       string
 	insecureFlag    bool
+	configFlag      string
 
 	// Stress testing flags
 	stressFlag           bool
@@ -80,22 +83,31 @@ var (
 )
 
 func init() {
-	runCmd.Flags().StringVarP(&envFlag, "env", "e", "dev", "Environment to use")
-	runCmd.Flags().StringVar(&envFileFlag, "env-file", "", "Path to .env file for variable interpolation")
+	// Core flags
+	runCmd.Flags().StringVarP(&envFlag, "env", "e", getEnvString("HITSPEC_ENV", "dev"), "Environment to use (env: HITSPEC_ENV)")
+	runCmd.Flags().StringVar(&envFileFlag, "env-file", getEnvString("HITSPEC_ENV_FILE", ""), "Path to .env file for variable interpolation (env: HITSPEC_ENV_FILE)")
+	runCmd.Flags().StringVar(&configFlag, "config", getEnvString("HITSPEC_CONFIG", ""), "Path to config file (env: HITSPEC_CONFIG)")
 	runCmd.Flags().StringVarP(&nameFlag, "name", "n", "", "Run only tests matching name pattern")
-	runCmd.Flags().StringVarP(&tagsFlag, "tags", "t", "", "Run only tests with specified tags (comma-separated)")
-	runCmd.Flags().BoolVarP(&verboseFlag, "verbose", "v", false, "Verbose output")
-	runCmd.Flags().BoolVar(&bailFlag, "bail", false, "Stop on first failure")
-	runCmd.Flags().IntVar(&timeoutFlag, "timeout", 30000, "Global timeout in milliseconds")
-	runCmd.Flags().BoolVar(&noColorFlag, "no-color", false, "Disable colored output")
+	runCmd.Flags().StringVarP(&tagsFlag, "tags", "t", getEnvString("HITSPEC_TAGS", ""), "Run only tests with specified tags (comma-separated) (env: HITSPEC_TAGS)")
+
+	// Output flags
+	runCmd.Flags().CountVarP(&verboseFlag, "verbose", "v", "Verbose output (-v, -vv, -vvv for more detail)")
+	runCmd.Flags().BoolVarP(&quietFlag, "quiet", "q", getEnvBool("HITSPEC_QUIET", false), "Suppress all output except errors (env: HITSPEC_QUIET)")
+	runCmd.Flags().BoolVar(&noColorFlag, "no-color", getEnvBool("HITSPEC_NO_COLOR", false), "Disable colored output (env: HITSPEC_NO_COLOR)")
+	runCmd.Flags().StringVarP(&outputFlag, "output", "o", getEnvString("HITSPEC_OUTPUT", "console"), "Output format: console, json, junit, tap (env: HITSPEC_OUTPUT)")
+	runCmd.Flags().StringVar(&outputFileFlag, "output-file", getEnvString("HITSPEC_OUTPUT_FILE", ""), "Write output to file (default: stdout) (env: HITSPEC_OUTPUT_FILE)")
+
+	// Execution flags
+	runCmd.Flags().BoolVar(&bailFlag, "bail", getEnvBool("HITSPEC_BAIL", false), "Stop on first failure (env: HITSPEC_BAIL)")
+	runCmd.Flags().StringVar(&timeoutFlag, "timeout", getEnvString("HITSPEC_TIMEOUT", "30s"), "Request timeout (e.g., 30s, 1m) (env: HITSPEC_TIMEOUT)")
 	runCmd.Flags().BoolVar(&dryRunFlag, "dry-run", false, "Parse and show what would run without executing")
-	runCmd.Flags().StringVarP(&outputFlag, "output", "o", "console", "Output format: console, json, junit, tap")
-	runCmd.Flags().StringVar(&outputFileFlag, "output-file", "", "Write output to file (default: stdout)")
-	runCmd.Flags().BoolVarP(&parallelFlag, "parallel", "p", false, "Run requests in parallel (when no dependencies)")
-	runCmd.Flags().IntVar(&concurrencyFlag, "concurrency", 5, "Number of concurrent requests when running in parallel")
+	runCmd.Flags().BoolVarP(&parallelFlag, "parallel", "p", getEnvBool("HITSPEC_PARALLEL", false), "Run requests in parallel (when no dependencies) (env: HITSPEC_PARALLEL)")
+	runCmd.Flags().IntVar(&concurrencyFlag, "concurrency", getEnvInt("HITSPEC_CONCURRENCY", 5), "Number of concurrent requests when running in parallel (env: HITSPEC_CONCURRENCY)")
 	runCmd.Flags().BoolVarP(&watchFlag, "watch", "w", false, "Watch files for changes and re-run tests")
-	runCmd.Flags().StringVar(&proxyFlag, "proxy", "", "Proxy URL for HTTP requests")
-	runCmd.Flags().BoolVarP(&insecureFlag, "insecure", "k", false, "Disable SSL certificate validation")
+
+	// Network flags
+	runCmd.Flags().StringVar(&proxyFlag, "proxy", getEnvString("HITSPEC_PROXY", ""), "Proxy URL for HTTP requests (env: HITSPEC_PROXY)")
+	runCmd.Flags().BoolVarP(&insecureFlag, "insecure", "k", getEnvBool("HITSPEC_INSECURE", false), "Disable SSL certificate validation (env: HITSPEC_INSECURE)")
 
 	// Stress testing flags
 	runCmd.Flags().BoolVar(&stressFlag, "stress", false, "Enable stress testing mode")
@@ -109,6 +121,30 @@ func init() {
 	runCmd.Flags().StringVar(&stressProfileFlag, "profile", "", "Load stress profile from config")
 	runCmd.Flags().BoolVar(&stressNoProgressFlag, "no-progress", false, "Disable real-time progress display")
 	runCmd.Flags().BoolVar(&stressJSONFlag, "stress-json", false, "Output stress results as JSON")
+}
+
+// Environment variable helpers
+func getEnvString(key, defaultVal string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return defaultVal
+}
+
+func getEnvBool(key string, defaultVal bool) bool {
+	if val := os.Getenv(key); val != "" {
+		return val == "true" || val == "1" || val == "yes"
+	}
+	return defaultVal
+}
+
+func getEnvInt(key string, defaultVal int) int {
+	if val := os.Getenv(key); val != "" {
+		if i, err := strconv.Atoi(val); err == nil {
+			return i
+		}
+	}
+	return defaultVal
 }
 
 // Formatter interface for all output formatters
@@ -158,8 +194,8 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		formatter = output.NewTAPFormatter(opts...)
 	default: // "console"
 		consoleOpts := []output.ConsoleOption{
-			output.WithVerbose(verboseFlag),
-			output.WithNoColor(noColorFlag),
+			output.WithVerbose(verboseFlag > 0),
+			output.WithNoColor(noColorFlag || quietFlag),
 		}
 		if outWriter != nil {
 			consoleOpts = append(consoleOpts, output.WithWriter(outWriter))
@@ -191,7 +227,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load config from file (if present) and apply CLI overrides
-	fileConfig, _ := config.LoadConfig("")
+	fileConfig, _ := config.LoadConfig(configFlag)
 
 	// If stress mode is enabled, delegate to stress runner
 	if stressFlag {
@@ -209,11 +245,17 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		validateSSL = false
 	}
 
+	// Parse timeout duration string
+	timeout, err := time.ParseDuration(timeoutFlag)
+	if err != nil {
+		return fmt.Errorf("invalid timeout value %q: %w (use format like 30s, 1m, 500ms)", timeoutFlag, err)
+	}
+
 	cfg := &runner.Config{
 		Environment:        envFlag,
 		EnvFile:            envFileFlag,
-		Verbose:            verboseFlag,
-		Timeout:            time.Duration(timeoutFlag) * time.Millisecond,
+		Verbose:            verboseFlag > 0,
+		Timeout:            timeout,
 		FollowRedirect:     fileConfig.GetFollowRedirects(),
 		Bail:               bailFlag,
 		NameFilter:         nameFlag,
@@ -348,7 +390,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 						formatter = output.NewTAPFormatter()
 					default:
 						formatter = output.NewConsoleFormatter(
-							output.WithVerbose(verboseFlag),
+							output.WithVerbose(verboseFlag > 0),
 							output.WithNoColor(noColorFlag),
 						)
 					}
@@ -450,7 +492,7 @@ func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config
 	reporter := stress.NewReporter(
 		stress.WithNoColor(noColorFlag),
 		stress.WithNoProgress(stressNoProgressFlag),
-		stress.WithVerbose(verboseFlag),
+		stress.WithVerbose(verboseFlag > 0),
 	)
 
 	// Create runner with config environments for proper variable resolution

@@ -72,21 +72,26 @@ hitspec run tests/ --dry-run
 
 **Flags:**
 
-| Flag | Short | Description | Default |
-|------|-------|-------------|---------|
-| `--env` | `-e` | Environment name | `dev` |
-| `--name` | `-n` | Filter by request name (pattern match) | |
-| `--tags` | `-t` | Filter by tags (comma-separated) | |
-| `--verbose` | `-v` | Show detailed output | `false` |
-| `--bail` | | Stop on first failure | `false` |
-| `--timeout` | | Global timeout in milliseconds | `30000` |
-| `--no-color` | | Disable colored output | `false` |
-| `--dry-run` | | Parse and show what would run | `false` |
-| `--output` | `-o` | Output format: `console`, `json`, `junit`, `tap` | `console` |
-| `--output-file` | | Write output to file | |
-| `--parallel` | `-p` | Run requests in parallel | `false` |
-| `--concurrency` | | Max concurrent requests | `5` |
-| `--watch` | `-w` | Watch files and re-run on changes | `false` |
+| Flag | Short | Description | Default | Env Var |
+|------|-------|-------------|---------|---------|
+| `--env` | `-e` | Environment name | `dev` | `HITSPEC_ENV` |
+| `--env-file` | | Path to .env file | | `HITSPEC_ENV_FILE` |
+| `--config` | | Path to config file | | `HITSPEC_CONFIG` |
+| `--name` | `-n` | Filter by request name (pattern match) | | |
+| `--tags` | `-t` | Filter by tags (comma-separated) | | `HITSPEC_TAGS` |
+| `--verbose` | `-v` | Show detailed output (use -vv or -vvv for more) | `false` | |
+| `--quiet` | `-q` | Suppress all output except errors | `false` | `HITSPEC_QUIET` |
+| `--bail` | | Stop on first failure | `false` | `HITSPEC_BAIL` |
+| `--timeout` | | Request timeout (e.g., 30s, 1m) | `30s` | `HITSPEC_TIMEOUT` |
+| `--no-color` | | Disable colored output | `false` | `HITSPEC_NO_COLOR` |
+| `--dry-run` | | Parse and show what would run | `false` | |
+| `--output` | `-o` | Output format: `console`, `json`, `junit`, `tap` | `console` | `HITSPEC_OUTPUT` |
+| `--output-file` | | Write output to file | | `HITSPEC_OUTPUT_FILE` |
+| `--parallel` | `-p` | Run requests in parallel | `false` | `HITSPEC_PARALLEL` |
+| `--concurrency` | | Max concurrent requests | `5` | `HITSPEC_CONCURRENCY` |
+| `--watch` | `-w` | Watch files and re-run on changes | `false` | |
+| `--proxy` | | Proxy URL for HTTP requests | | `HITSPEC_PROXY` |
+| `--insecure` | `-k` | Disable SSL certificate validation | `false` | `HITSPEC_INSECURE` |
 
 ---
 
@@ -151,11 +156,12 @@ Initialize a new hitspec project with example files.
 
 ```bash
 hitspec init
+hitspec init --force  # Overwrite existing files
 ```
 
 **Creates:**
-- `tests/example.http` - Example test file
-- `.hitspec.env.json` - Environment configuration
+- `hitspec.yaml` - Configuration file with environments
+- `example.http` - Example test file
 
 ---
 
@@ -165,6 +171,35 @@ Show version information.
 
 ```bash
 hitspec version
+```
+
+---
+
+### hitspec completion
+
+Generate shell completion scripts for bash, zsh, fish, or PowerShell.
+
+```bash
+hitspec completion [bash|zsh|fish|powershell]
+```
+
+**Examples:**
+
+```bash
+# Bash (Linux)
+hitspec completion bash > /etc/bash_completion.d/hitspec
+
+# Bash (macOS with Homebrew)
+hitspec completion bash > $(brew --prefix)/etc/bash_completion.d/hitspec
+
+# Zsh
+hitspec completion zsh > "${fpath[1]}/_hitspec"
+
+# Fish
+hitspec completion fish > ~/.config/fish/completions/hitspec.fish
+
+# PowerShell
+hitspec completion powershell > hitspec.ps1
 ```
 
 ---
@@ -334,8 +369,10 @@ Environment variables are loaded from `.hitspec.env.json`. See [environments.md]
 |------|-------------|
 | 0 | All tests passed |
 | 1 | One or more tests failed |
-| 2 | Invalid arguments or configuration |
-| 3 | File/directory not found |
+| 2 | Parse error (invalid .http file syntax) |
+| 3 | Configuration error |
+| 4 | Network/connection error |
+| 64 | Invalid CLI usage |
 
 ---
 

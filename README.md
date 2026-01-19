@@ -5,6 +5,16 @@ Plain text API tests. No magic.
 hitspec is a file-based HTTP API testing tool that emphasizes simplicity and readability.
 Write your API tests in plain text files that look like actual HTTP requests.
 
+## Why hitspec?
+
+| Tool | hitspec Advantage |
+|------|-------------------|
+| **Postman** | Plain text files, version-controllable, no GUI needed |
+| **REST Client (VSCode)** | Adds assertions, captures, dependencies, stress testing |
+| **newman** | Simpler file format, no collection export needed |
+| **curl** | Full test framework on top of HTTP requests |
+| **k6** | Simpler syntax, no JavaScript required for basic tests |
+
 ## Installation
 
 ### Homebrew (macOS/Linux)
@@ -101,6 +111,33 @@ hitspec run api.http
 - **Parallel execution** - Run independent tests concurrently
 - **Multiple output formats** - Console, JSON, JUnit, TAP
 - **Watch mode** - Re-run on file changes
+
+## Editor Support
+
+### VSCode
+
+For syntax highlighting of `.http` files, install the [REST Client extension](https://marketplace.visualstudio.com/items?itemName=humao.rest-client). While it doesn't support hitspec-specific features like assertions and captures, it provides:
+
+- HTTP syntax highlighting
+- Request/response formatting
+- Basic HTTP request execution (for quick testing)
+
+The `.http` file format is designed to be compatible with REST Client's syntax.
+
+### Shell Completion
+
+Generate shell completion scripts for bash, zsh, fish, or PowerShell:
+
+```bash
+# Bash
+hitspec completion bash > /etc/bash_completion.d/hitspec
+
+# Zsh
+hitspec completion zsh > "${fpath[1]}/_hitspec"
+
+# Fish
+hitspec completion fish > ~/.config/fish/completions/hitspec.fish
+```
 
 ## Quick Reference
 
@@ -471,6 +508,35 @@ Use the official hitspec action to run API tests in your CI pipeline:
     files: tests/
     env: staging
     env-file: .env.ci
+```
+
+#### Using hitspec Environment Variables
+
+All major CLI flags can be set via environment variables with the `HITSPEC_` prefix:
+
+| Environment Variable | CLI Flag | Description |
+|---------------------|----------|-------------|
+| `HITSPEC_ENV` | `--env` | Environment to use |
+| `HITSPEC_ENV_FILE` | `--env-file` | Path to .env file |
+| `HITSPEC_CONFIG` | `--config` | Path to config file |
+| `HITSPEC_TIMEOUT` | `--timeout` | Request timeout |
+| `HITSPEC_TAGS` | `--tags` | Filter by tags |
+| `HITSPEC_OUTPUT` | `--output` | Output format |
+| `HITSPEC_OUTPUT_FILE` | `--output-file` | Output file path |
+| `HITSPEC_BAIL` | `--bail` | Stop on first failure |
+| `HITSPEC_PARALLEL` | `--parallel` | Run in parallel |
+| `HITSPEC_CONCURRENCY` | `--concurrency` | Concurrent requests |
+| `HITSPEC_QUIET` | `--quiet` | Suppress output |
+| `HITSPEC_NO_COLOR` | `--no-color` | Disable colors |
+| `HITSPEC_PROXY` | `--proxy` | Proxy URL |
+| `HITSPEC_INSECURE` | `--insecure` | Skip SSL verification |
+
+Example:
+```bash
+export HITSPEC_ENV=staging
+export HITSPEC_TIMEOUT=60s
+export HITSPEC_BAIL=true
+hitspec run tests/
 ```
 
 See [.github/workflows/example-hitspec.yml](.github/workflows/example-hitspec.yml) for more examples.
