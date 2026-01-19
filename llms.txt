@@ -1,0 +1,629 @@
+# hitspec
+
+> Plain text HTTP API testing tool. Write tests that look like HTTP requests.
+
+## Quick Start
+
+1. Create `test.http`:
+```http
+GET https://httpbin.org/get
+
+>>>
+expect status 200
+<<<
+```
+
+2. Run: `hitspec run test.http`
+
+3. Output on success:
+```
+✓ test.http (125ms)
+
+1 passed, 0 failed
+```
+
+4. Output on failure:
+```
+✗ test.http (89ms)
+  → status ==
+    Expected: 201
+    Actual:   200
+
+0 passed, 1 failed
+```
+
+## Install
+
+```bash
+brew install abdul-hamid-achik/tap/hitspec
+go install github.com/abdul-hamid-achik/hitspec/apps/cli@latest
+```
+
+## File Format (.http files)
+
+### Variables
+```http
+@baseUrl = https://api.example.com
+@token = your-api-token
+```
+
+### Request Structure
+```http
+### Request Name
+# @name uniqueId
+# @tags smoke, auth
+# @timeout 5000
+# @auth bearer {{token}}
+
+GET {{baseUrl}}/endpoint
+Header-Name: Header-Value
+
+{
+  "body": "content"
+}
+
+>>>
+expect status 200
+expect body.field exists
+<<<
+
+>>>capture
+varName from body.field
+<<<
+```
+
+## Assertion Operators (20)
+
+| Operator | Example |
+|----------|---------|
+| `==` | `expect status == 200` |
+| `!=` | `expect body.error != null` |
+| `>` | `expect body.count > 0` |
+| `>=` | `expect body.count >= 1` |
+| `<` | `expect duration < 1000` |
+| `<=` | `expect duration <= 500` |
+| `contains` | `expect body contains "success"` |
+| `!contains` | `expect body !contains "error"` |
+| `startsWith` | `expect body.url startsWith "https"` |
+| `endsWith` | `expect body.email endsWith ".com"` |
+| `matches` | `expect body.id matches /^\d+$/` |
+| `exists` | `expect body.id exists` |
+| `!exists` | `expect body.error !exists` |
+| `length` | `expect body.items length 10` |
+| `includes` | `expect body.tags includes "admin"` |
+| `!includes` | `expect body.tags !includes "test"` |
+| `in` | `expect status in [200, 201, 204]` |
+| `!in` | `expect status !in [400, 404, 500]` |
+| `type` | `expect body.items type array` |
+| `schema` | `expect body schema ./schema.json` |
+| `each` | `expect body.items each type object` |
+
+Types: `null`, `boolean`, `number`, `string`, `array`, `object`
+
+## Built-in Functions (16)
+
+| Function | Description |
+|----------|-------------|
+| `{{$uuid()}}` | Generate UUID v4 |
+| `{{$timestamp()}}` | Unix timestamp (seconds) |
+| `{{$timestampMs()}}` | Unix timestamp (milliseconds) |
+| `{{$now()}}` | Current datetime (RFC3339) |
+| `{{$date(2006-01-02)}}` | Custom date format |
+| `{{$random(1, 100)}}` | Random integer in range |
+| `{{$randomString(8)}}` | Random alphanumeric string |
+| `{{$randomEmail()}}` | Random email address |
+| `{{$randomAlphanumeric(10)}}` | Random alphanumeric |
+| `{{$base64(value)}}` | Base64 encode |
+| `{{$base64Decode(value)}}` | Base64 decode |
+| `{{$md5(value)}}` | MD5 hash |
+| `{{$sha256(value)}}` | SHA256 hash |
+| `{{$urlEncode(value)}}` | URL encode |
+| `{{$urlDecode(value)}}` | URL decode |
+| `{{$json(value)}}` | JSON passthrough |
+
+## Metadata Directives (10)
+
+| Directive | Description |
+|-----------|-------------|
+| `# @name id` | Request identifier for referencing |
+| `# @description text` | Human-readable description |
+| `# @tags a, b, c` | Tags for filtering (comma-separated) |
+| `# @skip reason` | Skip request execution |
+| `# @only` | Run only this request |
+| `# @timeout 5000` | Timeout in milliseconds |
+| `# @retry 3` | Retry attempts on failure |
+| `# @retryDelay 1000` | Delay between retries (ms) |
+| `# @depends login, setup` | Dependencies (request names) |
+| `# @auth type args` | Authentication method |
+
+## Authentication (6 types)
+
+```http
+# @auth bearer {{token}}
+# @auth basic {{username}}, {{password}}
+# @auth apiKey X-API-Key, {{apiKey}}
+# @auth apiKeyQuery api_key, {{apiKey}}
+# @auth digest {{username}}, {{password}}
+# @auth aws {{accessKey}}, {{secretKey}}, {{region}}, {{service}}
+```
+
+## Assertion Subjects
+
+| Subject | Example |
+|---------|---------|
+| `status` | `expect status 200` |
+| `duration` | `expect duration < 1000` |
+| `header Name` | `expect header Content-Type contains json` |
+| `body` | `expect body contains "success"` |
+| `body.path` | `expect body.user.name == "John"` |
+| `body[n]` | `expect body[0].id exists` |
+| `jsonpath $.path` | `expect jsonpath $.users[0].id exists` |
+
+## Captures
+
+```http
+>>>capture
+token from body.access_token
+userId from body.user.id
+headerVal from header X-Request-Id
+statusCode from status
+responseTime from duration
+<<<
+
+# Use in subsequent requests
+# @depends login
+GET {{baseUrl}}/users/{{login.userId}}
+Authorization: Bearer {{login.token}}
+```
+
+## CLI Commands
+
+```bash
+# Run tests
+hitspec run <file|dir> [flags]
+
+# Validate syntax without executing
+hitspec validate <file|dir>
+
+# List all requests
+hitspec list <file|dir>
+
+# Initialize project
+hitspec init
+
+# Show version
+hitspec version
+
+# Output this documentation
+hitspec llms
+```
+
+## Run Flags
+
+| Flag | Description |
+|------|-------------|
+| `--env, -e` | Environment name (default: dev) |
+| `--name, -n` | Filter by request name pattern |
+| `--tags, -t` | Filter by tags (comma-separated) |
+| `--verbose, -v` | Show detailed output |
+| `--bail` | Stop on first failure |
+| `--timeout` | Global timeout in ms (default: 30000) |
+| `--no-color` | Disable colored output |
+| `--dry-run` | Show what would run |
+| `--output, -o` | Format: console, json, junit, tap |
+| `--output-file` | Write output to file |
+| `--parallel, -p` | Run requests in parallel |
+| `--concurrency` | Max concurrent requests (default: 5) |
+| `--watch, -w` | Watch files for changes |
+| `--proxy` | Proxy URL for requests |
+| `--insecure, -k` | Disable SSL validation |
+
+## Environment Configuration
+
+File: `.hitspec.env.json`
+```json
+{
+  "dev": {
+    "baseUrl": "https://api-dev.example.com",
+    "token": "dev-token"
+  },
+  "prod": {
+    "baseUrl": "https://api.example.com",
+    "token": "${ENV_PROD_TOKEN}"
+  }
+}
+```
+
+Use: `hitspec run tests/ --env prod`
+
+## Syntax Rules
+
+- `###` starts a new request (request separator)
+- `#` without `@` is a regular comment (ignored)
+- `# @directive` is a metadata directive (parsed)
+- `expect status 200` is shorthand for `expect status == 200`
+- Blank line separates headers from body
+
+## Body Types
+
+- **JSON:** `{ "key": "value" }`
+- **Form:** `key=value&key2=value2`
+- **Form Block:** Lines starting with `& key = value`
+- **Multipart:** `>>>multipart ... <<<`
+- **GraphQL:** `>>>graphql ... <<<` with `>>>variables ... <<<`
+- **XML:** `<?xml ...` or `<root>...</root>`
+
+### GraphQL Example
+```http
+POST {{baseUrl}}/graphql
+Content-Type: application/json
+
+>>>graphql
+query GetUsers($limit: Int) {
+  users(limit: $limit) {
+    id
+    name
+    email
+  }
+}
+<<<
+
+>>>variables
+{
+  "limit": 10
+}
+<<<
+
+>>>
+expect status 200
+expect body.data.users type array
+expect body.errors !exists
+<<<
+```
+
+### Multipart / File Upload
+```http
+POST {{baseUrl}}/upload
+# Content-Type is set automatically
+
+>>>multipart
+field name = John Doe
+field email = john@example.com
+file avatar = ./photo.jpg
+file document = ./report.pdf, application/pdf
+<<<
+
+>>>
+expect status 200
+expect body.uploaded == true
+<<<
+```
+
+### Form Data
+```http
+POST {{baseUrl}}/login
+Content-Type: application/x-www-form-urlencoded
+
+& username = john
+& password = secret123
+& remember = true
+
+>>>
+expect status 200
+<<<
+```
+
+## Query Parameters
+
+```http
+# Inline
+GET {{baseUrl}}/search?query=test&limit=10
+
+# Explicit
+GET {{baseUrl}}/search
+? query = test
+? limit = 10
+```
+
+## Common Patterns
+
+### Testing Error Responses
+```http
+### Unauthorized Access
+# @name unauthorized
+# @tags errors
+
+GET {{baseUrl}}/admin/users
+# No auth header
+
+>>>
+expect status 401
+expect body.error exists
+expect body.message contains "unauthorized"
+<<<
+
+### Not Found
+# @name notFound
+
+GET {{baseUrl}}/users/99999999
+
+>>>
+expect status 404
+<<<
+
+### Validation Error
+# @name validationError
+
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{
+  "email": "invalid-email"
+}
+
+>>>
+expect status 400
+expect body.errors type array
+expect body.errors length > 0
+<<<
+```
+
+### Complex Array Assertions
+```http
+>>>
+# Each item in array must be an object with required fields
+expect body.users each type object
+expect body.users each body.id exists
+expect body.users each body.email matches /^.+@.+\..+$/
+
+# Array contains specific value
+expect body.tags includes "active"
+expect body.roles !includes "admin"
+
+# Check array length
+expect body.items length > 0
+expect body.items length <= 100
+<<<
+```
+
+### Authentication Flow
+```http
+### Login
+# @name login
+# @tags auth
+
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "password123"
+}
+
+>>>
+expect status 200
+expect body.token exists
+expect body.refreshToken exists
+<<<
+
+>>>capture
+token from body.token
+refreshToken from body.refreshToken
+userId from body.user.id
+<<<
+
+### Access Protected Resource
+# @name protected
+# @depends login
+# @auth bearer {{login.token}}
+
+GET {{baseUrl}}/me
+
+>>>
+expect status 200
+expect body.id == {{login.userId}}
+<<<
+
+### Refresh Token
+# @name refresh
+# @depends login
+
+POST {{baseUrl}}/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{login.refreshToken}}"
+}
+
+>>>
+expect status 200
+expect body.token exists
+<<<
+```
+
+### Retry on Flaky Endpoints
+```http
+### Flaky Service
+# @name flakyCall
+# @retry 3
+# @retryDelay 1000
+# @timeout 10000
+
+GET {{baseUrl}}/external-service
+
+>>>
+expect status 200
+<<<
+```
+
+## Complete Example
+
+```http
+@baseUrl = https://jsonplaceholder.typicode.com
+
+### Health Check
+# @name health
+# @tags smoke
+
+GET {{baseUrl}}/posts/1
+
+>>>
+expect status 200
+expect body.id == 1
+<<<
+
+### Create Post
+# @name createPost
+# @tags write
+# @timeout 10000
+
+POST {{baseUrl}}/posts
+Content-Type: application/json
+
+{
+  "title": "Test Post {{$uuid()}}",
+  "body": "Created at {{$now()}}",
+  "userId": 1
+}
+
+>>>
+expect status 201
+expect body.id exists
+expect body.title startsWith "Test Post"
+<<<
+
+>>>capture
+postId from body.id
+<<<
+
+### Verify Created Post
+# @name verifyPost
+# @depends createPost
+
+GET {{baseUrl}}/posts/{{createPost.postId}}
+
+>>>
+expect status 200
+expect body.id == {{createPost.postId}}
+<<<
+```
+
+## Output Formats
+
+```bash
+# Human-readable (default)
+hitspec run tests/
+
+# JSON for CI/CD
+hitspec run tests/ --output json
+
+# JUnit XML
+hitspec run tests/ --output junit --output-file results.xml
+
+# TAP format
+hitspec run tests/ --output tap
+```
+
+## File Extensions
+
+`.http` or `.hitspec`
+
+## Project Structure
+
+```
+project/
+├── .hitspec.env.json       # Environment config
+├── tests/
+│   ├── auth.http           # Auth tests
+│   └── users.http          # User tests
+└── schemas/
+    └── user.json           # JSON Schema
+```
+
+## Troubleshooting
+
+### Syntax Errors
+```bash
+# Validate without running
+hitspec validate test.http
+```
+
+### Common Mistakes
+
+| Problem | Wrong | Correct |
+|---------|-------|---------|
+| Missing assertion block markers | `expect status 200` | `>>>` `expect status 200` `<<<` |
+| Wrong variable syntax | `${var}` or `$var` | `{{var}}` |
+| Spaces in header | `Content-Type : json` | `Content-Type: application/json` |
+| Body before blank line | Headers then body | Headers, blank line, then body |
+| Capture without @name | Can't reference | Add `# @name requestId` |
+| Depends without capture | `{{req.field}}` fails | Add `>>>capture` block first |
+
+### Debug Mode
+```bash
+# See full request/response
+hitspec run test.http --verbose
+
+# See what would run without executing
+hitspec run test.http --dry-run
+```
+
+### Variable Not Found
+If `{{variable}}` shows as literal text:
+1. Check `.hitspec.env.json` exists
+2. Check variable is defined in current environment
+3. Check `--env` flag matches: `hitspec run test.http --env dev`
+
+### Capture Not Working
+```http
+### First Request
+# @name login        <-- REQUIRED for referencing
+
+POST {{baseUrl}}/login
+...
+
+>>>capture
+token from body.token   <-- captures to login.token
+<<<
+
+### Second Request
+# @depends login     <-- REQUIRED to ensure order
+
+GET {{baseUrl}}/me
+Authorization: Bearer {{login.token}}  <-- use as requestName.varName
+```
+
+## Minimal Examples
+
+### Smallest Valid Test
+```http
+GET https://api.example.com/health
+
+>>>
+expect status 200
+<<<
+```
+
+### POST with JSON
+```http
+POST https://api.example.com/users
+Content-Type: application/json
+
+{"name": "test"}
+
+>>>
+expect status 201
+<<<
+```
+
+### With Variables
+```http
+@baseUrl = https://api.example.com
+
+GET {{baseUrl}}/users
+
+>>>
+expect status 200
+expect body type array
+<<<
+```
