@@ -10,8 +10,8 @@ import (
 //go:embed llms.txt
 var llmsTxt string
 
-var llmsCmd = &cobra.Command{
-	Use:   "llms",
+var docsCmd = &cobra.Command{
+	Use:   "docs",
 	Short: "Output AI-readable documentation (llms.txt)",
 	Long:  "Print the llms.txt content for AI agents to learn hitspec usage.",
 	Run: func(cmd *cobra.Command, args []string) {

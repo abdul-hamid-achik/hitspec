@@ -33,6 +33,6 @@ func init() {
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(initCmd)
-	rootCmd.AddCommand(llmsCmd)
+	rootCmd.AddCommand(docsCmd)
 	rootCmd.AddCommand(stressCmd)
 }

@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -178,9 +179,9 @@ GET {{baseUrl}}/fast
 }
 
 func TestRunnerVUMode(t *testing.T) {
-	requestCount := 0
+	var requestCount int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestCount++
+		atomic.AddInt64(&requestCount, 1)
 		time.Sleep(10 * time.Millisecond) // Simulate some work
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -219,14 +220,14 @@ GET {{baseUrl}}/
 }
 
 func TestRunnerWithWeightedRequests(t *testing.T) {
-	heavyCount := 0
-	lightCount := 0
+	var heavyCount int64
+	var lightCount int64
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/heavy" {
-			heavyCount++
+			atomic.AddInt64(&heavyCount, 1)
 		} else {
-			lightCount++
+			atomic.AddInt64(&lightCount, 1)
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -268,27 +269,29 @@ GET {{baseUrl}}/light
 	require.NoError(t, err)
 
 	// Heavy should be called roughly 9x more than light
-	t.Logf("Heavy: %d, Light: %d, Total: %d", heavyCount, lightCount, result.Summary.TotalRequests)
+	heavy := atomic.LoadInt64(&heavyCount)
+	light := atomic.LoadInt64(&lightCount)
+	t.Logf("Heavy: %d, Light: %d, Total: %d", heavy, light, result.Summary.TotalRequests)
 
-	if heavyCount+lightCount > 20 { // Need enough samples
-		ratio := float64(heavyCount) / float64(lightCount)
+	if heavy+light > 20 { // Need enough samples
+		ratio := float64(heavy) / float64(light)
 		assert.True(t, ratio > 5, "heavy should be called much more than light (ratio: %.1f)", ratio)
 	}
 }
 
 func TestRunnerSetupTeardown(t *testing.T) {
-	setupCalled := false
-	teardownCalled := false
-	mainCalled := 0
+	var setupCalled int32
+	var teardownCalled int32
+	var mainCalled int64
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/setup":
-			setupCalled = true
+			atomic.StoreInt32(&setupCalled, 1)
 		case "/teardown":
-			teardownCalled = true
+			atomic.StoreInt32(&teardownCalled, 1)
 		case "/main":
-			mainCalled++
+			atomic.AddInt64(&mainCalled, 1)
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -334,10 +337,13 @@ GET {{baseUrl}}/teardown
 	_, err = runner.Run(context.Background())
 	require.NoError(t, err)
 
-	assert.True(t, setupCalled, "setup should be called")
-	assert.True(t, teardownCalled, "teardown should be called")
-	assert.True(t, mainCalled > 0, "main should be called multiple times")
-	t.Logf("Setup: %v, Teardown: %v, Main calls: %d", setupCalled, teardownCalled, mainCalled)
+	setup := atomic.LoadInt32(&setupCalled) == 1
+	teardown := atomic.LoadInt32(&teardownCalled) == 1
+	main := atomic.LoadInt64(&mainCalled)
+	assert.True(t, setup, "setup should be called")
+	assert.True(t, teardown, "teardown should be called")
+	assert.True(t, main > 0, "main should be called multiple times")
+	t.Logf("Setup: %v, Teardown: %v, Main calls: %d", setup, teardown, main)
 }
 
 func TestRunnerGracefulShutdown(t *testing.T) {
