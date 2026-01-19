@@ -387,3 +387,125 @@ GET {{baseUrl}}/slow
 	assert.True(t, result.Summary.Duration < 2*time.Second, "should have stopped early")
 	t.Logf("Stopped after %v with %d requests", result.Summary.Duration, result.Summary.TotalRequests)
 }
+
+func TestRunnerSetupCapturesExtracted(t *testing.T) {
+	// Create a test server that returns a project ID in the setup response
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/setup":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"projectId": "proj-12345"}`))
+		case "/projects/proj-12345/tasks":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"tasks": []}`))
+		default:
+			// Should not receive requests with literal {{...}} strings
+			if r.URL.Path == "/projects/{{setupProject.projectId}}/tasks" {
+				t.Errorf("Received request with unresolved variable: %s", r.URL.Path)
+			}
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	httpFile := filepath.Join(tmpDir, "test.http")
+	content := `@baseUrl = ` + server.URL + `
+
+### Setup Project
+# @name setupProject
+# @stress.setup
+
+GET {{baseUrl}}/setup
+
+>>>capture
+projectId from body.projectId
+<<<
+
+### List Tasks (uses captured projectId)
+# @name listTasks
+
+GET {{baseUrl}}/projects/{{setupProject.projectId}}/tasks
+
+>>>
+expect status 200
+<<<
+`
+	err := os.WriteFile(httpFile, []byte(content), 0644)
+	require.NoError(t, err)
+
+	cfg := &Config{
+		Mode:     RateMode,
+		Duration: 1 * time.Second,
+		Rate:     5,
+		MaxVUs:   5,
+	}
+
+	reporter := NewReporter(WithNoProgress(true), WithNoColor(true))
+	runner := NewRunner(cfg, WithReporter(reporter))
+
+	err = runner.LoadFile(httpFile)
+	require.NoError(t, err)
+
+	result, err := runner.Run(context.Background())
+	require.NoError(t, err)
+
+	// Check that the captured variable was used - requests should succeed (200 OK)
+	assert.True(t, result.Summary.SuccessCount > 0, "should have successful requests using captured projectId")
+	t.Logf("Success: %d, Errors: %d", result.Summary.SuccessCount, result.Summary.ErrorCount)
+}
+
+func TestRunnerSkipsUnresolvedVariables(t *testing.T) {
+	// Create a test server - it should not receive any requests with unresolved variables
+	var receivedRequests []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedRequests = append(receivedRequests, r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	httpFile := filepath.Join(tmpDir, "test.http")
+	// This request has an unresolved variable that should cause it to be skipped
+	content := `@baseUrl = ` + server.URL + `
+
+### Request with unresolved variable
+# @name badRequest
+
+GET {{baseUrl}}/projects/{{missingVar}}/tasks
+
+>>>
+expect status 200
+<<<
+`
+	err := os.WriteFile(httpFile, []byte(content), 0644)
+	require.NoError(t, err)
+
+	cfg := &Config{
+		Mode:     RateMode,
+		Duration: 500 * time.Millisecond,
+		Rate:     10,
+		MaxVUs:   5,
+	}
+
+	reporter := NewReporter(WithNoProgress(true), WithNoColor(true))
+	runner := NewRunner(cfg, WithReporter(reporter))
+
+	err = runner.LoadFile(httpFile)
+	require.NoError(t, err)
+
+	result, err := runner.Run(context.Background())
+	require.NoError(t, err)
+
+	// All requests should be errors (unresolved variables)
+	assert.True(t, result.Summary.ErrorCount > 0, "should have errors for unresolved variables")
+	assert.Equal(t, int64(0), result.Summary.SuccessCount, "should have no successful requests")
+
+	// Verify no requests with literal {{...}} were sent to the server
+	for _, path := range receivedRequests {
+		assert.NotContains(t, path, "{{", "should not send literal {{...}} to server, got: %s", path)
+	}
+
+	t.Logf("Skipped %d requests with unresolved variables", result.Summary.ErrorCount)
+}

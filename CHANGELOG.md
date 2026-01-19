@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-01-19
+
+### Fixed
+
+- Stress runner now extracts captures from setup requests, enabling variable chaining
+- Requests with unresolved variables are skipped instead of being sent with literal `{{variable}}` strings
+- Added `HasUnresolvedVariables` and `GetUnresolvedVariables` methods to env.Resolver for variable validation
+
 ## [0.1.0] - 2024-01-18
 
 ### Added
@@ -37,5 +45,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `hitspec init` - Initialize a new project
 - `hitspec version` - Show version information
 
-[Unreleased]: https://github.com/abdul-hamid-achik/hitspec/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/hitspec/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/abdul-hamid-achik/hitspec/compare/v0.1.0...v1.0.1
 [0.1.0]: https://github.com/abdul-hamid-achik/hitspec/releases/tag/v0.1.0

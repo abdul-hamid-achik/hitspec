@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/abdul-hamid-achik/hitspec/packages/capture"
 	"github.com/abdul-hamid-achik/hitspec/packages/core/env"
 	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
 	"github.com/abdul-hamid-achik/hitspec/packages/http"
@@ -401,6 +402,28 @@ func (r *Runner) runVUMode(ctx context.Context) {
 	pool.Wait()
 }
 
+// hasUnresolvedVariables checks if a request has any unresolved template variables
+// Returns true and the list of unresolved variable names if any are found
+func (r *Runner) hasUnresolvedVariables(req *parser.Request) (bool, []string) {
+	// Check URL
+	if vars := r.resolver.GetUnresolvedVariables(req.URL); len(vars) > 0 {
+		return true, vars
+	}
+	// Check headers
+	for _, h := range req.Headers {
+		if vars := r.resolver.GetUnresolvedVariables(h.Value); len(vars) > 0 {
+			return true, vars
+		}
+	}
+	// Check body
+	if req.Body != nil && req.Body.Raw != "" {
+		if vars := r.resolver.GetUnresolvedVariables(req.Body.Raw); len(vars) > 0 {
+			return true, vars
+		}
+	}
+	return false, nil
+}
+
 // executeScheduledRequest executes a scheduled request and records metrics
 func (r *Runner) executeScheduledRequest(ctx context.Context, sched *ScheduledRequest) error {
 	if sched.Index >= len(r.requests) {
@@ -408,6 +431,14 @@ func (r *Runner) executeScheduledRequest(ctx context.Context, sched *ScheduledRe
 	}
 
 	reqWithDir := r.requests[sched.Index]
+
+	// Skip requests with unresolved variables instead of sending literal {{var}} strings
+	if hasUnresolved, vars := r.hasUnresolvedVariables(reqWithDir.request); hasUnresolved {
+		err := fmt.Errorf("unresolved variables: %v", vars)
+		r.metrics.Record(sched.Name, 0, err)
+		return err
+	}
+
 	start := time.Now()
 
 	// Build HTTP request using the request's own base directory
@@ -449,6 +480,14 @@ func (r *Runner) executeRequest(ctx context.Context, reqWithDir requestWithBaseD
 
 	if !resp.IsSuccess() {
 		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
+	}
+
+	// Extract captures from setup responses so they can be used by subsequent requests
+	if len(reqWithDir.request.Captures) > 0 {
+		captures := capture.ExtractAll(resp, reqWithDir.request.Captures)
+		for name, value := range captures {
+			r.resolver.SetCapture(reqWithDir.request.Name, name, value)
+		}
 	}
 
 	return nil

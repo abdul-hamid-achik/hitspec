@@ -211,3 +211,25 @@ func (r *Resolver) Clone() *Resolver {
 	}
 	return clone
 }
+
+// HasUnresolvedVariables checks if the resolved string still contains unresolved {{...}} variables
+func (r *Resolver) HasUnresolvedVariables(input string) bool {
+	resolved := r.Resolve(input)
+	return variablePattern.MatchString(resolved)
+}
+
+// GetUnresolvedVariables returns a list of variable names that could not be resolved
+func (r *Resolver) GetUnresolvedVariables(input string) []string {
+	resolved := r.Resolve(input)
+	matches := variablePattern.FindAllStringSubmatch(resolved, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+	vars := make([]string, 0, len(matches))
+	for _, match := range matches {
+		if len(match) > 1 {
+			vars = append(vars, match[1])
+		}
+	}
+	return vars
+}
