@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+//go:generate cp ../../../llms.txt llms.txt
 //go:embed llms.txt
 var llmsTxt string
 

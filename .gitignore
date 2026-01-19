@@ -39,6 +39,9 @@ Thumbs.db
 # Build artifacts
 dist/
 
+# Generated files
+apps/cli/cmd/llms.txt
+
 # Debug files
 debug
 *.log
