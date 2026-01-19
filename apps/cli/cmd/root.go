@@ -34,5 +34,4 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(docsCmd)
-	rootCmd.AddCommand(stressCmd)
 }

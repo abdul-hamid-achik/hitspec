@@ -1,15 +1,21 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/abdul-hamid-achik/hitspec/packages/core/config"
+	"github.com/abdul-hamid-achik/hitspec/packages/core/env"
 	"github.com/abdul-hamid-achik/hitspec/packages/core/runner"
+	"github.com/abdul-hamid-achik/hitspec/packages/http"
 	"github.com/abdul-hamid-achik/hitspec/packages/output"
+	"github.com/abdul-hamid-achik/hitspec/packages/stress"
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/cobra"
 )
@@ -23,7 +29,13 @@ Examples:
   hitspec run api.http
   hitspec run api.http --env staging
   hitspec run ./tests/ --tags smoke
-  hitspec run api.http --name "createUser"`,
+  hitspec run api.http --name "createUser"
+
+Stress Testing Mode:
+  hitspec run api.http --stress --duration 1m --rate 100
+  hitspec run api.http --stress --vus 50 --think-time 1s
+  hitspec run api.http --stress -d 1m -r 100 --threshold "p95<200ms,errors<0.1%"
+  hitspec run api.http --stress --profile load --env staging`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: runCommand,
 }
@@ -50,6 +62,19 @@ var (
 	watchFlag       bool
 	proxyFlag       string
 	insecureFlag    bool
+
+	// Stress testing flags
+	stressFlag           bool
+	stressDurationFlag   string
+	stressRateFlag       float64
+	stressVUsFlag        int
+	stressMaxVUsFlag     int
+	stressThinkTimeFlag  string
+	stressRampUpFlag     string
+	stressThresholdFlag  string
+	stressProfileFlag    string
+	stressNoProgressFlag bool
+	stressJSONFlag       bool
 )
 
 func init() {
@@ -69,6 +94,19 @@ func init() {
 	runCmd.Flags().BoolVarP(&watchFlag, "watch", "w", false, "Watch files for changes and re-run tests")
 	runCmd.Flags().StringVar(&proxyFlag, "proxy", "", "Proxy URL for HTTP requests")
 	runCmd.Flags().BoolVarP(&insecureFlag, "insecure", "k", false, "Disable SSL certificate validation")
+
+	// Stress testing flags
+	runCmd.Flags().BoolVar(&stressFlag, "stress", false, "Enable stress testing mode")
+	runCmd.Flags().StringVarP(&stressDurationFlag, "duration", "d", "30s", "Stress test duration (e.g., 30s, 5m, 1h)")
+	runCmd.Flags().Float64VarP(&stressRateFlag, "rate", "r", 10, "Target requests per second")
+	runCmd.Flags().IntVar(&stressVUsFlag, "vus", 0, "Number of virtual users (alternative to rate)")
+	runCmd.Flags().IntVar(&stressMaxVUsFlag, "max-vus", 100, "Maximum concurrent requests")
+	runCmd.Flags().StringVar(&stressThinkTimeFlag, "think-time", "0s", "Think time between requests per VU")
+	runCmd.Flags().StringVar(&stressRampUpFlag, "ramp-up", "0s", "Ramp-up time to reach target rate/VUs")
+	runCmd.Flags().StringVar(&stressThresholdFlag, "threshold", "", "Pass/fail thresholds (e.g., \"p95<200ms,errors<0.1%\")")
+	runCmd.Flags().StringVar(&stressProfileFlag, "profile", "", "Load stress profile from config")
+	runCmd.Flags().BoolVar(&stressNoProgressFlag, "no-progress", false, "Disable real-time progress display")
+	runCmd.Flags().BoolVar(&stressJSONFlag, "stress-json", false, "Output stress results as JSON")
 }
 
 // Formatter interface for all output formatters
@@ -152,6 +190,11 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 	// Load config from file (if present) and apply CLI overrides
 	fileConfig, _ := config.LoadConfig("")
+
+	// If stress mode is enabled, delegate to stress runner
+	if stressFlag {
+		return runStressMode(cmd, files, fileConfig)
+	}
 
 	// Determine proxy and validateSSL from config file, allowing CLI flags to override
 	proxy := fileConfig.Proxy
@@ -364,4 +407,216 @@ func collectFiles(args []string) ([]string, error) {
 func isHitspecFile(path string) bool {
 	ext := filepath.Ext(path)
 	return ext == ".http" || ext == ".hitspec"
+}
+
+// runStressMode executes stress tests using the stress runner
+func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config) error {
+	// Stress mode only supports a single file
+	if len(files) != 1 {
+		return fmt.Errorf("stress mode requires exactly one file, got %d", len(files))
+	}
+	filePath := files[0]
+
+	// Build stress config
+	cfg, err := buildStressConfig(fileConfig)
+	if err != nil {
+		return err
+	}
+
+	// Create HTTP client
+	clientOpts := []http.ClientOption{}
+	if fileConfig != nil {
+		clientOpts = append(clientOpts, http.WithFollowRedirects(fileConfig.GetFollowRedirects()))
+		if fileConfig.Proxy != "" && proxyFlag == "" {
+			proxyFlag = fileConfig.Proxy
+		}
+	}
+	if proxyFlag != "" {
+		clientOpts = append(clientOpts, http.WithProxy(proxyFlag))
+	}
+	validateSSL := true
+	if fileConfig != nil {
+		validateSSL = fileConfig.GetValidateSSL()
+	}
+	if insecureFlag {
+		validateSSL = false
+	}
+	clientOpts = append(clientOpts, http.WithValidateSSL(validateSSL))
+	client := http.NewClient(clientOpts...)
+
+	// Create resolver
+	resolver := env.NewResolver()
+	resolver.SetWarnFunc(func(format string, args ...any) {
+		fmt.Fprintf(os.Stderr, "warning: "+format+"\n", args...)
+	})
+
+	// Create reporter
+	reporter := stress.NewReporter(
+		stress.WithNoColor(noColorFlag),
+		stress.WithNoProgress(stressNoProgressFlag),
+		stress.WithVerbose(verboseFlag),
+	)
+
+	// Create runner with config environments for proper variable resolution
+	runnerOpts := []stress.RunnerOption{
+		stress.WithHTTPClient(client),
+		stress.WithResolver(resolver),
+		stress.WithReporter(reporter),
+	}
+	if envFlag != "" {
+		runnerOpts = append(runnerOpts, stress.WithEnvironment(envFlag))
+	}
+	if envFileFlag != "" {
+		runnerOpts = append(runnerOpts, stress.WithEnvFile(envFileFlag))
+	}
+	// Pass config environments for proper variable resolution
+	if fileConfig != nil && fileConfig.Environments != nil {
+		runnerOpts = append(runnerOpts, stress.WithConfigEnvironments(fileConfig.Environments))
+	}
+	stressRunner := stress.NewRunner(cfg, runnerOpts...)
+
+	// Load file
+	if err := stressRunner.LoadFile(filePath); err != nil {
+		return err
+	}
+
+	// Set up signal handling for graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-sigCh
+		fmt.Fprintln(os.Stderr, "\nReceived interrupt, stopping gracefully...")
+		cancel()
+	}()
+
+	// Run the stress test
+	result, err := stressRunner.Run(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Output JSON if requested
+	if stressJSONFlag {
+		return reporter.JSONSummary(result.Summary, result.Thresholds)
+	}
+
+	// Exit with error code if thresholds failed
+	if result.HasThresholdFailures() {
+		os.Exit(1)
+	}
+
+	return nil
+}
+
+// buildStressConfig builds stress configuration from flags and profile
+func buildStressConfig(fileConfig *config.Config) (*stress.Config, error) {
+	cfg := stress.DefaultConfig()
+
+	// Load from profile if specified
+	if stressProfileFlag != "" && fileConfig != nil && fileConfig.Stress != nil {
+		if profile, ok := fileConfig.Stress.Profiles[stressProfileFlag]; ok {
+			if profile.Duration != "" {
+				d, err := time.ParseDuration(profile.Duration)
+				if err != nil {
+					return nil, fmt.Errorf("invalid duration in profile: %w", err)
+				}
+				cfg.Duration = d
+			}
+			if profile.Rate > 0 {
+				cfg.Rate = profile.Rate
+			}
+			if profile.VUs > 0 {
+				cfg.VUs = profile.VUs
+				cfg.Mode = stress.VUMode
+			}
+			if profile.MaxVUs > 0 {
+				cfg.MaxVUs = profile.MaxVUs
+			}
+			if profile.ThinkTime != "" {
+				d, err := time.ParseDuration(profile.ThinkTime)
+				if err != nil {
+					return nil, fmt.Errorf("invalid think time in profile: %w", err)
+				}
+				cfg.ThinkTime = d
+			}
+			if profile.RampUp != "" {
+				d, err := time.ParseDuration(profile.RampUp)
+				if err != nil {
+					return nil, fmt.Errorf("invalid ramp-up in profile: %w", err)
+				}
+				cfg.RampUp = d
+			}
+			if len(profile.Thresholds) > 0 {
+				thresholdStr := buildThresholdString(profile.Thresholds)
+				t, err := stress.ParseThresholds(thresholdStr)
+				if err != nil {
+					return nil, fmt.Errorf("invalid thresholds in profile: %w", err)
+				}
+				cfg.Thresholds = t
+			}
+		} else {
+			return nil, fmt.Errorf("stress profile %q not found in config", stressProfileFlag)
+		}
+	}
+
+	// Override with CLI flags
+	if stressDurationFlag != "30s" { // Only override if explicitly set
+		d, err := time.ParseDuration(stressDurationFlag)
+		if err != nil {
+			return nil, fmt.Errorf("invalid duration: %w", err)
+		}
+		cfg.Duration = d
+	}
+
+	if stressRateFlag != 10 { // Only override if explicitly set
+		cfg.Rate = stressRateFlag
+	}
+
+	if stressVUsFlag > 0 {
+		cfg.VUs = stressVUsFlag
+		cfg.Mode = stress.VUMode
+	}
+
+	if stressMaxVUsFlag != 100 { // Only override if explicitly set
+		cfg.MaxVUs = stressMaxVUsFlag
+	}
+
+	if stressThinkTimeFlag != "0s" {
+		d, err := time.ParseDuration(stressThinkTimeFlag)
+		if err != nil {
+			return nil, fmt.Errorf("invalid think time: %w", err)
+		}
+		cfg.ThinkTime = d
+	}
+
+	if stressRampUpFlag != "0s" {
+		d, err := time.ParseDuration(stressRampUpFlag)
+		if err != nil {
+			return nil, fmt.Errorf("invalid ramp-up: %w", err)
+		}
+		cfg.RampUp = d
+	}
+
+	if stressThresholdFlag != "" {
+		t, err := stress.ParseThresholds(stressThresholdFlag)
+		if err != nil {
+			return nil, fmt.Errorf("invalid thresholds: %w", err)
+		}
+		cfg.Thresholds = t
+	}
+
+	return cfg, nil
+}
+
+// buildThresholdString converts threshold map to string format
+func buildThresholdString(thresholds map[string]string) string {
+	var parts []string
+	for k, v := range thresholds {
+		parts = append(parts, k+"<"+v)
+	}
+	return strings.Join(parts, ",")
 }

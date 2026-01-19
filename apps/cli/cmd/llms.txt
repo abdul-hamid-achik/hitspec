@@ -285,6 +285,9 @@ Authorization: Bearer {{login.token}}
 # Run tests
 hitspec run <file|dir> [flags]
 
+# Stress testing mode
+hitspec run <file> --stress [stress-flags]
+
 # Validate syntax without executing
 hitspec validate <file|dir>
 
@@ -298,7 +301,7 @@ hitspec init
 hitspec version
 
 # Output this documentation
-hitspec llms
+hitspec docs
 ```
 
 ## Run Flags
@@ -306,6 +309,7 @@ hitspec llms
 | Flag | Description |
 |------|-------------|
 | `--env, -e` | Environment name (default: dev) |
+| `--env-file` | Path to .env file for variable interpolation |
 | `--name, -n` | Filter by request name pattern |
 | `--tags, -t` | Filter by tags (comma-separated) |
 | `--verbose, -v` | Show detailed output |
@@ -320,6 +324,100 @@ hitspec llms
 | `--watch, -w` | Watch files for changes |
 | `--proxy` | Proxy URL for requests |
 | `--insecure, -k` | Disable SSL validation |
+
+## Stress Testing Mode
+
+Enable stress testing with `--stress` flag on the run command:
+
+```bash
+# Simple constant rate test
+hitspec run api.http --stress --duration 1m --rate 100
+
+# Virtual users mode with think time
+hitspec run api.http --stress --duration 2m --vus 50 --think-time 1s
+
+# With ramp-up
+hitspec run api.http --stress --duration 5m --rate 200 --ramp-up 30s
+
+# Using config profile
+hitspec run api.http --stress --profile load --env staging
+
+# With thresholds for CI/CD
+hitspec run api.http --stress -d 1m -r 100 --threshold "p95<200ms,errors<0.1%"
+
+# With environment file (full feature parity with run)
+hitspec run api.http --stress --env prod --env-file .env -d 1m -r 50
+```
+
+### Stress Testing Flags
+
+| Flag | Description |
+|------|-------------|
+| `--stress` | Enable stress testing mode |
+| `--duration, -d` | Test duration (default: 30s) |
+| `--rate, -r` | Target requests per second (default: 10) |
+| `--vus` | Number of virtual users (alternative to rate) |
+| `--max-vus` | Maximum concurrent requests (default: 100) |
+| `--think-time` | Think time between requests per VU |
+| `--ramp-up` | Ramp-up time to reach target rate/VUs |
+| `--threshold` | Pass/fail thresholds (e.g., "p95<200ms,errors<0.1%") |
+| `--profile` | Load stress profile from config |
+| `--no-progress` | Disable real-time progress display |
+| `--stress-json` | Output stress results as JSON |
+
+### Stress Request Configuration
+
+Configure individual request behavior in stress tests:
+
+```http
+### Main Request
+# @name apiCall
+# @stress.weight 10
+# @stress.think 500ms
+
+GET {{baseUrl}}/api/data
+
+>>>
+expect status 200
+<<<
+
+### Setup Request (runs once before stress test)
+# @name setup
+# @stress.setup
+
+POST {{baseUrl}}/api/init
+
+### Teardown Request (runs once after stress test)
+# @name teardown
+# @stress.teardown
+
+POST {{baseUrl}}/api/cleanup
+```
+
+### Stress Profile in Config
+
+Define stress profiles in hitspec.yaml:
+
+```yaml
+stress:
+  profiles:
+    smoke:
+      duration: 30s
+      rate: 10
+    load:
+      duration: 5m
+      rate: 100
+      ramp-up: 30s
+    spike:
+      duration: 10m
+      vus: 200
+      think-time: 1s
+      thresholds:
+        p95: 500ms
+        errors: 1%
+```
+
+Use: `hitspec run api.http --stress --profile load`
 
 ## Configuration File (hitspec.yaml)
 

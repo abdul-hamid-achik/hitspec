@@ -24,6 +24,7 @@ type Runner struct {
 	// Environment configuration
 	envName    string
 	envFile    string
+	configEnvs map[string]map[string]any
 
 	// Parsed requests
 	file        *parser.File
@@ -68,6 +69,13 @@ func WithEnvironment(envName string) RunnerOption {
 func WithEnvFile(envFile string) RunnerOption {
 	return func(r *Runner) {
 		r.envFile = envFile
+	}
+}
+
+// WithConfigEnvironments sets the config environments for variable resolution
+func WithConfigEnvironments(envs map[string]map[string]any) RunnerOption {
+	return func(r *Runner) {
+		r.configEnvs = envs
 	}
 }
 
@@ -116,8 +124,8 @@ func (r *Runner) LoadFile(path string) error {
 		}
 	}
 
-	// Load environment variables
-	environment, err := env.LoadEnvironment(r.baseDir, r.envName, nil)
+	// Load environment variables - pass config environments for proper resolution
+	environment, err := env.LoadEnvironment(r.baseDir, r.envName, r.configEnvs)
 	if err != nil {
 		// Non-fatal, just log it
 		r.reporter.Info("warning: failed to load environment: %v", err)
