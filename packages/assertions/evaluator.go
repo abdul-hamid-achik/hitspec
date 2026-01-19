@@ -65,6 +65,11 @@ func (e *Evaluator) Evaluate(assertion *parser.Assertion) *Result {
 	result.Passed = passed
 	result.Message = msg
 
+	// For length operator, show the computed length as the actual value
+	if assertion.Operator == parser.OpLength {
+		result.Actual = computeLength(actual)
+	}
+
 	return result
 }
 
@@ -92,6 +97,16 @@ func (e *Evaluator) getActualValue(subject string) (any, error) {
 	}
 }
 
+// convertBracketNotation converts array bracket notation to gjson dot notation
+// e.g., "[0].id" -> "0.id", "items[0].tags[1]" -> "items.0.tags.1"
+func convertBracketNotation(path string) string {
+	// Replace [N] with .N
+	result := regexp.MustCompile(`\[(\d+)\]`).ReplaceAllString(path, ".$1")
+	// Remove leading dot if present (from converting [0] at start)
+	result = strings.TrimPrefix(result, ".")
+	return result
+}
+
 func (e *Evaluator) getBodyValue(subject string) (any, error) {
 	if !e.bodyJSON.Exists() {
 		return e.response.BodyString(), nil
@@ -102,6 +117,9 @@ func (e *Evaluator) getBodyValue(subject string) (any, error) {
 		return e.bodyJSON.Value(), nil
 	}
 	path = strings.TrimPrefix(path, ".")
+
+	// Convert bracket notation to gjson dot notation
+	path = convertBracketNotation(path)
 
 	result := e.bodyJSON.Get(path)
 	if !result.Exists() {
@@ -114,6 +132,8 @@ func (e *Evaluator) getJSONPathValue(path string) (any, error) {
 	if !e.bodyJSON.Exists() {
 		return nil, fmt.Errorf("response body is not JSON")
 	}
+	// Convert bracket notation to gjson dot notation
+	path = convertBracketNotation(path)
 	result := e.bodyJSON.Get(path)
 	if !result.Exists() {
 		return nil, nil
@@ -288,28 +308,35 @@ func (e *Evaluator) exists(actual any) (bool, string) {
 	return true, ""
 }
 
+// computeLength returns the length of a value, or -1 if length cannot be computed
+func computeLength(actual any) int {
+	switch v := actual.(type) {
+	case string:
+		return len(v)
+	case []any:
+		return len(v)
+	case map[string]any:
+		return len(v)
+	default:
+		rv := reflect.ValueOf(actual)
+		switch rv.Kind() {
+		case reflect.Slice, reflect.Array, reflect.Map, reflect.String:
+			return rv.Len()
+		default:
+			return -1
+		}
+	}
+}
+
 func (e *Evaluator) length(actual, expected any) (bool, string) {
 	expectedLen, ok := toInt(expected)
 	if !ok {
 		return false, fmt.Sprintf("expected length must be a number, got %v", expected)
 	}
 
-	var actualLen int
-	switch v := actual.(type) {
-	case string:
-		actualLen = len(v)
-	case []any:
-		actualLen = len(v)
-	case map[string]any:
-		actualLen = len(v)
-	default:
-		rv := reflect.ValueOf(actual)
-		switch rv.Kind() {
-		case reflect.Slice, reflect.Array, reflect.Map, reflect.String:
-			actualLen = rv.Len()
-		default:
-			return false, fmt.Sprintf("cannot get length of %T", actual)
-		}
+	actualLen := computeLength(actual)
+	if actualLen == -1 {
+		return false, fmt.Sprintf("cannot get length of %T", actual)
 	}
 
 	if actualLen == expectedLen {

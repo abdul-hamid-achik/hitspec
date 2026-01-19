@@ -1,34 +1,39 @@
 @baseUrl = https://petstore.swagger.io/v2
 
-### Get pet by ID
-# @name getPet
-# @description Get a single pet by ID
-# @tags smoke, pets
-
-GET {{baseUrl}}/pet/1
-
->>>
-expect status 200
-expect header Content-Type contains application/json
-expect body.id == 1
-expect body.name exists
-<<<
-
 ### Find pets by status
 # @name findPetsByStatus
-# @tags pets
+# @description Find available pets
+# @tags smoke, pets
 
 GET {{baseUrl}}/pet/findByStatus?status=available
 
 >>>
 expect status 200
-expect body length > 0
 expect body[0].id exists
 expect body[0].status == "available"
 <<<
 
+>>>capture
+existingPetId from body[0].id
+<<<
+
+### Get pet by ID
+# @name getPet
+# @description Get the created pet
+# @tags pets
+# @depends createPet
+
+GET {{baseUrl}}/pet/{{createPet.petId}}
+
+>>>
+expect status 200
+expect body.id exists
+expect body.name exists
+<<<
+
 ### Create a new pet
 # @name createPet
+# @description Create a new pet
 # @tags pets, write
 
 POST {{baseUrl}}/pet
@@ -63,6 +68,7 @@ petId from body.id
 
 ### Update the pet
 # @name updatePet
+# @description Update the pet
 # @tags pets, write
 # @depends createPet
 
@@ -72,6 +78,7 @@ Content-Type: application/json
 {
   "id": {{createPet.petId}},
   "name": "doggie updated",
+  "photoUrls": ["http://example.com/photo.jpg"],
   "status": "sold"
 }
 
@@ -83,8 +90,9 @@ expect body.status == "sold"
 
 ### Delete the pet
 # @name deletePet
+# @description Delete the pet
 # @tags pets, write
-# @depends createPet
+# @depends getPet
 
 DELETE {{baseUrl}}/pet/{{createPet.petId}}
 

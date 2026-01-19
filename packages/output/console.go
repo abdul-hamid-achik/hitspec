@@ -9,6 +9,25 @@ import (
 	"github.com/fatih/color"
 )
 
+// formatValue formats a value for display, truncating or summarizing large values
+func formatValue(v any, maxLen int) string {
+	switch val := v.(type) {
+	case []any:
+		return fmt.Sprintf("[array with %d items]", len(val))
+	case map[string]any:
+		return fmt.Sprintf("{object with %d keys}", len(val))
+	case map[string]string:
+		return fmt.Sprintf("{map with %d entries}", len(val))
+	case map[string][]string:
+		return fmt.Sprintf("{headers with %d entries}", len(val))
+	}
+	str := fmt.Sprintf("%v", v)
+	if len(str) > maxLen {
+		return str[:maxLen] + "..."
+	}
+	return str
+}
+
 type ConsoleFormatter struct {
 	writer  io.Writer
 	verbose bool
@@ -88,8 +107,8 @@ func (f *ConsoleFormatter) FormatResult(result *runner.RunResult) {
 			for _, a := range r.Assertions {
 				if !a.Passed {
 					fmt.Fprintf(f.writer, "    %s %s %s\n", red("→"), a.Subject, a.Operator)
-					fmt.Fprintf(f.writer, "      Expected: %v\n", a.Expected)
-					fmt.Fprintf(f.writer, "      Actual:   %v\n", a.Actual)
+					fmt.Fprintf(f.writer, "      Expected: %s\n", formatValue(a.Expected, 100))
+					fmt.Fprintf(f.writer, "      Actual:   %s\n", formatValue(a.Actual, 100))
 					if a.Message != "" {
 						fmt.Fprintf(f.writer, "      %s\n", a.Message)
 					}

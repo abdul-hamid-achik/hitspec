@@ -200,9 +200,9 @@ func (p *Parser) parseAnnotation(req *Request) error {
 
 	switch name {
 	case "name":
-		if req.Name == "" {
-			req.Name = value
-		}
+		// @name always overrides the separator name for better DX
+		// This allows readable separators (### Get User Profile) with simple identifiers (@name getUser)
+		req.Name = value
 	case "description":
 		req.Description = value
 	case "tags":
@@ -400,6 +400,11 @@ func (p *Parser) parseBody() (*Body, error) {
 			builder.WriteString("}}")
 		} else if p.curToken.Type == TokenNewline {
 			builder.WriteString("\n")
+		} else if p.curToken.Type == TokenString {
+			// Preserve quotes for string tokens in body
+			builder.WriteString("\"")
+			builder.WriteString(p.curToken.Value)
+			builder.WriteString("\"")
 		} else {
 			builder.WriteString(p.curToken.Value)
 		}

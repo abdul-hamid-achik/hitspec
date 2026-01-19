@@ -122,7 +122,8 @@ GET https://api.example.com/test`
 	require.Len(t, file.Requests, 1)
 
 	req := file.Requests[0]
-	assert.Equal(t, "Test Request", req.Name)
+	// @name overrides the separator name for better DX
+	assert.Equal(t, "myTest", req.Name)
 	assert.Equal(t, "This is a test request", req.Description)
 	assert.Contains(t, req.Tags, "smoke")
 	assert.Contains(t, req.Tags, "auth")
