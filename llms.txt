@@ -321,24 +321,6 @@ hitspec llms
 | `--proxy` | Proxy URL for requests |
 | `--insecure, -k` | Disable SSL validation |
 
-## Environment Configuration
-
-File: `.hitspec.env.json`
-```json
-{
-  "dev": {
-    "baseUrl": "https://api-dev.example.com",
-    "token": "dev-token"
-  },
-  "prod": {
-    "baseUrl": "https://api.example.com",
-    "token": "${ENV_PROD_TOKEN}"
-  }
-}
-```
-
-Use: `hitspec run tests/ --env prod`
-
 ## Configuration File (hitspec.yaml)
 
 Unified configuration file combining settings and environments:
@@ -355,7 +337,7 @@ headers:
   User-Agent: hitspec/1.0
 verbose: false
 
-# Environments (inline, same as .hitspec.env.json)
+# Environments
 environments:
   dev:
     baseUrl: https://api-dev.example.com
@@ -366,15 +348,10 @@ environments:
 ```
 
 Supported config files (searched in order):
-1. `hitspec.yaml` / `hitspec.yml`
-2. `.hitspec.yaml` / `.hitspec.yml`
-3. `.hitspec.config.json` / `hitspec.config.json`
-4. `.hitspecrc` / `.hitspecrc.json`
+1. `hitspec.yaml`
+2. `hitspec.yml`
 
-Environment variable precedence (later overrides earlier):
-1. `environments:` in hitspec.yaml
-2. `.hitspec.env.json`
-3. `.hitspec.env.local.json`
+Use: `hitspec run tests/ --env prod`
 
 ## Syntax Rules
 
@@ -672,7 +649,7 @@ hitspec run tests/ --output tap
 
 ```
 project/
-├── .hitspec.env.json       # Environment config
+├── hitspec.yaml            # Config and environments
 ├── tests/
 │   ├── auth.http           # Auth tests
 │   └── users.http          # User tests
@@ -710,7 +687,7 @@ hitspec run test.http --dry-run
 
 ### Variable Not Found
 If `{{variable}}` shows as literal text:
-1. Check `.hitspec.env.json` exists
+1. Check `hitspec.yaml` exists with `environments:` section
 2. Check variable is defined in current environment
 3. Check `--env` flag matches: `hitspec run test.http --env dev`
 

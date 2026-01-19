@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 
@@ -81,12 +80,6 @@ func (c *Config) GetNoColor() bool {
 var ConfigFilenames = []string{
 	"hitspec.yaml",
 	"hitspec.yml",
-	".hitspec.yaml",
-	".hitspec.yml",
-	".hitspec.config.json",
-	"hitspec.config.json",
-	".hitspecrc",
-	".hitspecrc.json",
 }
 
 // LoadConfig loads configuration from the specified path or searches for config files
@@ -120,16 +113,8 @@ func loadConfigFromFile(path string) (*Config, error) {
 	}
 
 	config := DefaultConfig()
-
-	ext := filepath.Ext(path)
-	if ext == ".yaml" || ext == ".yml" {
-		if err := yaml.Unmarshal(data, config); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := json.Unmarshal(data, config); err != nil {
-			return nil, err
-		}
+	if err := yaml.Unmarshal(data, config); err != nil {
+		return nil, err
 	}
 
 	return config, nil
@@ -223,7 +208,7 @@ func (c *Config) Merge(other *Config) *Config {
 
 // SaveConfig saves the configuration to a file
 func (c *Config) SaveConfig(path string) error {
-	data, err := json.MarshalIndent(c, "", "  ")
+	data, err := yaml.Marshal(c)
 	if err != nil {
 		return err
 	}

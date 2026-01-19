@@ -1,6 +1,6 @@
 module github.com/abdul-hamid-achik/hitspec
 
-go 1.22.0
+go 1.25
 
 require (
 	github.com/fatih/color v1.16.0

@@ -1,18 +1,12 @@
 package env
 
 import (
-	"encoding/json"
 	"os"
-	"path/filepath"
 )
 
 type Environment struct {
 	Name      string
 	Variables map[string]any
-}
-
-type EnvFile struct {
-	Environments map[string]map[string]any
 }
 
 func LoadEnvironment(dir, envName string, configEnvs map[string]map[string]any) (*Environment, error) {
@@ -21,7 +15,7 @@ func LoadEnvironment(dir, envName string, configEnvs map[string]map[string]any) 
 		Variables: make(map[string]any),
 	}
 
-	// First load from hitspec.yaml environments section (lowest precedence)
+	// Load from hitspec.yaml environments section
 	if configEnvs != nil {
 		if vars, ok := configEnvs[envName]; ok {
 			for k, v := range vars {
@@ -30,43 +24,7 @@ func LoadEnvironment(dir, envName string, configEnvs map[string]map[string]any) 
 		}
 	}
 
-	// Then overlay from .hitspec.env.json
-	mainFile := filepath.Join(dir, ".hitspec.env.json")
-	if err := loadEnvFile(mainFile, envName, env.Variables); err != nil && !os.IsNotExist(err) {
-		return nil, err
-	}
-
-	// Finally overlay from .hitspec.env.local.json (highest precedence)
-	localFile := filepath.Join(dir, ".hitspec.env.local.json")
-	if err := loadEnvFile(localFile, envName, env.Variables); err != nil && !os.IsNotExist(err) {
-		return nil, err
-	}
-
 	return env, nil
-}
-
-func loadEnvFile(path, envName string, target map[string]any) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-
-	var envFile map[string]map[string]any
-	if err := json.Unmarshal(data, &envFile); err != nil {
-		return err
-	}
-
-	if vars, ok := envFile[envName]; ok {
-		for k, v := range vars {
-			target[k] = v
-		}
-	}
-
-	return nil
-}
-
-func LoadEnvironmentFromFile(path, envName string) (*Environment, error) {
-	return LoadEnvironment(filepath.Dir(path), envName, nil)
 }
 
 func MergeVariables(sources ...map[string]any) map[string]any {
