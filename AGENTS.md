@@ -79,6 +79,31 @@ task test                            # Run tests via Taskfile
 task build                           # Build binary
 ```
 
+## Pre-Release Checklist
+
+Before committing and releasing a new version, run these checks:
+
+```bash
+# 1. Build the binary
+go build -o hitspec ./apps/cli
+
+# 2. Run all tests
+go test ./...
+
+# 3. Run linter
+golangci-lint run
+
+# 4. Check for security vulnerabilities
+govulncheck ./...
+
+# 5. If all pass, commit and tag
+git add -A && git commit -m "Your commit message"
+git tag vX.Y.Z && git push origin main --tags
+gh release create vX.Y.Z
+```
+
+**Important**: Always fix any issues found by `govulncheck` before releasing. Security vulnerabilities in dependencies should be addressed by updating the affected packages.
+
 ## Coding Conventions
 
 - Standard Go formatting (gofmt)
