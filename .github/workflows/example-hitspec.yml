@@ -1,0 +1,136 @@
+# Example workflow demonstrating hitspec GitHub Action usage
+# Copy and adapt these examples for your own workflows
+
+name: Example hitspec Tests
+
+on:
+  workflow_dispatch:  # Manual trigger only - this is an example file
+    inputs:
+      run_stress_test:
+        description: 'Run stress tests'
+        type: boolean
+        default: false
+
+jobs:
+  # Basic API testing with JUnit output
+  api-tests:
+    name: API Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run API tests
+        uses: abdul-hamid-achik/hitspec@v1
+        with:
+          files: tests/
+          env: dev
+          output: junit
+          output-file: test-results.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: test-results.xml
+
+      # Optional: Publish test results with third-party action
+      # - name: Publish Test Results
+      #   uses: EnricoMi/publish-unit-test-result-action@v2
+      #   if: always()
+      #   with:
+      #     files: test-results.xml
+
+  # Testing with environment variables and filtering
+  filtered-tests:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run smoke tests only
+        uses: abdul-hamid-achik/hitspec@v1
+        with:
+          files: tests/
+          env: staging
+          tags: smoke
+          output: junit
+          output-file: smoke-results.xml
+          parallel: true
+          bail: true
+
+      - name: Upload smoke test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-results
+          path: smoke-results.xml
+
+  # Using .env file for secrets
+  tests-with-env-file:
+    name: Tests with Environment File
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env file from secrets
+        run: |
+          echo "API_TOKEN=${{ secrets.API_TOKEN }}" >> .env.ci
+          echo "BASE_URL=${{ vars.API_BASE_URL }}" >> .env.ci
+
+      - name: Run tests with env file
+        uses: abdul-hamid-achik/hitspec@v1
+        with:
+          files: tests/
+          env: prod
+          env-file: .env.ci
+          output: json
+          output-file: results.json
+
+  # Stress testing example
+  stress-test:
+    name: Stress Test
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.run_stress_test == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run stress test
+        uses: abdul-hamid-achik/hitspec@v1
+        with:
+          files: tests/api.http
+          stress: true
+          duration: 2m
+          rate: 50
+          max-vus: 20
+          threshold: 'p95<500ms,errors<1%'
+          verbose: true
+
+  # Testing specific version
+  version-pinned:
+    name: Pinned Version Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run tests with specific hitspec version
+        uses: abdul-hamid-achik/hitspec@v1
+        with:
+          files: tests/
+          version: v0.9.4
+
+  # Multi-platform testing
+  multi-platform:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run tests
+        uses: abdul-hamid-achik/hitspec@v1
+        with:
+          files: tests/
+          output: tap

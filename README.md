@@ -410,6 +410,71 @@ Authorization: Bearer {{login.token}}
 | Status | `code from status` | Capture status code |
 | Duration | `time from duration` | Capture response time (ms) |
 
+## CI/CD Integration
+
+### GitHub Actions
+
+Use the official hitspec action to run API tests in your CI pipeline:
+
+```yaml
+- uses: abdul-hamid-achik/hitspec@v1
+  with:
+    files: tests/
+    output: junit
+    output-file: test-results.xml
+
+- uses: actions/upload-artifact@v4
+  with:
+    name: test-results
+    path: test-results.xml
+```
+
+#### Action Inputs
+
+| Input | Description | Default |
+|-------|-------------|---------|
+| `files` | Files/directories to test | (required) |
+| `env` | Environment name | `dev` |
+| `env-file` | Path to .env file | - |
+| `output` | Output format (console, json, junit, tap) | `junit` |
+| `output-file` | Write output to file | - |
+| `tags` | Filter by tags | - |
+| `parallel` | Run in parallel | `false` |
+| `bail` | Stop on first failure | `false` |
+| `stress` | Enable stress testing | `false` |
+| `duration` | Stress test duration | `30s` |
+| `rate` | Requests per second | `10` |
+| `threshold` | Pass/fail thresholds | - |
+| `version` | hitspec version | `latest` |
+
+#### Stress Testing in CI
+
+```yaml
+- uses: abdul-hamid-achik/hitspec@v1
+  with:
+    files: api.http
+    stress: true
+    duration: 2m
+    rate: 100
+    threshold: 'p95<200ms,errors<0.5%'
+```
+
+#### With Environment Variables
+
+```yaml
+- name: Create .env file
+  run: |
+    echo "API_TOKEN=${{ secrets.API_TOKEN }}" >> .env.ci
+
+- uses: abdul-hamid-achik/hitspec@v1
+  with:
+    files: tests/
+    env: staging
+    env-file: .env.ci
+```
+
+See [.github/workflows/example-hitspec.yml](.github/workflows/example-hitspec.yml) for more examples.
+
 ## Development
 
 ```bash

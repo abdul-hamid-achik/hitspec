@@ -1,0 +1,264 @@
+name: 'hitspec'
+description: 'Run API tests with hitspec - plain text HTTP testing'
+author: 'Abdul Hamid Achik'
+branding:
+  icon: 'zap'
+  color: 'blue'
+
+inputs:
+  files:
+    description: 'Files or directories to test (required)'
+    required: true
+  env:
+    description: 'Environment name'
+    required: false
+    default: 'dev'
+  env-file:
+    description: 'Path to .env file for variable interpolation'
+    required: false
+  output:
+    description: 'Output format (console, json, junit, tap)'
+    required: false
+    default: 'junit'
+  output-file:
+    description: 'Write output to file'
+    required: false
+  tags:
+    description: 'Filter by tags (comma-separated)'
+    required: false
+  name:
+    description: 'Filter by request name pattern'
+    required: false
+  timeout:
+    description: 'Global timeout in milliseconds'
+    required: false
+  parallel:
+    description: 'Run requests in parallel'
+    required: false
+    default: 'false'
+  concurrency:
+    description: 'Max concurrent requests when parallel is enabled'
+    required: false
+  bail:
+    description: 'Stop on first failure'
+    required: false
+    default: 'false'
+  verbose:
+    description: 'Show detailed output'
+    required: false
+    default: 'false'
+  insecure:
+    description: 'Disable SSL certificate validation'
+    required: false
+    default: 'false'
+  proxy:
+    description: 'Proxy URL for requests'
+    required: false
+  stress:
+    description: 'Enable stress testing mode'
+    required: false
+    default: 'false'
+  duration:
+    description: 'Stress test duration (e.g., 30s, 1m, 5m)'
+    required: false
+    default: '30s'
+  rate:
+    description: 'Target requests per second for stress testing'
+    required: false
+    default: '10'
+  vus:
+    description: 'Number of virtual users (alternative to rate)'
+    required: false
+  max-vus:
+    description: 'Maximum concurrent requests in stress mode'
+    required: false
+  think-time:
+    description: 'Think time between requests per VU'
+    required: false
+  ramp-up:
+    description: 'Ramp-up time to reach target rate/VUs'
+    required: false
+  threshold:
+    description: 'Pass/fail thresholds (e.g., "p95<200ms,errors<0.1%")'
+    required: false
+  profile:
+    description: 'Stress profile name from hitspec.yaml'
+    required: false
+  version:
+    description: 'hitspec version to use (e.g., v0.9.4 or latest)'
+    required: false
+    default: 'latest'
+
+outputs:
+  exit-code:
+    description: 'Exit code from hitspec (0 = success, non-zero = failure)'
+    value: ${{ steps.run-tests.outputs.exit-code }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install hitspec
+      shell: bash
+      run: |
+        set -e
+
+        VERSION="${{ inputs.version }}"
+
+        # Resolve 'latest' to actual version
+        if [ "$VERSION" = "latest" ]; then
+          echo "Fetching latest version..."
+          VERSION=$(curl -sL https://api.github.com/repos/abdul-hamid-achik/hitspec/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+          if [ -z "$VERSION" ]; then
+            echo "::error::Failed to fetch latest version"
+            exit 1
+          fi
+          echo "Latest version: $VERSION"
+        fi
+
+        # Detect OS
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+
+        # Detect architecture and normalize
+        ARCH=$(uname -m)
+        case $ARCH in
+          x86_64)
+            ARCH="amd64"
+            ;;
+          aarch64|arm64)
+            ARCH="arm64"
+            ;;
+          *)
+            echo "::error::Unsupported architecture: $ARCH"
+            exit 1
+            ;;
+        esac
+
+        echo "Platform: ${OS}_${ARCH}"
+
+        # Strip 'v' prefix for download URL (goreleaser uses version without v)
+        VERSION_NUM="${VERSION#v}"
+
+        # Construct download URL
+        if [ "$OS" = "windows" ]; then
+          ARCHIVE="hitspec_${VERSION_NUM}_${OS}_${ARCH}.zip"
+        else
+          ARCHIVE="hitspec_${VERSION_NUM}_${OS}_${ARCH}.tar.gz"
+        fi
+
+        URL="https://github.com/abdul-hamid-achik/hitspec/releases/download/${VERSION}/${ARCHIVE}"
+        echo "Downloading: $URL"
+
+        # Download and extract
+        INSTALL_DIR="/usr/local/bin"
+        if [ "$OS" = "windows" ]; then
+          curl -sL "$URL" -o hitspec.zip
+          unzip -o hitspec.zip hitspec.exe -d "$INSTALL_DIR"
+          rm hitspec.zip
+        else
+          curl -sL "$URL" | tar xz -C "$INSTALL_DIR" hitspec
+        fi
+
+        # Verify installation
+        hitspec version
+        echo "hitspec installed successfully"
+
+    - name: Run hitspec tests
+      id: run-tests
+      shell: bash
+      run: |
+        set -e
+
+        # Build command
+        CMD="hitspec run ${{ inputs.files }}"
+
+        # Add standard options
+        CMD="$CMD --env ${{ inputs.env }}"
+        CMD="$CMD --output ${{ inputs.output }}"
+        CMD="$CMD --no-color"
+
+        # Add optional flags
+        if [ -n "${{ inputs.env-file }}" ]; then
+          CMD="$CMD --env-file ${{ inputs.env-file }}"
+        fi
+
+        if [ -n "${{ inputs.output-file }}" ]; then
+          CMD="$CMD --output-file ${{ inputs.output-file }}"
+        fi
+
+        if [ -n "${{ inputs.tags }}" ]; then
+          CMD="$CMD --tags ${{ inputs.tags }}"
+        fi
+
+        if [ -n "${{ inputs.name }}" ]; then
+          CMD="$CMD --name ${{ inputs.name }}"
+        fi
+
+        if [ -n "${{ inputs.timeout }}" ]; then
+          CMD="$CMD --timeout ${{ inputs.timeout }}"
+        fi
+
+        if [ "${{ inputs.parallel }}" = "true" ]; then
+          CMD="$CMD --parallel"
+          if [ -n "${{ inputs.concurrency }}" ]; then
+            CMD="$CMD --concurrency ${{ inputs.concurrency }}"
+          fi
+        fi
+
+        if [ "${{ inputs.bail }}" = "true" ]; then
+          CMD="$CMD --bail"
+        fi
+
+        if [ "${{ inputs.verbose }}" = "true" ]; then
+          CMD="$CMD --verbose"
+        fi
+
+        if [ "${{ inputs.insecure }}" = "true" ]; then
+          CMD="$CMD --insecure"
+        fi
+
+        if [ -n "${{ inputs.proxy }}" ]; then
+          CMD="$CMD --proxy ${{ inputs.proxy }}"
+        fi
+
+        # Stress testing options
+        if [ "${{ inputs.stress }}" = "true" ]; then
+          CMD="$CMD --stress"
+          CMD="$CMD --duration ${{ inputs.duration }}"
+          CMD="$CMD --rate ${{ inputs.rate }}"
+          CMD="$CMD --no-progress"
+
+          if [ -n "${{ inputs.vus }}" ]; then
+            CMD="$CMD --vus ${{ inputs.vus }}"
+          fi
+
+          if [ -n "${{ inputs.max-vus }}" ]; then
+            CMD="$CMD --max-vus ${{ inputs.max-vus }}"
+          fi
+
+          if [ -n "${{ inputs.think-time }}" ]; then
+            CMD="$CMD --think-time ${{ inputs.think-time }}"
+          fi
+
+          if [ -n "${{ inputs.ramp-up }}" ]; then
+            CMD="$CMD --ramp-up ${{ inputs.ramp-up }}"
+          fi
+
+          if [ -n "${{ inputs.threshold }}" ]; then
+            CMD="$CMD --threshold '${{ inputs.threshold }}'"
+          fi
+
+          if [ -n "${{ inputs.profile }}" ]; then
+            CMD="$CMD --profile ${{ inputs.profile }}"
+          fi
+        fi
+
+        echo "Running: $CMD"
+
+        # Execute and capture exit code
+        EXIT_CODE=0
+        eval $CMD || EXIT_CODE=$?
+
+        echo "exit-code=$EXIT_CODE" >> $GITHUB_OUTPUT
+
+        # Exit with the same code to fail the step if tests fail
+        exit $EXIT_CODE
