@@ -35,6 +35,7 @@ const (
 
 var (
 	envFlag         string
+	envFileFlag     string
 	nameFlag        string
 	tagsFlag        string
 	verboseFlag     bool
@@ -53,6 +54,7 @@ var (
 
 func init() {
 	runCmd.Flags().StringVarP(&envFlag, "env", "e", "dev", "Environment to use")
+	runCmd.Flags().StringVar(&envFileFlag, "env-file", "", "Path to .env file for variable interpolation")
 	runCmd.Flags().StringVarP(&nameFlag, "name", "n", "", "Run only tests matching name pattern")
 	runCmd.Flags().StringVarP(&tagsFlag, "tags", "t", "", "Run only tests with specified tags (comma-separated)")
 	runCmd.Flags().BoolVarP(&verboseFlag, "verbose", "v", false, "Verbose output")
@@ -164,6 +166,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 	cfg := &runner.Config{
 		Environment:    envFlag,
+		EnvFile:        envFileFlag,
 		Verbose:        verboseFlag,
 		Timeout:        time.Duration(timeoutFlag) * time.Millisecond,
 		FollowRedirect: fileConfig.GetFollowRedirects(),

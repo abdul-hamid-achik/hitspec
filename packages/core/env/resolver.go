@@ -22,6 +22,7 @@ type Resolver struct {
 	mu        sync.RWMutex
 	variables map[string]any
 	captures  map[string]any
+	dotenv    map[string]string
 	funcs     *builtin.Registry
 	warnFunc  WarnFunc
 }
@@ -30,8 +31,24 @@ func NewResolver() *Resolver {
 	return &Resolver{
 		variables: make(map[string]any),
 		captures:  make(map[string]any),
+		dotenv:    make(map[string]string),
 		funcs:     builtin.NewRegistry(),
 	}
+}
+
+// LoadDotEnv loads variables from a .env file for variable interpolation.
+// Variables loaded from the .env file take precedence over OS environment variables.
+func (r *Resolver) LoadDotEnv(path string) error {
+	vars, err := LoadDotEnv(path)
+	if err != nil {
+		return err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for k, v := range vars {
+		r.dotenv[k] = v
+	}
+	return nil
 }
 
 // SetWarnFunc sets a function to be called when warnings occur (e.g., unresolved variables)
@@ -95,6 +112,13 @@ func (r *Resolver) Resolve(input string) string {
 				return match
 			}
 			// Otherwise treat as environment variable
+			// Check dotenv first, then OS env
+			r.mu.RLock()
+			if val, ok := r.dotenv[funcExpr]; ok {
+				r.mu.RUnlock()
+				return val
+			}
+			r.mu.RUnlock()
 			if val := os.Getenv(funcExpr); val != "" {
 				return val
 			}
@@ -169,6 +193,9 @@ func (r *Resolver) Clone() *Resolver {
 	}
 	for k, v := range r.captures {
 		clone.captures[k] = v
+	}
+	for k, v := range r.dotenv {
+		clone.dotenv[k] = v
 	}
 	return clone
 }

@@ -29,6 +29,7 @@ type Runner struct {
 
 type Config struct {
 	Environment     string
+	EnvFile         string
 	Verbose         bool
 	Timeout         time.Duration
 	FollowRedirect  bool
@@ -69,6 +70,13 @@ func NewRunner(cfg *Config) *Runner {
 	resolver.SetWarnFunc(func(format string, args ...any) {
 		fmt.Fprintf(os.Stderr, "warning: "+format+"\n", args...)
 	})
+
+	// Load dotenv file if specified
+	if cfg.EnvFile != "" {
+		if err := resolver.LoadDotEnv(cfg.EnvFile); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to load env file: %v\n", err)
+		}
+	}
 
 	return &Runner{
 		client:   http.NewClient(clientOpts...),
