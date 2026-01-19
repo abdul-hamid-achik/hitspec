@@ -82,11 +82,11 @@ func NewReporter(opts ...ReporterOption) *Reporter {
 
 // Header prints the test header
 func (r *Reporter) Header(version, filename string, config *Config) {
-	fmt.Fprintln(r.writer)
-	r.bold.Fprintf(r.writer, "hitspec stress %s\n", version)
-	fmt.Fprintln(r.writer)
+	_, _ = fmt.Fprintln(r.writer)
+	_, _ = r.bold.Fprintf(r.writer, "hitspec stress %s\n", version)
+	_, _ = fmt.Fprintln(r.writer)
 
-	r.cyan.Fprintf(r.writer, "Stress Testing: %s\n", filename)
+	_, _ = r.cyan.Fprintf(r.writer, "Stress Testing: %s\n", filename)
 
 	var details []string
 	if config.Mode == RateMode {
@@ -97,8 +97,8 @@ func (r *Reporter) Header(version, filename string, config *Config) {
 	details = append(details, fmt.Sprintf("Duration: %s", config.Duration))
 	details = append(details, fmt.Sprintf("Max VUs: %d", config.MaxVUs))
 
-	fmt.Fprintf(r.writer, "%s\n", strings.Join(details, " | "))
-	fmt.Fprintln(r.writer)
+	_, _ = fmt.Fprintf(r.writer, "%s\n", strings.Join(details, " | "))
+	_, _ = fmt.Fprintln(r.writer)
 }
 
 // Progress prints real-time progress
@@ -108,7 +108,7 @@ func (r *Reporter) Progress(stats CurrentStats, duration time.Duration) {
 	}
 
 	// Clear line and print progress
-	fmt.Fprint(r.writer, "\r\033[K")
+	_, _ = fmt.Fprint(r.writer, "\r\033[K")
 
 	// Progress bar
 	progress := float64(stats.Elapsed) / float64(duration)
@@ -119,33 +119,33 @@ func (r *Reporter) Progress(stats CurrentStats, duration time.Duration) {
 	filled := int(progress * float64(barWidth))
 	bar := strings.Repeat("━", filled) + strings.Repeat("─", barWidth-filled)
 
-	fmt.Fprintf(r.writer, "Progress %s %s / %s\n", bar, formatDuration(stats.Elapsed), formatDuration(duration))
+	_, _ = fmt.Fprintf(r.writer, "Progress %s %s / %s\n", bar, formatDuration(stats.Elapsed), formatDuration(duration))
 
 	// Stats line
-	fmt.Fprintf(r.writer, "Requests: ")
-	r.bold.Fprintf(r.writer, "%s", formatNumber(stats.Total))
-	fmt.Fprintf(r.writer, " total | ")
-	r.green.Fprintf(r.writer, "%s", formatNumber(stats.Success))
-	fmt.Fprintf(r.writer, " success | ")
+	_, _ = fmt.Fprintf(r.writer, "Requests: ")
+	_, _ = r.bold.Fprintf(r.writer, "%s", formatNumber(stats.Total))
+	_, _ = fmt.Fprintf(r.writer, " total | ")
+	_, _ = r.green.Fprintf(r.writer, "%s", formatNumber(stats.Success))
+	_, _ = fmt.Fprintf(r.writer, " success | ")
 	if stats.Errors > 0 {
-		r.red.Fprintf(r.writer, "%s", formatNumber(stats.Errors))
+		_, _ = r.red.Fprintf(r.writer, "%s", formatNumber(stats.Errors))
 	} else {
-		fmt.Fprintf(r.writer, "%s", formatNumber(stats.Errors))
+		_, _ = fmt.Fprintf(r.writer, "%s", formatNumber(stats.Errors))
 	}
-	fmt.Fprintf(r.writer, " errors (%.2f%%)\n", stats.ErrorRate*100)
+	_, _ = fmt.Fprintf(r.writer, " errors (%.2f%%)\n", stats.ErrorRate*100)
 
-	fmt.Fprintf(r.writer, "Rate: ")
-	r.cyan.Fprintf(r.writer, "%.1f", stats.RPS)
-	fmt.Fprintf(r.writer, " req/s | Active VUs: %d\n", stats.ActiveVUs)
+	_, _ = fmt.Fprintf(r.writer, "Rate: ")
+	_, _ = r.cyan.Fprintf(r.writer, "%.1f", stats.RPS)
+	_, _ = fmt.Fprintf(r.writer, " req/s | Active VUs: %d\n", stats.ActiveVUs)
 
-	fmt.Fprintf(r.writer, "Latency: p50: %s | p95: %s | p99: %s | max: %s\n",
+	_, _ = fmt.Fprintf(r.writer, "Latency: p50: %s | p95: %s | p99: %s | max: %s\n",
 		formatLatency(stats.P50),
 		formatLatency(stats.P95),
 		formatLatency(stats.P99),
 		formatLatency(stats.Max))
 
 	// Move cursor up for next update
-	fmt.Fprint(r.writer, "\033[4A")
+	_, _ = fmt.Fprint(r.writer, "\033[4A")
 }
 
 // ClearProgress clears the progress display
@@ -154,88 +154,88 @@ func (r *Reporter) ClearProgress() {
 		return
 	}
 	// Move down and clear the progress lines
-	fmt.Fprint(r.writer, "\033[4B\r\033[K\033[A\r\033[K\033[A\r\033[K\033[A\r\033[K")
+	_, _ = fmt.Fprint(r.writer, "\033[4B\r\033[K\033[A\r\033[K\033[A\r\033[K\033[A\r\033[K")
 }
 
 // Summary prints the final summary
 func (r *Reporter) Summary(summary *Summary, thresholdResults []ThresholdResult) {
-	fmt.Fprintln(r.writer)
-	r.bold.Fprintln(r.writer, "STRESS TEST SUMMARY")
-	fmt.Fprintln(r.writer, strings.Repeat("─", 40))
+	_, _ = fmt.Fprintln(r.writer)
+	_, _ = r.bold.Fprintln(r.writer, "STRESS TEST SUMMARY")
+	_, _ = fmt.Fprintln(r.writer, strings.Repeat("─", 40))
 
 	// Duration and totals
-	fmt.Fprintf(r.writer, "Duration:   %s\n", formatDuration(summary.Duration))
-	fmt.Fprintf(r.writer, "Total:      ")
-	r.bold.Fprintf(r.writer, "%s", formatNumber(summary.TotalRequests))
-	fmt.Fprintf(r.writer, " requests (%.1f req/s)\n", summary.RPS)
+	_, _ = fmt.Fprintf(r.writer, "Duration:   %s\n", formatDuration(summary.Duration))
+	_, _ = fmt.Fprintf(r.writer, "Total:      ")
+	_, _ = r.bold.Fprintf(r.writer, "%s", formatNumber(summary.TotalRequests))
+	_, _ = fmt.Fprintf(r.writer, " requests (%.1f req/s)\n", summary.RPS)
 
-	fmt.Fprintf(r.writer, "Success:    ")
-	r.green.Fprintf(r.writer, "%s", formatNumber(summary.SuccessCount))
-	fmt.Fprintf(r.writer, " (%.1f%%)\n", summary.SuccessRate*100)
+	_, _ = fmt.Fprintf(r.writer, "Success:    ")
+	_, _ = r.green.Fprintf(r.writer, "%s", formatNumber(summary.SuccessCount))
+	_, _ = fmt.Fprintf(r.writer, " (%.1f%%)\n", summary.SuccessRate*100)
 
-	fmt.Fprintf(r.writer, "Failed:     ")
+	_, _ = fmt.Fprintf(r.writer, "Failed:     ")
 	if summary.ErrorCount > 0 {
-		r.red.Fprintf(r.writer, "%s", formatNumber(summary.ErrorCount))
+		_, _ = r.red.Fprintf(r.writer, "%s", formatNumber(summary.ErrorCount))
 	} else {
-		fmt.Fprintf(r.writer, "%s", formatNumber(summary.ErrorCount))
+		_, _ = fmt.Fprintf(r.writer, "%s", formatNumber(summary.ErrorCount))
 	}
-	fmt.Fprintf(r.writer, " (%.1f%%)\n", summary.ErrorRate*100)
+	_, _ = fmt.Fprintf(r.writer, " (%.1f%%)\n", summary.ErrorRate*100)
 
 	if summary.TimeoutCount > 0 {
-		fmt.Fprintf(r.writer, "Timeouts:   ")
-		r.yellow.Fprintf(r.writer, "%s\n", formatNumber(summary.TimeoutCount))
+		_, _ = fmt.Fprintf(r.writer, "Timeouts:   ")
+		_, _ = r.yellow.Fprintf(r.writer, "%s\n", formatNumber(summary.TimeoutCount))
 	}
 
 	// Latency
-	fmt.Fprintln(r.writer)
-	r.bold.Fprintln(r.writer, "LATENCY (ms)")
-	fmt.Fprintf(r.writer, "  p50: %-6s | p95: %-6s | p99: %-6s | max: %s\n",
+	_, _ = fmt.Fprintln(r.writer)
+	_, _ = r.bold.Fprintln(r.writer, "LATENCY (ms)")
+	_, _ = fmt.Fprintf(r.writer, "  p50: %-6s | p95: %-6s | p99: %-6s | max: %s\n",
 		formatLatencyMs(summary.P50),
 		formatLatencyMs(summary.P95),
 		formatLatencyMs(summary.P99),
 		formatLatencyMs(summary.Max))
-	fmt.Fprintf(r.writer, "  min: %-6s | mean: %-5s | stddev: %s\n",
+	_, _ = fmt.Fprintf(r.writer, "  min: %-6s | mean: %-5s | stddev: %s\n",
 		formatLatencyMs(summary.Min),
 		formatLatencyMs(summary.Mean),
 		formatLatencyMs(summary.StdDev))
 
 	// Per-request breakdown (if verbose)
 	if r.verbose && len(summary.RequestBreakdown) > 0 {
-		fmt.Fprintln(r.writer)
-		r.bold.Fprintln(r.writer, "PER-REQUEST BREAKDOWN")
+		_, _ = fmt.Fprintln(r.writer)
+		_, _ = r.bold.Fprintln(r.writer, "PER-REQUEST BREAKDOWN")
 		for name, rs := range summary.RequestBreakdown {
-			fmt.Fprintf(r.writer, "  %s:\n", name)
-			fmt.Fprintf(r.writer, "    Total: %s | Success: %s | Errors: %s\n",
+			_, _ = fmt.Fprintf(r.writer, "  %s:\n", name)
+			_, _ = fmt.Fprintf(r.writer, "    Total: %s | Success: %s | Errors: %s\n",
 				formatNumber(rs.Total), formatNumber(rs.Success), formatNumber(rs.Errors))
-			fmt.Fprintf(r.writer, "    p50: %s | p95: %s | p99: %s\n",
+			_, _ = fmt.Fprintf(r.writer, "    p50: %s | p95: %s | p99: %s\n",
 				formatLatency(rs.P50), formatLatency(rs.P95), formatLatency(rs.P99))
 		}
 	}
 
 	// Thresholds
 	if len(thresholdResults) > 0 {
-		fmt.Fprintln(r.writer)
-		r.bold.Fprintln(r.writer, "THRESHOLDS")
+		_, _ = fmt.Fprintln(r.writer)
+		_, _ = r.bold.Fprintln(r.writer, "THRESHOLDS")
 		allPassed := true
 		for _, tr := range thresholdResults {
 			if tr.Passed {
-				r.green.Fprintf(r.writer, "  ✓ ")
+				_, _ = r.green.Fprintf(r.writer, "  ✓ ")
 			} else {
-				r.red.Fprintf(r.writer, "  ✗ ")
+				_, _ = r.red.Fprintf(r.writer, "  ✗ ")
 				allPassed = false
 			}
-			fmt.Fprintf(r.writer, "%s %s    (actual: %s)\n", tr.Name, tr.Expected, tr.Actual)
+			_, _ = fmt.Fprintf(r.writer, "%s %s    (actual: %s)\n", tr.Name, tr.Expected, tr.Actual)
 		}
 
-		fmt.Fprintln(r.writer)
+		_, _ = fmt.Fprintln(r.writer)
 		if allPassed {
-			r.green.Fprintln(r.writer, "All thresholds passed!")
+			_, _ = r.green.Fprintln(r.writer, "All thresholds passed!")
 		} else {
-			r.red.Fprintln(r.writer, "Some thresholds failed!")
+			_, _ = r.red.Fprintln(r.writer, "Some thresholds failed!")
 		}
 	}
 
-	fmt.Fprintln(r.writer)
+	_, _ = fmt.Fprintln(r.writer)
 }
 
 // JSONSummary outputs the summary as JSON
@@ -300,12 +300,12 @@ func (r *Reporter) JSONSummary(summary *Summary, thresholdResults []ThresholdRes
 
 // Error prints an error message
 func (r *Reporter) Error(format string, args ...interface{}) {
-	r.red.Fprintf(r.writer, "Error: "+format+"\n", args...)
+	_, _ = r.red.Fprintf(r.writer, "Error: "+format+"\n", args...)
 }
 
 // Info prints an info message
 func (r *Reporter) Info(format string, args ...interface{}) {
-	fmt.Fprintf(r.writer, format+"\n", args...)
+	_, _ = fmt.Fprintf(r.writer, format+"\n", args...)
 }
 
 // formatDuration formats a duration for display

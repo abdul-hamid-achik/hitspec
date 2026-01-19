@@ -298,7 +298,7 @@ func (r *Runner) runRateMode(ctx context.Context) {
 			defer wg.Done()
 			defer r.scheduler.Release()
 
-			r.executeScheduledRequest(ctx, sched)
+			_ = r.executeScheduledRequest(ctx, sched)
 		}(scheduled)
 	}
 }
