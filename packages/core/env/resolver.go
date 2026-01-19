@@ -85,14 +85,24 @@ func (r *Resolver) Resolve(input string) string {
 		expr = strings.TrimSpace(expr)
 
 		if strings.HasPrefix(expr, "$") {
-			envVar := expr[1:]
-			if val := os.Getenv(envVar); val != "" {
+			funcExpr := expr[1:] // strip the $
+			// Check if it's a function call (has parentheses)
+			if strings.Contains(funcExpr, "(") {
+				if result, ok := r.funcs.Call(funcExpr); ok {
+					return fmt.Sprintf("%v", result)
+				}
+				r.warn("unresolved function call: %s", expr)
+				return match
+			}
+			// Otherwise treat as environment variable
+			if val := os.Getenv(funcExpr); val != "" {
 				return val
 			}
-			r.warn("unresolved environment variable: $%s", envVar)
+			r.warn("unresolved environment variable: $%s", funcExpr)
 			return match
 		}
 
+		// Keep for backward compatibility with non-$ function calls
 		if strings.Contains(expr, "(") {
 			if result, ok := r.funcs.Call(expr); ok {
 				return fmt.Sprintf("%v", result)
