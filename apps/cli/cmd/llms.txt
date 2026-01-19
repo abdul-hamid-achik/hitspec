@@ -400,6 +400,41 @@ POST {{baseUrl}}/api/init
 POST {{baseUrl}}/api/cleanup
 ```
 
+### Understanding Rate Limits
+
+The `--rate` flag sets how many requests hitspec sends per second, but your server may have its own rate limits. High failure rates often indicate you're exceeding server limits.
+
+**Common confusion**: Server rate limits are often expressed as requests per minute, not per second.
+
+| Server Limit | Equivalent | Safe `--rate` value |
+|--------------|------------|---------------------|
+| 100 req/min  | ~1.67 req/s | `--rate 1.5` |
+| 600 req/min  | 10 req/s | `--rate 8` |
+| 1000 req/min | ~16.7 req/s | `--rate 15` |
+| 100 req/sec  | 6000 req/min | `--rate 100` |
+
+**Diagnosing rate limit issues**:
+
+```bash
+# If you see high failure rates (>10%), try reducing rate
+hitspec run api.http --stress --rate 50 --verbose
+
+# Watch for patterns in failures - exact success counts often reveal limits
+# Example: Exactly 100 successes in 60s = 100 req/minute limit
+
+# Reduce concurrency with --max-vus to avoid connection limits
+hitspec run api.http --stress --rate 10 --max-vus 5
+
+# Start low and increase to find your server's actual limits
+hitspec run api.http --stress --rate 1 --duration 60s
+```
+
+**Rate vs Max VUs**:
+- `--rate`: Target requests per second (controls throughput)
+- `--max-vus`: Maximum concurrent in-flight requests (controls concurrency)
+
+Even with a low `--rate`, a high `--max-vus` can overwhelm servers with connection limits. When troubleshooting, reduce both.
+
 ### Stress Profile in Config
 
 Define stress profiles in hitspec.yaml:
@@ -407,23 +442,33 @@ Define stress profiles in hitspec.yaml:
 ```yaml
 stress:
   profiles:
+    # Conservative profile for rate-limited APIs (100 req/min limit)
+    conservative:
+      duration: 60s
+      rate: 1.5
+      maxVUs: 2
+    # Smoke test - quick validation
     smoke:
       duration: 30s
       rate: 10
+      maxVUs: 5
+    # Load test - sustained traffic
     load:
       duration: 5m
       rate: 100
-      ramp-up: 30s
+      maxVUs: 50
+      rampUp: 30s
+    # Spike test - high concurrency
     spike:
       duration: 10m
       vus: 200
-      think-time: 1s
+      thinkTime: 1s
       thresholds:
         p95: 500ms
         errors: 1%
 ```
 
-Use: `hitspec run api.http --stress --profile load`
+Use: `hitspec run api.http --stress --profile conservative`
 
 ## Configuration File (hitspec.yaml)
 
