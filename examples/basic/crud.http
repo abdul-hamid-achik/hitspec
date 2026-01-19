@@ -1,0 +1,139 @@
+# Basic CRUD Operations Example
+# Demonstrates GET, POST, PUT, DELETE with a REST API
+
+@baseUrl = https://jsonplaceholder.typicode.com
+
+### List all posts
+# @name listPosts
+# @description Get all posts from the API
+# @tags smoke, read
+
+GET {{baseUrl}}/posts
+
+>>>
+expect status 200
+expect body type array
+expect body[0].id exists
+expect body[0].title exists
+expect body[0].body exists
+expect body[0].userId exists
+<<<
+
+### Get single post
+# @name getPost
+# @description Get a specific post by ID
+# @tags read
+
+GET {{baseUrl}}/posts/1
+
+>>>
+expect status 200
+expect body.id == 1
+expect body.title exists
+expect body.body exists
+expect body.userId type number
+<<<
+
+### Create a new post
+# @name createPost
+# @description Create a new post
+# @tags write
+
+POST {{baseUrl}}/posts
+Content-Type: application/json
+
+{
+  "title": "My New Post",
+  "body": "This is the content of my new post.",
+  "userId": 1
+}
+
+>>>
+expect status 201
+expect body.id exists
+expect body.title == "My New Post"
+expect body.body contains "content"
+expect body.userId == 1
+<<<
+
+>>>capture
+newPostId from body.id
+<<<
+
+### Update a post
+# @name updatePost
+# @description Update an existing post (using fixed ID since jsonplaceholder doesn't persist)
+# @tags write
+
+PUT {{baseUrl}}/posts/1
+Content-Type: application/json
+
+{
+  "id": 1,
+  "title": "Updated Post Title",
+  "body": "This post has been updated.",
+  "userId": 1
+}
+
+>>>
+expect status 200
+expect body.title == "Updated Post Title"
+<<<
+
+### Partial update (PATCH)
+# @name patchPost
+# @description Partially update a post
+# @tags write
+
+PATCH {{baseUrl}}/posts/1
+Content-Type: application/json
+
+{
+  "title": "Patched Title Only"
+}
+
+>>>
+expect status 200
+expect body.title == "Patched Title Only"
+expect body.id == 1
+<<<
+
+### Delete a post
+# @name deletePost
+# @description Delete a post (using fixed ID since jsonplaceholder doesn't persist)
+# @tags write
+
+DELETE {{baseUrl}}/posts/1
+
+>>>
+expect status 200
+<<<
+
+### Get post with comments (nested resource)
+# @name getPostComments
+# @description Get comments for a specific post
+# @tags read
+
+GET {{baseUrl}}/posts/1/comments
+
+>>>
+expect status 200
+expect body type array
+expect body[0].postId == 1
+expect body[0].email exists
+expect body[0].body exists
+<<<
+
+### Filter posts by user
+# @name filterPostsByUser
+# @description Get posts filtered by userId query param
+# @tags read
+
+GET {{baseUrl}}/posts
+? userId = 1
+
+>>>
+expect status 200
+expect body type array
+expect body[0].userId == 1
+<<<
