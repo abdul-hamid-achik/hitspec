@@ -1,15 +1,12 @@
 package cmd
 
 import (
-	_ "embed"
 	"fmt"
 
 	"github.com/spf13/cobra"
 )
 
-//go:generate cp ../../../llms.txt llms.txt
-//go:embed llms.txt
-var llmsTxt string
+//go:generate go run gen_llms.go
 
 var docsCmd = &cobra.Command{
 	Use:   "docs",

@@ -40,7 +40,7 @@ Thumbs.db
 dist/
 
 # Generated files
-apps/cli/cmd/llms.txt
+apps/cli/cmd/llms_content.go
 
 # Debug files
 debug
