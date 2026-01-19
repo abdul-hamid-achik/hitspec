@@ -285,8 +285,8 @@ Authorization: Bearer {{login.token}}
 # Run tests
 hitspec run <file|dir> [flags]
 
-# Stress testing mode
-hitspec run <file> --stress [stress-flags]
+# Stress testing mode (supports files, directories, or multiple files)
+hitspec run <file|dir|files...> --stress [stress-flags]
 
 # Validate syntax without executing
 hitspec validate <file|dir>
@@ -332,6 +332,12 @@ Enable stress testing with `--stress` flag on the run command:
 ```bash
 # Simple constant rate test
 hitspec run api.http --stress --duration 1m --rate 100
+
+# Stress test all files in a directory
+hitspec run ./tests/ --stress --duration 1m --rate 100
+
+# Stress test multiple specific files
+hitspec run api.http users.http --stress -d 1m -r 100
 
 # Virtual users mode with think time
 hitspec run api.http --stress --duration 2m --vus 50 --think-time 1s

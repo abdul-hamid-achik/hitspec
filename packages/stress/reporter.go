@@ -81,12 +81,23 @@ func NewReporter(opts ...ReporterOption) *Reporter {
 }
 
 // Header prints the test header
-func (r *Reporter) Header(version, filename string, config *Config) {
+func (r *Reporter) Header(version string, files []string, config *Config) {
 	_, _ = fmt.Fprintln(r.writer)
 	_, _ = r.bold.Fprintf(r.writer, "hitspec stress %s\n", version)
 	_, _ = fmt.Fprintln(r.writer)
 
-	_, _ = r.cyan.Fprintf(r.writer, "Stress Testing: %s\n", filename)
+	// Display file info
+	if len(files) == 1 {
+		_, _ = r.cyan.Fprintf(r.writer, "Stress Testing: %s\n", files[0])
+	} else {
+		_, _ = r.cyan.Fprintf(r.writer, "Stress Testing: %d files\n", len(files))
+		// List files if verbose or if there are few files
+		if r.verbose || len(files) <= 5 {
+			for _, f := range files {
+				_, _ = fmt.Fprintf(r.writer, "  - %s\n", f)
+			}
+		}
+	}
 
 	var details []string
 	if config.Mode == RateMode {

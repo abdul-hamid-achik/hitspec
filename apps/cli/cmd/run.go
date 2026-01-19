@@ -33,6 +33,8 @@ Examples:
 
 Stress Testing Mode:
   hitspec run api.http --stress --duration 1m --rate 100
+  hitspec run ./tests/ --stress --duration 1m --rate 100
+  hitspec run api.http users.http --stress -d 1m -r 100
   hitspec run api.http --stress --vus 50 --think-time 1s
   hitspec run api.http --stress -d 1m -r 100 --threshold "p95<200ms,errors<0.1%"
   hitspec run api.http --stress --profile load --env staging`,
@@ -411,12 +413,6 @@ func isHitspecFile(path string) bool {
 
 // runStressMode executes stress tests using the stress runner
 func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config) error {
-	// Stress mode only supports a single file
-	if len(files) != 1 {
-		return fmt.Errorf("stress mode requires exactly one file, got %d", len(files))
-	}
-	filePath := files[0]
-
 	// Build stress config
 	cfg, err := buildStressConfig(fileConfig)
 	if err != nil {
@@ -475,8 +471,8 @@ func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config
 	}
 	stressRunner := stress.NewRunner(cfg, runnerOpts...)
 
-	// Load file
-	if err := stressRunner.LoadFile(filePath); err != nil {
+	// Load files (supports single file, multiple files, or directories)
+	if err := stressRunner.LoadFiles(files); err != nil {
 		return err
 	}
 

@@ -12,6 +12,12 @@ import (
 	"github.com/abdul-hamid-achik/hitspec/packages/http"
 )
 
+// requestWithBaseDir pairs a request with its base directory for relative path resolution
+type requestWithBaseDir struct {
+	request *parser.Request
+	baseDir string
+}
+
 // Runner executes stress tests
 type Runner struct {
 	config    *Config
@@ -26,12 +32,13 @@ type Runner struct {
 	envFile    string
 	configEnvs map[string]map[string]any
 
-	// Parsed requests
-	file        *parser.File
-	baseDir     string
-	requests    []*parser.Request
-	setupReqs   []*parser.Request
-	teardownReqs []*parser.Request
+	// Parsed requests with their base directories
+	requests     []requestWithBaseDir
+	setupReqs    []requestWithBaseDir
+	teardownReqs []requestWithBaseDir
+
+	// Track loaded files for header display
+	loadedFiles []string
 }
 
 // RunnerOption configures the runner
@@ -107,25 +114,49 @@ func NewRunner(config *Config, opts ...RunnerOption) *Runner {
 	return r
 }
 
-// LoadFile parses and loads requests from a file
+// LoadFiles loads requests from multiple files
+func (r *Runner) LoadFiles(paths []string) error {
+	for _, path := range paths {
+		if err := r.loadFile(path); err != nil {
+			return err
+		}
+	}
+	if len(r.requests) == 0 {
+		return fmt.Errorf("no requests found in files")
+	}
+	return nil
+}
+
+// LoadFile parses and loads requests from a single file
 func (r *Runner) LoadFile(path string) error {
+	if err := r.loadFile(path); err != nil {
+		return err
+	}
+	if len(r.requests) == 0 {
+		return fmt.Errorf("no requests found in file (all may be skipped or marked as setup/teardown)")
+	}
+	return nil
+}
+
+// loadFile is the internal method that loads requests from a file and appends to existing requests
+func (r *Runner) loadFile(path string) error {
 	file, err := parser.ParseFile(path)
 	if err != nil {
-		return fmt.Errorf("parsing file: %w", err)
+		return fmt.Errorf("parsing file %s: %w", path, err)
 	}
 
-	r.file = file
-	r.baseDir = filepath.Dir(path)
+	baseDir := filepath.Dir(path)
+	r.loadedFiles = append(r.loadedFiles, path)
 
-	// Load dotenv file if specified
-	if r.envFile != "" {
+	// Load dotenv file if specified (only once, on first file)
+	if len(r.loadedFiles) == 1 && r.envFile != "" {
 		if err := r.resolver.LoadDotEnv(r.envFile); err != nil {
 			r.reporter.Info("warning: failed to load env file: %v", err)
 		}
 	}
 
 	// Load environment variables - pass config environments for proper resolution
-	environment, err := env.LoadEnvironment(r.baseDir, r.envName, r.configEnvs)
+	environment, err := env.LoadEnvironment(baseDir, r.envName, r.configEnvs)
 	if err != nil {
 		// Non-fatal, just log it
 		r.reporter.Info("warning: failed to load environment: %v", err)
@@ -146,22 +177,23 @@ func (r *Runner) LoadFile(path string) error {
 			continue
 		}
 
+		reqWithDir := requestWithBaseDir{
+			request: req,
+			baseDir: baseDir,
+		}
+
 		if cfg.Setup {
-			r.setupReqs = append(r.setupReqs, req)
+			r.setupReqs = append(r.setupReqs, reqWithDir)
 			continue
 		}
 
 		if cfg.Teardown {
-			r.teardownReqs = append(r.teardownReqs, req)
+			r.teardownReqs = append(r.teardownReqs, reqWithDir)
 			continue
 		}
 
-		r.requests = append(r.requests, req)
+		r.requests = append(r.requests, reqWithDir)
 		r.scheduler.AddRequest(len(r.requests)-1, req.Name, cfg)
-	}
-
-	if len(r.requests) == 0 {
-		return fmt.Errorf("no requests found in file (all may be skipped or marked as setup/teardown)")
 	}
 
 	return nil
@@ -196,18 +228,14 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 	}
 
 	// Print header
-	filename := ""
-	if r.file != nil {
-		filename = r.file.Path
-	}
-	r.reporter.Header("", filename, r.config)
+	r.reporter.Header("", r.loadedFiles, r.config)
 
 	// Run setup requests
 	if len(r.setupReqs) > 0 {
 		r.reporter.Info("Running %d setup request(s)...", len(r.setupReqs))
-		for _, req := range r.setupReqs {
-			if err := r.executeRequest(ctx, req); err != nil {
-				return nil, fmt.Errorf("setup request %q failed: %w", req.Name, err)
+		for _, reqWithDir := range r.setupReqs {
+			if err := r.executeRequest(ctx, reqWithDir); err != nil {
+				return nil, fmt.Errorf("setup request %q failed: %w", reqWithDir.request.Name, err)
 			}
 		}
 		r.reporter.Info("Setup complete.\n")
@@ -242,9 +270,9 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 	if len(r.teardownReqs) > 0 {
 		r.reporter.Info("\nRunning %d teardown request(s)...", len(r.teardownReqs))
 		teardownCtx := context.Background() // Use fresh context for teardown
-		for _, req := range r.teardownReqs {
-			if err := r.executeRequest(teardownCtx, req); err != nil {
-				r.reporter.Error("teardown request %q failed: %v", req.Name, err)
+		for _, reqWithDir := range r.teardownReqs {
+			if err := r.executeRequest(teardownCtx, reqWithDir); err != nil {
+				r.reporter.Error("teardown request %q failed: %v", reqWithDir.request.Name, err)
 			}
 		}
 		r.reporter.Info("Teardown complete.")
@@ -379,11 +407,11 @@ func (r *Runner) executeScheduledRequest(ctx context.Context, sched *ScheduledRe
 		return nil
 	}
 
-	req := r.requests[sched.Index]
+	reqWithDir := r.requests[sched.Index]
 	start := time.Now()
 
-	// Build HTTP request
-	httpReq := http.BuildRequestFromASTWithBaseDir(req, r.resolver.Resolve, r.baseDir)
+	// Build HTTP request using the request's own base directory
+	httpReq := http.BuildRequestFromASTWithBaseDir(reqWithDir.request, r.resolver.Resolve, reqWithDir.baseDir)
 
 	// Execute request
 	resp, err := r.client.Do(httpReq)
@@ -411,8 +439,8 @@ func (r *Runner) executeScheduledRequest(ctx context.Context, sched *ScheduledRe
 }
 
 // executeRequest executes a single request (for setup/teardown)
-func (r *Runner) executeRequest(ctx context.Context, req *parser.Request) error {
-	httpReq := http.BuildRequestFromASTWithBaseDir(req, r.resolver.Resolve, r.baseDir)
+func (r *Runner) executeRequest(ctx context.Context, reqWithDir requestWithBaseDir) error {
+	httpReq := http.BuildRequestFromASTWithBaseDir(reqWithDir.request, r.resolver.Resolve, reqWithDir.baseDir)
 
 	resp, err := r.client.Do(httpReq)
 	if err != nil {
