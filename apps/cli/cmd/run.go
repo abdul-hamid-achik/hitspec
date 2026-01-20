@@ -14,7 +14,9 @@ import (
 	"github.com/abdul-hamid-achik/hitspec/packages/core/config"
 	"github.com/abdul-hamid-achik/hitspec/packages/core/env"
 	"github.com/abdul-hamid-achik/hitspec/packages/core/runner"
+	"github.com/abdul-hamid-achik/hitspec/packages/export/metrics"
 	"github.com/abdul-hamid-achik/hitspec/packages/http"
+	"github.com/abdul-hamid-achik/hitspec/packages/notify"
 	"github.com/abdul-hamid-achik/hitspec/packages/output"
 	"github.com/abdul-hamid-achik/hitspec/packages/stress"
 	"github.com/fsnotify/fsnotify"
@@ -80,6 +82,21 @@ var (
 	stressProfileFlag    string
 	stressNoProgressFlag bool
 	stressJSONFlag       bool
+
+	// Metrics flags
+	metricsFlag        string
+	metricsPortFlag    int
+	metricsFileFlag    string
+	datadogAPIKeyFlag  string
+	datadogSiteFlag    string
+	datadogTagsFlag    string
+
+	// Notification flags
+	notifyFlag         string
+	notifyOnFlag       string
+	slackWebhookFlag   string
+	slackChannelFlag   string
+	teamsWebhookFlag   string
 )
 
 func init() {
@@ -94,7 +111,7 @@ func init() {
 	runCmd.Flags().CountVarP(&verboseFlag, "verbose", "v", "Verbose output (-v, -vv, -vvv for more detail)")
 	runCmd.Flags().BoolVarP(&quietFlag, "quiet", "q", getEnvBool("HITSPEC_QUIET", false), "Suppress all output except errors (env: HITSPEC_QUIET)")
 	runCmd.Flags().BoolVar(&noColorFlag, "no-color", getEnvBool("HITSPEC_NO_COLOR", false), "Disable colored output (env: HITSPEC_NO_COLOR)")
-	runCmd.Flags().StringVarP(&outputFlag, "output", "o", getEnvString("HITSPEC_OUTPUT", "console"), "Output format: console, json, junit, tap (env: HITSPEC_OUTPUT)")
+	runCmd.Flags().StringVarP(&outputFlag, "output", "o", getEnvString("HITSPEC_OUTPUT", "console"), "Output format: console, json, junit, tap, html (env: HITSPEC_OUTPUT)")
 	runCmd.Flags().StringVar(&outputFileFlag, "output-file", getEnvString("HITSPEC_OUTPUT_FILE", ""), "Write output to file (default: stdout) (env: HITSPEC_OUTPUT_FILE)")
 
 	// Execution flags
@@ -121,6 +138,21 @@ func init() {
 	runCmd.Flags().StringVar(&stressProfileFlag, "profile", "", "Load stress profile from config")
 	runCmd.Flags().BoolVar(&stressNoProgressFlag, "no-progress", false, "Disable real-time progress display")
 	runCmd.Flags().BoolVar(&stressJSONFlag, "stress-json", false, "Output stress results as JSON")
+
+	// Metrics flags
+	runCmd.Flags().StringVar(&metricsFlag, "metrics", getEnvString("HITSPEC_METRICS", ""), "Metrics export format: prometheus, datadog, json (env: HITSPEC_METRICS)")
+	runCmd.Flags().IntVar(&metricsPortFlag, "metrics-port", getEnvInt("HITSPEC_METRICS_PORT", 9090), "Port for Prometheus metrics HTTP endpoint (env: HITSPEC_METRICS_PORT)")
+	runCmd.Flags().StringVar(&metricsFileFlag, "metrics-file", getEnvString("HITSPEC_METRICS_FILE", ""), "Output file for metrics (JSON format) (env: HITSPEC_METRICS_FILE)")
+	runCmd.Flags().StringVar(&datadogAPIKeyFlag, "datadog-api-key", getEnvString("DD_API_KEY", ""), "DataDog API key (env: DD_API_KEY)")
+	runCmd.Flags().StringVar(&datadogSiteFlag, "datadog-site", getEnvString("DD_SITE", "datadoghq.com"), "DataDog site (env: DD_SITE)")
+	runCmd.Flags().StringVar(&datadogTagsFlag, "datadog-tags", getEnvString("DD_TAGS", ""), "Comma-separated DataDog tags (env: DD_TAGS)")
+
+	// Notification flags
+	runCmd.Flags().StringVar(&notifyFlag, "notify", getEnvString("HITSPEC_NOTIFY", ""), "Notification service: slack, teams (env: HITSPEC_NOTIFY)")
+	runCmd.Flags().StringVar(&notifyOnFlag, "notify-on", getEnvString("HITSPEC_NOTIFY_ON", "failure"), "When to notify: always, failure, success, recovery (env: HITSPEC_NOTIFY_ON)")
+	runCmd.Flags().StringVar(&slackWebhookFlag, "slack-webhook", getEnvString("SLACK_WEBHOOK", ""), "Slack webhook URL (env: SLACK_WEBHOOK)")
+	runCmd.Flags().StringVar(&slackChannelFlag, "slack-channel", getEnvString("SLACK_CHANNEL", ""), "Slack channel override (env: SLACK_CHANNEL)")
+	runCmd.Flags().StringVar(&teamsWebhookFlag, "teams-webhook", getEnvString("TEAMS_WEBHOOK", ""), "Microsoft Teams webhook URL (env: TEAMS_WEBHOOK)")
 }
 
 // Environment variable helpers
@@ -192,6 +224,12 @@ func runCommand(cmd *cobra.Command, args []string) error {
 			opts = append(opts, output.TAPWithWriter(outWriter))
 		}
 		formatter = output.NewTAPFormatter(opts...)
+	case "html":
+		opts := []output.HTMLOption{}
+		if outWriter != nil {
+			opts = append(opts, output.HTMLWithWriter(outWriter))
+		}
+		formatter = output.NewHTMLFormatter(opts...)
 	default: // "console"
 		consoleOpts := []output.ConsoleOption{
 			output.WithVerbose(verboseFlag > 0),
@@ -204,6 +242,38 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	formatter.FormatHeader(version)
+
+	// Set up notification manager
+	var notifyManager *notify.Manager
+	if notifyFlag != "" {
+		var notifiers []notify.Notifier
+		notifyOn := notify.NotifyOn(notifyOnFlag)
+
+		for _, service := range strings.Split(notifyFlag, ",") {
+			service = strings.TrimSpace(service)
+			switch strings.ToLower(service) {
+			case "slack":
+				if slackWebhookFlag == "" {
+					return fmt.Errorf("--slack-webhook is required when using --notify slack")
+				}
+				slackOpts := []notify.SlackOption{}
+				if slackChannelFlag != "" {
+					slackOpts = append(slackOpts, notify.WithSlackChannel(slackChannelFlag))
+				}
+				notifiers = append(notifiers, notify.NewSlackNotifier(slackWebhookFlag, slackOpts...))
+
+			case "teams":
+				if teamsWebhookFlag == "" {
+					return fmt.Errorf("--teams-webhook is required when using --notify teams")
+				}
+				notifiers = append(notifiers, notify.NewTeamsNotifier(teamsWebhookFlag))
+			}
+		}
+
+		if len(notifiers) > 0 {
+			notifyManager = notify.NewManager(notifyOn, notifiers...)
+		}
+	}
 
 	files, err := collectFiles(args)
 	if err != nil {
@@ -306,12 +376,28 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Run tests once
-	_, totalFailed, _, totalDuration := runTests()
+	totalPassed, totalFailed, totalSkipped, totalDuration := runTests()
 
 	// Flush output for formatters that accumulate results
 	if flushable, ok := formatter.(Flushable); ok {
 		if err := flushable.Flush(totalDuration); err != nil {
 			return fmt.Errorf("error writing output: %w", err)
+		}
+	}
+
+	// Send notifications if configured
+	if notifyManager != nil {
+		summary := &notify.RunSummary{
+			TotalFiles:   len(files),
+			TotalTests:   totalPassed + totalFailed + totalSkipped,
+			PassedTests:  totalPassed,
+			FailedTests:  totalFailed,
+			SkippedTests: totalSkipped,
+			Duration:     totalDuration,
+			Environment:  envFlag,
+		}
+		if err := notifyManager.Notify(summary); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to send notification: %v\n", err)
 		}
 	}
 
@@ -388,6 +474,8 @@ func runCommand(cmd *cobra.Command, args []string) error {
 						formatter = output.NewJUnitFormatter()
 					case "tap":
 						formatter = output.NewTAPFormatter()
+					case "html":
+						formatter = output.NewHTMLFormatter()
 					default:
 						formatter = output.NewConsoleFormatter(
 							output.WithVerbose(verboseFlag > 0),
@@ -460,6 +548,61 @@ func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config
 	if err != nil {
 		return err
 	}
+
+	// Set up metrics exporters
+	var metricsExporters []metrics.Exporter
+	var metricsCollector *metrics.Collector
+
+	if metricsFlag != "" {
+		for _, format := range strings.Split(metricsFlag, ",") {
+			format = strings.TrimSpace(format)
+			switch strings.ToLower(format) {
+			case "prometheus":
+				promExporter := metrics.NewPrometheusExporter(
+					metrics.WithPrometheusHTTP(metricsPortFlag),
+				)
+				metricsExporters = append(metricsExporters, promExporter)
+				fmt.Fprintf(cmd.OutOrStdout(), "Prometheus metrics available at http://localhost:%d/metrics\n", metricsPortFlag)
+
+			case "datadog":
+				ddOpts := []metrics.DataDogOption{}
+				if datadogAPIKeyFlag != "" {
+					ddOpts = append(ddOpts, metrics.WithDataDogAPIKey(datadogAPIKeyFlag))
+				}
+				if datadogSiteFlag != "" {
+					ddOpts = append(ddOpts, metrics.WithDataDogSite(datadogSiteFlag))
+				}
+				if datadogTagsFlag != "" {
+					tags := strings.Split(datadogTagsFlag, ",")
+					ddOpts = append(ddOpts, metrics.WithDataDogTags(tags))
+				}
+				ddExporter := metrics.NewDataDogExporter(ddOpts...)
+				metricsExporters = append(metricsExporters, ddExporter)
+
+			case "json":
+				jsonOpts := []metrics.JSONOption{}
+				if metricsFileFlag != "" {
+					jsonOpts = append(jsonOpts, metrics.WithJSONFile(metricsFileFlag))
+				} else {
+					jsonOpts = append(jsonOpts, metrics.WithJSONWriter(os.Stdout))
+				}
+				jsonExporter := metrics.NewJSONExporter(jsonOpts...)
+				metricsExporters = append(metricsExporters, jsonExporter)
+			}
+		}
+
+		if len(metricsExporters) > 0 {
+			metricsCollector = metrics.NewCollector(metricsExporters...)
+		}
+	}
+
+	// Cleanup metrics exporters on exit
+	defer func() {
+		if metricsCollector != nil {
+			_ = metricsCollector.Flush()
+			_ = metricsCollector.Close()
+		}
+	}()
 
 	// Create HTTP client
 	clientOpts := []http.ClientOption{}
@@ -535,6 +678,14 @@ func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config
 	result, err := stressRunner.Run(ctx)
 	if err != nil {
 		return err
+	}
+
+	// Export metrics if collector is configured
+	if metricsCollector != nil && result.Summary != nil {
+		aggregate := stressResultToMetrics(result.Summary)
+		if err := metricsCollector.Export(aggregate); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to export metrics: %v\n", err)
+		}
 	}
 
 	// Output JSON if requested
@@ -657,4 +808,37 @@ func buildThresholdString(thresholds map[string]string) string {
 		parts = append(parts, k+"<"+v)
 	}
 	return strings.Join(parts, ",")
+}
+
+// stressResultToMetrics converts stress test summary to metrics aggregate format
+func stressResultToMetrics(summary *stress.Summary) *metrics.AggregateMetrics {
+	aggregate := &metrics.AggregateMetrics{
+		TotalRequests:   summary.TotalRequests,
+		SuccessCount:    summary.SuccessCount,
+		FailureCount:    summary.ErrorCount,
+		TotalDurationMs: float64(summary.Duration.Milliseconds()),
+		MinDurationMs:   float64(summary.Min.Milliseconds()),
+		MaxDurationMs:   float64(summary.Max.Milliseconds()),
+		AvgDurationMs:   float64(summary.Mean.Milliseconds()),
+		P50DurationMs:   float64(summary.P50.Milliseconds()),
+		P95DurationMs:   float64(summary.P95.Milliseconds()),
+		P99DurationMs:   float64(summary.P99.Milliseconds()),
+		StatusCodes:     make(map[int]int64),
+		ByTest:          make(map[string]*metrics.TestAggregate),
+	}
+
+	// Copy per-request breakdown as test aggregates
+	for name, reqSummary := range summary.RequestBreakdown {
+		aggregate.ByTest[name] = &metrics.TestAggregate{
+			Name:          name,
+			TotalRequests: reqSummary.Total,
+			SuccessCount:  reqSummary.Success,
+			FailureCount:  reqSummary.Errors,
+			AvgDurationMs: float64(reqSummary.Mean.Milliseconds()),
+			MinDurationMs: float64(reqSummary.P50.Milliseconds()), // Use P50 as approx min
+			MaxDurationMs: float64(reqSummary.P99.Milliseconds()), // Use P99 as approx max
+		}
+	}
+
+	return aggregate
 }

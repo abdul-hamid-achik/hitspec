@@ -90,6 +90,8 @@ const (
 	AuthAPIKeyQuery
 	AuthDigest
 	AuthAWS
+	AuthOAuth2ClientCredentials
+	AuthOAuth2Password
 )
 
 type Condition struct {

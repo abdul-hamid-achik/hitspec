@@ -45,3 +45,6 @@ apps/cli/cmd/llms_content.go
 # Debug files
 debug
 *.log
+
+# Vector search index
+.vecgrep/

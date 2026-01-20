@@ -48,6 +48,7 @@ func (r *Registry) registerDefaults() {
 	r.funcs["urlDecode"] = funcURLDecode
 	r.funcs["date"] = funcDate
 	r.funcs["json"] = funcJSON
+	r.funcs["env"] = funcEnv
 }
 
 func (r *Registry) Register(name string, fn Func) {
@@ -243,4 +244,19 @@ func randomString(length int, charset string) string {
 		result[i] = charset[rand.Intn(len(charset))]
 	}
 	return string(result)
+}
+
+// funcEnv returns environment variable value with optional default
+// Usage: $env(VAR_NAME) or $env(VAR_NAME, default_value)
+func funcEnv(args []string) any {
+	if len(args) < 1 {
+		return ""
+	}
+	if val := os.Getenv(args[0]); val != "" {
+		return val
+	}
+	if len(args) >= 2 {
+		return args[1]
+	}
+	return ""
 }

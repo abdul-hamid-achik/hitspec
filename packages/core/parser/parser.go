@@ -367,6 +367,17 @@ func parseAuthConfig(value string) (*AuthConfig, error) {
 	case "aws":
 		auth.Type = AuthAWS
 		auth.Params = parts[1:]
+	case "oauth2":
+		if len(parts) >= 2 {
+			switch strings.ToLower(parts[1]) {
+			case "client_credentials":
+				auth.Type = AuthOAuth2ClientCredentials
+				auth.Params = parts[2:] // tokenUrl, clientId, clientSecret, [scopes]
+			case "password":
+				auth.Type = AuthOAuth2Password
+				auth.Params = parts[2:] // tokenUrl, clientId, clientSecret, username, password, [scopes]
+			}
+		}
 	}
 
 	return auth, nil

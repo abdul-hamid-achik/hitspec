@@ -34,4 +34,9 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(docsCmd)
+	rootCmd.AddCommand(diffCmd)
+	rootCmd.AddCommand(importCmd)
+	rootCmd.AddCommand(mockCmd)
+	rootCmd.AddCommand(recordCmd)
+	rootCmd.AddCommand(contractCmd)
 }

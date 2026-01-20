@@ -166,6 +166,11 @@ func (c *Client) Do(req *Request) (*Response, error) {
 		return c.doWithAWSAuth(ctx, req)
 	}
 
+	// Handle OAuth2 auth
+	if req.OAuth2Auth != nil {
+		return c.doWithOAuth2Auth(ctx, req)
+	}
+
 	return c.doRequest(ctx, req, "")
 }
 
@@ -306,6 +311,86 @@ func (c *Client) doWithAWSAuth(ctx context.Context, req *Request) (*Response, er
 	}
 
 	return c.doRequest(ctx, req, authHeader)
+}
+
+func (c *Client) doWithOAuth2Auth(ctx context.Context, req *Request) (*Response, error) {
+	// Fetch OAuth2 token
+	token, err := c.fetchOAuth2Token(req.OAuth2Auth)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get OAuth2 token: %w", err)
+	}
+
+	// Add Bearer token to Authorization header
+	authHeader := "Bearer " + token
+	return c.doRequest(ctx, req, authHeader)
+}
+
+func (c *Client) fetchOAuth2Token(auth *OAuth2AuthCredentials) (string, error) {
+	// Build token request
+	data := neturl.Values{}
+	data.Set("grant_type", auth.GrantType)
+
+	if auth.GrantType == "password" {
+		data.Set("username", auth.Username)
+		data.Set("password", auth.Password)
+	}
+
+	if len(auth.Scopes) > 0 {
+		data.Set("scope", strings.Join(auth.Scopes, " "))
+	}
+
+	tokenReq, err := http.NewRequest("POST", auth.TokenURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		return "", err
+	}
+
+	tokenReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	// Add client credentials via Basic auth
+	if auth.ClientID != "" && auth.ClientSecret != "" {
+		tokenReq.SetBasicAuth(auth.ClientID, auth.ClientSecret)
+	}
+
+	resp, err := c.httpClient.Do(tokenReq)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("token request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse token response - simple extraction of access_token
+	var tokenResp struct {
+		AccessToken string `json:"access_token"`
+		TokenType   string `json:"token_type"`
+		ExpiresIn   int    `json:"expires_in"`
+	}
+
+	// Simple JSON parsing for access_token
+	// Using strings to avoid importing encoding/json in this file
+	accessTokenStart := strings.Index(string(body), `"access_token"`)
+	if accessTokenStart == -1 {
+		return "", fmt.Errorf("no access_token in response: %s", string(body))
+	}
+
+	// Find the value after "access_token": "
+	valueStart := strings.Index(string(body)[accessTokenStart:], `"`) + accessTokenStart + 1
+	valueStart = strings.Index(string(body)[valueStart:], `"`) + valueStart + 1
+	valueEnd := strings.Index(string(body)[valueStart:], `"`) + valueStart
+
+	if valueEnd <= valueStart {
+		return "", fmt.Errorf("invalid token response format: %s", string(body))
+	}
+
+	tokenResp.AccessToken = string(body)[valueStart:valueEnd]
+	return tokenResp.AccessToken, nil
 }
 
 func (c *Client) Get(url string, headers map[string]string) (*Response, error) {

@@ -79,6 +79,10 @@ func (e *Evaluator) getActualValue(subject string) (any, error) {
 		return e.response.StatusCode, nil
 	case subject == "duration":
 		return e.response.DurationMs(), nil
+	// Percentile assertions - for single requests, all percentiles equal duration
+	// In stress testing mode, these would be calculated from aggregated metrics
+	case subject == "p50", subject == "p95", subject == "p99":
+		return e.response.DurationMs(), nil
 	case strings.HasPrefix(subject, "header"):
 		headerName := strings.TrimPrefix(subject, "header")
 		headerName = strings.TrimSpace(headerName)

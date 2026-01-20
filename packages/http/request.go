@@ -21,6 +21,18 @@ type Request struct {
 	BaseDir     string // Base directory for resolving relative file paths
 	DigestAuth  *DigestAuthCredentials
 	AWSAuth     *AWSAuthCredentials
+	OAuth2Auth  *OAuth2AuthCredentials
+}
+
+// OAuth2AuthCredentials holds OAuth2 authentication configuration
+type OAuth2AuthCredentials struct {
+	TokenURL     string
+	ClientID     string
+	ClientSecret string
+	Scopes       []string
+	GrantType    string // "client_credentials" or "password"
+	Username     string // For password grant
+	Password     string // For password grant
 }
 
 // AWSAuthCredentials holds credentials for AWS Signature v4 authentication
@@ -118,6 +130,36 @@ func (r *Request) ApplyAuth() {
 				SecretKey: r.Auth.Params[1],
 				Region:    r.Auth.Params[2],
 				Service:   r.Auth.Params[3],
+			}
+		}
+	case parser.AuthOAuth2ClientCredentials:
+		// OAuth2 client_credentials grant
+		// Params: tokenUrl, clientId, clientSecret, [scopes]
+		if len(r.Auth.Params) >= 3 {
+			r.OAuth2Auth = &OAuth2AuthCredentials{
+				TokenURL:     r.Auth.Params[0],
+				ClientID:     r.Auth.Params[1],
+				ClientSecret: r.Auth.Params[2],
+				GrantType:    "client_credentials",
+			}
+			if len(r.Auth.Params) >= 4 {
+				r.OAuth2Auth.Scopes = strings.Split(r.Auth.Params[3], ",")
+			}
+		}
+	case parser.AuthOAuth2Password:
+		// OAuth2 password grant
+		// Params: tokenUrl, clientId, clientSecret, username, password, [scopes]
+		if len(r.Auth.Params) >= 5 {
+			r.OAuth2Auth = &OAuth2AuthCredentials{
+				TokenURL:     r.Auth.Params[0],
+				ClientID:     r.Auth.Params[1],
+				ClientSecret: r.Auth.Params[2],
+				Username:     r.Auth.Params[3],
+				Password:     r.Auth.Params[4],
+				GrantType:    "password",
+			}
+			if len(r.Auth.Params) >= 6 {
+				r.OAuth2Auth.Scopes = strings.Split(r.Auth.Params[5], ",")
 			}
 		}
 	}
