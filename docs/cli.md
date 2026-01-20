@@ -92,6 +92,10 @@ hitspec run tests/ --dry-run
 | `--watch` | `-w` | Watch files and re-run on changes | `false` | |
 | `--proxy` | | Proxy URL for HTTP requests | | `HITSPEC_PROXY` |
 | `--insecure` | `-k` | Disable SSL certificate validation | `false` | `HITSPEC_INSECURE` |
+| `--update-snapshots` | | Update snapshot files instead of comparing | `false` | |
+| `--coverage` | | Enable API coverage tracking | `false` | |
+| `--openapi` | | Path to OpenAPI spec for coverage analysis | | |
+| `--coverage-output` | | Coverage output file (supports .html, .json) | | |
 
 ---
 
@@ -503,6 +507,62 @@ hitspec import postman collection.json -o tests/
 hitspec import postman collection.json --env environment.json -o tests/
 ```
 
+#### curl Import
+
+```bash
+hitspec import curl <curl-command|@file> [flags]
+```
+
+Convert curl commands to hitspec format.
+
+**Examples:**
+
+```bash
+# Convert a curl command
+hitspec import curl "curl -X POST https://api.example.com/users -H 'Content-Type: application/json' -d '{\"name\":\"John\"}'"
+
+# Convert from file (one curl command per line)
+hitspec import curl @commands.txt -o tests/api.http
+
+# Specify output file
+hitspec import curl "curl https://api.example.com" -o tests/generated.http
+```
+
+**Supported curl flags:**
+- `-X, --request` - HTTP method
+- `-H, --header` - Request headers
+- `-d, --data` - Request body
+- `-u, --user` - Basic authentication
+- `-k, --insecure` - Skip SSL verification
+- `-L, --location` - Follow redirects
+- `-A, --user-agent` - User agent header
+- `-b, --cookie` - Cookies
+
+#### Insomnia Import
+
+```bash
+hitspec import insomnia <export.json> [flags]
+```
+
+Import Insomnia export files (v4 format).
+
+**Examples:**
+
+```bash
+# Basic import
+hitspec import insomnia insomnia-export.json -o tests/
+
+# Specify output file
+hitspec import insomnia insomnia-export.json -o tests/api.http
+```
+
+**Supported features:**
+- Request folders as file separators
+- Environment variables
+- Authentication (Bearer, Basic, API Key)
+- Request bodies (JSON, form data, raw)
+- Headers
+
 ---
 
 ### hitspec mock
@@ -651,6 +711,79 @@ hitspec run api.http --notify teams --teams-webhook $TEAMS_WEBHOOK
 # Notify only on failure
 hitspec run api.http --notify slack --slack-webhook $SLACK_WEBHOOK --notify-on failure
 ```
+
+---
+
+## Snapshot Testing
+
+Snapshot testing allows you to capture and compare response bodies against saved baselines.
+
+### Usage
+
+Add snapshot assertions to your test files:
+
+```http
+### Get User
+# @name getUser
+GET {{baseUrl}}/users/1
+
+>>>
+expect status == 200
+expect body snapshot "getUserResponse"
+<<<
+```
+
+### Running Snapshot Tests
+
+```bash
+# First run: creates snapshots in __snapshots__/ directory
+hitspec run tests/
+
+# Subsequent runs: compares against saved snapshots
+hitspec run tests/
+
+# Update snapshots when expected changes occur
+hitspec run tests/ --update-snapshots
+```
+
+### Snapshot Files
+
+Snapshots are stored in `__snapshots__/` directories next to your test files:
+
+```
+tests/
+├── api.http
+└── __snapshots__/
+    └── api/
+        └── getUserResponse.json
+```
+
+---
+
+## API Coverage Reporting
+
+Measure how much of your API is covered by tests.
+
+### Usage
+
+```bash
+# Enable coverage with OpenAPI spec
+hitspec run tests/ --coverage --openapi api-spec.yaml
+
+# Generate HTML coverage report
+hitspec run tests/ --coverage --openapi api-spec.yaml --coverage-output coverage.html
+
+# Generate JSON coverage report
+hitspec run tests/ --coverage --openapi api-spec.yaml --coverage-output coverage.json
+```
+
+### Coverage Output
+
+The coverage report shows:
+- Overall coverage percentage
+- Covered vs uncovered endpoints
+- Coverage by tag/category
+- Missing test cases
 
 ---
 

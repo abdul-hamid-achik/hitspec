@@ -97,6 +97,9 @@ var (
 	slackWebhookFlag   string
 	slackChannelFlag   string
 	teamsWebhookFlag   string
+
+	// Snapshot testing flags
+	updateSnapshotsFlag bool
 )
 
 func init() {
@@ -153,6 +156,9 @@ func init() {
 	runCmd.Flags().StringVar(&slackWebhookFlag, "slack-webhook", getEnvString("SLACK_WEBHOOK", ""), "Slack webhook URL (env: SLACK_WEBHOOK)")
 	runCmd.Flags().StringVar(&slackChannelFlag, "slack-channel", getEnvString("SLACK_CHANNEL", ""), "Slack channel override (env: SLACK_CHANNEL)")
 	runCmd.Flags().StringVar(&teamsWebhookFlag, "teams-webhook", getEnvString("TEAMS_WEBHOOK", ""), "Microsoft Teams webhook URL (env: TEAMS_WEBHOOK)")
+
+	// Snapshot testing flags
+	runCmd.Flags().BoolVar(&updateSnapshotsFlag, "update-snapshots", false, "Update snapshot files instead of comparing")
 }
 
 // Environment variable helpers
@@ -336,6 +342,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		Proxy:              proxy,
 		DefaultHeaders:     fileConfig.Headers,
 		ConfigEnvironments: fileConfig.Environments,
+		UpdateSnapshots:    updateSnapshotsFlag,
 	}
 
 	r := runner.NewRunner(cfg)

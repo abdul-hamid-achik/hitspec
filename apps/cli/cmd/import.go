@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/abdul-hamid-achik/hitspec/packages/import/curl"
+	"github.com/abdul-hamid-achik/hitspec/packages/import/insomnia"
 	"github.com/abdul-hamid-achik/hitspec/packages/import/openapi"
 	"github.com/spf13/cobra"
 )
@@ -26,6 +28,7 @@ var importCmd = &cobra.Command{
 Supported formats:
   openapi - OpenAPI 3.0/3.1 (YAML or JSON)
   postman - Postman Collection v2.1
+  curl    - curl commands
 
 Examples:
   hitspec import openapi spec.yaml
@@ -34,7 +37,13 @@ Examples:
   hitspec import openapi spec.yaml --tags users,auth --base-url http://localhost:3000
 
   hitspec import postman collection.json
-  hitspec import postman collection.json -o tests/`,
+  hitspec import postman collection.json -o tests/
+
+  hitspec import curl "curl -X POST https://api.example.com -d '{\"name\":\"John\"}'"
+  hitspec import curl @commands.txt -o tests/api.http
+
+  hitspec import insomnia export.json
+  hitspec import insomnia export.json -o tests/api.http`,
 }
 
 var importOpenAPICmd = &cobra.Command{
@@ -71,6 +80,53 @@ Examples:
 	RunE: importPostmanCommand,
 }
 
+var importCurlNoTestsFlag bool
+var importInsomniaNoTestsFlag bool
+
+var importCurlCmd = &cobra.Command{
+	Use:   "curl <command-or-file>",
+	Short: "Import from curl command",
+	Long: `Import API tests from a curl command or a file containing curl commands.
+
+The command parses curl flags and converts them to hitspec format.
+Use @filename to read commands from a file (one command per line, supports line continuations with \).
+
+Supported curl flags:
+  -X, --request     HTTP method
+  -H, --header      Request header
+  -d, --data        Request body
+  -u, --user        Basic auth (user:password)
+  -k, --insecure    Skip SSL verification
+  -L, --location    Follow redirects
+  -A, --user-agent  User-Agent header
+  -e, --referer     Referer header
+  -b, --cookie      Cookie header
+
+Examples:
+  hitspec import curl "curl https://api.example.com/users"
+  hitspec import curl "curl -X POST -H 'Content-Type: application/json' -d '{\"name\":\"John\"}' https://api.example.com/users"
+  hitspec import curl @commands.txt -o tests/api.http
+  hitspec import curl @commands.txt --no-tests`,
+	Args: cobra.ExactArgs(1),
+	RunE: importCurlCommand,
+}
+
+var importInsomniaCmd = &cobra.Command{
+	Use:   "insomnia <export-file>",
+	Short: "Import from Insomnia export",
+	Long: `Import API tests from an Insomnia export file.
+
+The command reads an Insomnia export (v4 format) and generates hitspec-compatible .http files
+with requests, converting Insomnia variables and authentication to hitspec format.
+
+Examples:
+  hitspec import insomnia export.json
+  hitspec import insomnia export.json -o tests/api.http
+  hitspec import insomnia export.json --no-tests`,
+	Args: cobra.ExactArgs(1),
+	RunE: importInsomniaCommand,
+}
+
 func init() {
 	// OpenAPI flags
 	importOpenAPICmd.Flags().StringVarP(&importOutputFlag, "output", "o", "", "Output file path (default: stdout)")
@@ -81,8 +137,18 @@ func init() {
 	// Postman flags
 	importPostmanCmd.Flags().StringVarP(&importOutputFlag, "output", "o", "", "Output file or directory path (default: stdout)")
 
+	// curl flags
+	importCurlCmd.Flags().StringVarP(&importOutputFlag, "output", "o", "", "Output file path (default: stdout)")
+	importCurlCmd.Flags().BoolVar(&importCurlNoTestsFlag, "no-tests", false, "Don't generate test assertions")
+
+	// Insomnia flags
+	importInsomniaCmd.Flags().StringVarP(&importOutputFlag, "output", "o", "", "Output file path (default: stdout)")
+	importInsomniaCmd.Flags().BoolVar(&importInsomniaNoTestsFlag, "no-tests", false, "Don't generate test assertions")
+
 	importCmd.AddCommand(importOpenAPICmd)
 	importCmd.AddCommand(importPostmanCmd)
+	importCmd.AddCommand(importCurlCmd)
+	importCmd.AddCommand(importInsomniaCmd)
 }
 
 func importOpenAPICommand(cmd *cobra.Command, args []string) error {
@@ -113,6 +179,93 @@ func importOpenAPICommand(cmd *cobra.Command, args []string) error {
 	content, err := converter.ConvertFile(specPath)
 	if err != nil {
 		return fmt.Errorf("failed to convert OpenAPI spec: %w", err)
+	}
+
+	// Output
+	if importOutputFlag != "" {
+		// Create directory if needed
+		if dir := filepath.Dir(importOutputFlag); dir != "" && dir != "." {
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return fmt.Errorf("failed to create directory: %w", err)
+			}
+		}
+
+		if err := os.WriteFile(importOutputFlag, []byte(content), 0644); err != nil {
+			return fmt.Errorf("failed to write output file: %w", err)
+		}
+
+		fmt.Printf("Successfully imported to %s\n", importOutputFlag)
+	} else {
+		fmt.Print(content)
+	}
+
+	return nil
+}
+
+func importInsomniaCommand(cmd *cobra.Command, args []string) error {
+	filePath := args[0]
+
+	// Build converter options
+	var opts []insomnia.Option
+	if importInsomniaNoTestsFlag {
+		opts = append(opts, insomnia.WithAssertions(false))
+	}
+
+	converter := insomnia.NewConverter(opts...)
+
+	content, err := converter.ConvertFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to convert Insomnia export: %w", err)
+	}
+
+	// Output
+	if importOutputFlag != "" {
+		// Create directory if needed
+		if dir := filepath.Dir(importOutputFlag); dir != "" && dir != "." {
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return fmt.Errorf("failed to create directory: %w", err)
+			}
+		}
+
+		if err := os.WriteFile(importOutputFlag, []byte(content), 0644); err != nil {
+			return fmt.Errorf("failed to write output file: %w", err)
+		}
+
+		fmt.Printf("Successfully imported to %s\n", importOutputFlag)
+	} else {
+		fmt.Print(content)
+	}
+
+	return nil
+}
+
+func importCurlCommand(cmd *cobra.Command, args []string) error {
+	input := args[0]
+
+	// Build converter options
+	var opts []curl.Option
+	if importCurlNoTestsFlag {
+		opts = append(opts, curl.WithAssertions(false))
+	}
+
+	converter := curl.NewConverter(opts...)
+
+	var content string
+	var err error
+
+	// Check if input is a file reference (@filename)
+	if strings.HasPrefix(input, "@") {
+		filePath := strings.TrimPrefix(input, "@")
+		content, err = converter.ConvertFile(filePath)
+		if err != nil {
+			return fmt.Errorf("failed to convert curl file: %w", err)
+		}
+	} else {
+		// Direct curl command
+		content, err = converter.ConvertCommand(input)
+		if err != nil {
+			return fmt.Errorf("failed to convert curl command: %w", err)
+		}
 	}
 
 	// Output

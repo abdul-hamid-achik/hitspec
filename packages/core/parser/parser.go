@@ -336,6 +336,13 @@ func (p *Parser) parseAnnotation(req *Request) error {
 			req.Metadata.Stress = &StressMetadata{}
 		}
 		req.Metadata.Stress.Teardown = true
+	default:
+		// Store unrecognized annotations as custom annotations
+		// This supports @contract.state, @contract.provider, @x-custom, etc.
+		if req.Metadata.Custom == nil {
+			req.Metadata.Custom = make(map[string]string)
+		}
+		req.Metadata.Custom[name] = value
 	}
 
 	return nil
@@ -792,6 +799,8 @@ func (p *Parser) parseAssertionOperator() (AssertionOperator, error) {
 		return OpEach, nil
 	case "schema":
 		return OpSchema, nil
+	case "snapshot":
+		return OpSnapshot, nil
 	}
 
 	return OpEquals, &ParseError{

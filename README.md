@@ -101,7 +101,7 @@ hitspec run api.http
 ## Features
 
 - **Plain text test files** - `.http` format, readable and version-controllable
-- **19 assertion operators** - `==`, `!=`, `>`, `<`, `contains`, `matches`, `exists`, `length`, `type`, `schema`, and more
+- **20 assertion operators** - `==`, `!=`, `>`, `<`, `contains`, `matches`, `exists`, `length`, `type`, `schema`, `snapshot`, and more
 - **16 metadata directives** - `@name`, `@tags`, `@depends`, `@timeout`, `@retry`, `@auth`, and more
 - **17 built-in functions** - `$uuid()`, `$timestamp()`, `$random()`, `$base64()`, `$sha256()`, and more
 - **6 authentication types** - Bearer, Basic, API Key, Digest, AWS Signature v4
@@ -109,20 +109,34 @@ hitspec run api.http
 - **Request dependencies** - Control execution order with `@depends`
 - **Multiple environments** - Dev, staging, prod configurations
 - **Parallel execution** - Run independent tests concurrently
-- **Multiple output formats** - Console, JSON, JUnit, TAP
+- **Multiple output formats** - Console, JSON, JUnit, TAP, HTML
 - **Watch mode** - Re-run on file changes
+- **Snapshot testing** - Capture and compare response bodies against baselines
+- **API coverage reporting** - Measure test coverage against OpenAPI specs
+- **curl/Insomnia import** - Convert existing tests from curl commands or Insomnia exports
+- **SSE support** - Test Server-Sent Events endpoints
+- **Custom annotations** - Extend metadata with `@x-custom` or namespaced annotations
 
 ## Editor Support
 
 ### VSCode
 
-For syntax highlighting of `.http` files, install the [REST Client extension](https://marketplace.visualstudio.com/items?itemName=humao.rest-client). While it doesn't support hitspec-specific features like assertions and captures, it provides:
+Install the official hitspec VSCode extension for full syntax support:
 
-- HTTP syntax highlighting
-- Request/response formatting
-- Basic HTTP request execution (for quick testing)
+**From VSIX (manual install):**
+1. Build the extension: `cd vscode-hitspec && npm run package`
+2. In VSCode, open Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`)
+3. Run "Extensions: Install from VSIX..."
+4. Select the generated `.vsix` file
 
-The `.http` file format is designed to be compatible with REST Client's syntax.
+**Features:**
+- Full syntax highlighting for `.http` and `.hitspec` files
+- Code snippets for requests, assertions, captures
+- Support for hitspec-specific syntax: `>>>`, `<<<`, `[[[`, `]]]`
+- Variable interpolation highlighting (`{{variable}}`)
+- Built-in function highlighting (`$uuid()`, `$timestamp()`, etc.)
+
+Alternatively, the [REST Client extension](https://marketplace.visualstudio.com/items?itemName=humao.rest-client) provides basic HTTP syntax highlighting.
 
 ### Shell Completion
 
@@ -157,6 +171,7 @@ expect body.tags includes "api"   # Array contains
 expect status in [200, 201]       # Value in array
 expect body.data type object      # Type check
 expect body schema ./schema.json  # JSON Schema validation
+expect body snapshot "response"   # Snapshot comparison
 <<<
 ```
 
@@ -199,14 +214,18 @@ Authorization: Bearer {{login.token}}
 ## CLI Usage
 
 ```bash
-hitspec run tests/              # Run all tests in directory
-hitspec run tests/ --env prod   # Use production environment
-hitspec run tests/ --tags smoke # Run only smoke tests
-hitspec run tests/ --parallel   # Run in parallel
-hitspec run tests/ --watch      # Watch mode
-hitspec run tests/ -o json      # JSON output
-hitspec validate tests/         # Validate syntax
-hitspec list tests/             # List all requests
+hitspec run tests/                    # Run all tests in directory
+hitspec run tests/ --env prod         # Use production environment
+hitspec run tests/ --tags smoke       # Run only smoke tests
+hitspec run tests/ --parallel         # Run in parallel
+hitspec run tests/ --watch            # Watch mode
+hitspec run tests/ -o json            # JSON output
+hitspec run tests/ --update-snapshots # Update snapshot files
+hitspec run tests/ --coverage --openapi spec.yaml  # API coverage
+hitspec validate tests/               # Validate syntax
+hitspec list tests/                   # List all requests
+hitspec import curl "curl ..."        # Import from curl
+hitspec import insomnia export.json   # Import from Insomnia
 ```
 
 ## Examples
@@ -365,6 +384,11 @@ query GetUser($id: ID!) {
 | Operator | Syntax | Description |
 |----------|--------|-------------|
 | `schema` | `expect body schema ./schema.json` | Validate against JSON Schema |
+
+#### Snapshot Testing
+| Operator | Syntax | Description |
+|----------|--------|-------------|
+| `snapshot` | `expect body snapshot "responseName"` | Compare against saved snapshot |
 
 ### Assertion Subjects
 

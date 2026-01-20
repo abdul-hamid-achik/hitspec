@@ -12,6 +12,7 @@ import (
 
 	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
 	"github.com/abdul-hamid-achik/hitspec/packages/http"
+	"github.com/abdul-hamid-achik/hitspec/packages/snapshot"
 	"github.com/tidwall/gjson"
 	"github.com/xeipuuv/gojsonschema"
 )
@@ -26,22 +27,44 @@ type Result struct {
 }
 
 type Evaluator struct {
-	response *http.Response
-	bodyJSON gjson.Result
-	baseDir  string // Base directory for resolving schema file paths
+	response    *http.Response
+	bodyJSON    gjson.Result
+	baseDir     string // Base directory for resolving schema file paths
+	testFile    string // Path to the test file (for snapshots)
+	requestName string // Name of the current request (for snapshots)
+}
+
+// EvaluatorOption is a functional option for configuring an Evaluator.
+type EvaluatorOption func(*Evaluator)
+
+// WithTestFile sets the test file path for snapshot testing.
+func WithTestFile(path string) EvaluatorOption {
+	return func(e *Evaluator) {
+		e.testFile = path
+	}
+}
+
+// WithRequestName sets the request name for snapshot testing.
+func WithRequestName(name string) EvaluatorOption {
+	return func(e *Evaluator) {
+		e.requestName = name
+	}
 }
 
 func NewEvaluator(resp *http.Response) *Evaluator {
 	return NewEvaluatorWithBaseDir(resp, "")
 }
 
-func NewEvaluatorWithBaseDir(resp *http.Response, baseDir string) *Evaluator {
+func NewEvaluatorWithBaseDir(resp *http.Response, baseDir string, opts ...EvaluatorOption) *Evaluator {
 	e := &Evaluator{
 		response: resp,
 		baseDir:  baseDir,
 	}
 	if resp.IsJSON() {
 		e.bodyJSON = gjson.ParseBytes(resp.Body)
+	}
+	for _, opt := range opts {
+		opt(e)
 	}
 	return e
 }
@@ -209,6 +232,8 @@ func (e *Evaluator) compare(actual any, op parser.AssertionOperator, expected an
 		return e.schema(actual, expected)
 	case parser.OpEach:
 		return e.each(actual, expected)
+	case parser.OpSnapshot:
+		return e.snapshot(actual, expected)
 	default:
 		return false, fmt.Sprintf("unknown operator: %v", op)
 	}
@@ -448,8 +473,8 @@ func EvaluateAll(resp *http.Response, assertions []*parser.Assertion) []*Result 
 	return EvaluateAllWithBaseDir(resp, assertions, "")
 }
 
-func EvaluateAllWithBaseDir(resp *http.Response, assertions []*parser.Assertion, baseDir string) []*Result {
-	evaluator := NewEvaluatorWithBaseDir(resp, baseDir)
+func EvaluateAllWithBaseDir(resp *http.Response, assertions []*parser.Assertion, baseDir string, opts ...EvaluatorOption) []*Result {
+	evaluator := NewEvaluatorWithBaseDir(resp, baseDir, opts...)
 	results := make([]*Result, len(assertions))
 	for i, a := range assertions {
 		results[i] = evaluator.Evaluate(a)
@@ -570,6 +595,32 @@ func (e *Evaluator) each(actual, expected any) (bool, string) {
 		}
 	}
 	return true, ""
+}
+
+func (e *Evaluator) snapshot(actual, expected any) (bool, string) {
+	// Get snapshot name from expected value (optional)
+	snapshotName := ""
+	if expected != nil {
+		snapshotName = fmt.Sprintf("%v", expected)
+	}
+
+	// Use global snapshot manager
+	manager := snapshot.GetGlobalManager()
+	if manager == nil {
+		return false, "snapshot manager not initialized"
+	}
+
+	result := manager.Compare(e.testFile, e.requestName, snapshotName, actual)
+	if result.Passed {
+		if result.IsNew {
+			return true, "new snapshot created"
+		}
+		if result.WasUpdated {
+			return true, "snapshot updated"
+		}
+		return true, ""
+	}
+	return false, result.Message
 }
 
 func (e *Evaluator) applyOperator(actual any, op string, expected any) (bool, string) {

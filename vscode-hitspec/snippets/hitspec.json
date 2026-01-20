@@ -1,0 +1,334 @@
+{
+  "GET Request": {
+    "prefix": "get",
+    "body": [
+      "### ${1:Request Name}",
+      "# @name ${2:requestName}",
+      "GET ${3:{{baseUrl}}/endpoint}",
+      "",
+      ">>>",
+      "expect status == 200",
+      "<<<",
+      ""
+    ],
+    "description": "Create a GET request"
+  },
+  "POST Request": {
+    "prefix": "post",
+    "body": [
+      "### ${1:Request Name}",
+      "# @name ${2:requestName}",
+      "POST ${3:{{baseUrl}}/endpoint}",
+      "Content-Type: application/json",
+      "",
+      "{",
+      "  \"${4:key}\": \"${5:value}\"",
+      "}",
+      "",
+      ">>>",
+      "expect status == 201",
+      "<<<",
+      ""
+    ],
+    "description": "Create a POST request with JSON body"
+  },
+  "PUT Request": {
+    "prefix": "put",
+    "body": [
+      "### ${1:Request Name}",
+      "# @name ${2:requestName}",
+      "PUT ${3:{{baseUrl}}/endpoint/{{id}}}",
+      "Content-Type: application/json",
+      "",
+      "{",
+      "  \"${4:key}\": \"${5:value}\"",
+      "}",
+      "",
+      ">>>",
+      "expect status == 200",
+      "<<<",
+      ""
+    ],
+    "description": "Create a PUT request"
+  },
+  "PATCH Request": {
+    "prefix": "patch",
+    "body": [
+      "### ${1:Request Name}",
+      "# @name ${2:requestName}",
+      "PATCH ${3:{{baseUrl}}/endpoint/{{id}}}",
+      "Content-Type: application/json",
+      "",
+      "{",
+      "  \"${4:key}\": \"${5:value}\"",
+      "}",
+      "",
+      ">>>",
+      "expect status == 200",
+      "<<<",
+      ""
+    ],
+    "description": "Create a PATCH request"
+  },
+  "DELETE Request": {
+    "prefix": "delete",
+    "body": [
+      "### ${1:Request Name}",
+      "# @name ${2:requestName}",
+      "DELETE ${3:{{baseUrl}}/endpoint/{{id}}}",
+      "",
+      ">>>",
+      "expect status == 204",
+      "<<<",
+      ""
+    ],
+    "description": "Create a DELETE request"
+  },
+  "Assertion Block": {
+    "prefix": "assert",
+    "body": [
+      ">>>",
+      "expect ${1:status} ${2|==,!=,>,>=,<,<=,contains,matches,exists|} ${3:value}",
+      "<<<"
+    ],
+    "description": "Create an assertion block"
+  },
+  "Capture Block": {
+    "prefix": "capture",
+    "body": [
+      "[[[",
+      "${1:variableName} from ${2|body,body.,header,status,duration|}${3:path}",
+      "]]]"
+    ],
+    "description": "Create a capture block"
+  },
+  "Variable Definition": {
+    "prefix": "var",
+    "body": [
+      "@${1:variableName} = ${2:value}"
+    ],
+    "description": "Define a variable"
+  },
+  "Auth Basic": {
+    "prefix": "authbasic",
+    "body": [
+      "# @auth basic ${1:username} ${2:password}"
+    ],
+    "description": "Add basic authentication"
+  },
+  "Auth Bearer": {
+    "prefix": "authbearer",
+    "body": [
+      "# @auth bearer ${1:token}"
+    ],
+    "description": "Add bearer token authentication"
+  },
+  "Auth OAuth2": {
+    "prefix": "authoauth",
+    "body": [
+      "# @auth oauth2 client_credentials ${1:tokenUrl} ${2:clientId} ${3:clientSecret}"
+    ],
+    "description": "Add OAuth2 client credentials authentication"
+  },
+  "Skip Annotation": {
+    "prefix": "skip",
+    "body": [
+      "# @skip ${1:reason}"
+    ],
+    "description": "Skip this request"
+  },
+  "Timeout Annotation": {
+    "prefix": "timeout",
+    "body": [
+      "# @timeout ${1:5000}"
+    ],
+    "description": "Set request timeout in milliseconds"
+  },
+  "Retry Annotation": {
+    "prefix": "retry",
+    "body": [
+      "# @retry ${1:3}"
+    ],
+    "description": "Set number of retries"
+  },
+  "Depends Annotation": {
+    "prefix": "depends",
+    "body": [
+      "# @depends ${1:requestName}"
+    ],
+    "description": "Set request dependency"
+  },
+  "Tags Annotation": {
+    "prefix": "tags",
+    "body": [
+      "# @tags ${1:smoke}, ${2:api}"
+    ],
+    "description": "Add tags to the request"
+  },
+  "Expect Status": {
+    "prefix": "expectstatus",
+    "body": [
+      "expect status == ${1:200}"
+    ],
+    "description": "Assert status code"
+  },
+  "Expect Body": {
+    "prefix": "expectbody",
+    "body": [
+      "expect body.${1:path} == ${2:\"value\"}"
+    ],
+    "description": "Assert body field"
+  },
+  "Expect Header": {
+    "prefix": "expectheader",
+    "body": [
+      "expect header ${1:Content-Type} contains ${2:\"application/json\"}"
+    ],
+    "description": "Assert response header"
+  },
+  "Expect Duration": {
+    "prefix": "expectduration",
+    "body": [
+      "expect duration < ${1:1000}"
+    ],
+    "description": "Assert response time"
+  },
+  "Expect Exists": {
+    "prefix": "expectexists",
+    "body": [
+      "expect body.${1:path} exists"
+    ],
+    "description": "Assert field exists"
+  },
+  "Expect Type": {
+    "prefix": "expecttype",
+    "body": [
+      "expect body.${1:path} type ${2|string,number,boolean,array,object,null|}"
+    ],
+    "description": "Assert field type"
+  },
+  "Expect Length": {
+    "prefix": "expectlength",
+    "body": [
+      "expect body.${1:items} length ${2:10}"
+    ],
+    "description": "Assert array length"
+  },
+  "Expect Schema": {
+    "prefix": "expectschema",
+    "body": [
+      "expect body schema \"${1:schemas/response.json}\""
+    ],
+    "description": "Assert JSON schema validation"
+  },
+  "Expect Snapshot": {
+    "prefix": "expectsnapshot",
+    "body": [
+      "expect body snapshot ${1:\"snapshotName\"}"
+    ],
+    "description": "Assert against snapshot"
+  },
+  "UUID Function": {
+    "prefix": "uuid",
+    "body": [
+      "{{\\$uuid()}}"
+    ],
+    "description": "Generate a UUID"
+  },
+  "Timestamp Function": {
+    "prefix": "timestamp",
+    "body": [
+      "{{\\$timestamp()}}"
+    ],
+    "description": "Generate current timestamp"
+  },
+  "Random Function": {
+    "prefix": "random",
+    "body": [
+      "{{\\$random(${1:1}, ${2:100})}}"
+    ],
+    "description": "Generate random number"
+  },
+  "Environment Variable": {
+    "prefix": "env",
+    "body": [
+      "{{\\$env(\"${1:VAR_NAME}\")}}"
+    ],
+    "description": "Get environment variable"
+  },
+  "File Content": {
+    "prefix": "file",
+    "body": [
+      "{{\\$file(\"${1:path/to/file}\")}}"
+    ],
+    "description": "Read file content"
+  },
+  "Base64 Encode": {
+    "prefix": "base64",
+    "body": [
+      "{{\\$base64(\"${1:value}\")}}"
+    ],
+    "description": "Base64 encode a value"
+  },
+  "JSON Request Template": {
+    "prefix": "jsonrequest",
+    "body": [
+      "### ${1:Request Name}",
+      "# @name ${2:requestName}",
+      "# @tags ${3:api}",
+      "${4|GET,POST,PUT,PATCH,DELETE|} ${5:{{baseUrl}}/endpoint}",
+      "Content-Type: application/json",
+      "Authorization: Bearer {{token}}",
+      "",
+      "{",
+      "  \"${6:key}\": \"${7:value}\"",
+      "}",
+      "",
+      ">>>",
+      "expect status == ${8:200}",
+      "expect body.${9:id} exists",
+      "<<<",
+      "",
+      "[[[",
+      "${10:responseId} from body.id",
+      "]]]",
+      ""
+    ],
+    "description": "Complete JSON request template with assertions and captures"
+  },
+  "Stress Test Annotations": {
+    "prefix": "stress",
+    "body": [
+      "# @stress.weight ${1:1}",
+      "# @stress.think ${2:1000}"
+    ],
+    "description": "Add stress test configuration"
+  },
+  "Contract Test Annotations": {
+    "prefix": "contract",
+    "body": [
+      "# @contract.state \"${1:state description}\"",
+      "# @contract.provider ${2:ProviderName}"
+    ],
+    "description": "Add contract test configuration"
+  },
+  "Wait For Service": {
+    "prefix": "waitfor",
+    "body": [
+      "# @waitfor ${1:http://localhost:8080/health} ${2:200} ${3:30000} ${4:1000}"
+    ],
+    "description": "Wait for service to be ready"
+  },
+  "Database Assertion Block": {
+    "prefix": "db",
+    "body": [
+      "# @db ${1:postgres://user:pass@localhost/db}",
+      "",
+      "~~~",
+      "query SELECT * FROM ${2:users} WHERE id = ${3:1}",
+      "expect ${4:count} > 0",
+      "~~~"
+    ],
+    "description": "Add database assertion block"
+  }
+}

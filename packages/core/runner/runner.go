@@ -12,6 +12,7 @@ import (
 	"github.com/abdul-hamid-achik/hitspec/packages/core/env"
 	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
 	"github.com/abdul-hamid-achik/hitspec/packages/http"
+	"github.com/abdul-hamid-achik/hitspec/packages/snapshot"
 )
 
 const (
@@ -42,6 +43,7 @@ type Config struct {
 	Proxy              string
 	DefaultHeaders     map[string]string
 	ConfigEnvironments map[string]map[string]any
+	UpdateSnapshots    bool // Update snapshots instead of comparing
 }
 
 func NewRunner(cfg *Config) *Runner {
@@ -127,6 +129,10 @@ func (r *Runner) RunFile(path string) (*RunResult, error) {
 		r.resolver.SetVariable(v.Name, v.Value)
 	}
 
+	// Initialize snapshot manager for this file
+	snapshotManager := snapshot.NewManager(filepath.Dir(path), r.config.UpdateSnapshots)
+	snapshot.SetGlobalManager(snapshotManager)
+
 	return r.runRequests(file)
 }
 
@@ -190,7 +196,7 @@ func (r *Runner) runRequests(file *parser.File) (*RunResult, error) {
 
 	// Run in parallel if configured and no dependencies
 	if r.config.Parallel && !hasDependencies {
-		results := r.runParallel(filteredRequests, baseDir)
+		results := r.runParallel(filteredRequests, baseDir, file.Path)
 		for _, reqResult := range results {
 			result.Results = append(result.Results, reqResult)
 			if reqResult.Passed {
@@ -226,7 +232,7 @@ func (r *Runner) runRequests(file *parser.File) (*RunResult, error) {
 				}
 			}
 
-			reqResult := r.runRequest(req, baseDir)
+			reqResult := r.runRequest(req, baseDir, file.Path)
 			result.Results = append(result.Results, reqResult)
 
 			// Track executed request
@@ -249,7 +255,7 @@ func (r *Runner) runRequests(file *parser.File) (*RunResult, error) {
 	return result, nil
 }
 
-func (r *Runner) runParallel(requests []*parser.Request, baseDir string) []*RequestResult {
+func (r *Runner) runParallel(requests []*parser.Request, baseDir string, filePath string) []*RequestResult {
 	concurrency := r.config.Concurrency
 	if concurrency <= 0 {
 		concurrency = DefaultConcurrency
@@ -267,7 +273,7 @@ func (r *Runner) runParallel(requests []*parser.Request, baseDir string) []*Requ
 			defer wg.Done()
 			defer func() { <-sem }() // release semaphore
 
-			results[idx] = r.runRequestParallel(request, baseDir)
+			results[idx] = r.runRequestParallel(request, baseDir, filePath)
 		}(i, req)
 	}
 
@@ -381,17 +387,17 @@ func (r *Runner) shouldRun(req *parser.Request, hasOnly bool) bool {
 	return true
 }
 
-func (r *Runner) runRequest(req *parser.Request, baseDir string) *RequestResult {
-	return r.runRequestWithRetry(req, baseDir, false)
+func (r *Runner) runRequest(req *parser.Request, baseDir string, filePath string) *RequestResult {
+	return r.runRequestWithRetry(req, baseDir, filePath, false)
 }
 
 // runRequestParallel runs a request in parallel mode (no captures set in resolver)
-func (r *Runner) runRequestParallel(req *parser.Request, baseDir string) *RequestResult {
-	return r.runRequestWithRetry(req, baseDir, true)
+func (r *Runner) runRequestParallel(req *parser.Request, baseDir string, filePath string) *RequestResult {
+	return r.runRequestWithRetry(req, baseDir, filePath, true)
 }
 
 // runRequestWithRetry executes a request with retry logic
-func (r *Runner) runRequestWithRetry(req *parser.Request, baseDir string, parallel bool) *RequestResult {
+func (r *Runner) runRequestWithRetry(req *parser.Request, baseDir string, filePath string, parallel bool) *RequestResult {
 	// Determine retry settings
 	maxRetries := 0
 	retryDelay := DefaultRetryDelayMs
@@ -411,7 +417,7 @@ func (r *Runner) runRequestWithRetry(req *parser.Request, baseDir string, parall
 
 	var result *RequestResult
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		result = r.executeRequest(req, baseDir, parallel)
+		result = r.executeRequest(req, baseDir, filePath, parallel)
 
 		// If passed, no need to retry
 		if result.Passed {
@@ -441,7 +447,7 @@ func (r *Runner) runRequestWithRetry(req *parser.Request, baseDir string, parall
 	return result
 }
 
-func (r *Runner) executeRequest(req *parser.Request, baseDir string, parallel bool) *RequestResult {
+func (r *Runner) executeRequest(req *parser.Request, baseDir string, filePath string, parallel bool) *RequestResult {
 	result := &RequestResult{
 		Name:     req.Name,
 		Captures: make(map[string]any),
@@ -493,7 +499,9 @@ func (r *Runner) executeRequest(req *parser.Request, baseDir string, parallel bo
 	result.Response = resp
 
 	if len(req.Assertions) > 0 {
-		result.Assertions = assertions.EvaluateAllWithBaseDir(resp, req.Assertions, baseDir)
+		result.Assertions = assertions.EvaluateAllWithBaseDir(resp, req.Assertions, baseDir,
+			assertions.WithTestFile(filePath),
+			assertions.WithRequestName(req.Name))
 		result.Passed = true
 		for _, a := range result.Assertions {
 			if !a.Passed {

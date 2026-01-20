@@ -57,6 +57,7 @@ type RequestMetadata struct {
 	DBConnection string
 	WaitFor      *WaitForConfig
 	Stress       *StressMetadata
+	Custom       map[string]string // Custom annotations (e.g., @x-custom, @contract.state)
 }
 
 // StressMetadata holds stress test configuration for a request
@@ -204,6 +205,7 @@ const (
 	OpType
 	OpEach
 	OpSchema
+	OpSnapshot
 )
 
 func (op AssertionOperator) String() string {
@@ -250,6 +252,8 @@ func (op AssertionOperator) String() string {
 		return "each"
 	case OpSchema:
 		return "schema"
+	case OpSnapshot:
+		return "snapshot"
 	default:
 		return "unknown"
 	}

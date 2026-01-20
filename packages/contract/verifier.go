@@ -136,8 +136,12 @@ func (v *Verifier) verifyInteraction(req *parser.Request, baseDir string) Intera
 		Description: req.Description,
 	}
 
-	// TODO: Extract contract metadata from annotations when parser supports custom annotations
-	// Currently, state is extracted from the request description
+	// Extract contract metadata from custom annotations
+	if req.Metadata != nil && req.Metadata.Custom != nil {
+		if provider, ok := req.Metadata.Custom["contract.provider"]; ok {
+			result.Provider = provider
+		}
+	}
 
 	// Set up provider state if state handler is configured
 	state := v.extractState(req)
@@ -182,8 +186,13 @@ func (v *Verifier) verifyInteraction(req *parser.Request, baseDir string) Intera
 // extractState extracts the contract state from request metadata
 // Looking for # @contract.state "state description" annotation
 func (v *Verifier) extractState(req *parser.Request) string {
-	// The parser would need to be extended to support custom annotations
-	// For now, we'll look in the request description for state hints
+	// First, check custom annotations for contract.state
+	if req.Metadata != nil && req.Metadata.Custom != nil {
+		if state, ok := req.Metadata.Custom["contract.state"]; ok {
+			return state
+		}
+	}
+	// Fallback: look in the request description for state hints
 	if req.Description != "" && strings.HasPrefix(req.Description, "state:") {
 		return strings.TrimPrefix(req.Description, "state:")
 	}

@@ -1,0 +1,63 @@
+{
+  "name": "hitspec",
+  "displayName": "hitspec",
+  "description": "Syntax highlighting and snippets for hitspec HTTP API testing files",
+  "version": "0.1.0",
+  "publisher": "hitspec",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/abdul-hamid-achik/hitspec"
+  },
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Testing"
+  ],
+  "keywords": [
+    "http",
+    "api",
+    "testing",
+    "rest",
+    "hitspec"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "hitspec",
+        "aliases": ["hitspec", "HTTP"],
+        "extensions": [".http", ".hitspec"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "hitspec",
+        "scopeName": "source.hitspec",
+        "path": "./syntaxes/hitspec.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "hitspec",
+        "path": "./snippets/hitspec.json"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "^18.0.0",
+    "typescript": "^5.0.0",
+    "@vscode/vsce": "^2.22.0"
+  }
+}
