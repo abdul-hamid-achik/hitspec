@@ -230,7 +230,7 @@ func (t *TeamsNotifier) send(msg teamsMessage) error {
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("Teams API returned status %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("teams API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	return nil

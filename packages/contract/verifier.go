@@ -136,11 +136,8 @@ func (v *Verifier) verifyInteraction(req *parser.Request, baseDir string) Intera
 		Description: req.Description,
 	}
 
-	// Extract contract metadata from annotations
-	if req.Metadata != nil {
-		// Check for contract state annotation
-		// The state would be stored in a custom annotation field
-	}
+	// TODO: Extract contract metadata from annotations when parser supports custom annotations
+	// Currently, state is extracted from the request description
 
 	// Set up provider state if state handler is configured
 	state := v.extractState(req)

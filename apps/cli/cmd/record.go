@@ -51,7 +51,7 @@ func init() {
 	recordCmd.Flags().BoolVar(&recordDedupeFlag, "dedupe", false, "Skip duplicate requests (same method+path)")
 	recordCmd.Flags().BoolVar(&recordJSONFlag, "json", false, "Export as JSON instead of .http format")
 
-	recordCmd.MarkFlagRequired("target")
+	_ = recordCmd.MarkFlagRequired("target")
 }
 
 func recordCommand(cmd *cobra.Command, args []string) error {

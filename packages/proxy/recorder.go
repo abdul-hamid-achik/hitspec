@@ -16,6 +16,11 @@ import (
 	"time"
 )
 
+// contextKey is a custom type for context keys to avoid collisions
+type contextKey string
+
+const recordingKey contextKey = "recording"
+
 // Recording represents a recorded HTTP request/response pair
 type Recording struct {
 	Timestamp   time.Time
@@ -176,7 +181,7 @@ func (r *Recorder) StartWithContext(ctx context.Context) error {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		server.Shutdown(shutdownCtx)
+		_ = server.Shutdown(shutdownCtx)
 	}()
 
 	log.Printf("Recording proxy starting on http://localhost:%d", r.port)
@@ -217,7 +222,7 @@ func (r *Recorder) wrap(next http.Handler) http.Handler {
 		}
 
 		// Store in context for response handling
-		ctx := context.WithValue(req.Context(), "recording", &recording)
+		ctx := context.WithValue(req.Context(), recordingKey, &recording)
 		req = req.WithContext(ctx)
 
 		// Serve request
@@ -229,7 +234,7 @@ func (r *Recorder) wrap(next http.Handler) http.Handler {
 
 func (r *Recorder) recordResponse(resp *http.Response) error {
 	// Get recording from context
-	recording, ok := resp.Request.Context().Value("recording").(*Recording)
+	recording, ok := resp.Request.Context().Value(recordingKey).(*Recording)
 	if !ok {
 		return nil
 	}

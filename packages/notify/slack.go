@@ -79,7 +79,7 @@ type slackAttachment struct {
 	Fields     []slackField `json:"fields,omitempty"`
 	Footer     string       `json:"footer,omitempty"`
 	FooterIcon string       `json:"footer_icon,omitempty"`
-	Ts         int64        `json:"ts,omitempty"`
+	TS         int64        `json:"ts,omitempty"`
 }
 
 // slackField represents a field in a Slack attachment
@@ -143,7 +143,7 @@ func (s *SlackNotifier) Notify(summary *RunSummary) error {
 		Fields:     fields,
 		Footer:     "hitspec",
 		FooterIcon: "https://github.com/abdul-hamid-achik/hitspec",
-		Ts:         time.Now().Unix(),
+		TS:         time.Now().Unix(),
 	}
 
 	msg := slackMessage{
@@ -177,7 +177,7 @@ func (s *SlackNotifier) send(msg slackMessage) error {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("Slack API returned status %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("slack API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	return nil

@@ -47,7 +47,7 @@ func init() {
 	contractVerifyCmd.Flags().StringVar(&contractStateHandlerFlag, "state-handler", "", "Path to state handler script")
 	contractVerifyCmd.Flags().BoolVarP(&contractVerboseFlag, "verbose", "v", false, "Verbose output")
 
-	contractVerifyCmd.MarkFlagRequired("provider")
+	_ = contractVerifyCmd.MarkFlagRequired("provider")
 
 	contractCmd.AddCommand(contractVerifyCmd)
 }

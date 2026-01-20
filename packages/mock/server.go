@@ -294,7 +294,7 @@ func (s *Server) StartWithContext(ctx context.Context) error {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		server.Shutdown(shutdownCtx)
+		_ = server.Shutdown(shutdownCtx)
 	}()
 
 	log.Printf("Mock server starting on http://localhost:%d", s.port)
@@ -333,7 +333,7 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	body := s.resolveBodyParams(resp.Body, params)
 
 	w.WriteHeader(resp.StatusCode)
-	w.Write([]byte(body))
+	_, _ = w.Write([]byte(body))
 
 	if s.verbose {
 		log.Printf("%s %s -> %d (%s)", r.Method, r.URL.Path, resp.StatusCode, time.Since(start))
