@@ -100,7 +100,7 @@ varName from body.field
 
 Types: `null`, `boolean`, `number`, `string`, `array`, `object`
 
-## Built-in Functions (16)
+## Built-in Functions (17)
 
 | Function | Description |
 |----------|-------------|
@@ -120,6 +120,7 @@ Types: `null`, `boolean`, `number`, `string`, `array`, `object`
 | `{{$urlEncode(value)}}` | URL encode |
 | `{{$urlDecode(value)}}` | URL decode |
 | `{{$json(value)}}` | JSON passthrough |
+| `{{$env(VAR, default)}}` | Environment variable with optional default |
 
 ## Metadata Directives (14) + Blocks
 
@@ -239,7 +240,7 @@ echo "Processing complete"
 - Commands run via `sh -c`
 - Working directory is the .http file location
 
-## Authentication (6 types)
+## Authentication (8 types)
 
 ```http
 # @auth bearer {{token}}
@@ -248,6 +249,8 @@ echo "Processing complete"
 # @auth apiKeyQuery api_key, {{apiKey}}
 # @auth digest {{username}}, {{password}}
 # @auth aws {{accessKey}}, {{secretKey}}, {{region}}, {{service}}
+# @auth oauth2 client_credentials {{tokenUrl}}, {{clientId}}, {{clientSecret}}, scope1,scope2
+# @auth oauth2 password {{tokenUrl}}, {{clientId}}, {{clientSecret}}, {{username}}, {{password}}, scope1,scope2
 ```
 
 ## Assertion Subjects
@@ -256,6 +259,9 @@ echo "Processing complete"
 |---------|---------|
 | `status` | `expect status 200` |
 | `duration` | `expect duration < 1000` |
+| `p50` | `expect p50 < 100` |
+| `p95` | `expect p95 < 200` |
+| `p99` | `expect p99 < 500` |
 | `header Name` | `expect header Content-Type contains json` |
 | `body` | `expect body contains "success"` |
 | `body.path` | `expect body.user.name == "John"` |
@@ -302,6 +308,24 @@ hitspec version
 
 # Output this documentation
 hitspec docs
+
+# Compare test results
+hitspec diff <results1.json> <results2.json> [flags]
+
+# Import OpenAPI/Swagger spec
+hitspec import openapi <spec.yaml|url> -o <output.http>
+
+# Import Postman collection
+hitspec import postman <collection.json> -o <output-dir>
+
+# Start mock server from .http files
+hitspec mock <file|dir> --port 3000
+
+# Record HTTP traffic as .http files
+hitspec record --port 8080 -o recorded.http
+
+# Verify API contracts
+hitspec contract verify <contracts-dir> --provider <url>
 ```
 
 ## Run Flags
@@ -317,7 +341,7 @@ hitspec docs
 | `--timeout` | Global timeout in ms (default: 30000) |
 | `--no-color` | Disable colored output |
 | `--dry-run` | Show what would run |
-| `--output, -o` | Format: console, json, junit, tap |
+| `--output, -o` | Format: console, json, junit, tap, html |
 | `--output-file` | Write output to file |
 | `--parallel, -p` | Run requests in parallel |
 | `--concurrency` | Max concurrent requests (default: 5) |
@@ -370,6 +394,27 @@ hitspec run api.http --stress --env prod --env-file .env -d 1m -r 50
 | `--profile` | Load stress profile from config |
 | `--no-progress` | Disable real-time progress display |
 | `--stress-json` | Output stress results as JSON |
+
+### Metrics Export Flags
+
+| Flag | Description |
+|------|-------------|
+| `--metrics` | Export format: prometheus, datadog, json |
+| `--metrics-port` | Prometheus HTTP endpoint port (default: 9090) |
+| `--metrics-file` | Output file for JSON metrics |
+| `--datadog-api-key` | DataDog API key (env: DD_API_KEY) |
+| `--datadog-site` | DataDog site (default: datadoghq.com) |
+| `--datadog-tags` | Comma-separated DataDog tags |
+
+### Notification Flags
+
+| Flag | Description |
+|------|-------------|
+| `--notify` | Notification service: slack, teams |
+| `--notify-on` | When to notify: always, failure, success, recovery |
+| `--slack-webhook` | Slack webhook URL (env: SLACK_WEBHOOK) |
+| `--slack-channel` | Slack channel override |
+| `--teams-webhook` | Microsoft Teams webhook URL (env: TEAMS_WEBHOOK) |
 
 ### Stress Request Configuration
 
@@ -946,4 +991,166 @@ Use hitspec in CI/CD pipelines with the official GitHub Action:
     files: tests/
     env: staging
     env-file: .env.ci
+```
+
+## Diff Command
+
+Compare two test result files to identify regressions:
+
+```bash
+# Compare JSON results
+hitspec diff results1.json results2.json
+
+# With threshold for CI (fail if >10% slower)
+hitspec diff results1.json results2.json --threshold 10%
+
+# Output as HTML
+hitspec diff results1.json results2.json --output html
+
+# Output as JSON
+hitspec diff results1.json results2.json --output json
+```
+
+## Import Commands
+
+### OpenAPI/Swagger Import
+
+```bash
+# Import from file
+hitspec import openapi spec.yaml -o tests/api.http
+
+# Import from URL
+hitspec import openapi https://petstore.swagger.io/v2/swagger.json -o petstore.http
+
+# With filters
+hitspec import openapi spec.yaml --tags users,auth --base-url http://localhost:3000 -o api.http
+```
+
+### Postman Collection Import
+
+```bash
+# Basic import
+hitspec import postman collection.json -o tests/
+
+# With environment file
+hitspec import postman collection.json --env environment.json -o tests/
+```
+
+## Mock Server
+
+Start a mock server from .http files:
+
+```bash
+# Basic usage
+hitspec mock api.http --port 3000
+
+# From directory
+hitspec mock tests/ --port 8080
+
+# With artificial delay
+hitspec mock api.http --port 3000 --delay 100ms
+```
+
+Mock responses are generated from assertion expectations. Add a `>>>mock` block for custom responses:
+
+```http
+### Get User
+# @name getUser
+GET {{baseUrl}}/users/{{id}}
+
+>>>mock
+{
+  "id": {{id}},
+  "name": "Mock User"
+}
+<<<
+
+>>>
+expect status 200
+<<<
+```
+
+## Record Proxy
+
+Record HTTP traffic as .http files:
+
+```bash
+# Basic recording
+hitspec record --port 8080 -o recorded.http
+
+# With target server
+hitspec record --port 8080 --target https://api.example.com -o recorded.http
+
+# Exclude endpoints
+hitspec record --port 8080 --exclude "/health,/metrics" -o recorded.http
+```
+
+## Contract Testing
+
+Verify API contracts against a provider:
+
+```bash
+# Basic verification
+hitspec contract verify contracts/ --provider http://localhost:3000
+
+# With state handler
+hitspec contract verify contracts/ --provider http://localhost:3000 --state-handler ./setup-states.sh
+
+# Verbose output
+hitspec contract verify contracts/ --provider http://localhost:3000 -v
+```
+
+Contract annotations:
+
+```http
+### Get User
+# @contract.state "user exists with id 1"
+# @contract.provider UserService
+
+GET {{baseUrl}}/users/1
+
+>>>
+expect status 200
+expect body.id == 1
+<<<
+```
+
+## Metrics Export
+
+Export test metrics for monitoring:
+
+```bash
+# Prometheus metrics endpoint
+hitspec run api.http --stress --metrics prometheus --metrics-port 9090
+
+# JSON metrics file
+hitspec run api.http --stress --metrics json --metrics-file metrics.json
+
+# DataDog integration
+hitspec run api.http --stress --metrics datadog --datadog-api-key $DD_API_KEY
+```
+
+Prometheus metrics exposed:
+- `hitspec_requests_total` - Total requests (counter)
+- `hitspec_requests_success_total` - Successful requests (counter)
+- `hitspec_requests_failed_total` - Failed requests (counter)
+- `hitspec_request_duration_ms` - Request duration with quantiles (gauge)
+- `hitspec_requests_by_status_total` - Requests by HTTP status (counter)
+
+## Notifications
+
+Send test result notifications:
+
+```bash
+# Slack notification
+hitspec run api.http --notify slack --slack-webhook $SLACK_WEBHOOK
+
+# Teams notification
+hitspec run api.http --notify teams --teams-webhook $TEAMS_WEBHOOK
+
+# Notify only on failure
+hitspec run api.http --notify slack --slack-webhook $SLACK_WEBHOOK --notify-on failure
+
+# Notify on recovery (after failure passes again)
+hitspec run api.http --notify slack --slack-webhook $SLACK_WEBHOOK --notify-on recovery
 ```

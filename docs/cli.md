@@ -85,7 +85,7 @@ hitspec run tests/ --dry-run
 | `--timeout` | | Request timeout (e.g., 30s, 1m) | `30s` | `HITSPEC_TIMEOUT` |
 | `--no-color` | | Disable colored output | `false` | `HITSPEC_NO_COLOR` |
 | `--dry-run` | | Parse and show what would run | `false` | |
-| `--output` | `-o` | Output format: `console`, `json`, `junit`, `tap` | `console` | `HITSPEC_OUTPUT` |
+| `--output` | `-o` | Output format: `console`, `json`, `junit`, `tap`, `html` | `console` | `HITSPEC_OUTPUT` |
 | `--output-file` | | Write output to file | | `HITSPEC_OUTPUT_FILE` |
 | `--parallel` | `-p` | Run requests in parallel | `false` | `HITSPEC_PARALLEL` |
 | `--concurrency` | | Max concurrent requests | `5` | `HITSPEC_CONCURRENCY` |
@@ -427,6 +427,229 @@ hitspec list tests/
 
 # Verbose output for debugging
 hitspec run tests/ --verbose
+```
+
+---
+
+---
+
+## Additional Commands
+
+### hitspec diff
+
+Compare two test result JSON files to identify regressions:
+
+```bash
+hitspec diff <results1.json> <results2.json> [flags]
+```
+
+**Examples:**
+
+```bash
+# Basic comparison
+hitspec diff baseline.json current.json
+
+# With threshold (fail if >10% slower)
+hitspec diff baseline.json current.json --threshold 10%
+
+# Output as HTML report
+hitspec diff baseline.json current.json --output html
+
+# Output as JSON
+hitspec diff baseline.json current.json --output json
+```
+
+---
+
+### hitspec import
+
+Import API specifications from other formats.
+
+#### OpenAPI/Swagger Import
+
+```bash
+hitspec import openapi <spec.yaml|url> [flags]
+```
+
+**Examples:**
+
+```bash
+# From local file
+hitspec import openapi api-spec.yaml -o tests/api.http
+
+# From URL
+hitspec import openapi https://petstore.swagger.io/v2/swagger.json -o petstore.http
+
+# Filter by tags
+hitspec import openapi spec.yaml --tags users,auth -o api.http
+
+# Override base URL
+hitspec import openapi spec.yaml --base-url http://localhost:3000 -o api.http
+```
+
+#### Postman Collection Import
+
+```bash
+hitspec import postman <collection.json> [flags]
+```
+
+**Examples:**
+
+```bash
+# Basic import
+hitspec import postman collection.json -o tests/
+
+# With environment file
+hitspec import postman collection.json --env environment.json -o tests/
+```
+
+---
+
+### hitspec mock
+
+Start a mock HTTP server from `.http` files:
+
+```bash
+hitspec mock <file|directory> [flags]
+```
+
+**Flags:**
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--port` | Server port | `3000` |
+| `--delay` | Response delay | `0` |
+
+**Examples:**
+
+```bash
+# Basic usage
+hitspec mock api.http --port 3000
+
+# From directory
+hitspec mock tests/ --port 8080
+
+# With artificial delay
+hitspec mock api.http --port 3000 --delay 100ms
+```
+
+---
+
+### hitspec record
+
+Record HTTP traffic as `.http` files:
+
+```bash
+hitspec record [flags]
+```
+
+**Flags:**
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--port` | Proxy port | `8080` |
+| `--target` | Target server URL | |
+| `--output, -o` | Output file | `recorded.http` |
+| `--exclude` | Exclude paths (comma-separated) | |
+
+**Examples:**
+
+```bash
+# Basic recording
+hitspec record --port 8080 -o recorded.http
+
+# With target server (reverse proxy)
+hitspec record --port 8080 --target https://api.example.com -o api.http
+
+# Exclude endpoints
+hitspec record --port 8080 --exclude "/health,/metrics" -o api.http
+```
+
+---
+
+### hitspec contract
+
+Verify API contracts against a provider:
+
+```bash
+hitspec contract verify <contracts-dir> [flags]
+```
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--provider, -p` | Provider URL (required) |
+| `--state-handler` | Path to state handler script |
+| `--verbose, -v` | Verbose output |
+
+**Examples:**
+
+```bash
+# Basic verification
+hitspec contract verify contracts/ --provider http://localhost:3000
+
+# With state handler
+hitspec contract verify contracts/ --provider http://localhost:3000 --state-handler ./setup.sh
+
+# Verbose output
+hitspec contract verify contracts/ --provider http://localhost:3000 -v
+```
+
+---
+
+## Metrics and Notifications
+
+### Metrics Export
+
+Export test metrics to monitoring systems:
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--metrics` | Export format: prometheus, datadog, json |
+| `--metrics-port` | Prometheus HTTP endpoint port (default: 9090) |
+| `--metrics-file` | Output file for JSON metrics |
+| `--datadog-api-key` | DataDog API key (env: DD_API_KEY) |
+
+**Examples:**
+
+```bash
+# Prometheus endpoint
+hitspec run api.http --stress --metrics prometheus --metrics-port 9090
+
+# JSON file
+hitspec run api.http --stress --metrics json --metrics-file metrics.json
+
+# DataDog
+hitspec run api.http --stress --metrics datadog --datadog-api-key $DD_API_KEY
+```
+
+### Notifications
+
+Send test result notifications:
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--notify` | Notification service: slack, teams |
+| `--notify-on` | When to notify: always, failure, success, recovery |
+| `--slack-webhook` | Slack webhook URL (env: SLACK_WEBHOOK) |
+| `--teams-webhook` | Teams webhook URL (env: TEAMS_WEBHOOK) |
+
+**Examples:**
+
+```bash
+# Slack notification
+hitspec run api.http --notify slack --slack-webhook $SLACK_WEBHOOK
+
+# Teams notification
+hitspec run api.http --notify teams --teams-webhook $TEAMS_WEBHOOK
+
+# Notify only on failure
+hitspec run api.http --notify slack --slack-webhook $SLACK_WEBHOOK --notify-on failure
 ```
 
 ---
