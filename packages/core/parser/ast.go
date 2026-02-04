@@ -198,6 +198,10 @@ const (
 	OpExists
 	OpNotExists
 	OpLength
+	OpLengthGt  // length >
+	OpLengthGte // length >=
+	OpLengthLt  // length <
+	OpLengthLte // length <=
 	OpIncludes
 	OpNotIncludes
 	OpIn
@@ -238,6 +242,14 @@ func (op AssertionOperator) String() string {
 		return "!exists"
 	case OpLength:
 		return "length"
+	case OpLengthGt:
+		return "length >"
+	case OpLengthGte:
+		return "length >="
+	case OpLengthLt:
+		return "length <"
+	case OpLengthLte:
+		return "length <="
 	case OpIncludes:
 		return "includes"
 	case OpNotIncludes:

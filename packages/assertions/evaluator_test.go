@@ -121,6 +121,53 @@ func TestEvaluator_Body_Array(t *testing.T) {
 		assert.True(t, result.Passed)
 	})
 
+	t.Run("array length greater than", func(t *testing.T) {
+		result := e.Evaluate(&parser.Assertion{
+			Subject:  "body.items",
+			Operator: parser.OpLengthGt,
+			Expected: 3,
+		})
+		assert.True(t, result.Passed)
+		assert.Equal(t, 5, result.Actual)
+	})
+
+	t.Run("array length greater than fails", func(t *testing.T) {
+		result := e.Evaluate(&parser.Assertion{
+			Subject:  "body.items",
+			Operator: parser.OpLengthGt,
+			Expected: 5,
+		})
+		assert.False(t, result.Passed)
+		assert.Contains(t, result.Message, "expected length > 5, got 5")
+	})
+
+	t.Run("array length greater than or equal", func(t *testing.T) {
+		result := e.Evaluate(&parser.Assertion{
+			Subject:  "body.items",
+			Operator: parser.OpLengthGte,
+			Expected: 5,
+		})
+		assert.True(t, result.Passed)
+	})
+
+	t.Run("array length less than", func(t *testing.T) {
+		result := e.Evaluate(&parser.Assertion{
+			Subject:  "body.items",
+			Operator: parser.OpLengthLt,
+			Expected: 10,
+		})
+		assert.True(t, result.Passed)
+	})
+
+	t.Run("array length less than or equal", func(t *testing.T) {
+		result := e.Evaluate(&parser.Assertion{
+			Subject:  "body.items",
+			Operator: parser.OpLengthLte,
+			Expected: 5,
+		})
+		assert.True(t, result.Passed)
+	})
+
 	t.Run("array includes", func(t *testing.T) {
 		result := e.Evaluate(&parser.Assertion{
 			Subject:  "body.items",
@@ -409,6 +456,63 @@ func TestEvaluateAll(t *testing.T) {
 	for _, r := range results {
 		assert.True(t, r.Passed, "Failed: %s - %s", r.Subject, r.Message)
 	}
+}
+
+func TestEvaluator_WithResolver(t *testing.T) {
+	resp := createResponse(200, `{"name": "John", "items": ["a", "b", "c"]}`, nil)
+
+	// Create a simple resolver that replaces variables
+	resolver := func(s string) string {
+		if s == "{{expectedName}}" {
+			return "John"
+		}
+		if s == "{{expectedItem}}" {
+			return "a"
+		}
+		return s
+	}
+
+	t.Run("string variable interpolation", func(t *testing.T) {
+		e := NewEvaluatorWithBaseDir(resp, "", WithResolver(resolver))
+		result := e.Evaluate(&parser.Assertion{
+			Subject:  "body.name",
+			Operator: parser.OpEquals,
+			Expected: "{{expectedName}}",
+		})
+		assert.True(t, result.Passed)
+		assert.Equal(t, "John", result.Expected)
+	})
+
+	t.Run("array with variable interpolation", func(t *testing.T) {
+		e := NewEvaluatorWithBaseDir(resp, "", WithResolver(resolver))
+		result := e.Evaluate(&parser.Assertion{
+			Subject:  "body.items",
+			Operator: parser.OpIncludes,
+			Expected: "{{expectedItem}}",
+		})
+		assert.True(t, result.Passed)
+		assert.Equal(t, "a", result.Expected)
+	})
+
+	t.Run("expected array with resolved values", func(t *testing.T) {
+		e := NewEvaluatorWithBaseDir(resp, "", WithResolver(resolver))
+		result := e.Evaluate(&parser.Assertion{
+			Subject:  "body.name",
+			Operator: parser.OpIn,
+			Expected: []any{"{{expectedName}}", "Jane"},
+		})
+		assert.True(t, result.Passed)
+	})
+
+	t.Run("without resolver - no interpolation", func(t *testing.T) {
+		e := NewEvaluator(resp)
+		result := e.Evaluate(&parser.Assertion{
+			Subject:  "body.name",
+			Operator: parser.OpEquals,
+			Expected: "{{expectedName}}",
+		})
+		assert.False(t, result.Passed)
+	})
 }
 
 func TestValidatePathWithinBase(t *testing.T) {

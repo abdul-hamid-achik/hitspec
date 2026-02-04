@@ -784,6 +784,24 @@ func (p *Parser) parseAssertionOperator() (AssertionOperator, error) {
 	case "!exists":
 		return OpNotExists, nil
 	case "length":
+		// Check for compound length operators (length >, length >=, etc.)
+		p.skipWhitespace()
+		if p.curToken.Type == TokenOperator {
+			switch p.curToken.Value {
+			case ">":
+				p.nextToken()
+				return OpLengthGt, nil
+			case ">=":
+				p.nextToken()
+				return OpLengthGte, nil
+			case "<":
+				p.nextToken()
+				return OpLengthLt, nil
+			case "<=":
+				p.nextToken()
+				return OpLengthLte, nil
+			}
+		}
 		return OpLength, nil
 	case "includes":
 		return OpIncludes, nil

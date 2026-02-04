@@ -501,7 +501,8 @@ func (r *Runner) executeRequest(req *parser.Request, baseDir string, filePath st
 	if len(req.Assertions) > 0 {
 		result.Assertions = assertions.EvaluateAllWithBaseDir(resp, req.Assertions, baseDir,
 			assertions.WithTestFile(filePath),
-			assertions.WithRequestName(req.Name))
+			assertions.WithRequestName(req.Name),
+			assertions.WithResolver(r.resolver.Resolve))
 		result.Passed = true
 		for _, a := range result.Assertions {
 			if !a.Passed {

@@ -29,9 +29,10 @@ type Result struct {
 type Evaluator struct {
 	response    *http.Response
 	bodyJSON    gjson.Result
-	baseDir     string // Base directory for resolving schema file paths
-	testFile    string // Path to the test file (for snapshots)
-	requestName string // Name of the current request (for snapshots)
+	baseDir     string                 // Base directory for resolving schema file paths
+	testFile    string                 // Path to the test file (for snapshots)
+	requestName string                 // Name of the current request (for snapshots)
+	resolver    func(string) string    // Optional resolver for variable interpolation
 }
 
 // EvaluatorOption is a functional option for configuring an Evaluator.
@@ -48,6 +49,13 @@ func WithTestFile(path string) EvaluatorOption {
 func WithRequestName(name string) EvaluatorOption {
 	return func(e *Evaluator) {
 		e.requestName = name
+	}
+}
+
+// WithResolver sets a resolver function for variable interpolation in expected values.
+func WithResolver(resolver func(string) string) EvaluatorOption {
+	return func(e *Evaluator) {
+		e.resolver = resolver
 	}
 }
 
@@ -69,11 +77,41 @@ func NewEvaluatorWithBaseDir(resp *http.Response, baseDir string, opts ...Evalua
 	return e
 }
 
+// resolveExpected applies variable interpolation to expected values.
+// It handles strings, arrays, and maps recursively.
+func (e *Evaluator) resolveExpected(expected any) any {
+	if e.resolver == nil {
+		return expected
+	}
+
+	switch v := expected.(type) {
+	case string:
+		return e.resolver(v)
+	case []any:
+		result := make([]any, len(v))
+		for i, item := range v {
+			result[i] = e.resolveExpected(item)
+		}
+		return result
+	case map[string]any:
+		result := make(map[string]any, len(v))
+		for key, val := range v {
+			result[key] = e.resolveExpected(val)
+		}
+		return result
+	default:
+		return expected
+	}
+}
+
 func (e *Evaluator) Evaluate(assertion *parser.Assertion) *Result {
+	// Resolve any variables in the expected value
+	resolvedExpected := e.resolveExpected(assertion.Expected)
+
 	result := &Result{
 		Subject:  assertion.Subject,
 		Operator: assertion.Operator.String(),
-		Expected: assertion.Expected,
+		Expected: resolvedExpected,
 	}
 
 	actual, err := e.getActualValue(assertion.Subject)
@@ -84,12 +122,13 @@ func (e *Evaluator) Evaluate(assertion *parser.Assertion) *Result {
 	}
 	result.Actual = actual
 
-	passed, msg := e.compare(actual, assertion.Operator, assertion.Expected)
+	passed, msg := e.compare(actual, assertion.Operator, resolvedExpected)
 	result.Passed = passed
 	result.Message = msg
 
-	// For length operator, show the computed length as the actual value
-	if assertion.Operator == parser.OpLength {
+	// For length operators, show the computed length as the actual value
+	switch assertion.Operator {
+	case parser.OpLength, parser.OpLengthGt, parser.OpLengthGte, parser.OpLengthLt, parser.OpLengthLte:
 		result.Actual = computeLength(actual)
 	}
 
@@ -210,6 +249,14 @@ func (e *Evaluator) compare(actual any, op parser.AssertionOperator, expected an
 		return true, ""
 	case parser.OpLength:
 		return e.length(actual, expected)
+	case parser.OpLengthGt:
+		return e.lengthCompare(actual, expected, ">")
+	case parser.OpLengthGte:
+		return e.lengthCompare(actual, expected, ">=")
+	case parser.OpLengthLt:
+		return e.lengthCompare(actual, expected, "<")
+	case parser.OpLengthLte:
+		return e.lengthCompare(actual, expected, "<=")
 	case parser.OpIncludes:
 		return e.includes(actual, expected)
 	case parser.OpNotIncludes:
@@ -372,6 +419,35 @@ func (e *Evaluator) length(actual, expected any) (bool, string) {
 		return true, ""
 	}
 	return false, fmt.Sprintf("expected length %d, got %d", expectedLen, actualLen)
+}
+
+func (e *Evaluator) lengthCompare(actual, expected any, op string) (bool, string) {
+	expectedLen, ok := toInt(expected)
+	if !ok {
+		return false, fmt.Sprintf("expected length must be a number, got %v", expected)
+	}
+
+	actualLen := computeLength(actual)
+	if actualLen == -1 {
+		return false, fmt.Sprintf("cannot get length of %T", actual)
+	}
+
+	var passed bool
+	switch op {
+	case ">":
+		passed = actualLen > expectedLen
+	case ">=":
+		passed = actualLen >= expectedLen
+	case "<":
+		passed = actualLen < expectedLen
+	case "<=":
+		passed = actualLen <= expectedLen
+	}
+
+	if passed {
+		return true, ""
+	}
+	return false, fmt.Sprintf("expected length %s %d, got %d", op, expectedLen, actualLen)
 }
 
 func (e *Evaluator) includes(actual, expected any) (bool, string) {

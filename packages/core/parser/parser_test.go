@@ -168,6 +168,10 @@ func TestParser_AssertionOperators(t *testing.T) {
 		{"expect body.id exists", OpExists},
 		{"expect body.error !exists", OpNotExists},
 		{"expect body.items length 10", OpLength},
+		{"expect body.items length > 0", OpLengthGt},
+		{"expect body.items length >= 1", OpLengthGte},
+		{"expect body.items length < 100", OpLengthLt},
+		{"expect body.items length <= 50", OpLengthLte},
 	}
 
 	for _, tt := range tests {
