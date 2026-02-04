@@ -427,8 +427,16 @@ func (l *Lexer) readString(quote byte) Token {
 	l.readChar()
 	var builder strings.Builder
 	for l.ch != 0 && l.ch != quote {
-		if l.ch == '\\' && l.peekChar() == quote {
+		if l.ch == '\\' {
+			// Preserve escape sequences: write the backslash
+			builder.WriteByte(l.ch)
 			l.readChar()
+			if l.ch != 0 {
+				// Write the escaped character (could be ", \, n, t, etc.)
+				builder.WriteByte(l.ch)
+				l.readChar()
+			}
+			continue
 		}
 		builder.WriteByte(l.ch)
 		l.readChar()

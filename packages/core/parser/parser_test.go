@@ -253,3 +253,41 @@ GET https://api.example.com/skip`
 	req := file.Requests[0]
 	assert.Equal(t, "This test is temporarily disabled", req.Metadata.Skip)
 }
+
+func TestParser_EscapedQuotesInBody(t *testing.T) {
+	input := `### Escaped quotes test
+POST https://api.example.com/test
+Content-Type: application/json
+
+{"content": "{\"test\": true}", "nested": "{\"key\": \"value\"}"}`
+
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+
+	req := file.Requests[0]
+	require.NotNil(t, req.Body)
+	assert.Equal(t, BodyJSON, req.Body.ContentType)
+	// Verify escaped quotes are preserved
+	assert.Contains(t, req.Body.Raw, `"{\"test\": true}"`)
+	assert.Contains(t, req.Body.Raw, `"{\"key\": \"value\"}"`)
+}
+
+func TestParser_EscapeSequencesInBody(t *testing.T) {
+	input := `### Escape sequences test
+POST https://api.example.com/test
+Content-Type: application/json
+
+{"message": "line1\nline2\ttab", "path": "C:\\Users\\test"}`
+
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+
+	req := file.Requests[0]
+	require.NotNil(t, req.Body)
+	// Verify escape sequences are preserved
+	assert.Contains(t, req.Body.Raw, `\n`)
+	assert.Contains(t, req.Body.Raw, `\t`)
+	assert.Contains(t, req.Body.Raw, `\\`)
+}

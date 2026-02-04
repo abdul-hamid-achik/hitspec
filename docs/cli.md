@@ -787,6 +787,86 @@ The coverage report shows:
 
 ---
 
+## Export Commands
+
+### hitspec export curl
+
+Export hitspec requests as executable curl commands.
+
+```bash
+hitspec export curl <file> [flags]
+```
+
+**Flags:**
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--name` | `-n` | Filter by request name (glob pattern) | all |
+| `--tags` | `-t` | Filter by tags (comma-separated) | all |
+| `--output` | `-o` | Output file path | stdout |
+| `--env` | `-e` | Environment for variable resolution | none |
+| `--exec` | | Execute the curl command directly | false |
+| `--verbose` | `-v` | Include -v in curl output | false |
+
+**Examples:**
+
+```bash
+# Export all requests from a file
+hitspec export curl tests/api.http
+
+# Filter by request name (glob pattern)
+hitspec export curl tests/api.http --name "Login*"
+hitspec export curl tests/api.http -n "createUser"
+
+# Filter by tags
+hitspec export curl tests/api.http --tags smoke,auth
+
+# Output to file instead of stdout
+hitspec export curl tests/api.http -o commands.sh
+
+# Execute the curl command directly (single request only)
+hitspec export curl tests/api.http --name "Login" --exec
+
+# Include verbose flag in curl output
+hitspec export curl tests/api.http --verbose
+
+# Resolve variables from environment before export
+hitspec export curl tests/api.http --env staging
+```
+
+**Output Format:**
+
+Each request is exported as a curl command with a comment header:
+
+```bash
+# Request: Login
+curl -X POST 'https://api.example.com/auth/login' \
+  -H 'Content-Type: application/json' \
+  -d '{"username": "john", "password": "secret"}'
+
+# Request: Get Profile
+curl -X GET 'https://api.example.com/profile' \
+  -H 'Authorization: Bearer {{login.token}}'
+```
+
+**Auth Conversion:**
+
+| Hitspec | Curl |
+|---------|------|
+| `@auth bearer token` | `-H 'Authorization: Bearer token'` |
+| `@auth basic user pass` | `-u 'user:pass'` |
+| `@auth apiKey X-API-Key key` | `-H 'X-API-Key: key'` |
+| `@auth digest user pass` | `--digest -u 'user:pass'` |
+
+**Use Cases:**
+
+- Debug failing tests by running the raw curl command
+- Share API calls with teammates who don't have hitspec
+- Use the curl in scripts or other tools
+- Quickly test an endpoint outside the test framework
+
+---
+
 ## See Also
 
 - [Syntax Reference](README.md) - Complete .http file syntax

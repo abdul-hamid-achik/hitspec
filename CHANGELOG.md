@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-02-04
+
+### Added
+
+- **Export to Curl**: New `hitspec export curl` command to convert `.http` files to executable curl commands
+  - Filter by request name with glob patterns (`--name "Login*"`)
+  - Filter by tags (`--tags smoke,auth`)
+  - Output to file (`-o commands.sh`) or stdout
+  - Execute curl directly (`--exec`, requires single request)
+  - Verbose curl output (`--verbose`)
+  - Environment variable resolution (`--env staging`)
+  - Handles all auth types (bearer, basic, apiKey, digest)
+  - Handles all body types (JSON, form, multipart, GraphQL)
+
+### Fixed
+
+- **Escaped Quotes in JSON Body**: Escaped characters (like `\"`) inside JSON body values are now correctly preserved
+  - Previously, `{"content": "{\"test\": true}"}` would become malformed JSON
+  - Now escape sequences (`\"`, `\\`, `\n`, `\t`, etc.) are properly maintained when sent to the server
+  - This fixes issues with APIs that accept JSON-in-JSON payloads
+
 ## [1.2.2] - 2026-02-04
 
 ### Changed

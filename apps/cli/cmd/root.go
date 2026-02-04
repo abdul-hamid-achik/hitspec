@@ -36,6 +36,7 @@ func init() {
 	rootCmd.AddCommand(docsCmd)
 	rootCmd.AddCommand(diffCmd)
 	rootCmd.AddCommand(importCmd)
+	rootCmd.AddCommand(exportCmd)
 	rootCmd.AddCommand(mockCmd)
 	rootCmd.AddCommand(recordCmd)
 	rootCmd.AddCommand(contractCmd)

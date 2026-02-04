@@ -114,6 +114,7 @@ hitspec run api.http
 - **Snapshot testing** - Capture and compare response bodies against baselines
 - **API coverage reporting** - Measure test coverage against OpenAPI specs
 - **curl/Insomnia import** - Convert existing tests from curl commands or Insomnia exports
+- **Export to curl** - Export hitspec tests as executable curl commands for debugging and sharing
 - **SSE support** - Test Server-Sent Events endpoints
 - **Custom annotations** - Extend metadata with `@x-custom` or namespaced annotations
 
