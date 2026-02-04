@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-02-04
+
+### Changed
+
+- Updated README with length comparison operators documentation
+- Updated CHANGELOG with v1.2.1 release notes
+
 ## [1.2.1] - 2026-02-04
 
 ### Added
@@ -93,7 +100,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `hitspec init` - Initialize a new project
 - `hitspec version` - Show version information
 
-[Unreleased]: https://github.com/abdul-hamid-achik/hitspec/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/hitspec/compare/v1.2.2...HEAD
+[1.2.2]: https://github.com/abdul-hamid-achik/hitspec/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/abdul-hamid-achik/hitspec/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v1.0.1...v1.2.0
 [1.0.1]: https://github.com/abdul-hamid-achik/hitspec/compare/v0.1.0...v1.0.1
