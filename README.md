@@ -166,7 +166,8 @@ expect duration < 1000            # Less than
 expect body contains "success"    # Contains substring
 expect body.id matches /^\d+$/    # Regex match
 expect body.error !exists         # Does not exist
-expect body.items length 10       # Array length
+expect body.items length 10       # Array length equals
+expect body.items length > 0      # Array length greater than
 expect body.tags includes "api"   # Array contains
 expect status in [200, 201]       # Value in array
 expect body.data type object      # Type check
@@ -374,6 +375,10 @@ query GetUser($id: ID!) {
 | Operator | Syntax | Description |
 |----------|--------|-------------|
 | `length` | `expect body.items length 10` | Array/string length equals |
+| `length >` | `expect body.items length > 0` | Array/string length greater than |
+| `length >=` | `expect body.items length >= 1` | Array/string length greater than or equal |
+| `length <` | `expect body.items length < 100` | Array/string length less than |
+| `length <=` | `expect body.items length <= 50` | Array/string length less than or equal |
 | `includes` | `expect body.tags includes "admin"` | Array contains value |
 | `!includes` | `expect body.tags !includes "test"` | Array does not contain |
 | `in` | `expect status in [200, 201, 204]` | Value is in array |
@@ -461,7 +466,14 @@ userId from body.user.id
 # @depends login
 GET {{baseUrl}}/users/{{login.userId}}
 Authorization: Bearer {{login.token}}
+
+>>>
+expect status 200
+expect body.id == "{{login.userId}}"
+<<<
 ```
+
+**Note:** Captured variables can be used in expect clauses with `{{requestName.captureName}}` syntax.
 
 **Capture Sources:**
 | Source | Syntax | Description |
