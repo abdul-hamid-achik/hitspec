@@ -26,6 +26,10 @@ func (r *Runner) executeDBAssertions(dbAssertions []*parser.DBAssertion, connStr
 		return nil, nil
 	}
 
+	if !r.config.AllowDB {
+		return nil, fmt.Errorf("database assertions require --allow-db flag")
+	}
+
 	// Resolve variables in connection string
 	connStr = resolver(connStr)
 

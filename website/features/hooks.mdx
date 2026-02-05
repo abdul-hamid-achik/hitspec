@@ -1,0 +1,155 @@
+---
+title: "Hooks"
+description: "Run setup and teardown scripts before and after HTTP requests using @before and @after annotations."
+---
+
+Hooks let you run shell scripts before and after individual requests. Use `@before` for setup (seeding data, starting services) and `@after` for cleanup (removing test data, stopping services).
+
+## Security
+
+<Warning>
+  Hooks execute shell scripts on your system. You must pass the `--allow-shell` flag to enable them. Without this flag, `@before` and `@after` hooks are skipped.
+</Warning>
+
+```bash
+hitspec run tests/ --allow-shell
+```
+
+## Basic Usage
+
+```http
+### Test with setup and teardown
+# @name testWithHooks
+# @before ./scripts/setup.sh
+# @after ./scripts/cleanup.sh
+
+GET {{baseUrl}}/api/test
+
+>>>
+expect status 200
+<<<
+```
+
+## @before Hooks
+
+`@before` hooks run before the HTTP request is sent. Use them to prepare test data, start services, or set up preconditions.
+
+```http
+### Test user creation
+# @name testCreateUser
+# @before ./scripts/seed-db.sh
+# @before ./scripts/clear-cache.sh
+
+POST {{baseUrl}}/api/users
+Content-Type: application/json
+
+{
+  "name": "Test User"
+}
+
+>>>
+expect status 201
+<<<
+```
+
+Multiple `@before` hooks execute in the order they are declared.
+
+## @after Hooks
+
+`@after` hooks run after the request completes and assertions are evaluated. They always run, even if the request or assertions fail. This makes them reliable for cleanup.
+
+```http
+### Test that requires cleanup
+# @name testWithCleanup
+# @after ./scripts/remove-test-data.sh
+# @after ./scripts/reset-state.sh
+
+DELETE {{baseUrl}}/api/test-resources/123
+
+>>>
+expect status 204
+<<<
+```
+
+Multiple `@after` hooks also execute in declaration order.
+
+<Note>
+  `@after` hooks always run, even when the request fails or assertions do not pass. This guarantees cleanup happens regardless of test outcome.
+</Note>
+
+## Variable Resolution
+
+Variables are resolved in hook paths and commands:
+
+```http
+### Dynamic hook paths
+# @name envSpecificTest
+# @before ./scripts/setup-{{env}}.sh
+# @after ./scripts/cleanup-{{env}}.sh
+
+GET {{baseUrl}}/api/health
+
+>>>
+expect status 200
+<<<
+```
+
+## Execution Details
+
+| Behavior | Detail |
+|----------|--------|
+| Execution engine | `sh -c` |
+| Working directory | Location of the `.http` file |
+| Multiple hooks | Executed in declaration order |
+| `@before` failure | Request is not sent; `@after` hooks still run |
+| `@after` timing | Always runs, even on request failure |
+| Variable support | `{{variables}}` are resolved before execution |
+
+## Example: Database Seed and Cleanup
+
+```http
+### Verify user list after seeding
+# @name verifyUsers
+# @before ./scripts/seed-users.sh
+# @after ./scripts/truncate-users.sh
+
+GET {{baseUrl}}/api/users
+
+>>>
+expect status 200
+expect body type array
+expect body length > 0
+<<<
+```
+
+`scripts/seed-users.sh`:
+```bash
+#!/bin/bash
+psql $DATABASE_URL -c "INSERT INTO users (name, email) VALUES ('Test', 'test@example.com');"
+```
+
+`scripts/truncate-users.sh`:
+```bash
+#!/bin/bash
+psql $DATABASE_URL -c "TRUNCATE TABLE users CASCADE;"
+```
+
+## Example: Service Health Check
+
+```http
+### Wait for service and test
+# @name serviceTest
+# @before ./scripts/start-service.sh
+# @after ./scripts/stop-service.sh
+
+GET http://localhost:8080/api/health
+
+>>>
+expect status 200
+expect body.status == "ok"
+<<<
+```
+
+<Tip>
+  For simple command execution after a request (without needing a separate script file), consider using [shell command blocks](/features/shell-commands) with the `>>>shell` syntax instead.
+</Tip>

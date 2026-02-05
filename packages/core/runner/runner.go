@@ -44,6 +44,8 @@ type Config struct {
 	DefaultHeaders     map[string]string
 	ConfigEnvironments map[string]map[string]any
 	UpdateSnapshots    bool // Update snapshots instead of comparing
+	AllowShell         bool // Allow shell command execution (>>>shell blocks and hooks)
+	AllowDB            bool // Allow database assertions (>>>db blocks)
 }
 
 func NewRunner(cfg *Config) *Runner {
@@ -379,7 +381,7 @@ func (r *Runner) shouldRun(req *parser.Request, hasOnly bool) bool {
 	}
 
 	if len(r.config.TagsFilter) > 0 {
-		if !hasAnyTag(req.Tags, r.config.TagsFilter) {
+		if !parser.HasAnyTag(req.Tags, r.config.TagsFilter) {
 			return false
 		}
 	}
@@ -584,13 +586,3 @@ func matchesPattern(name, pattern string) bool {
 	return name == pattern
 }
 
-func hasAnyTag(tags []string, filters []string) bool {
-	for _, filter := range filters {
-		for _, tag := range tags {
-			if tag == filter {
-				return true
-			}
-		}
-	}
-	return false
-}

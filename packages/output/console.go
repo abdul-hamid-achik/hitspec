@@ -110,7 +110,11 @@ func (f *ConsoleFormatter) FormatResult(result *runner.RunResult) {
 		if !r.Passed && len(r.Assertions) > 0 {
 			for _, a := range r.Assertions {
 				if !a.Passed {
-					fmt.Fprintf(f.writer, "    %s %s %s\n", red("→"), a.Subject, a.Operator)
+					lineInfo := ""
+					if a.Line > 0 {
+						lineInfo = fmt.Sprintf(" (line %d)", a.Line)
+					}
+					fmt.Fprintf(f.writer, "    %s %s %s%s\n", red("→"), a.Subject, a.Operator, lineInfo)
 					fmt.Fprintf(f.writer, "      Expected: %s\n", formatValue(a.Expected, 100))
 					fmt.Fprintf(f.writer, "      Actual:   %s\n", formatValue(a.Actual, 100))
 					if a.Message != "" {

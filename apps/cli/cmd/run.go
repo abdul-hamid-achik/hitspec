@@ -100,6 +100,10 @@ var (
 
 	// Snapshot testing flags
 	updateSnapshotsFlag bool
+
+	// Security flags
+	allowShellFlag bool
+	allowDBFlag    bool
 )
 
 func init() {
@@ -159,6 +163,10 @@ func init() {
 
 	// Snapshot testing flags
 	runCmd.Flags().BoolVar(&updateSnapshotsFlag, "update-snapshots", false, "Update snapshot files instead of comparing")
+
+	// Security flags
+	runCmd.Flags().BoolVar(&allowShellFlag, "allow-shell", false, "Allow shell command execution (>>>shell blocks and hooks)")
+	runCmd.Flags().BoolVar(&allowDBFlag, "allow-db", false, "Allow database assertions (>>>db blocks)")
 }
 
 // Environment variable helpers
@@ -343,6 +351,8 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		DefaultHeaders:     fileConfig.Headers,
 		ConfigEnvironments: fileConfig.Environments,
 		UpdateSnapshots:    updateSnapshotsFlag,
+		AllowShell:         allowShellFlag,
+		AllowDB:            allowDBFlag,
 	}
 
 	r := runner.NewRunner(cfg)
@@ -411,7 +421,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	// If watch mode is not enabled, exit normally
 	if !watchFlag {
 		if totalFailed > 0 {
-			os.Exit(1)
+			os.Exit(ExitTestFailure)
 		}
 		return nil
 	}
@@ -702,7 +712,7 @@ func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config
 
 	// Exit with error code if thresholds failed
 	if result.HasThresholdFailures() {
-		os.Exit(1)
+		os.Exit(ExitTestFailure)
 	}
 
 	return nil

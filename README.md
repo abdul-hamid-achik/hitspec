@@ -319,8 +319,8 @@ Content-Type: application/x-www-form-urlencoded
 POST {{baseUrl}}/upload
 
 >>>multipart
-name = John Doe
-avatar < @./photo.jpg
+field name = John Doe
+file @./photo.jpg
 <<<
 ```
 

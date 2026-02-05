@@ -217,7 +217,7 @@ func filterRequests(requests []*parser.Request, namePattern, tagsStr string) []*
 
 		// Check tags
 		if len(tags) > 0 {
-			if !hasAnyTag(req.Tags, tags) {
+			if !parser.HasAnyTag(req.Tags, tags) {
 				continue
 			}
 		}
@@ -263,14 +263,3 @@ func matchGlob(s, pattern string) bool {
 	return j == len(pattern)
 }
 
-// hasAnyTag returns true if the request has any of the specified tags.
-func hasAnyTag(reqTags, filterTags []string) bool {
-	for _, ft := range filterTags {
-		for _, rt := range reqTags {
-			if strings.EqualFold(strings.TrimSpace(rt), ft) {
-				return true
-			}
-		}
-	}
-	return false
-}

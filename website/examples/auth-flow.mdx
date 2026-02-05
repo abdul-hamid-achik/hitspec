@@ -1,0 +1,352 @@
+---
+title: "Auth Flow"
+description: "Login to get a token, capture it, and use it in authenticated requests with @auth bearer and @depends."
+---
+
+Most APIs require authentication. This tutorial demonstrates a common pattern: log in to get an access token, capture it, and pass it to all subsequent requests. You will use captures, dependencies, and the `@auth` directive.
+
+## Prerequisites
+
+- hitspec installed ([Installation](/installation))
+- Familiarity with the [Basic CRUD](/examples/basic-crud) example
+
+## The Complete Test File
+
+Create a file called `auth-flow.http`:
+
+```http auth-flow.http
+@baseUrl = https://httpbin.org
+
+### Login and get a token
+# @name login
+# @tags auth
+
+POST {{baseUrl}}/post
+Content-Type: application/json
+
+{
+  "username": "testuser",
+  "password": "secret123"
+}
+
+>>>
+expect status 200
+expect body.json.username == "testuser"
+<<<
+
+>>>capture
+token from body.json.username
+userId from body.json.username
+<<<
+
+### Access a protected resource
+# @name getProfile
+# @tags auth, profile
+# @depends login
+# @auth bearer {{login.token}}
+
+GET {{baseUrl}}/bearer
+
+>>>
+expect status 200
+expect body.authenticated == true
+expect body.token exists
+<<<
+
+>>>capture
+bearerToken from body.token
+<<<
+
+### Access another protected endpoint
+# @name getSettings
+# @tags auth, settings
+# @depends login
+# @auth bearer {{login.token}}
+
+GET {{baseUrl}}/headers
+
+>>>
+expect status 200
+expect header Content-Type contains "application/json"
+expect body.headers.Authorization exists
+expect body.headers.Authorization startsWith "Bearer"
+<<<
+
+### Update profile with auth
+# @name updateProfile
+# @tags auth, profile
+# @depends getProfile
+# @auth bearer {{login.token}}
+
+PUT {{baseUrl}}/put
+Content-Type: application/json
+
+{
+  "displayName": "Test User",
+  "email": "testuser@example.com"
+}
+
+>>>
+expect status 200
+expect body.json.displayName == "Test User"
+expect body.json.email endsWith "@example.com"
+<<<
+
+### Basic auth request
+# @name basicAuthRequest
+# @tags auth
+
+GET {{baseUrl}}/basic-auth/testuser/testpass
+# @auth basic testuser, testpass
+
+>>>
+expect status 200
+expect body.authenticated == true
+expect body.user == "testuser"
+<<<
+```
+
+## Step-by-Step Breakdown
+
+<Steps>
+
+<Step title="Login and capture the token">
+
+The first request simulates a login and captures credentials from the response.
+
+```http
+### Login and get a token
+# @name login
+# @tags auth
+
+POST {{baseUrl}}/post
+Content-Type: application/json
+
+{
+  "username": "testuser",
+  "password": "secret123"
+}
+
+>>>
+expect status 200
+expect body.json.username == "testuser"
+<<<
+
+>>>capture
+token from body.json.username
+userId from body.json.username
+<<<
+```
+
+The `>>>capture` block extracts values from the response body. These become available as `{{login.token}}` and `{{login.userId}}` in later requests.
+
+<Note>
+  In a real API, you would capture from a path like `body.access_token` or `body.data.token`. This example uses httpbin.org which echoes back the posted JSON.
+</Note>
+
+</Step>
+
+<Step title="Use the token with @auth bearer">
+
+The `@auth bearer` directive automatically adds an `Authorization: Bearer <token>` header.
+
+```http
+### Access a protected resource
+# @name getProfile
+# @tags auth, profile
+# @depends login
+# @auth bearer {{login.token}}
+
+GET {{baseUrl}}/bearer
+
+>>>
+expect status 200
+expect body.authenticated == true
+expect body.token exists
+<<<
+```
+
+Key points:
+- `# @depends login` ensures this runs after the login request
+- `# @auth bearer {{login.token}}` injects the captured token
+- httpbin.org's `/bearer` endpoint validates the Bearer token and returns `authenticated: true`
+
+This is equivalent to manually writing the header:
+```http
+Authorization: Bearer {{login.token}}
+```
+
+But `@auth bearer` is cleaner and makes the intent explicit.
+
+</Step>
+
+<Step title="Chain multiple authenticated requests">
+
+Multiple requests can depend on the same login and reuse the token.
+
+```http
+### Access another protected endpoint
+# @name getSettings
+# @tags auth, settings
+# @depends login
+# @auth bearer {{login.token}}
+
+GET {{baseUrl}}/headers
+
+>>>
+expect status 200
+expect header Content-Type contains "application/json"
+expect body.headers.Authorization exists
+expect body.headers.Authorization startsWith "Bearer"
+<<<
+```
+
+The `startsWith` operator checks that the Authorization header was sent correctly.
+
+</Step>
+
+<Step title="Dependent chain: login -> getProfile -> updateProfile">
+
+You can create multi-level dependency chains.
+
+```http
+### Update profile with auth
+# @name updateProfile
+# @tags auth, profile
+# @depends getProfile
+# @auth bearer {{login.token}}
+
+PUT {{baseUrl}}/put
+Content-Type: application/json
+
+{
+  "displayName": "Test User",
+  "email": "testuser@example.com"
+}
+
+>>>
+expect status 200
+expect body.json.displayName == "Test User"
+expect body.json.email endsWith "@example.com"
+<<<
+```
+
+`updateProfile` depends on `getProfile`, which depends on `login`. hitspec resolves the full dependency graph automatically.
+
+</Step>
+
+<Step title="Basic authentication">
+
+hitspec supports multiple auth types. Here is Basic auth:
+
+```http
+### Basic auth request
+# @name basicAuthRequest
+# @tags auth
+
+GET {{baseUrl}}/basic-auth/testuser/testpass
+# @auth basic testuser, testpass
+
+>>>
+expect status 200
+expect body.authenticated == true
+expect body.user == "testuser"
+<<<
+```
+
+The `@auth basic` directive base64-encodes the credentials and sends them as `Authorization: Basic <encoded>`.
+
+</Step>
+
+<Step title="Run the auth tests">
+
+Run all auth tests:
+
+```bash
+hitspec run auth-flow.http
+```
+
+Run only profile-related tests:
+
+```bash
+hitspec run auth-flow.http --tags profile
+```
+
+Expected output:
+
+```
+  login (245ms)
+  getProfile (132ms)
+  getSettings (118ms)
+  updateProfile (156ms)
+  basicAuthRequest (189ms)
+
+5 passed, 0 failed
+```
+
+</Step>
+
+</Steps>
+
+## Supported Auth Types
+
+hitspec supports six authentication methods:
+
+| Type | Syntax | Header Sent |
+|------|--------|------------|
+| Bearer | `@auth bearer {{token}}` | `Authorization: Bearer <token>` |
+| Basic | `@auth basic user, pass` | `Authorization: Basic <base64>` |
+| API Key (header) | `@auth apiKey X-API-Key, {{key}}` | `X-API-Key: <key>` |
+| API Key (query) | `@auth apiKeyQuery api_key, {{key}}` | `?api_key=<key>` |
+| Digest | `@auth digest user, pass` | Digest authentication |
+| AWS Sig v4 | `@auth aws {{access}}, {{secret}}, {{region}}, {{service}}` | AWS Signature v4 |
+
+## Real-World Pattern
+
+In practice, an auth flow test file typically looks like this:
+
+```http
+@baseUrl = https://api.yourservice.com
+
+### Login
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{$randomEmail()}}",
+  "password": "testPassword123"
+}
+
+>>>
+expect status 200
+expect body.access_token exists
+expect body.expires_in > 0
+<<<
+
+>>>capture
+accessToken from body.access_token
+refreshToken from body.refresh_token
+<<<
+
+### Use the token
+# @depends login
+# @auth bearer {{login.accessToken}}
+GET {{baseUrl}}/me
+
+>>>
+expect status 200
+expect body.email exists
+<<<
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Captures" icon="link" href="/concepts/captures">
+    Learn all capture sources: body, headers, status, and duration.
+  </Card>
+  <Card title="Dependencies" icon="arrow-right" href="/concepts/dependencies">
+    Understand how hitspec resolves the dependency graph.
+  </Card>
+</CardGroup>

@@ -1,0 +1,52 @@
+---
+title: "Server-Sent Events (SSE)"
+description: "Test Server-Sent Events endpoints with hitspec."
+---
+
+<Warning>
+  SSE support is **experimental**. The syntax and behavior may change in future releases.
+</Warning>
+
+hitspec can test Server-Sent Events (SSE) endpoints. SSE is a standard for servers to push real-time updates to clients over a single HTTP connection.
+
+## Basic Usage
+
+Connect to an SSE endpoint and assert on the events received:
+
+```http
+### Listen to event stream
+# @name eventStream
+
+GET {{baseUrl}}/events
+Accept: text/event-stream
+
+>>>
+expect status 200
+expect header Content-Type contains "text/event-stream"
+<<<
+```
+
+## How It Works
+
+When hitspec detects a `text/event-stream` content type, it reads events from the stream for the duration of the configured timeout. You can then assert on the received events using standard assertion operators.
+
+## Configuration
+
+Control how long hitspec listens for events using the `@timeout` directive:
+
+```http
+### Listen for 5 seconds
+# @name longStream
+# @timeout 5000
+
+GET {{baseUrl}}/events
+Accept: text/event-stream
+
+>>>
+expect status 200
+<<<
+```
+
+<Note>
+  SSE support is still being developed. Additional assertion capabilities for event data, event types, and stream behavior are planned for future releases.
+</Note>

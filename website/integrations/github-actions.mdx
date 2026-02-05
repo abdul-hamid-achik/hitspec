@@ -1,0 +1,357 @@
+---
+title: "GitHub Actions"
+description: "Run hitspec API tests in your GitHub Actions CI/CD pipeline with JUnit reporting, caching, and matrix testing."
+---
+
+hitspec integrates with GitHub Actions through an official action and direct CLI usage. You can run API tests on every push, pull request, or schedule, and report results using JUnit XML.
+
+## Official GitHub Action
+
+The fastest way to add hitspec to your pipeline:
+
+```yaml .github/workflows/api-tests.yml
+name: API Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: abdul-hamid-achik/hitspec@v1
+        with:
+          files: tests/
+          output: junit
+          output-file: test-results.xml
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: test-results.xml
+```
+
+### Action Inputs
+
+| Input | Description | Default |
+|-------|-------------|---------|
+| `files` | Files or directories to test | (required) |
+| `env` | Environment name | `dev` |
+| `env-file` | Path to `.env` file | - |
+| `output` | Output format (`console`, `json`, `junit`, `tap`) | `junit` |
+| `output-file` | Write output to file | - |
+| `tags` | Filter by tags | - |
+| `parallel` | Run in parallel | `false` |
+| `bail` | Stop on first failure | `false` |
+| `stress` | Enable stress testing | `false` |
+| `duration` | Stress test duration | `30s` |
+| `rate` | Requests per second | `10` |
+| `threshold` | Pass/fail thresholds | - |
+| `version` | hitspec version to install | `latest` |
+
+## Using the CLI Directly
+
+If you prefer installing hitspec yourself (for example, to pin a specific version or use Homebrew caching), you can call the CLI directly:
+
+```yaml .github/workflows/api-tests.yml
+name: API Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install hitspec
+        run: |
+          curl -fsSL https://github.com/abdul-hamid-achik/hitspec/releases/latest/download/hitspec_linux_amd64.tar.gz | tar xz
+          sudo mv hitspec /usr/local/bin/
+
+      - name: Run API tests
+        run: |
+          hitspec run tests/ \
+            --env staging \
+            --output junit \
+            --output-file test-results.xml \
+            --bail
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: test-results.xml
+```
+
+## Exit Codes
+
+hitspec uses specific exit codes that GitHub Actions interprets as pass or fail:
+
+| Code | Meaning | CI Result |
+|------|---------|-----------|
+| `0` | All tests passed | Step passes |
+| `1` | One or more tests failed | Step fails |
+| `2` | Parse error (invalid `.http` file syntax) | Step fails |
+| `3` | Configuration error | Step fails |
+| `4` | Network/connection error | Step fails |
+| `64` | Invalid CLI usage | Step fails |
+
+Any non-zero exit code causes the GitHub Actions step to fail, which blocks the workflow (and any required status checks) from passing.
+
+## Environment Variables and Secrets
+
+Use GitHub secrets to pass sensitive values like API tokens and credentials. hitspec supports all major CLI flags as environment variables with the `HITSPEC_` prefix.
+
+```yaml
+- uses: abdul-hamid-achik/hitspec@v1
+  env:
+    API_TOKEN: ${{ secrets.API_TOKEN }}
+    HITSPEC_ENV: staging
+    HITSPEC_TIMEOUT: 60s
+    HITSPEC_BAIL: "true"
+  with:
+    files: tests/
+    output: junit
+    output-file: test-results.xml
+```
+
+### Using an `.env` File
+
+If your tests rely on an environment file, generate it from secrets at runtime:
+
+```yaml
+- name: Create environment file
+  run: |
+    echo "API_TOKEN=${{ secrets.API_TOKEN }}" >> .env.ci
+    echo "DB_URL=${{ secrets.DB_URL }}" >> .env.ci
+
+- uses: abdul-hamid-achik/hitspec@v1
+  with:
+    files: tests/
+    env: staging
+    env-file: .env.ci
+```
+
+### Supported Environment Variables
+
+| Environment Variable | CLI Flag | Description |
+|---------------------|----------|-------------|
+| `HITSPEC_ENV` | `--env` | Environment to use |
+| `HITSPEC_ENV_FILE` | `--env-file` | Path to `.env` file |
+| `HITSPEC_CONFIG` | `--config` | Path to config file |
+| `HITSPEC_TIMEOUT` | `--timeout` | Request timeout |
+| `HITSPEC_TAGS` | `--tags` | Filter by tags |
+| `HITSPEC_OUTPUT` | `--output` | Output format |
+| `HITSPEC_OUTPUT_FILE` | `--output-file` | Output file path |
+| `HITSPEC_BAIL` | `--bail` | Stop on first failure |
+| `HITSPEC_PARALLEL` | `--parallel` | Run in parallel |
+| `HITSPEC_CONCURRENCY` | `--concurrency` | Concurrent requests |
+| `HITSPEC_QUIET` | `--quiet` | Suppress output |
+| `HITSPEC_NO_COLOR` | `--no-color` | Disable colors |
+| `HITSPEC_PROXY` | `--proxy` | Proxy URL |
+| `HITSPEC_INSECURE` | `--insecure` | Skip SSL verification |
+
+## Caching
+
+Cache the hitspec binary to speed up subsequent runs:
+
+```yaml
+- name: Cache hitspec binary
+  uses: actions/cache@v4
+  with:
+    path: /usr/local/bin/hitspec
+    key: hitspec-${{ runner.os }}-${{ hashFiles('.hitspec-version') }}
+
+- name: Install hitspec
+  run: |
+    if ! command -v hitspec &> /dev/null; then
+      curl -fsSL https://github.com/abdul-hamid-achik/hitspec/releases/latest/download/hitspec_linux_amd64.tar.gz | tar xz
+      sudo mv hitspec /usr/local/bin/
+    fi
+```
+
+If you install hitspec via Go, you can cache the Go module cache instead:
+
+```yaml
+- uses: actions/setup-go@v5
+  with:
+    go-version: "1.22"
+    cache: true
+
+- name: Install hitspec
+  run: go install github.com/abdul-hamid-achik/hitspec/apps/cli@latest
+```
+
+## Matrix Testing
+
+Run the same tests across multiple environments or configurations using a GitHub Actions matrix:
+
+```yaml .github/workflows/api-tests.yml
+name: API Tests (Matrix)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [dev, staging, production]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: abdul-hamid-achik/hitspec@v1
+        with:
+          files: tests/
+          env: ${{ matrix.environment }}
+          output: junit
+          output-file: test-results-${{ matrix.environment }}.xml
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.environment }}
+          path: test-results-${{ matrix.environment }}.xml
+```
+
+### Matrix with Tags
+
+You can also use a matrix to run different test suites:
+
+```yaml
+strategy:
+  fail-fast: false
+  matrix:
+    include:
+      - suite: smoke
+        tags: smoke
+        timeout: 30s
+      - suite: integration
+        tags: integration
+        timeout: 120s
+      - suite: contract
+        tags: contract
+        timeout: 60s
+
+steps:
+  - uses: actions/checkout@v4
+
+  - uses: abdul-hamid-achik/hitspec@v1
+    env:
+      HITSPEC_TIMEOUT: ${{ matrix.timeout }}
+    with:
+      files: tests/
+      tags: ${{ matrix.tags }}
+      output: junit
+      output-file: test-results-${{ matrix.suite }}.xml
+```
+
+## Stress Testing in CI
+
+Run load tests in your pipeline to catch performance regressions:
+
+```yaml
+- uses: abdul-hamid-achik/hitspec@v1
+  with:
+    files: api.http
+    stress: true
+    duration: 2m
+    rate: 100
+    threshold: "p95<200ms,errors<0.5%"
+```
+
+The `threshold` input defines pass/fail criteria. If any threshold is exceeded, the step fails with exit code `1`.
+
+## Reporting with JUnit
+
+Most CI reporting tools understand JUnit XML. To publish results in GitHub pull requests, combine hitspec with a JUnit reporter action:
+
+```yaml
+- uses: abdul-hamid-achik/hitspec@v1
+  with:
+    files: tests/
+    output: junit
+    output-file: test-results.xml
+
+- name: Publish Test Results
+  uses: dorny/test-reporter@v1
+  if: always()
+  with:
+    name: API Test Results
+    path: test-results.xml
+    reporter: java-junit
+```
+
+This adds a test summary directly to the pull request checks tab.
+
+## Full Example Workflow
+
+A complete workflow that runs smoke tests on every PR, full tests on `main`, and uploads results:
+
+```yaml .github/workflows/api-tests.yml
+name: API Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: abdul-hamid-achik/hitspec@v1
+        with:
+          files: tests/
+          tags: smoke
+          output: junit
+          output-file: smoke-results.xml
+          bail: true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-results
+          path: smoke-results.xml
+
+  full:
+    runs-on: ubuntu-latest
+    needs: smoke
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create environment file
+        run: |
+          echo "API_TOKEN=${{ secrets.API_TOKEN }}" >> .env.ci
+
+      - uses: abdul-hamid-achik/hitspec@v1
+        with:
+          files: tests/
+          env: staging
+          env-file: .env.ci
+          parallel: true
+          output: junit
+          output-file: full-results.xml
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: full-results
+          path: full-results.xml
+```

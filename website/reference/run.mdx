@@ -1,0 +1,310 @@
+---
+title: "hitspec run"
+description: "Run HTTP API tests from .http and .hitspec files"
+---
+
+# hitspec run
+
+Run HTTP API tests defined in `.http` or `.hitspec` files.
+
+```bash
+hitspec run <file|directory> [flags]
+```
+
+## Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `<file>` | Single `.http` or `.hitspec` file to run |
+| `<directory>` | Directory containing test files (searched recursively) |
+
+You can pass multiple files and directories as arguments.
+
+## Flags
+
+### Core Flags
+
+| Flag | Short | Description | Default | Env Var |
+|------|-------|-------------|---------|---------|
+| `--env` | `-e` | Environment name to use | `dev` | `HITSPEC_ENV` |
+| `--env-file` | | Path to `.env` file for variable interpolation | | `HITSPEC_ENV_FILE` |
+| `--config` | | Path to config file (`hitspec.yaml`) | | `HITSPEC_CONFIG` |
+| `--name` | `-n` | Run only tests matching name pattern | | |
+| `--tags` | `-t` | Run only tests with specified tags (comma-separated) | | `HITSPEC_TAGS` |
+
+### Output Flags
+
+| Flag | Short | Description | Default | Env Var |
+|------|-------|-------------|---------|---------|
+| `--verbose` | `-v` | Verbose output (use `-vv` or `-vvv` for more detail) | `false` | |
+| `--quiet` | `-q` | Suppress all output except errors | `false` | `HITSPEC_QUIET` |
+| `--no-color` | | Disable colored output | `false` | `HITSPEC_NO_COLOR` |
+| `--output` | `-o` | Output format: `console`, `json`, `junit`, `tap`, `html` | `console` | `HITSPEC_OUTPUT` |
+| `--output-file` | | Write output to a file instead of stdout | | `HITSPEC_OUTPUT_FILE` |
+
+### Execution Flags
+
+| Flag | Short | Description | Default | Env Var |
+|------|-------|-------------|---------|---------|
+| `--bail` | | Stop on first failure | `false` | `HITSPEC_BAIL` |
+| `--timeout` | | Request timeout (e.g., `30s`, `1m`, `500ms`) | `30s` | `HITSPEC_TIMEOUT` |
+| `--dry-run` | | Parse and show what would run without executing | `false` | |
+| `--parallel` | `-p` | Run independent requests in parallel | `false` | `HITSPEC_PARALLEL` |
+| `--concurrency` | | Max concurrent requests when running in parallel | `5` | `HITSPEC_CONCURRENCY` |
+| `--watch` | `-w` | Watch files for changes and re-run tests | `false` | |
+
+### Network Flags
+
+| Flag | Short | Description | Default | Env Var |
+|------|-------|-------------|---------|---------|
+| `--proxy` | | Proxy URL for HTTP requests | | `HITSPEC_PROXY` |
+| `--insecure` | `-k` | Disable SSL certificate validation | `false` | `HITSPEC_INSECURE` |
+
+### Snapshot Flags
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--update-snapshots` | Update snapshot files instead of comparing against them | `false` |
+
+### Coverage Flags
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--coverage` | Enable API coverage tracking | `false` |
+| `--openapi` | Path to OpenAPI spec for coverage analysis | |
+| `--coverage-output` | Coverage output file (supports `.html`, `.json`) | |
+
+### Security Flags
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--allow-shell` | Allow shell command execution (`>>>shell` blocks and hooks) | `false` |
+| `--allow-db` | Allow database assertions (`>>>db` blocks) | `false` |
+
+<Warning>
+Shell and database blocks are disabled by default for security. You must explicitly opt in with `--allow-shell` or `--allow-db` when your test files use these features.
+</Warning>
+
+### Stress Testing Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--stress` | | Enable stress testing mode | `false` |
+| `--duration` | `-d` | Stress test duration (e.g., `30s`, `5m`, `1h`) | `30s` |
+| `--rate` | `-r` | Target requests per second | `10` |
+| `--vus` | | Number of virtual users (alternative to `--rate`) | `0` |
+| `--max-vus` | | Maximum concurrent requests | `100` |
+| `--think-time` | | Think time between requests per virtual user | `0s` |
+| `--ramp-up` | | Ramp-up time to reach target rate/VUs | `0s` |
+| `--threshold` | | Pass/fail thresholds (e.g., `"p95<200ms,errors<0.1%"`) | |
+| `--profile` | | Load a stress profile from config file | |
+| `--no-progress` | | Disable real-time progress display | `false` |
+| `--stress-json` | | Output stress results as JSON | `false` |
+
+### Metrics Flags
+
+| Flag | Description | Default | Env Var |
+|------|-------------|---------|---------|
+| `--metrics` | Export format: `prometheus`, `datadog`, `json` | | `HITSPEC_METRICS` |
+| `--metrics-port` | Port for Prometheus metrics HTTP endpoint | `9090` | `HITSPEC_METRICS_PORT` |
+| `--metrics-file` | Output file for JSON metrics | | `HITSPEC_METRICS_FILE` |
+| `--datadog-api-key` | DataDog API key | | `DD_API_KEY` |
+| `--datadog-site` | DataDog site | `datadoghq.com` | `DD_SITE` |
+| `--datadog-tags` | Comma-separated DataDog tags | | `DD_TAGS` |
+
+### Notification Flags
+
+| Flag | Description | Default | Env Var |
+|------|-------------|---------|---------|
+| `--notify` | Notification service: `slack`, `teams` | | `HITSPEC_NOTIFY` |
+| `--notify-on` | When to notify: `always`, `failure`, `success`, `recovery` | `failure` | `HITSPEC_NOTIFY_ON` |
+| `--slack-webhook` | Slack webhook URL | | `SLACK_WEBHOOK` |
+| `--slack-channel` | Slack channel override | | `SLACK_CHANNEL` |
+| `--teams-webhook` | Microsoft Teams webhook URL | | `TEAMS_WEBHOOK` |
+
+## Examples
+
+### Basic Usage
+
+<CodeGroup>
+```bash Run a single file
+hitspec run tests/api.http
+```
+
+```bash Run a directory
+hitspec run tests/
+```
+
+```bash Run with a specific environment
+hitspec run tests/ --env staging
+```
+
+```bash Run specific tests by name
+hitspec run tests/ --name "Login"
+```
+
+```bash Run tests by tag
+hitspec run tests/ --tags smoke
+```
+</CodeGroup>
+
+### Filtering
+
+```bash
+# Run only smoke-tagged tests
+hitspec run tests/ --tags smoke
+
+# Multiple tags (OR logic)
+hitspec run tests/ --tags smoke,critical
+
+# Filter by name pattern (glob matching)
+hitspec run tests/ --name "User*"
+hitspec run tests/ --name "*Profile"
+
+# Combine filters
+hitspec run tests/ --tags smoke --name "*Auth*"
+```
+
+### Parallel Execution
+
+```bash
+# Run independent requests in parallel
+hitspec run tests/ --parallel
+
+# Set concurrency limit
+hitspec run tests/ --parallel --concurrency 10
+```
+
+<Note>
+Requests with dependencies (`@depends`) always run sequentially. Only independent requests run in parallel. Captured variables are not shared between parallel requests.
+</Note>
+
+### Watch Mode
+
+```bash
+# Watch files and re-run on changes
+hitspec run tests/ --watch
+
+# Combine with tags for focused development
+hitspec run tests/ --watch --tags dev
+```
+
+### Output Formats
+
+<CodeGroup>
+```bash Console (default)
+hitspec run tests/
+```
+
+```bash JSON
+hitspec run tests/ --output json
+```
+
+```bash JUnit XML (for CI/CD)
+hitspec run tests/ --output junit --output-file results.xml
+```
+
+```bash TAP
+hitspec run tests/ --output tap
+```
+
+```bash HTML
+hitspec run tests/ --output html --output-file report.html
+```
+</CodeGroup>
+
+### Stress Testing
+
+<CodeGroup>
+```bash Rate-based stress test
+hitspec run api.http --stress --duration 1m --rate 100
+```
+
+```bash Virtual user mode
+hitspec run api.http --stress --vus 50 --think-time 1s
+```
+
+```bash With pass/fail thresholds
+hitspec run api.http --stress -d 1m -r 100 --threshold "p95<200ms,errors<0.1%"
+```
+
+```bash Load profile from config
+hitspec run api.http --stress --profile load --env staging
+```
+</CodeGroup>
+
+### CI/CD Integration
+
+```bash
+# GitHub Actions example
+hitspec run tests/ \
+  --env staging \
+  --output junit \
+  --output-file test-results.xml \
+  --bail
+```
+
+```bash
+# With notifications on failure
+hitspec run tests/ \
+  --env staging \
+  --notify slack \
+  --slack-webhook "$SLACK_WEBHOOK" \
+  --notify-on failure
+```
+
+### Snapshot Testing
+
+```bash
+# First run creates snapshots in __snapshots__/
+hitspec run tests/
+
+# Update snapshots when expected changes occur
+hitspec run tests/ --update-snapshots
+```
+
+### API Coverage
+
+```bash
+# Generate coverage report against an OpenAPI spec
+hitspec run tests/ --coverage --openapi api-spec.yaml
+
+# HTML coverage report
+hitspec run tests/ --coverage --openapi api-spec.yaml --coverage-output coverage.html
+```
+
+### Security Flags
+
+```bash
+# Allow shell blocks and database assertions
+hitspec run tests/ --allow-shell --allow-db
+
+# Only allow shell execution
+hitspec run tests/ --allow-shell
+```
+
+## Exit Codes
+
+| Code | Constant | Description |
+|------|----------|-------------|
+| `0` | `ExitSuccess` | All tests passed |
+| `1` | `ExitTestFailure` | One or more tests failed |
+| `2` | `ExitParseError` | File parsing error (invalid syntax) |
+| `3` | `ExitConfigError` | Configuration error |
+| `4` | `ExitNetworkError` | Network or connection error |
+| `64` | `ExitUsageError` | Invalid CLI usage |
+
+## Environment Variables
+
+All flags that support environment variables are listed in the flag tables above. Environment variables are read at startup and can be overridden by explicit flags.
+
+Common variables:
+
+```bash
+export HITSPEC_ENV=staging
+export HITSPEC_TIMEOUT=60s
+export HITSPEC_OUTPUT=json
+export HITSPEC_BAIL=true
+export HITSPEC_PARALLEL=true
+export HITSPEC_CONCURRENCY=10
+```

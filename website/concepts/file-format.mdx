@@ -1,0 +1,367 @@
+---
+title: "File Format"
+description: "Anatomy of .http files -- requests, headers, bodies, assertions, captures, and more."
+---
+
+hitspec tests live in plain text files with `.http` or `.hitspec` extensions. Each file contains one or more HTTP requests along with optional variables, assertions, and captures.
+
+## Minimal Example
+
+The smallest valid test is a request with one assertion:
+
+```http
+GET https://api.example.com/health
+
+>>>
+expect status 200
+<<<
+```
+
+## File Structure
+
+A typical `.http` file follows this structure:
+
+```http
+@baseUrl = https://api.example.com
+@token = my-secret-token
+
+### Get all users
+# @name getUsers
+# @tags smoke, users
+
+GET {{baseUrl}}/users
+Authorization: Bearer {{token}}
+
+>>>
+expect status 200
+expect body type array
+<<<
+
+>>>capture
+total from header X-Total-Count
+<<<
+
+### Get single user
+# @name getUser
+# @depends getUsers
+
+GET {{baseUrl}}/users/1
+
+>>>
+expect status 200
+expect body.id == 1
+<<<
+```
+
+## Request Separator
+
+Use `###` to separate multiple requests within a single file. Everything before the first `###` (or before the first request line if no separator is used) is treated as the file-level scope for variable definitions.
+
+```http
+### First request
+GET https://api.example.com/posts
+
+>>>
+expect status 200
+<<<
+
+### Second request
+GET https://api.example.com/users
+
+>>>
+expect status 200
+<<<
+```
+
+<Note>
+The `###` separator is required when a file contains more than one request. Text after `###` on the same line is treated as a human-readable title and is ignored by the parser.
+</Note>
+
+## Variables
+
+Define variables at the top of a file using the `@variable = value` syntax:
+
+```http
+@baseUrl = https://api.example.com
+@apiVersion = v1
+@timeout = 5000
+```
+
+Reference them anywhere in the file with double curly braces:
+
+```http
+GET {{baseUrl}}/{{apiVersion}}/users
+```
+
+See [Variables](/concepts/variables) for the full variable system including built-in functions and captures.
+
+## Request Line
+
+Every request starts with an HTTP method followed by a URL:
+
+```http
+GET {{baseUrl}}/users
+POST {{baseUrl}}/users
+PUT {{baseUrl}}/users/1
+PATCH {{baseUrl}}/users/1
+DELETE {{baseUrl}}/users/1
+HEAD {{baseUrl}}/health
+OPTIONS {{baseUrl}}/users
+```
+
+## Headers
+
+Headers follow the request line, one per line, using standard `Name: Value` format:
+
+```http
+POST {{baseUrl}}/users
+Content-Type: application/json
+Authorization: Bearer {{token}}
+Accept: application/json
+X-Request-Id: {{$uuid()}}
+```
+
+<Warning>
+A blank line separates headers from the request body. Any lines after the blank line (until the next block marker or separator) are treated as the body.
+</Warning>
+
+## Request Body
+
+### JSON
+
+```http
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{
+  "name": "Jane Doe",
+  "email": "jane@example.com",
+  "role": "admin"
+}
+```
+
+### Form URL-Encoded
+
+Use the `&` prefix syntax for readable form data:
+
+```http
+POST {{baseUrl}}/login
+Content-Type: application/x-www-form-urlencoded
+
+& username = john
+& password = secret123
+& remember = true
+```
+
+### Multipart Form Data
+
+Use the `>>>multipart` block for file uploads and mixed form data:
+
+```http
+POST {{baseUrl}}/upload
+
+>>>multipart
+field name = John Doe
+field email = john@example.com
+file @./photo.jpg
+file @./report.pdf
+<<<
+```
+
+### GraphQL
+
+Use `>>>graphql` and `>>>variables` blocks:
+
+```http
+POST {{baseUrl}}/graphql
+Content-Type: application/json
+
+>>>graphql
+query GetUsers($limit: Int) {
+  users(limit: $limit) {
+    id
+    name
+    email
+  }
+}
+<<<
+
+>>>variables
+{
+  "limit": 10
+}
+<<<
+```
+
+### XML
+
+```http
+POST {{baseUrl}}/soap
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<request>
+  <action>getUser</action>
+  <id>123</id>
+</request>
+```
+
+## Query Parameters
+
+Inline with the URL:
+
+```http
+GET {{baseUrl}}/search?query=test&limit=10
+```
+
+Or use the explicit `?` prefix syntax for readability:
+
+```http
+GET {{baseUrl}}/search
+? query = test
+? limit = 10
+? sort = created_at
+? order = desc
+```
+
+## Assertion Blocks
+
+Wrap assertions in `>>>` and `<<<` markers:
+
+```http
+GET {{baseUrl}}/users
+
+>>>
+expect status 200
+expect body type array
+expect body[0].id exists
+expect duration < 1000
+<<<
+```
+
+See [Assertions](/concepts/assertions) for all 24 operators.
+
+## Capture Blocks
+
+Capture response values for use in later requests:
+
+```http
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{"email": "test@example.com", "password": "secret"}
+
+>>>capture
+token from body.access_token
+userId from body.user.id
+<<<
+```
+
+See [Captures](/concepts/captures) for the full capture system.
+
+## Metadata Directives
+
+Metadata directives are comments that start with `# @` and control request behavior:
+
+```http
+### Create user
+# @name createUser
+# @description Creates a new user account
+# @tags smoke, users, write
+# @timeout 10000
+# @retry 3
+# @retryDelay 1000
+# @depends login
+# @auth bearer {{login.token}}
+
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{"name": "Test User"}
+```
+
+### All Directives
+
+| Directive | Description | Example |
+|-----------|-------------|---------|
+| `@name` | Request identifier for captures and dependencies | `# @name createUser` |
+| `@description` | Human-readable description | `# @description Creates a user` |
+| `@tags` | Comma-separated tags for filtering | `# @tags smoke, auth` |
+| `@skip` | Skip this request | `# @skip Temporarily disabled` |
+| `@only` | Run only this request | `# @only` |
+| `@timeout` | Request timeout in milliseconds | `# @timeout 5000` |
+| `@retry` | Number of retry attempts | `# @retry 3` |
+| `@retryDelay` | Delay between retries in milliseconds | `# @retryDelay 1000` |
+| `@retryOn` | Status codes that trigger a retry | `# @retryOn 500, 502, 503` |
+| `@depends` | Request dependencies (comma-separated names) | `# @depends login, setup` |
+| `@auth` | Authentication method | `# @auth bearer {{token}}` |
+| `@before` | Shell script to run before the request | `# @before ./setup.sh` |
+| `@after` | Shell script to run after the request (always runs) | `# @after ./cleanup.sh` |
+| `@db` | Database connection for DB assertions | `# @db sqlite://./test.db` |
+| `@waitFor` | Poll URL until ready before executing | `# @waitFor {{baseUrl}}/health 200 30000 1000` |
+
+## Comments
+
+Lines starting with `#` that do not have an `@` directive are treated as regular comments and ignored:
+
+```http
+# This is a comment
+# Another comment
+
+### Get users
+# @name getUsers
+
+# The following request fetches all active users
+GET {{baseUrl}}/users?active=true
+```
+
+## Authentication
+
+Use `@auth` to attach credentials to a request. hitspec supports 8 authentication methods:
+
+<CodeGroup>
+```http Bearer Token
+# @auth bearer {{token}}
+
+GET {{baseUrl}}/me
+```
+
+```http Basic Auth
+# @auth basic {{username}}, {{password}}
+
+GET {{baseUrl}}/admin
+```
+
+```http API Key (Header)
+# @auth apiKey X-API-Key, {{apiKey}}
+
+GET {{baseUrl}}/data
+```
+
+```http API Key (Query)
+# @auth apiKeyQuery api_key, {{apiKey}}
+
+GET {{baseUrl}}/data
+```
+
+```http Digest Auth
+# @auth digest {{username}}, {{password}}
+
+GET {{baseUrl}}/secure
+```
+
+```http AWS Signature v4
+# @auth aws {{accessKey}}, {{secretKey}}, {{region}}, {{service}}
+
+GET {{baseUrl}}/s3/object
+```
+</CodeGroup>
+
+## File Extensions
+
+hitspec recognizes two file extensions:
+
+- `.http` -- the standard extension, compatible with REST Client and other HTTP file tools
+- `.hitspec` -- an alternative extension for files that use hitspec-specific features
+
+Both are functionally identical.

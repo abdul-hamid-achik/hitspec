@@ -23,6 +23,10 @@ func (r *Runner) executeShellCommands(commands []*parser.ShellCommand, baseDir s
 		return nil, nil
 	}
 
+	if !r.config.AllowShell {
+		return nil, fmt.Errorf("shell commands require --allow-shell flag")
+	}
+
 	var results []*ShellResult
 
 	for _, cmd := range commands {

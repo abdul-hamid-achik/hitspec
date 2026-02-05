@@ -1,0 +1,253 @@
+---
+title: "Output Formats"
+description: "hitspec supports five output formats: console, JSON, JUnit XML, TAP, and HTML. Choose the right format for your workflow."
+---
+
+hitspec supports five output formats, each designed for a different use case. Set the format with the `--output` (or `-o`) flag:
+
+```bash
+hitspec run tests/ --output <format>
+```
+
+To write the output to a file instead of stdout:
+
+```bash
+hitspec run tests/ --output json --output-file results.json
+```
+
+## Console (default)
+
+Human-readable output with colors, designed for local development. This is the default when no `--output` flag is specified.
+
+```bash
+hitspec run tests/
+```
+
+```
+Running: tests/api.http
+
+  ✓ healthCheck (45ms)
+  ✓ login (120ms)
+  ✗ getProfile (89ms)
+    → status ==
+      Expected: 200
+      Actual:   401
+      expected 200, got 401
+
+Tests: 2 passed, 1 failed, 3 total
+Time:  254ms
+```
+
+**When to use:** Local development, debugging, interactive use. The colored output makes it easy to spot failures at a glance.
+
+**Flags that affect console output:**
+
+| Flag | Effect |
+|------|--------|
+| `--verbose` / `-v` | Show request/response details (use `-vv` or `-vvv` for more) |
+| `--quiet` / `-q` | Suppress all output except errors |
+| `--no-color` | Disable colored output (also set via `HITSPEC_NO_COLOR=true`) |
+
+## JSON
+
+Machine-readable JSON output for scripting, custom dashboards, and programmatic analysis.
+
+```bash
+hitspec run tests/ --output json
+```
+
+```json
+{
+  "file": "tests/api.http",
+  "passed": 2,
+  "failed": 1,
+  "skipped": 0,
+  "duration": 254,
+  "results": [
+    {
+      "name": "healthCheck",
+      "passed": true,
+      "duration": 45
+    },
+    {
+      "name": "login",
+      "passed": true,
+      "duration": 120
+    },
+    {
+      "name": "getProfile",
+      "passed": false,
+      "duration": 89,
+      "errors": [
+        {
+          "assertion": "status ==",
+          "expected": "200",
+          "actual": "401",
+          "message": "expected 200, got 401"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**When to use:** Scripting and automation. Pipe the output to `jq` for filtering, feed it into monitoring dashboards, or use `hitspec diff` to compare two JSON result files for regression detection.
+
+**Examples:**
+
+<CodeGroup>
+
+```bash Filter failures with jq
+hitspec run tests/ -o json | jq '.results[] | select(.passed == false)'
+```
+
+```bash Save and compare results
+hitspec run tests/ -o json --output-file baseline.json
+# ... make changes ...
+hitspec run tests/ -o json --output-file current.json
+hitspec diff baseline.json current.json
+```
+
+```bash Extract timing data
+hitspec run tests/ -o json | jq '[.results[] | {name, duration}]'
+```
+
+</CodeGroup>
+
+## JUnit XML
+
+Standard JUnit XML format understood by virtually all CI/CD systems. This is the recommended format for CI pipelines.
+
+```bash
+hitspec run tests/ --output junit --output-file test-results.xml
+```
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="3" failures="1" errors="0" time="0.254">
+  <testsuite name="tests/api.http" tests="3" failures="1" errors="0" time="0.254">
+    <testcase name="healthCheck" time="0.045" />
+    <testcase name="login" time="0.120" />
+    <testcase name="getProfile" time="0.089">
+      <failure message="expected 200, got 401">
+        Assertion: status ==
+        Expected: 200
+        Actual:   401
+      </failure>
+    </testcase>
+  </testsuite>
+</testsuites>
+```
+
+**When to use:** CI/CD pipelines. JUnit XML is the de facto standard for test reporting in GitHub Actions, GitLab CI, Jenkins, CircleCI, Azure DevOps, and other CI systems. Use `--output-file` to write to a file that your CI system can pick up as a test artifact.
+
+**CI integration example:**
+
+```yaml
+# GitHub Actions
+- name: Run API tests
+  run: hitspec run tests/ --output junit --output-file test-results.xml
+
+- name: Publish results
+  uses: dorny/test-reporter@v1
+  if: always()
+  with:
+    name: API Tests
+    path: test-results.xml
+    reporter: java-junit
+```
+
+## TAP (Test Anything Protocol)
+
+TAP is a text-based protocol for reporting test results. It works well with Unix tools and TAP consumers.
+
+```bash
+hitspec run tests/ --output tap
+```
+
+```
+TAP version 13
+1..3
+ok 1 - healthCheck
+ok 2 - login
+not ok 3 - getProfile
+  ---
+  message: expected 200, got 401
+  ---
+```
+
+**When to use:** Unix pipelines and environments that already consume TAP output. TAP is a simple line-based format that works naturally with `grep`, `awk`, and other text-processing tools. It is also understood by TAP reporters in Node.js, Perl, and other ecosystems.
+
+**Examples:**
+
+<CodeGroup>
+
+```bash Count failures
+hitspec run tests/ -o tap | grep -c "^not ok"
+```
+
+```bash Show only failures
+hitspec run tests/ -o tap | grep "^not ok"
+```
+
+```bash Pipe to a TAP reporter
+hitspec run tests/ -o tap | npx tap-spec
+```
+
+</CodeGroup>
+
+## HTML
+
+Generate a self-contained HTML report for sharing test results with stakeholders who may not have terminal access.
+
+```bash
+hitspec run tests/ --output html --output-file report.html
+```
+
+The HTML report includes:
+
+- Summary of passed, failed, and skipped tests
+- Duration for each request
+- Detailed assertion failure messages
+- Filterable and sortable results table
+
+**When to use:** Sharing results with non-technical stakeholders, archiving test runs as artifacts, or generating reports for review meetings. Combine with `actions/upload-artifact` in CI to attach the report to each build.
+
+```yaml
+# GitHub Actions
+- name: Run API tests
+  run: hitspec run tests/ --output html --output-file report.html
+
+- uses: actions/upload-artifact@v4
+  if: always()
+  with:
+    name: api-test-report
+    path: report.html
+```
+
+## Format Comparison
+
+| Format | Best For | Machine Readable | Human Readable | CI Support |
+|--------|----------|:---:|:---:|:---:|
+| `console` | Local development | No | Yes | -- |
+| `json` | Scripting, dashboards | Yes | No | -- |
+| `junit` | CI/CD pipelines | Yes | No | All major CI systems |
+| `tap` | Unix pipelines | Yes | Partially | TAP consumers |
+| `html` | Reports, sharing | No | Yes | Upload as artifact |
+
+## Setting a Default Format
+
+Use the `HITSPEC_OUTPUT` environment variable to avoid passing `--output` on every invocation:
+
+```bash
+export HITSPEC_OUTPUT=json
+hitspec run tests/  # outputs JSON without --output flag
+```
+
+Similarly, `HITSPEC_OUTPUT_FILE` sets a default output file path:
+
+```bash
+export HITSPEC_OUTPUT=junit
+export HITSPEC_OUTPUT_FILE=test-results.xml
+hitspec run tests/  # writes JUnit XML to test-results.xml
+```

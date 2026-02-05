@@ -1,0 +1,246 @@
+---
+title: "Stress Testing"
+description: "Load test your APIs with configurable rate, virtual users, ramp-up periods, and pass/fail thresholds."
+---
+
+hitspec includes built-in stress testing. Add `--stress` to your run command and your functional tests become load tests -- no separate tool required.
+
+## Quick Start
+
+```bash
+# Send 100 requests per second for 1 minute
+hitspec run api.http --stress --duration 1m --rate 100
+```
+
+## Two Modes
+
+### Rate Mode
+
+Controls throughput by setting a target number of requests per second:
+
+```bash
+hitspec run api.http --stress --duration 1m --rate 50
+```
+
+### Virtual Users (VU) Mode
+
+Simulates concurrent users, each making sequential requests with optional think time between them:
+
+```bash
+hitspec run api.http --stress --duration 2m --vus 50 --think-time 1s
+```
+
+## Ramp-Up
+
+Gradually increase load instead of starting at full capacity:
+
+```bash
+hitspec run api.http --stress --duration 5m --rate 200 --ramp-up 30s
+```
+
+This linearly increases the request rate from 0 to 200 over the first 30 seconds, then holds at 200 for the remaining duration.
+
+## Thresholds
+
+Set pass/fail criteria for CI/CD pipelines. If any threshold is exceeded, the command exits with a non-zero code:
+
+```bash
+hitspec run api.http --stress -d 1m -r 100 --threshold "p95<200ms,errors<0.1%"
+```
+
+Available threshold metrics:
+
+| Metric | Example | Description |
+|--------|---------|-------------|
+| `p50` | `p50<100ms` | Median response time |
+| `p95` | `p95<200ms` | 95th percentile response time |
+| `p99` | `p99<500ms` | 99th percentile response time |
+| `errors` | `errors<0.1%` | Error rate percentage |
+
+You can also assert on percentile latencies in your expect blocks:
+
+```http
+>>>
+expect p95 < 200
+expect p99 < 500
+<<<
+```
+
+## Stress Testing Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--stress` | | Enable stress testing mode | `false` |
+| `--duration` | `-d` | Test duration (e.g., `30s`, `2m`, `1h`) | `30s` |
+| `--rate` | `-r` | Target requests per second | `10` |
+| `--vus` | | Number of virtual users | |
+| `--max-vus` | | Maximum concurrent requests | `100` |
+| `--think-time` | | Delay between requests per VU | |
+| `--ramp-up` | | Time to reach target rate/VUs | |
+| `--threshold` | | Pass/fail thresholds | |
+| `--profile` | | Load stress profile from config file | |
+| `--no-progress` | | Disable real-time progress display | `false` |
+| `--stress-json` | | Output stress results as JSON | `false` |
+
+## Per-Request Annotations
+
+Control how individual requests behave during stress tests:
+
+```http
+### Main API endpoint
+# @name apiCall
+# @stress.weight 10
+# @stress.think 500ms
+
+GET {{baseUrl}}/api/data
+
+>>>
+expect status 200
+<<<
+```
+
+### Available Annotations
+
+| Annotation | Description |
+|------------|-------------|
+| `@stress.weight <n>` | Relative weight for request selection. Higher weight means more frequent execution. |
+| `@stress.think <duration>` | Per-request think time override (e.g., `500ms`, `2s`). |
+| `@stress.skip` | Exclude this request from stress testing. |
+| `@stress.setup` | Run this request once before the stress test starts. |
+| `@stress.teardown` | Run this request once after the stress test ends. |
+
+### Setup and Teardown
+
+Use `@stress.setup` and `@stress.teardown` for one-time operations:
+
+```http
+### Initialize test data (runs once before stress test)
+# @name setup
+# @stress.setup
+
+POST {{baseUrl}}/api/init
+Content-Type: application/json
+
+{"seed": true}
+
+>>>
+expect status 200
+<<<
+
+>>>capture
+testToken from body.token
+<<<
+
+### Main request (repeated during stress test)
+# @name mainRequest
+# @stress.weight 10
+
+GET {{baseUrl}}/api/data
+Authorization: Bearer {{setup.testToken}}
+
+>>>
+expect status 200
+<<<
+
+### Clean up (runs once after stress test)
+# @name teardown
+# @stress.teardown
+
+POST {{baseUrl}}/api/cleanup
+
+>>>
+expect status 200
+<<<
+```
+
+## Stress Profiles
+
+Define reusable stress configurations in `hitspec.yaml`:
+
+```yaml
+stress:
+  profiles:
+    smoke:
+      duration: 30s
+      rate: 10
+      maxVUs: 5
+    load:
+      duration: 5m
+      rate: 100
+      maxVUs: 50
+      rampUp: 30s
+    spike:
+      duration: 10m
+      vus: 200
+      thinkTime: 1s
+      thresholds:
+        p95: 500ms
+        errors: 1%
+    conservative:
+      duration: 60s
+      rate: 1.5
+      maxVUs: 2
+```
+
+Run a profile:
+
+```bash
+hitspec run api.http --stress --profile load --env staging
+```
+
+## Testing Directories and Multiple Files
+
+Stress testing works with directories and multiple files:
+
+```bash
+# All files in a directory
+hitspec run tests/ --stress --duration 1m --rate 100
+
+# Multiple specific files
+hitspec run api.http users.http --stress -d 1m -r 100
+```
+
+## Understanding Rate Limits
+
+Your server may have its own rate limits. High failure rates often indicate you are exceeding them.
+
+| Server Limit | Equivalent | Safe `--rate` value |
+|--------------|------------|---------------------|
+| 100 req/min | ~1.67 req/s | `--rate 1.5` |
+| 600 req/min | 10 req/s | `--rate 8` |
+| 1000 req/min | ~16.7 req/s | `--rate 15` |
+
+<Tip>
+  Start with a low rate and increase gradually. If you see high failure rates (above 10%), reduce `--rate` and `--max-vus`. Exactly N successes in 60 seconds often reveals a server-side rate limit of N req/min.
+</Tip>
+
+## CI/CD Integration
+
+Use stress testing in GitHub Actions with thresholds:
+
+```yaml
+- uses: abdul-hamid-achik/hitspec@v1
+  with:
+    files: api.http
+    stress: true
+    duration: 2m
+    rate: 100
+    threshold: 'p95<200ms,errors<0.5%'
+```
+
+## Metrics Export
+
+Export stress test metrics to monitoring systems:
+
+```bash
+# Prometheus endpoint
+hitspec run api.http --stress --metrics prometheus --metrics-port 9090
+
+# JSON file
+hitspec run api.http --stress --metrics json --metrics-file metrics.json
+
+# DataDog
+hitspec run api.http --stress --metrics datadog --datadog-api-key $DD_API_KEY
+```
+
+See the [CI/CD integration guide](/integrations/github-actions) for more details.

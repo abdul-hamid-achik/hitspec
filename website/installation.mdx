@@ -1,0 +1,82 @@
+---
+title: "Installation"
+description: "Install hitspec via Homebrew, Go, or binary download."
+---
+
+## Homebrew (macOS / Linux)
+
+The recommended way to install hitspec:
+
+```bash
+brew install abdul-hamid-achik/tap/hitspec
+```
+
+This installs the latest release and makes the `hitspec` command available in your shell.
+
+## Go Install
+
+If you have Go installed:
+
+```bash
+go install github.com/abdul-hamid-achik/hitspec/apps/cli@latest
+```
+
+<Note>
+  Requires Go 1.21 or later. The binary will be placed in your `$GOPATH/bin` directory -- make sure it's in your `PATH`.
+</Note>
+
+## Binary Download
+
+Download pre-built binaries for your platform from [GitHub Releases](https://github.com/abdul-hamid-achik/hitspec/releases).
+
+<Tabs>
+  <Tab title="macOS">
+    ```bash
+    # Apple Silicon
+    curl -Lo hitspec https://github.com/abdul-hamid-achik/hitspec/releases/latest/download/hitspec-darwin-arm64
+    chmod +x hitspec
+    sudo mv hitspec /usr/local/bin/
+
+    # Intel
+    curl -Lo hitspec https://github.com/abdul-hamid-achik/hitspec/releases/latest/download/hitspec-darwin-amd64
+    chmod +x hitspec
+    sudo mv hitspec /usr/local/bin/
+    ```
+  </Tab>
+  <Tab title="Linux">
+    ```bash
+    # x86_64
+    curl -Lo hitspec https://github.com/abdul-hamid-achik/hitspec/releases/latest/download/hitspec-linux-amd64
+    chmod +x hitspec
+    sudo mv hitspec /usr/local/bin/
+
+    # ARM64
+    curl -Lo hitspec https://github.com/abdul-hamid-achik/hitspec/releases/latest/download/hitspec-linux-arm64
+    chmod +x hitspec
+    sudo mv hitspec /usr/local/bin/
+    ```
+  </Tab>
+  <Tab title="Windows">
+    Download `hitspec-windows-amd64.exe` from [GitHub Releases](https://github.com/abdul-hamid-achik/hitspec/releases) and add it to your `PATH`.
+  </Tab>
+</Tabs>
+
+## Verify Installation
+
+```bash
+hitspec version
+```
+
+You should see the installed version number. If the command is not found, make sure the binary location is in your `PATH`.
+
+## Updating
+
+<CodeGroup>
+```bash Homebrew
+brew upgrade hitspec
+```
+
+```bash Go
+go install github.com/abdul-hamid-achik/hitspec/apps/cli@latest
+```
+</CodeGroup>

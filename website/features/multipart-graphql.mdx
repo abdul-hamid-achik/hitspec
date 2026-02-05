@@ -1,0 +1,229 @@
+---
+title: "Multipart and GraphQL"
+description: "Send multipart form data with file uploads and execute GraphQL queries using dedicated block syntax."
+---
+
+hitspec provides dedicated block syntax for multipart form data and GraphQL requests, so you do not need to manually construct complex request bodies.
+
+## Multipart Form Data
+
+Use the `>>>multipart` block to send multipart/form-data requests. This is the standard format for file uploads and mixed form submissions.
+
+```http
+### Upload a profile photo
+# @name uploadPhoto
+
+POST {{baseUrl}}/upload
+
+>>>multipart
+field name = John Doe
+field email = john@example.com
+file @./photo.jpg
+<<<
+
+>>>
+expect status 200
+expect body.uploaded == true
+<<<
+```
+
+The `Content-Type: multipart/form-data` header is set automatically. Do not set it manually.
+
+### Field Syntax
+
+Each line in a `>>>multipart` block is either a field or a file:
+
+| Type | Syntax | Description |
+|------|--------|-------------|
+| Text field | `field name = value` | Sends a form text field |
+| File upload | `file @./path/to/file` | Uploads a file from disk |
+
+### Multiple Fields and Files
+
+You can include any combination of fields and files:
+
+```http
+### Submit a report with attachments
+# @name submitReport
+
+POST {{baseUrl}}/reports
+
+>>>multipart
+field title = Monthly Report
+field department = Engineering
+field priority = high
+file @./report.pdf
+file @./data.csv
+<<<
+
+>>>
+expect status 201
+expect body.id exists
+<<<
+```
+
+### Variable Interpolation
+
+Variables are resolved in both field values and file paths:
+
+```http
+>>>multipart
+field name = {{userName}}
+field token = {{authToken}}
+file @{{uploadPath}}
+<<<
+```
+
+<Note>
+  File paths in `file @` directives are relative to the `.http` file location.
+</Note>
+
+## GraphQL
+
+Use the `>>>graphql` block to write GraphQL queries and mutations. Optionally add a `>>>variables` block for query variables.
+
+### Basic Query
+
+```http
+### Get all users
+# @name getUsers
+
+POST {{baseUrl}}/graphql
+Content-Type: application/json
+
+>>>graphql
+query {
+  users {
+    id
+    name
+    email
+  }
+}
+<<<
+
+>>>
+expect status 200
+expect body.data.users type array
+expect body.errors !exists
+<<<
+```
+
+### Query with Variables
+
+Use the `>>>variables` block to pass variables to your GraphQL query:
+
+```http
+### Get user by ID
+# @name getUser
+
+POST {{baseUrl}}/graphql
+Content-Type: application/json
+
+>>>graphql
+query GetUser($id: ID!) {
+  user(id: $id) {
+    id
+    name
+    email
+    posts {
+      title
+    }
+  }
+}
+
+>>>variables
+{
+  "id": "123"
+}
+<<<
+
+>>>
+expect status 200
+expect body.data.user.id == "123"
+expect body.data.user.name exists
+expect body.errors !exists
+<<<
+```
+
+### Mutations
+
+```http
+### Create a new user
+# @name createUser
+
+POST {{baseUrl}}/graphql
+Content-Type: application/json
+
+>>>graphql
+mutation CreateUser($input: CreateUserInput!) {
+  createUser(input: $input) {
+    id
+    name
+    email
+  }
+}
+
+>>>variables
+{
+  "input": {
+    "name": "Jane Doe",
+    "email": "jane@example.com"
+  }
+}
+<<<
+
+>>>
+expect status 200
+expect body.data.createUser.id exists
+expect body.errors !exists
+<<<
+
+>>>capture
+newUserId from body.data.createUser.id
+<<<
+```
+
+### Variables with Interpolation
+
+hitspec variables work inside the `>>>variables` block:
+
+```http
+>>>variables
+{
+  "id": "{{login.userId}}",
+  "limit": {{pageSize}}
+}
+<<<
+```
+
+<Tip>
+  hitspec automatically wraps your GraphQL query and variables into the standard JSON format (`{"query": "...", "variables": {...}}`) before sending the request. You only need to set `Content-Type: application/json`.
+</Tip>
+
+### Asserting GraphQL Responses
+
+GraphQL responses follow a standard structure. Use JSON path assertions to validate both data and errors:
+
+```http
+>>>
+# Verify the query succeeded
+expect status 200
+expect body.errors !exists
+
+# Validate response data
+expect body.data.users type array
+expect body.data.users length > 0
+expect body.data.users[0].id exists
+expect body.data.users[0].email matches /^.+@.+\..+$/
+<<<
+```
+
+To test for expected GraphQL errors:
+
+```http
+>>>
+expect status 200
+expect body.errors type array
+expect body.errors[0].message contains "not found"
+<<<
+```

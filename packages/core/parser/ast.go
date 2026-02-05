@@ -316,10 +316,16 @@ type ParseError struct {
 }
 
 func (e *ParseError) Error() string {
+	var msg string
 	if e.File != "" {
-		return e.File + ":" + itoa(e.Line) + ":" + itoa(e.Column) + ": " + e.Message
+		msg = e.File + ":" + itoa(e.Line) + ":" + itoa(e.Column) + ": " + e.Message
+	} else {
+		msg = "line " + itoa(e.Line) + ": " + e.Message
 	}
-	return "line " + itoa(e.Line) + ": " + e.Message
+	if e.Snippet != "" {
+		msg += "\n  " + e.Snippet
+	}
+	return msg
 }
 
 func itoa(i int) string {

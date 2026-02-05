@@ -1,0 +1,119 @@
+---
+title: "Introduction"
+description: "Plain text API tests. No magic. Write HTTP tests that look like actual HTTP requests."
+---
+
+hitspec is a file-based HTTP API testing tool that emphasizes simplicity and readability.
+Write your API tests in plain text files that look like actual HTTP requests.
+
+```http
+GET https://api.example.com/users
+
+>>>
+expect status 200
+expect body type array
+expect body[0].id exists
+<<<
+```
+
+No SDK. No GUI. No JavaScript. Just plain text `.http` files you can read, diff, and check into git.
+
+## Why hitspec?
+
+<CardGroup cols={2}>
+  <Card title="Plain Text" icon="file-lines">
+    Tests are readable `.http` files. No binary formats, no JSON blobs, no GUI-only workflows.
+  </Card>
+  <Card title="Version Control Friendly" icon="code-branch">
+    Every test is a text file. Diffs are meaningful. Code review works naturally.
+  </Card>
+  <Card title="Full Test Framework" icon="flask-vial">
+    20+ assertion operators, variable captures, request dependencies, retries, and more.
+  </Card>
+  <Card title="Built-in Load Testing" icon="gauge-high">
+    Stress test your APIs with `--stress`. No separate tool needed.
+  </Card>
+</CardGroup>
+
+## How hitspec Compares
+
+| Tool | hitspec Advantage |
+|------|-------------------|
+| **Postman** | Plain text files, version-controllable, no GUI needed |
+| **REST Client (VSCode)** | Adds assertions, captures, dependencies, stress testing |
+| **curl** | Full test framework on top of HTTP requests |
+| **k6** | Simpler syntax, no JavaScript required for basic tests |
+| **Hurl** | Built-in stress testing, DB assertions, mock server, import/export |
+| **newman** | Simpler file format, no collection export needed |
+
+## Feature Highlights
+
+<CardGroup cols={2}>
+  <Card title="Assertions" icon="check">
+    20 operators including `==`, `contains`, `matches`, `exists`, `type`, `schema`, `snapshot`, and more.
+  </Card>
+  <Card title="Captures and Dependencies" icon="link">
+    Chain requests by capturing response values and controlling execution order with `@depends`.
+  </Card>
+  <Card title="Environments" icon="server">
+    Define dev, staging, and prod configurations in a single `hitspec.yaml` file.
+  </Card>
+  <Card title="Multiple Output Formats" icon="table">
+    Console, JSON, JUnit XML, TAP, and HTML output for CI/CD integration.
+  </Card>
+  <Card title="Stress Testing" icon="bolt">
+    Load test with configurable rate, virtual users, ramp-up, and pass/fail thresholds.
+  </Card>
+  <Card title="Mock Server" icon="clone">
+    Start a mock server from your `.http` files for frontend development and testing.
+  </Card>
+  <Card title="Database Assertions" icon="database">
+    Verify database state after requests with `>>>db` blocks. Supports PostgreSQL, MySQL, and SQLite.
+  </Card>
+  <Card title="CI/CD Ready" icon="circle-check">
+    Official GitHub Action, JUnit output, environment variables, and exit codes that just work.
+  </Card>
+</CardGroup>
+
+## What's in a Test File?
+
+A hitspec test file is a plain text `.http` file containing one or more requests with optional assertions and captures:
+
+```http
+@baseUrl = https://jsonplaceholder.typicode.com
+
+### Create a post
+# @name createPost
+
+POST {{baseUrl}}/posts
+Content-Type: application/json
+
+{
+  "title": "Hello hitspec",
+  "body": "Testing made simple",
+  "userId": 1
+}
+
+>>>
+expect status 201
+expect body.id exists
+<<<
+
+>>>capture
+postId from body.id
+<<<
+
+### Verify the post was created
+# @depends createPost
+
+GET {{baseUrl}}/posts/{{createPost.postId}}
+
+>>>
+expect status 200
+expect body.title == "Hello hitspec"
+<<<
+```
+
+<Tip>
+  hitspec files use the `.http` or `.hitspec` extension. The `.http` format is compatible with REST Client and other HTTP file tools, so you get syntax highlighting for free.
+</Tip>

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -311,7 +312,7 @@ func TestHasAnyTag(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		result := hasAnyTag(tt.tags, tt.filters)
+		result := parser.HasAnyTag(tt.tags, tt.filters)
 		assert.Equal(t, tt.expected, result)
 	}
 }
@@ -341,7 +342,7 @@ echo "executed" > ` + markerFile + `
 		err := os.WriteFile(testFile, []byte(content), 0644)
 		require.NoError(t, err)
 
-		r := NewRunner(&Config{})
+		r := NewRunner(&Config{AllowShell: true})
 		result, err := r.RunFile(testFile)
 
 		require.NoError(t, err)
@@ -371,7 +372,7 @@ exit 1
 		err := os.WriteFile(testFile, []byte(content), 0644)
 		require.NoError(t, err)
 
-		r := NewRunner(&Config{})
+		r := NewRunner(&Config{AllowShell: true})
 		result, err := r.RunFile(testFile)
 
 		require.NoError(t, err)
@@ -397,7 +398,7 @@ expect status 200
 		err := os.WriteFile(testFile, []byte(content), 0644)
 		require.NoError(t, err)
 
-		r := NewRunner(&Config{})
+		r := NewRunner(&Config{AllowShell: true})
 		result, err := r.RunFile(testFile)
 
 		require.NoError(t, err)
@@ -425,7 +426,7 @@ echo "{{testValue}}" > ` + markerFile + `
 		err := os.WriteFile(testFile, []byte(content), 0644)
 		require.NoError(t, err)
 
-		r := NewRunner(&Config{})
+		r := NewRunner(&Config{AllowShell: true})
 		result, err := r.RunFile(testFile)
 
 		require.NoError(t, err)
@@ -529,7 +530,7 @@ expect status 200
 		err = os.WriteFile(testFile, []byte(content), 0644)
 		require.NoError(t, err)
 
-		r := NewRunner(&Config{})
+		r := NewRunner(&Config{AllowShell: true})
 		result, err := r.RunFile(testFile)
 
 		require.NoError(t, err)
@@ -563,7 +564,7 @@ expect status 200
 		err = os.WriteFile(testFile, []byte(content), 0644)
 		require.NoError(t, err)
 
-		r := NewRunner(&Config{})
+		r := NewRunner(&Config{AllowShell: true})
 		result, err := r.RunFile(testFile)
 
 		require.NoError(t, err)
@@ -602,7 +603,7 @@ expect status 200
 		err = os.WriteFile(testFile, []byte(content), 0644)
 		require.NoError(t, err)
 
-		r := NewRunner(&Config{})
+		r := NewRunner(&Config{AllowShell: true})
 		result, err := r.RunFile(testFile)
 
 		require.NoError(t, err)
@@ -641,7 +642,7 @@ expect status 200
 		err = os.WriteFile(testFile, []byte(content), 0644)
 		require.NoError(t, err)
 
-		r := NewRunner(&Config{})
+		r := NewRunner(&Config{AllowShell: true})
 		result, err := r.RunFile(testFile)
 
 		require.NoError(t, err)

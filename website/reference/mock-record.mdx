@@ -1,0 +1,159 @@
+---
+title: "hitspec mock & record"
+description: "Start a mock HTTP server or recording proxy from hitspec files"
+---
+
+# hitspec mock
+
+Start an HTTP mock server that responds based on requests and assertions defined in your hitspec files.
+
+```bash
+hitspec mock <file|directory> [flags]
+```
+
+## Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `<file>` | Single `.http` or `.hitspec` file to derive routes from |
+| `<directory>` | Directory containing test files (searched recursively) |
+
+## Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--port` | `-p` | Port to run the mock server on | `3000` |
+| `--delay` | `-d` | Artificial delay for all responses (e.g., `100ms`, `1s`) | `0` |
+| `--verbose` | `-v` | Enable verbose logging | `false` |
+
+## Behavior
+
+The mock server:
+
+- Parses your `.http` files to extract routes (method + URL path)
+- Generates mock responses from assertion blocks or explicit mock definitions
+- Supports path parameters (e.g., `/users/{{id}}`)
+- Adds configurable response delays to simulate network latency
+- Handles graceful shutdown on `Ctrl+C` (SIGINT/SIGTERM)
+
+## Examples
+
+<CodeGroup>
+```bash Basic mock server
+hitspec mock api.http
+```
+
+```bash Custom port
+hitspec mock api.http --port 8080
+```
+
+```bash With simulated latency
+hitspec mock api.http --port 3000 --delay 100ms
+```
+
+```bash From a directory
+hitspec mock tests/ --verbose
+```
+</CodeGroup>
+
+### Sample Output
+
+```
+Loaded 12 routes from 3 files
+Mock server started on http://localhost:3000
+```
+
+## Use Cases
+
+- **Frontend development** -- Run a mock backend while building the UI without needing the real API.
+- **Offline testing** -- Test client code against a local server when the real API is unavailable.
+- **Prototyping** -- Quickly stand up a fake API from your test definitions.
+- **Integration tests** -- Use the mock server as a dependency in your CI pipeline.
+
+---
+
+# hitspec record
+
+Start an HTTP recording proxy that captures requests and responses, then exports them to hitspec format.
+
+```bash
+hitspec record [flags]
+```
+
+## Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--port` | `-p` | Port to run the proxy on | `8080` |
+| `--target` | `-t` | Target URL to proxy to (required) | |
+| `--output` | `-o` | Output file path | stdout |
+| `--exclude` | | Paths to exclude from recording (comma-separated) | |
+| `--verbose` | `-v` | Enable verbose logging | `false` |
+| `--dedupe` | | Skip duplicate requests (same method + path) | `false` |
+| `--json` | | Export as JSON instead of `.http` format | `false` |
+
+## Behavior
+
+The recording proxy:
+
+- Forwards all requests to the target server (reverse proxy mode)
+- Records both requests and responses
+- Sanitizes sensitive headers (Authorization, Cookie, etc.)
+- Exports to `.http` format on shutdown (`Ctrl+C`)
+- Supports deduplication of repeated requests
+
+## Examples
+
+<CodeGroup>
+```bash Basic recording
+hitspec record --target https://api.example.com -o recorded.http
+```
+
+```bash Custom port
+hitspec record --port 9090 --target https://api.example.com
+```
+
+```bash Exclude health/metrics endpoints
+hitspec record --target https://api.example.com --exclude "/health,/metrics" -o api.http
+```
+
+```bash Deduplicate requests
+hitspec record --target https://api.example.com --dedupe -o api.http
+```
+
+```bash Export as JSON
+hitspec record --target https://api.example.com --json -o recordings.json
+```
+</CodeGroup>
+
+### Workflow
+
+1. Start the recording proxy pointing at your real API:
+   ```bash
+   hitspec record --target https://api.example.com --port 8080 -o tests/api.http
+   ```
+
+2. Configure your client or browser to use `http://localhost:8080` as the API base URL.
+
+3. Perform the actions you want to capture (login, CRUD operations, etc.).
+
+4. Press `Ctrl+C` to stop the proxy. The recorded requests are exported to the output file.
+
+5. Edit the generated `.http` file to add assertions and parameterize values.
+
+### Sample Output
+
+```
+Proxy listening on http://localhost:8080
+Forwarding to https://api.example.com
+
+Recorded 5 requests
+Exported to tests/api.http
+```
+
+## Use Cases
+
+- **Bootstrap test suites** -- Record real API traffic and convert it into test files automatically.
+- **Regression testing** -- Capture a working session and replay it as tests.
+- **API exploration** -- Discover endpoints and their expected responses by interacting with the real API.
+- **Documentation** -- Generate `.http` files that document actual API usage patterns.

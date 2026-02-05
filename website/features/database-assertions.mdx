@@ -1,0 +1,181 @@
+---
+title: "Database Assertions"
+description: "Verify database state after HTTP requests with SQL queries and assertions. Supports PostgreSQL, MySQL, and SQLite."
+---
+
+<Warning>
+  Database assertions are an **experimental** feature. The syntax and behavior may change in future releases.
+</Warning>
+
+Database assertions let you verify that an HTTP request produced the expected side effects in your database. After sending a request, hitspec runs a SQL query and asserts on the results.
+
+## Security
+
+<Warning>
+  Database assertion blocks execute SQL queries against your database. You must pass the `--allow-db` flag to enable them. Without this flag, `>>>db` blocks are skipped.
+</Warning>
+
+```bash
+hitspec run tests/ --allow-db
+```
+
+## Basic Usage
+
+Use the `@db` annotation to specify a database connection and a `>>>db` block for queries and assertions:
+
+```http
+### Create a user and verify in database
+# @name createUser
+# @db sqlite://./test.db
+
+POST {{baseUrl}}/api/users
+Content-Type: application/json
+
+{
+  "name": "Jane Doe",
+  "email": "jane@example.com"
+}
+
+>>>
+expect status 201
+<<<
+
+>>>db
+query SELECT COUNT(*) as count FROM users WHERE email = 'jane@example.com'
+expect count == 1
+<<<
+```
+
+## Connection Strings
+
+Specify the database connection using the `@db` annotation:
+
+| Database | Connection String |
+|----------|------------------|
+| SQLite | `sqlite://./test.db` or `sqlite:./test.db` |
+| PostgreSQL | `postgres://user:pass@localhost:5432/dbname` |
+| MySQL | `mysql://user:pass@localhost:3306/dbname` |
+
+```http
+### PostgreSQL example
+# @db postgres://testuser:testpass@localhost:5432/testdb
+
+### MySQL example
+# @db mysql://root:password@localhost:3306/myapp
+
+### SQLite example
+# @db sqlite://./test.db
+```
+
+## Query and Assert Syntax
+
+Inside a `>>>db` block, use `query` to run SQL and `expect` to assert on the result columns:
+
+```http
+>>>db
+query SELECT name, email, active FROM users WHERE id = 1
+expect name == "Jane Doe"
+expect email == "jane@example.com"
+expect active == true
+<<<
+```
+
+### Supported Operators
+
+| Operator | Example | Description |
+|----------|---------|-------------|
+| `==` | `expect count == 5` | Equals |
+| `!=` | `expect status != "deleted"` | Not equals |
+| `>` | `expect count > 0` | Greater than |
+| `>=` | `expect count >= 1` | Greater than or equal |
+| `<` | `expect age < 100` | Less than |
+| `<=` | `expect score <= 10` | Less than or equal |
+| `contains` | `expect name contains "Jane"` | Contains substring |
+| `exists` | `expect email exists` | Value is not null |
+| `!exists` | `expect deleted_at !exists` | Value is null |
+
+## Examples
+
+### Verify Record Creation
+
+```http
+### Create order
+# @name createOrder
+# @db postgres://{{dbUser}}:{{dbPass}}@localhost:5432/{{dbName}}
+
+POST {{baseUrl}}/api/orders
+Content-Type: application/json
+
+{
+  "product_id": 42,
+  "quantity": 3
+}
+
+>>>
+expect status 201
+expect body.id exists
+<<<
+
+>>>capture
+orderId from body.id
+<<<
+
+>>>db
+query SELECT product_id, quantity, status FROM orders WHERE id = {{createOrder.orderId}}
+expect product_id == 42
+expect quantity == 3
+expect status == "pending"
+<<<
+```
+
+### Verify Record Deletion
+
+```http
+### Delete user
+# @name deleteUser
+# @depends createUser
+# @db sqlite://./test.db
+
+DELETE {{baseUrl}}/api/users/{{createUser.userId}}
+
+>>>
+expect status 204
+<<<
+
+>>>db
+query SELECT COUNT(*) as count FROM users WHERE id = {{createUser.userId}}
+expect count == 0
+<<<
+```
+
+### Verify Aggregates
+
+```http
+### Bulk import
+# @name bulkImport
+# @db postgres://{{dbUser}}:{{dbPass}}@localhost:5432/{{dbName}}
+
+POST {{baseUrl}}/api/import
+Content-Type: application/json
+
+{
+  "file": "data.csv"
+}
+
+>>>
+expect status 200
+<<<
+
+>>>db
+query SELECT COUNT(*) as total FROM imports WHERE batch_id IS NOT NULL
+expect total > 0
+<<<
+```
+
+<Note>
+  Variable interpolation works inside `>>>db` blocks. You can use captured values, environment variables, and built-in functions in your SQL queries.
+</Note>
+
+<Tip>
+  For CI/CD, use environment variables for database credentials and pass the `--allow-db` flag explicitly in your pipeline configuration.
+</Tip>

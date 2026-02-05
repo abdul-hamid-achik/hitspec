@@ -1,0 +1,349 @@
+---
+title: "Dependencies"
+description: "Control execution order with @depends, topological sorting, and request chaining."
+---
+
+By default, hitspec executes requests in the order they appear in the file. The `@depends` directive lets you declare explicit dependencies between requests, ensuring that prerequisite requests run first regardless of file order.
+
+## Basic Usage
+
+Add `# @depends <requestName>` to any request that relies on another:
+
+```http
+### Login
+# @name login
+
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{"email": "test@example.com", "password": "secret"}
+
+>>>capture
+token from body.token
+<<<
+
+### Get profile
+# @name getProfile
+# @depends login
+
+GET {{baseUrl}}/me
+Authorization: Bearer {{login.token}}
+
+>>>
+expect status 200
+<<<
+```
+
+The `getProfile` request will always execute after `login`, even if you run tests in parallel mode or filter to a specific request.
+
+## Multiple Dependencies
+
+A request can depend on multiple other requests. Separate names with commas:
+
+```http
+### Setup database
+# @name setupDb
+
+POST {{baseUrl}}/test/seed
+Content-Type: application/json
+
+{"fixture": "users"}
+
+>>>
+expect status 200
+<<<
+
+### Login
+# @name login
+
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{"email": "admin@example.com", "password": "secret"}
+
+>>>capture
+token from body.token
+<<<
+
+### Run protected operation
+# @name protectedOp
+# @depends setupDb, login
+
+POST {{baseUrl}}/admin/report
+Authorization: Bearer {{login.token}}
+
+>>>
+expect status 200
+<<<
+```
+
+All listed dependencies must complete before the dependent request runs. The dependencies themselves can run in any order (or in parallel, when `--parallel` is enabled).
+
+## How It Works
+
+### Topological Sort
+
+hitspec builds a directed acyclic graph (DAG) from the `@depends` declarations and performs a topological sort to determine execution order. This means:
+
+- Dependencies always run before the requests that need them
+- Independent requests can run in any order
+- With `--parallel`, independent requests run concurrently
+
+Given this dependency graph:
+
+```
+login ──────────┐
+                ├──> getProfile
+setupDb ────────┘
+                ├──> createPost ──> verifyPost
+login ──────────┘
+```
+
+hitspec determines that `login` and `setupDb` can run in parallel, `getProfile` and `createPost` must wait for their dependencies, and `verifyPost` runs last.
+
+### Cycle Detection
+
+hitspec detects circular dependencies at parse time and reports an error:
+
+```http
+### Request A
+# @name a
+# @depends b
+
+GET {{baseUrl}}/a
+
+### Request B
+# @name b
+# @depends a
+
+GET {{baseUrl}}/b
+```
+
+This produces an error:
+
+```
+Error: circular dependency detected: a -> b -> a
+```
+
+<Warning>
+Circular dependencies are always a configuration error. Restructure your tests so the dependency chain flows in one direction.
+</Warning>
+
+## Cross-File Dependencies
+
+Dependencies work across files within the same test run. If `login` is defined in `auth.http` and `createPost` in `posts.http`, you can still declare:
+
+```http
+# In posts.http
+### Create a post
+# @name createPost
+# @depends login
+
+POST {{baseUrl}}/posts
+Authorization: Bearer {{login.token}}
+Content-Type: application/json
+
+{"title": "Hello"}
+```
+
+As long as both files are included in the test run:
+
+```bash
+hitspec run auth.http posts.http
+# or
+hitspec run tests/    # if both files are in tests/
+```
+
+## Implicit Dependencies via Captures
+
+Using a captured variable implicitly requires the capturing request to run first, but hitspec does not infer this automatically. You must always declare `@depends` explicitly:
+
+```http
+### Login
+# @name login
+
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{"email": "test@example.com", "password": "secret"}
+
+>>>capture
+token from body.token
+<<<
+
+### Get data (WRONG -- missing @depends)
+GET {{baseUrl}}/data
+Authorization: Bearer {{login.token}}
+
+### Get data (CORRECT)
+# @depends login
+GET {{baseUrl}}/data
+Authorization: Bearer {{login.token}}
+```
+
+<Note>
+Without `@depends`, hitspec may execute requests in any order (especially with `--parallel`), causing captured variable references to resolve to empty strings.
+</Note>
+
+## Dependency Chains
+
+Dependencies are transitive. If A depends on B and B depends on C, then A implicitly waits for both B and C:
+
+```http
+### Step 1: Create org
+# @name createOrg
+
+POST {{baseUrl}}/orgs
+Content-Type: application/json
+
+{"name": "Test Org"}
+
+>>>capture
+orgId from body.id
+<<<
+
+### Step 2: Create team (depends on org)
+# @name createTeam
+# @depends createOrg
+
+POST {{baseUrl}}/orgs/{{createOrg.orgId}}/teams
+Content-Type: application/json
+
+{"name": "Engineering"}
+
+>>>capture
+teamId from body.id
+<<<
+
+### Step 3: Add member (depends on team, which depends on org)
+# @name addMember
+# @depends createTeam
+
+POST {{baseUrl}}/teams/{{createTeam.teamId}}/members
+Content-Type: application/json
+
+{"userId": "user-123"}
+
+>>>
+expect status 201
+<<<
+```
+
+You do not need to write `# @depends createOrg, createTeam` on `addMember` -- depending on `createTeam` is sufficient because `createTeam` already depends on `createOrg`.
+
+## Parallel Execution with Dependencies
+
+When you run tests with `--parallel`, hitspec respects all `@depends` constraints while maximizing concurrency for independent requests:
+
+```bash
+hitspec run tests/ --parallel --concurrency 5
+```
+
+In this mode:
+- Requests with no dependencies start immediately
+- Requests with satisfied dependencies start as soon as their prerequisites complete
+- The `--concurrency` flag limits how many requests run simultaneously
+
+## Filtered Execution
+
+When you filter tests by name or tag, hitspec automatically includes any dependency that the filtered request needs:
+
+```bash
+# Runs "login" automatically because getProfile depends on it
+hitspec run tests/ --name getProfile
+```
+
+```bash
+# Runs any dependencies of smoke-tagged requests
+hitspec run tests/ --tags smoke
+```
+
+## Common Patterns
+
+### Setup and Teardown
+
+```http
+### Seed test data
+# @name setup
+# @tags setup
+
+POST {{baseUrl}}/test/seed
+
+>>>
+expect status 200
+<<<
+
+>>>capture
+testUserId from body.userId
+<<<
+
+### Run test
+# @name mainTest
+# @depends setup
+
+GET {{baseUrl}}/users/{{setup.testUserId}}
+
+>>>
+expect status 200
+<<<
+
+### Clean up
+# @name teardown
+# @depends mainTest
+
+DELETE {{baseUrl}}/test/cleanup
+
+>>>
+expect status 200
+<<<
+```
+
+### Fan-Out Pattern
+
+Multiple requests depend on a single setup step:
+
+```http
+### Login
+# @name login
+
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{"email": "admin@example.com", "password": "secret"}
+
+>>>capture
+token from body.token
+<<<
+
+### Test users endpoint
+# @depends login
+
+GET {{baseUrl}}/users
+Authorization: Bearer {{login.token}}
+
+>>>
+expect status 200
+<<<
+
+### Test posts endpoint
+# @depends login
+
+GET {{baseUrl}}/posts
+Authorization: Bearer {{login.token}}
+
+>>>
+expect status 200
+<<<
+
+### Test comments endpoint
+# @depends login
+
+GET {{baseUrl}}/comments
+Authorization: Bearer {{login.token}}
+
+>>>
+expect status 200
+<<<
+```
+
+With `--parallel`, the three test requests run concurrently after `login` completes.

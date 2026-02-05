@@ -1,0 +1,301 @@
+---
+title: "Captures"
+description: "Extract values from HTTP responses and use them in subsequent requests."
+---
+
+Captures extract values from HTTP responses -- body fields, headers, status codes, and timing -- and store them as variables for use in later requests. This is the foundation for building multi-step test flows like authentication, CRUD operations, and workflow testing.
+
+## Capture Block Syntax
+
+Wrap capture definitions in `>>>capture` and `<<<` markers:
+
+```http
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{"email": "test@example.com", "password": "secret"}
+
+>>>capture
+token from body.access_token
+userId from body.user.id
+<<<
+```
+
+Each line follows this pattern:
+
+```
+<variableName> from <source>
+```
+
+## Capture Sources
+
+hitspec can capture values from four parts of the response:
+
+| Source | Syntax | Description |
+|--------|--------|-------------|
+| Body (JSON path) | `token from body.access_token` | Extract a value from the JSON response body |
+| Header | `contentType from header Content-Type` | Extract a response header value |
+| Status | `code from status` | Capture the HTTP status code |
+| Duration | `time from duration` | Capture the response time in milliseconds |
+
+### Body Captures
+
+Use dot notation and array indexing to reach into the JSON response:
+
+```http
+>>>capture
+id from body.id
+name from body.user.name
+firstTag from body.tags[0]
+nestedValue from body.data.items[0].metadata.key
+<<<
+```
+
+### Header Captures
+
+```http
+>>>capture
+requestId from header X-Request-Id
+rateLimit from header X-RateLimit-Remaining
+location from header Location
+<<<
+```
+
+### Status and Duration Captures
+
+```http
+>>>capture
+statusCode from status
+responseTime from duration
+<<<
+```
+
+## Using Captured Values
+
+Captured values are referenced using the `{{requestName.captureName}}` pattern. The `requestName` is the value of the `@name` directive on the capturing request.
+
+```http
+### Step 1: Login
+# @name login
+
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{"email": "admin@example.com", "password": "secret"}
+
+>>>
+expect status 200
+<<<
+
+>>>capture
+token from body.token
+userId from body.user.id
+<<<
+
+### Step 2: Access protected resource
+# @depends login
+
+GET {{baseUrl}}/users/{{login.userId}}
+Authorization: Bearer {{login.token}}
+
+>>>
+expect status 200
+expect body.id == "{{login.userId}}"
+<<<
+```
+
+<Warning>
+Three things are required for captures to work across requests:
+1. The source request must have a `# @name` directive.
+2. The source request must have a `>>>capture` block.
+3. The consuming request must declare `# @depends` on the source request to guarantee execution order.
+</Warning>
+
+## Real-World Examples
+
+### Authentication Flow
+
+```http
+@baseUrl = https://api.example.com
+
+### Login
+# @name login
+# @tags auth
+
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "password123"
+}
+
+>>>
+expect status 200
+expect body.token exists
+expect body.refreshToken exists
+<<<
+
+>>>capture
+token from body.token
+refreshToken from body.refreshToken
+userId from body.user.id
+<<<
+
+### Access protected endpoint
+# @name getProfile
+# @depends login
+# @auth bearer {{login.token}}
+
+GET {{baseUrl}}/me
+
+>>>
+expect status 200
+expect body.id == "{{login.userId}}"
+<<<
+
+### Refresh the token
+# @name refresh
+# @depends login
+
+POST {{baseUrl}}/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{login.refreshToken}}"
+}
+
+>>>
+expect status 200
+expect body.token exists
+<<<
+
+>>>capture
+newToken from body.token
+<<<
+```
+
+### CRUD Workflow
+
+```http
+@baseUrl = https://api.example.com
+
+### Create a post
+# @name createPost
+
+POST {{baseUrl}}/posts
+Content-Type: application/json
+Authorization: Bearer {{login.token}}
+
+{
+  "title": "Test Post {{$uuid()}}",
+  "body": "Created at {{$now()}}",
+  "status": "draft"
+}
+
+>>>
+expect status 201
+expect body.id exists
+<<<
+
+>>>capture
+postId from body.id
+<<<
+
+### Read the post
+# @name getPost
+# @depends createPost
+
+GET {{baseUrl}}/posts/{{createPost.postId}}
+Authorization: Bearer {{login.token}}
+
+>>>
+expect status 200
+expect body.id == "{{createPost.postId}}"
+expect body.status == "draft"
+<<<
+
+### Update the post
+# @name updatePost
+# @depends createPost
+
+PUT {{baseUrl}}/posts/{{createPost.postId}}
+Content-Type: application/json
+Authorization: Bearer {{login.token}}
+
+{
+  "status": "published"
+}
+
+>>>
+expect status 200
+expect body.status == "published"
+<<<
+
+### Delete the post
+# @name deletePost
+# @depends updatePost
+
+DELETE {{baseUrl}}/posts/{{createPost.postId}}
+Authorization: Bearer {{login.token}}
+
+>>>
+expect status 204
+<<<
+```
+
+### Capturing Headers for Pagination
+
+```http
+### Get first page
+# @name firstPage
+
+GET {{baseUrl}}/items?page=1&limit=10
+Authorization: Bearer {{token}}
+
+>>>
+expect status 200
+expect body type array
+<<<
+
+>>>capture
+totalCount from header X-Total-Count
+nextPage from header X-Next-Page
+<<<
+
+### Get second page
+# @depends firstPage
+
+GET {{baseUrl}}/items?page={{firstPage.nextPage}}&limit=10
+Authorization: Bearer {{token}}
+
+>>>
+expect status 200
+<<<
+```
+
+## Captures and Assertions Together
+
+A request can have both assertion and capture blocks. Assertions are evaluated first; if they fail, captures are still performed (allowing dependent requests to attempt execution):
+
+```http
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{"email": "test@example.com", "password": "secret"}
+
+>>>
+expect status 200
+expect body.token exists
+expect body.expiresIn > 0
+<<<
+
+>>>capture
+token from body.token
+expiresIn from body.expiresIn
+<<<
+```
+
+<Tip>
+Place assertion blocks before capture blocks for readability. Both blocks belong to the same request -- their order does not affect behavior.
+</Tip>

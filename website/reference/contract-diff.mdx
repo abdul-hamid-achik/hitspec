@@ -1,0 +1,232 @@
+---
+title: "hitspec contract & diff"
+description: "Contract testing against live providers and comparing test results"
+---
+
+# hitspec contract
+
+Verify API contracts against a live provider.
+
+```bash
+hitspec contract verify <contracts-dir> [flags]
+```
+
+## Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `<contracts-dir>` | Directory containing contract `.http` files (or a single file) |
+
+## Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--provider` | `-p` | Provider URL (required) | |
+| `--state-handler` | | Path to a state handler script | |
+| `--verbose` | `-v` | Enable verbose output | `false` |
+
+## Contract Annotations
+
+Define contract metadata using annotations in your `.http` files:
+
+```http
+### Get User
+# @name getUser
+# @contract.provider UserService
+# @contract.state "user exists with id 1"
+GET {{provider}}/users/1
+
+>>>
+expect status == 200
+expect body.id == 1
+expect body.name is_type string
+<<<
+```
+
+| Annotation | Description |
+|------------|-------------|
+| `@contract.provider` | Name of the provider service |
+| `@contract.state` | Provider state required for this interaction |
+
+## State Handler
+
+The `--state-handler` flag specifies a script that sets up provider state before each interaction. The script receives the state description as an argument:
+
+```bash
+#!/bin/bash
+# setup-states.sh
+case "$1" in
+  "user exists with id 1")
+    curl -s -X POST http://localhost:3000/_setup -d '{"user_id": 1}'
+    ;;
+  "no users exist")
+    curl -s -X POST http://localhost:3000/_reset
+    ;;
+esac
+```
+
+## Examples
+
+<CodeGroup>
+```bash Basic verification
+hitspec contract verify contracts/ --provider http://localhost:3000
+```
+
+```bash With state handler
+hitspec contract verify contracts/ \
+  --provider http://localhost:3000 \
+  --state-handler ./setup-states.sh
+```
+
+```bash Verbose output
+hitspec contract verify contracts/ --provider http://localhost:3000 -v
+```
+</CodeGroup>
+
+### Sample Output
+
+```
+Contract Verification Results
+
+contracts/user-service.http
+  + getUser [passed] (45ms)
+  + createUser [passed] (120ms)
+  x deleteUser [failed] (89ms)
+    -> status ==
+      Expected: 204
+      Actual:   404
+
+Summary
+  Contracts: 1 file(s)
+  Interactions: 2 passed, 1 failed, 3 total
+```
+
+## Use Cases
+
+- **Consumer-driven contracts** -- Define what your service expects from its dependencies, then verify those contracts against the real provider.
+- **API versioning** -- Ensure that provider changes do not break existing consumers.
+- **CI/CD gates** -- Run contract verification as part of the provider's deployment pipeline.
+
+---
+
+# hitspec diff
+
+Compare two JSON test result files to identify regressions, improvements, and changes between test runs.
+
+```bash
+hitspec diff <results1.json> <results2.json> [flags]
+```
+
+## Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `<results1.json>` | Baseline test results (JSON output from `hitspec run --output json`) |
+| `<results2.json>` | Current test results to compare against the baseline |
+
+## Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--output` | `-o` | Output format: `console`, `json`, `html` | `console` |
+| `--threshold` | | Fail if any test is slower by this percentage (e.g., `10%`) | |
+
+## How It Works
+
+The diff command compares tests by name and file, then categorizes each as:
+
+| Status | Meaning |
+|--------|---------|
+| **improved** | Test now passes (previously failed) or is >10% faster |
+| **regressed** | Test now fails (previously passed) or is >10% slower |
+| **unchanged** | No significant change in status or duration |
+| **new** | Test exists only in the second result file |
+| **removed** | Test exists only in the first result file |
+
+## Generating Input Files
+
+First, generate JSON results from your test runs:
+
+```bash
+# Baseline run
+hitspec run tests/ --output json --output-file baseline.json
+
+# After changes
+hitspec run tests/ --output json --output-file current.json
+```
+
+## Examples
+
+<CodeGroup>
+```bash Basic comparison
+hitspec diff baseline.json current.json
+```
+
+```bash With regression threshold
+hitspec diff baseline.json current.json --threshold 10%
+```
+
+```bash HTML report
+hitspec diff baseline.json current.json --output html > diff-report.html
+```
+
+```bash JSON output
+hitspec diff baseline.json current.json --output json
+```
+</CodeGroup>
+
+### Console Output
+
+```
+Test Results Comparison
+  File 1: baseline.json
+  File 2: current.json
+
+Summary
+  Total Tests:    5
+  Improved:       1
+  Regressed:      1
+  Unchanged:      3
+
+Duration
+  Total (File 1): 450ms
+  Total (File 2): 520ms
+  Avg (File 1):   90ms
+  Avg (File 2):   104ms
+
+Test Details
+  ^ healthCheck  45ms -> 42ms  -6.7%
+  = login        120ms -> 125ms +4.2%
+  v getProfile   89ms -> 150ms +68.5%
+  + newEndpoint  (new, 30ms)
+  - oldEndpoint  (removed)
+
+x Threshold check failed (some tests exceeded 10% regression)
+```
+
+### Threshold Check
+
+When `--threshold` is set, the command exits with a non-zero status if any test's duration increases by more than the specified percentage. This is useful for catching performance regressions in CI:
+
+```bash
+hitspec diff baseline.json current.json --threshold 15%
+# Exit code 0 if all tests are within 15% of baseline
+# Exit code 1 if any test regressed by more than 15%
+```
+
+## CI/CD Integration
+
+```yaml
+# GitHub Actions
+- name: Run baseline tests
+  run: hitspec run tests/ --output json --output-file baseline.json
+
+- name: Apply changes
+  run: # ... your deployment or code change steps
+
+- name: Run current tests
+  run: hitspec run tests/ --output json --output-file current.json
+
+- name: Check for regressions
+  run: hitspec diff baseline.json current.json --threshold 10%
+```

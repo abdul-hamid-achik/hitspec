@@ -1,0 +1,132 @@
+---
+title: "Quickstart"
+description: "Write and run your first API test in under a minute."
+---
+
+<Steps>
+
+<Step title="Create a test file">
+
+Create a file called `api.http`:
+
+```http api.http
+@baseUrl = https://jsonplaceholder.typicode.com
+
+### Get all posts
+# @name getPosts
+
+GET {{baseUrl}}/posts
+
+>>>
+expect status 200
+expect body type array
+expect body[0].id exists
+<<<
+
+### Create a post
+# @name createPost
+
+POST {{baseUrl}}/posts
+Content-Type: application/json
+
+{
+  "title": "Hello hitspec",
+  "body": "Testing made simple",
+  "userId": 1
+}
+
+>>>
+expect status 201
+expect body.id exists
+<<<
+
+>>>capture
+postId from body.id
+<<<
+
+### Get the created post
+# @name getCreatedPost
+# @depends createPost
+
+GET {{baseUrl}}/posts/{{createPost.postId}}
+
+>>>
+expect status 200
+expect body.title == "Hello hitspec"
+<<<
+```
+
+This file defines three requests:
+1. **getPosts** -- fetches all posts and checks the response is an array
+2. **createPost** -- creates a new post and captures its ID
+3. **getCreatedPost** -- uses the captured ID to verify the post was created
+
+</Step>
+
+<Step title="Run the tests">
+
+```bash
+hitspec run api.http
+```
+
+hitspec parses the file, executes each request in order (respecting dependencies), and evaluates all assertions.
+
+</Step>
+
+<Step title="See results">
+
+On success, you see a summary of passing tests:
+
+```
+✓ getPosts (125ms)
+✓ createPost (89ms)
+✓ getCreatedPost (94ms)
+
+3 passed, 0 failed
+```
+
+If an assertion fails, hitspec shows exactly what went wrong:
+
+```
+✓ getPosts (125ms)
+✗ createPost (89ms)
+  → status ==
+    Expected: 200
+    Actual:   201
+✓ getCreatedPost (94ms)
+
+2 passed, 1 failed
+```
+
+The output tells you which assertion failed, what value was expected, and what was actually returned.
+
+</Step>
+
+</Steps>
+
+## What Just Happened?
+
+Let's break down the key concepts from this example:
+
+**Variables** -- `@baseUrl` defines a reusable variable, referenced with `{{baseUrl}}`.
+
+**Request separator** -- `###` marks the start of each request.
+
+**Metadata** -- `# @name`, `# @depends` are directives that control behavior.
+
+**Assertions** -- The `>>> ... <<<` block contains `expect` statements that validate the response.
+
+**Captures** -- The `>>>capture ... <<<` block extracts values from responses for use in later requests.
+
+**Dependencies** -- `# @depends createPost` ensures a request runs after its dependency.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install hitspec via Homebrew, Go, or binary download.
+  </Card>
+  <Card title="Editor Setup" icon="code" href="/editor-setup">
+    Get syntax highlighting and completions in your editor.
+  </Card>
+</CardGroup>

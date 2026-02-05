@@ -1,0 +1,366 @@
+---
+title: "Environments"
+description: "Configure variables for dev, staging, and production with environment files and hitspec.yaml."
+---
+
+hitspec supports environment-specific configuration so you can run the same tests against different servers, credentials, and settings without modifying your test files.
+
+## Overview
+
+There are three ways to provide environment variables:
+
+1. **Inline variables** -- `@var = value` in `.http` files (same for all environments)
+2. **Environment file** -- `.hitspec.env.json` with per-environment values
+3. **Config file** -- `hitspec.yaml` with an `environments` section
+4. **System environment variables** -- accessed via `$env()`
+
+## Inline Variables
+
+Define variables directly in your test file:
+
+```http
+@baseUrl = https://api.example.com
+@token = your-api-token
+@timeout = 5000
+
+GET {{baseUrl}}/users
+Authorization: Bearer {{token}}
+```
+
+This is simple but limited:
+- Values are the same regardless of environment
+- Secrets are visible in the test file
+- Switching environments requires editing the file
+
+Inline variables are best for values that do not change between environments, such as API version paths or test data.
+
+## Environment File (.hitspec.env.json)
+
+Create a `.hitspec.env.json` file in your project root with per-environment variable sets:
+
+```json
+{
+  "dev": {
+    "baseUrl": "http://localhost:3000",
+    "token": "dev-token-123",
+    "timeout": "10000"
+  },
+  "staging": {
+    "baseUrl": "https://staging.api.example.com",
+    "token": "staging-token-456",
+    "timeout": "5000"
+  },
+  "prod": {
+    "baseUrl": "https://api.example.com",
+    "token": "prod-token-789",
+    "timeout": "3000"
+  }
+}
+```
+
+Select the environment with the `--env` flag:
+
+```bash
+# Uses "dev" by default
+hitspec run tests/
+
+# Use staging
+hitspec run tests/ --env staging
+
+# Use production
+hitspec run tests/ --env prod
+```
+
+Your test files reference variables without knowing which environment is active:
+
+```http
+GET {{baseUrl}}/users
+Authorization: Bearer {{token}}
+
+>>>
+expect duration < {{timeout}}
+<<<
+```
+
+## Config File (hitspec.yaml)
+
+The `hitspec.yaml` config file combines global settings with environment definitions:
+
+```yaml
+# Global settings
+defaultEnvironment: dev
+timeout: 30000
+retries: 0
+followRedirects: true
+validateSSL: true
+verbose: false
+headers:
+  User-Agent: hitspec/1.0
+
+# Per-environment variables
+environments:
+  dev:
+    baseUrl: https://api-dev.example.com
+    token: dev-token
+  staging:
+    baseUrl: https://api-staging.example.com
+    token: "${STAGING_TOKEN}"
+  prod:
+    baseUrl: https://api.example.com
+    token: "${PROD_TOKEN}"
+```
+
+hitspec searches for config files in this order:
+1. `hitspec.yaml`
+2. `hitspec.yml`
+
+You can also specify a config file explicitly:
+
+```bash
+hitspec run tests/ --config ./config/hitspec.yaml
+```
+
+### Using .env Files
+
+Pass a `.env` file with the `--env-file` flag to inject additional variables:
+
+```bash
+hitspec run tests/ --env staging --env-file .env.staging
+```
+
+The `.env` file uses standard `KEY=VALUE` format:
+
+```
+API_TOKEN=staging-secret-token
+DB_PASSWORD=staging-db-pass
+```
+
+## System Environment Variables
+
+Reference system environment variables in your test files using `$env()`:
+
+```http
+@token = {{$env(API_TOKEN)}}
+@dbUrl = {{$env(DATABASE_URL, sqlite://./test.db)}}
+```
+
+The second argument is an optional default value.
+
+In `.hitspec.env.json`, use the `{{$env.VAR}}` syntax:
+
+```json
+{
+  "prod": {
+    "baseUrl": "https://api.example.com",
+    "token": "{{$env.API_TOKEN}}",
+    "dbPassword": "{{$env.DB_PASSWORD}}"
+  }
+}
+```
+
+In `hitspec.yaml`, use shell-style `${VAR}` syntax:
+
+```yaml
+environments:
+  prod:
+    token: "${PROD_TOKEN}"
+```
+
+## HITSPEC_ Environment Variables
+
+All major CLI flags can be set via environment variables with the `HITSPEC_` prefix, which is useful in CI/CD pipelines:
+
+| Environment Variable | CLI Flag | Description |
+|---------------------|----------|-------------|
+| `HITSPEC_ENV` | `--env` | Environment to use |
+| `HITSPEC_ENV_FILE` | `--env-file` | Path to .env file |
+| `HITSPEC_CONFIG` | `--config` | Path to config file |
+| `HITSPEC_TIMEOUT` | `--timeout` | Request timeout |
+| `HITSPEC_TAGS` | `--tags` | Filter by tags |
+| `HITSPEC_OUTPUT` | `--output` | Output format |
+| `HITSPEC_OUTPUT_FILE` | `--output-file` | Output file path |
+| `HITSPEC_BAIL` | `--bail` | Stop on first failure |
+| `HITSPEC_PARALLEL` | `--parallel` | Run in parallel |
+| `HITSPEC_CONCURRENCY` | `--concurrency` | Concurrent requests |
+| `HITSPEC_QUIET` | `--quiet` | Suppress output |
+| `HITSPEC_NO_COLOR` | `--no-color` | Disable colors |
+| `HITSPEC_PROXY` | `--proxy` | Proxy URL |
+| `HITSPEC_INSECURE` | `--insecure` | Skip SSL verification |
+
+```bash
+export HITSPEC_ENV=staging
+export HITSPEC_TIMEOUT=60s
+export HITSPEC_BAIL=true
+hitspec run tests/
+```
+
+## Variable Resolution Order
+
+When the same variable name is defined in multiple sources, hitspec resolves it in this order (later sources override earlier ones):
+
+1. **Built-in functions** -- `$uuid()`, `$timestamp()`, etc.
+2. **Environment file** -- `.hitspec.env.json` for the active environment
+3. **Config file** -- `hitspec.yaml` environments section
+4. **Inline variables** -- `@variable = value` in the `.http` file
+5. **Captured values** -- `{{requestName.captureName}}` from prior responses
+
+<Note>
+Inline variables override environment file values. This means a `@baseUrl = ...` in your `.http` file will take precedence over the `baseUrl` defined in `.hitspec.env.json`. Remove inline definitions when you want environment-specific values to apply.
+</Note>
+
+## Best Practices
+
+### Keep Secrets Out of Version Control
+
+Add `.hitspec.env.json` to `.gitignore` if it contains tokens or passwords:
+
+```gitignore
+.hitspec.env.json
+```
+
+Create a template file for your team:
+
+```json
+// .hitspec.env.example.json
+{
+  "dev": {
+    "baseUrl": "http://localhost:3000",
+    "token": "YOUR_DEV_TOKEN_HERE"
+  },
+  "staging": {
+    "baseUrl": "https://staging.api.example.com",
+    "token": "YOUR_STAGING_TOKEN_HERE"
+  }
+}
+```
+
+### Use System Variables in CI/CD
+
+<Tabs>
+<Tab title="GitHub Actions">
+```yaml
+env:
+  API_BASE_URL: https://staging.api.example.com
+  API_TOKEN: ${{ secrets.API_TOKEN }}
+
+steps:
+  - uses: abdul-hamid-achik/hitspec@v1
+    with:
+      files: tests/
+      env: ci
+      env-file: .env.ci
+```
+</Tab>
+<Tab title="Shell">
+```bash
+# Set variables inline
+API_TOKEN=secret hitspec run tests/ --env staging
+
+# Or export them
+export API_TOKEN=secret
+export DB_PASSWORD=dbpass
+hitspec run tests/ --env staging
+```
+</Tab>
+</Tabs>
+
+### Shared Base Configuration
+
+Use a `default` environment key for values shared across all environments:
+
+```json
+{
+  "default": {
+    "apiVersion": "v1",
+    "timeout": "5000"
+  },
+  "dev": {
+    "baseUrl": "http://localhost:3000"
+  },
+  "staging": {
+    "baseUrl": "https://staging.api.example.com"
+  },
+  "prod": {
+    "baseUrl": "https://api.example.com",
+    "timeout": "3000"
+  }
+}
+```
+
+### Environment-Specific Test Behavior
+
+Use environment variables for timeouts, retry settings, and other behavioral differences:
+
+```json
+{
+  "dev": {
+    "baseUrl": "http://localhost:3000",
+    "timeout": "30000",
+    "retries": "3"
+  },
+  "prod": {
+    "baseUrl": "https://api.example.com",
+    "timeout": "5000",
+    "retries": "0"
+  }
+}
+```
+
+```http
+# @timeout {{timeout}}
+# @retry {{retries}}
+
+GET {{baseUrl}}/slow-endpoint
+
+>>>
+expect status 200
+<<<
+```
+
+## Recommended Project Structure
+
+```
+my-api-tests/
+├── hitspec.yaml               # Global config and environment definitions
+├── .hitspec.env.json          # Secret values (gitignored)
+├── .hitspec.env.example.json  # Template for team members
+├── .gitignore
+├── tests/
+│   ├── auth.http
+│   ├── users.http
+│   └── orders.http
+└── schemas/
+    └── user.json
+```
+
+## Troubleshooting
+
+<Accordion title="Variable not found">
+```
+Error: variable "baseUrl" not found
+```
+
+1. Check that `.hitspec.env.json` or `hitspec.yaml` contains the variable for your environment.
+2. Verify the `--env` flag matches an environment key: `hitspec run tests/ --env dev`.
+3. Check for typos in variable names (they are case-sensitive).
+</Accordion>
+
+<Accordion title="Environment not found">
+```
+Error: environment "staging" not found
+```
+
+1. Add a `"staging"` key to `.hitspec.env.json` or `hitspec.yaml`.
+2. Check for typos in the environment name.
+</Accordion>
+
+<Accordion title="System variable not set">
+```
+Error: environment variable "API_TOKEN" not set
+```
+
+1. Export the variable: `export API_TOKEN=xxx`
+2. Set it inline: `API_TOKEN=xxx hitspec run tests/`
+3. In CI/CD, add it to your secrets and pass it to the workflow.
+4. Use a default value: `{{$env(API_TOKEN, fallback-value)}}`
+</Accordion>

@@ -600,8 +600,8 @@ POST {{baseUrl}}/upload
 >>>multipart
 field name = John Doe
 field email = john@example.com
-file avatar = ./photo.jpg
-file document = ./report.pdf, application/pdf
+file @./photo.jpg
+file @./report.pdf
 <<<
 
 >>>

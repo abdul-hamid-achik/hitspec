@@ -1,0 +1,161 @@
+---
+title: "Shell Commands"
+description: "Run shell commands after HTTP requests for post-processing, notifications, and custom validation."
+---
+
+Shell command blocks let you run arbitrary shell commands after an HTTP request completes. This is useful for post-processing, triggering external scripts, or performing validation that goes beyond HTTP assertions.
+
+## Security
+
+<Warning>
+  Shell command blocks execute arbitrary commands on your system. You must pass the `--allow-shell` flag to enable them. Without this flag, `>>>shell` blocks are skipped.
+</Warning>
+
+```bash
+hitspec run tests/ --allow-shell
+```
+
+## Basic Usage
+
+Add a `>>>shell` block after your request and assertions:
+
+```http
+### Process data
+# @name processData
+
+POST {{baseUrl}}/api/process
+Content-Type: application/json
+
+{
+  "action": "generate-report"
+}
+
+>>>
+expect status 200
+<<<
+
+>>>shell
+echo "Processing complete"
+./scripts/notify.sh
+<<<
+```
+
+Shell commands execute after the HTTP assertions have been evaluated.
+
+## Variable Interpolation
+
+Variables are resolved in shell commands before execution. You can use environment variables, captured values, and built-in functions:
+
+```http
+### Create resource
+# @name createResource
+
+POST {{baseUrl}}/api/resources
+Content-Type: application/json
+
+{
+  "name": "test-resource"
+}
+
+>>>
+expect status 201
+<<<
+
+>>>capture
+resourceId from body.id
+<<<
+
+>>>shell
+echo "Created resource: {{createResource.resourceId}}"
+curl -s {{baseUrl}}/api/resources/{{createResource.resourceId}} | jq .
+<<<
+```
+
+## Error Handling
+
+By default, if a shell command fails (returns a non-zero exit code), the test fails. Prefix a command with `-` to ignore its exit code:
+
+```http
+>>>shell
+echo "This must succeed"
+-rm temp-file-that-may-not-exist.txt
+echo "Continues even if rm failed"
+<<<
+```
+
+| Prefix | Behavior |
+|--------|----------|
+| (none) | Fail the test if the command returns non-zero |
+| `-` | Ignore the exit code and continue |
+
+## Execution Details
+
+- Commands run via `sh -c`
+- Working directory is the `.http` file location
+- Commands execute sequentially in the order they appear
+- Each line is a separate command
+- Standard output and standard error are captured
+
+## Examples
+
+### Verify a File Was Created
+
+```http
+### Export data
+# @name exportData
+
+POST {{baseUrl}}/api/export
+
+>>>
+expect status 200
+<<<
+
+>>>shell
+test -f ./output/export.csv
+wc -l ./output/export.csv
+<<<
+```
+
+### Run a Cleanup Script
+
+```http
+### Integration test
+# @name integrationTest
+
+POST {{baseUrl}}/api/test-data
+Content-Type: application/json
+
+{
+  "seed": true
+}
+
+>>>
+expect status 200
+<<<
+
+>>>shell
+./scripts/verify-test-data.sh
+-./scripts/cleanup.sh
+<<<
+```
+
+### Chain with External Tools
+
+```http
+### Get API response
+# @name getResponse
+
+GET {{baseUrl}}/api/data
+
+>>>
+expect status 200
+<<<
+
+>>>shell
+echo '{{getResponse.body}}' | jq '.items | length'
+<<<
+```
+
+<Note>
+  Shell blocks are meant for tasks that cannot be expressed as HTTP assertions. For most validation needs, use the built-in assertion operators instead.
+</Note>

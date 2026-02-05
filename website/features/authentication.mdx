@@ -1,0 +1,208 @@
+---
+title: "Authentication"
+description: "Configure authentication for your API requests using the @auth annotation. hitspec supports 8 authentication methods."
+---
+
+hitspec supports 8 authentication methods through the `@auth` metadata directive. Instead of manually setting `Authorization` headers, declare your auth strategy once per request and hitspec handles the rest.
+
+## Bearer Token
+
+The most common method for API authentication. Sends an `Authorization: Bearer <token>` header.
+
+```http
+### Access protected resource
+# @name getProfile
+# @auth bearer {{token}}
+
+GET {{baseUrl}}/me
+
+>>>
+expect status 200
+<<<
+```
+
+## Basic Auth
+
+Sends a Base64-encoded `Authorization: Basic <credentials>` header.
+
+```http
+### Login with Basic Auth
+# @name basicLogin
+# @auth basic {{username}}, {{password}}
+
+GET {{baseUrl}}/admin/dashboard
+
+>>>
+expect status 200
+<<<
+```
+
+## API Key (Header)
+
+Sends the API key as a custom request header. Specify the header name and value.
+
+```http
+### Access with API key in header
+# @name apiKeyRequest
+# @auth apiKey X-API-Key, {{apiKey}}
+
+GET {{baseUrl}}/data
+
+>>>
+expect status 200
+<<<
+```
+
+## API Key (Query String)
+
+Appends the API key as a query parameter instead of a header.
+
+```http
+### Access with API key in query string
+# @name apiKeyQueryRequest
+# @auth apiKeyQuery api_key, {{apiKey}}
+
+GET {{baseUrl}}/data
+
+>>>
+expect status 200
+<<<
+```
+
+## Digest Auth
+
+HTTP Digest authentication. hitspec handles the challenge-response handshake automatically.
+
+```http
+### Digest auth request
+# @name digestRequest
+# @auth digest {{username}}, {{password}}
+
+GET {{baseUrl}}/secure/resource
+
+>>>
+expect status 200
+<<<
+```
+
+## AWS Signature v4
+
+Signs requests using AWS Signature Version 4 for authenticating with AWS services or compatible APIs.
+
+```http
+### AWS signed request
+# @name awsRequest
+# @auth aws {{accessKey}}, {{secretKey}}, {{region}}, {{service}}
+
+GET https://{{service}}.{{region}}.amazonaws.com/resource
+
+>>>
+expect status 200
+<<<
+```
+
+The four parameters are:
+1. **Access Key ID** - Your AWS access key
+2. **Secret Access Key** - Your AWS secret key
+3. **Region** - AWS region (e.g., `us-east-1`)
+4. **Service** - AWS service name (e.g., `s3`, `execute-api`)
+
+## OAuth2 Client Credentials
+
+Automatically fetches an access token using the OAuth2 Client Credentials grant before sending the request.
+
+```http
+### Access with OAuth2 client credentials
+# @name oauth2ClientRequest
+# @auth oauth2 client_credentials {{tokenUrl}}, {{clientId}}, {{clientSecret}}, scope1,scope2
+
+GET {{baseUrl}}/api/resource
+
+>>>
+expect status 200
+<<<
+```
+
+Parameters in order:
+1. **Token URL** - The OAuth2 token endpoint
+2. **Client ID** - Your application's client ID
+3. **Client Secret** - Your application's client secret
+4. **Scopes** - Comma-separated list of scopes (optional)
+
+## OAuth2 Password Grant
+
+Fetches an access token using the OAuth2 Resource Owner Password Credentials grant.
+
+```http
+### Access with OAuth2 password grant
+# @name oauth2PasswordRequest
+# @auth oauth2 password {{tokenUrl}}, {{clientId}}, {{clientSecret}}, {{username}}, {{password}}, scope1,scope2
+
+GET {{baseUrl}}/api/resource
+
+>>>
+expect status 200
+<<<
+```
+
+Parameters in order:
+1. **Token URL** - The OAuth2 token endpoint
+2. **Client ID** - Your application's client ID
+3. **Client Secret** - Your application's client secret
+4. **Username** - Resource owner's username
+5. **Password** - Resource owner's password
+6. **Scopes** - Comma-separated list of scopes (optional)
+
+## Using Auth with Captures
+
+A common pattern is to capture a token from a login request and use it in subsequent requests:
+
+```http
+### Login
+# @name login
+
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "password123"
+}
+
+>>>
+expect status 200
+expect body.token exists
+<<<
+
+>>>capture
+token from body.token
+<<<
+
+### Access protected resource
+# @name protected
+# @depends login
+# @auth bearer {{login.token}}
+
+GET {{baseUrl}}/me
+
+>>>
+expect status 200
+<<<
+```
+
+## Auth Syntax Reference
+
+| Method | Syntax |
+|--------|--------|
+| Bearer | `# @auth bearer <token>` |
+| Basic | `# @auth basic <username>, <password>` |
+| API Key (Header) | `# @auth apiKey <headerName>, <value>` |
+| API Key (Query) | `# @auth apiKeyQuery <paramName>, <value>` |
+| Digest | `# @auth digest <username>, <password>` |
+| AWS Signature v4 | `# @auth aws <accessKey>, <secretKey>, <region>, <service>` |
+| OAuth2 Client Credentials | `# @auth oauth2 client_credentials <tokenUrl>, <clientId>, <clientSecret>, <scopes>` |
+| OAuth2 Password | `# @auth oauth2 password <tokenUrl>, <clientId>, <clientSecret>, <username>, <password>, <scopes>` |
+
+<Tip>
+  All auth parameters support variable interpolation with `{{variableName}}` syntax, so you can store credentials in your environment configuration and keep them out of your test files.
+</Tip>

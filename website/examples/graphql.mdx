@@ -1,0 +1,377 @@
+---
+title: "GraphQL"
+description: "Query a GraphQL API with variables, test nested response fields, and chain mutations with captures."
+---
+
+hitspec has first-class support for GraphQL. Instead of manually constructing JSON bodies, you write queries in a `>>>graphql` block and variables in a `>>>variables` block. hitspec handles the rest.
+
+## Prerequisites
+
+- hitspec installed ([Installation](/installation))
+- Familiarity with [captures and dependencies](/concepts/captures)
+
+## The Complete Test File
+
+This example tests the [Countries GraphQL API](https://countries.trevorblades.com/), a free public GraphQL endpoint.
+
+Create a file called `graphql.http`:
+
+```http graphql.http
+@baseUrl = https://countries.trevorblades.com
+
+### Get a country by code
+# @name getCountry
+# @tags smoke
+
+POST {{baseUrl}}/
+Content-Type: application/json
+
+>>>graphql
+query GetCountry($code: ID!) {
+  country(code: $code) {
+    name
+    capital
+    currency
+    emoji
+    languages {
+      name
+      code
+    }
+    continent {
+      name
+    }
+  }
+}
+
+>>>variables
+{
+  "code": "US"
+}
+<<<
+
+>>>
+expect status 200
+expect body.data.country.name == "United States"
+expect body.data.country.capital == "Washington D.C."
+expect body.data.country.currency contains "USD"
+expect body.data.country.emoji exists
+expect body.data.country.languages type array
+expect body.data.country.languages length > 0
+expect body.data.country.languages[0].name == "English"
+expect body.data.country.continent.name == "North America"
+<<<
+
+>>>capture
+countryName from body.data.country.name
+continentName from body.data.country.continent.name
+<<<
+
+### List all continents
+# @name listContinents
+# @tags smoke
+
+POST {{baseUrl}}/
+Content-Type: application/json
+
+>>>graphql
+query {
+  continents {
+    code
+    name
+  }
+}
+<<<
+
+>>>
+expect status 200
+expect body.data.continents type array
+expect body.data.continents length 7
+expect body.data.continents[0].code exists
+expect body.data.continents[0].name exists
+<<<
+
+### Get countries in a continent
+# @name countriesInContinent
+# @tags continent
+# @depends getCountry
+
+POST {{baseUrl}}/
+Content-Type: application/json
+
+>>>graphql
+query GetContinent($code: ID!) {
+  continent(code: $code) {
+    name
+    countries {
+      name
+      capital
+      emoji
+    }
+  }
+}
+
+>>>variables
+{
+  "code": "NA"
+}
+<<<
+
+>>>
+expect status 200
+expect body.data.continent.name == "North America"
+expect body.data.continent.countries type array
+expect body.data.continent.countries length > 0
+<<<
+
+>>>capture
+countryCount from body.data.continent.countries.#
+<<<
+
+### Get languages
+# @name getLanguages
+# @tags language
+
+POST {{baseUrl}}/
+Content-Type: application/json
+
+>>>graphql
+query GetLanguage($code: ID!) {
+  language(code: $code) {
+    name
+    native
+    rtl
+  }
+}
+
+>>>variables
+{
+  "code": "en"
+}
+<<<
+
+>>>
+expect status 200
+expect body.data.language.name == "English"
+expect body.data.language.native == "English"
+expect body.data.language.rtl == false
+<<<
+
+### Query with multiple filters
+# @name filteredCountries
+# @tags filter
+
+POST {{baseUrl}}/
+Content-Type: application/json
+
+>>>graphql
+query FilterCountries($filter: CountryFilterInput) {
+  countries(filter: $filter) {
+    name
+    code
+    capital
+    continent {
+      name
+    }
+  }
+}
+
+>>>variables
+{
+  "filter": {
+    "continent": {
+      "eq": "NA"
+    }
+  }
+}
+<<<
+
+>>>
+expect status 200
+expect body.data.countries type array
+expect body.data.countries length > 0
+expect body.data.countries each type object
+<<<
+```
+
+## Step-by-Step Breakdown
+
+<Steps>
+
+<Step title="Write a GraphQL query with variables">
+
+The `>>>graphql` block contains the query, and `>>>variables` provides the variable values as JSON.
+
+```http
+POST {{baseUrl}}/
+Content-Type: application/json
+
+>>>graphql
+query GetCountry($code: ID!) {
+  country(code: $code) {
+    name
+    capital
+    currency
+  }
+}
+
+>>>variables
+{
+  "code": "US"
+}
+<<<
+```
+
+hitspec converts this into the standard GraphQL JSON format:
+
+```json
+{
+  "query": "query GetCountry($code: ID!) { country(code: $code) { name capital currency } }",
+  "variables": { "code": "US" }
+}
+```
+
+You write the query naturally and hitspec handles the serialization.
+
+</Step>
+
+<Step title="Assert nested response fields">
+
+GraphQL responses have a `data` wrapper. Use dot notation to reach nested fields.
+
+```http
+>>>
+expect status 200
+expect body.data.country.name == "United States"
+expect body.data.country.capital == "Washington D.C."
+expect body.data.country.currency contains "USD"
+expect body.data.country.languages type array
+expect body.data.country.languages[0].name == "English"
+expect body.data.country.continent.name == "North America"
+<<<
+```
+
+The JSON path syntax supports:
+- Dot notation: `body.data.country.name`
+- Array indexing: `body.data.country.languages[0].name`
+- Length via gjson: `body.data.country.languages.#`
+
+</Step>
+
+<Step title="Capture values from GraphQL responses">
+
+Captures work the same way as with REST responses. Extract values for use in later requests.
+
+```http
+>>>capture
+countryName from body.data.country.name
+continentName from body.data.country.continent.name
+<<<
+```
+
+These values are accessible as `{{getCountry.countryName}}` and `{{getCountry.continentName}}` in subsequent requests.
+
+</Step>
+
+<Step title="Query without variables">
+
+For queries with no variables, you can omit the `>>>variables` block.
+
+```http
+POST {{baseUrl}}/
+Content-Type: application/json
+
+>>>graphql
+query {
+  continents {
+    code
+    name
+  }
+}
+<<<
+```
+
+</Step>
+
+<Step title="Use the each operator for collections">
+
+The `each` operator applies an assertion to every element in an array.
+
+```http
+>>>
+expect status 200
+expect body.data.countries type array
+expect body.data.countries each type object
+<<<
+```
+
+This verifies that every item in the `countries` array is a JSON object.
+
+</Step>
+
+<Step title="Run the GraphQL tests">
+
+```bash
+hitspec run graphql.http
+```
+
+Run only smoke-tagged queries:
+
+```bash
+hitspec run graphql.http --tags smoke
+```
+
+Expected output:
+
+```
+  getCountry (312ms)
+  listContinents (198ms)
+  countriesInContinent (245ms)
+  getLanguages (167ms)
+  filteredCountries (223ms)
+
+5 passed, 0 failed
+```
+
+</Step>
+
+</Steps>
+
+## GraphQL Error Handling
+
+GraphQL APIs return errors in a `data.errors` array. You can assert on these:
+
+```http
+POST {{baseUrl}}/
+Content-Type: application/json
+
+>>>graphql
+query {
+  nonExistentField {
+    id
+  }
+}
+<<<
+
+>>>
+expect status 200
+expect body.errors exists
+expect body.errors type array
+expect body.errors length > 0
+expect body.errors[0].message exists
+<<<
+```
+
+<Tip>
+  GraphQL APIs typically return HTTP 200 even for query errors. Always check `body.errors` in addition to the status code.
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Multipart and GraphQL" icon="code" href="/features/multipart-graphql">
+    Full reference for GraphQL blocks and multipart uploads.
+  </Card>
+  <Card title="Assertions" icon="check" href="/concepts/assertions">
+    All 20+ assertion operators available in hitspec.
+  </Card>
+</CardGroup>

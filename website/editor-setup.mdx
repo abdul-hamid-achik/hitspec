@@ -1,0 +1,76 @@
+---
+title: "Editor Setup"
+description: "Configure syntax highlighting and shell completions for hitspec."
+---
+
+## VSCode Extension
+
+The official hitspec VSCode extension provides full syntax support for `.http` and `.hitspec` files.
+
+### Features
+
+- Full syntax highlighting for `.http` and `.hitspec` files
+- Code snippets for requests, assertions, and captures
+- Support for hitspec-specific syntax: `>>>`, `<<<`, `[[[`, `]]]`
+- Variable interpolation highlighting (`{{variable}}`)
+- Built-in function highlighting (`$uuid()`, `$timestamp()`, etc.)
+
+### Install from VSIX
+
+The extension is currently available as a manual VSIX install:
+
+<Steps>
+<Step title="Build the extension">
+```bash
+cd vscode-hitspec
+npm install
+npm run package
+```
+
+This generates a `.vsix` file in the `vscode-hitspec` directory.
+</Step>
+
+<Step title="Install in VSCode">
+1. Open the Command Palette (`Cmd+Shift+P` on macOS, `Ctrl+Shift+P` on Windows/Linux)
+2. Run **Extensions: Install from VSIX...**
+3. Select the generated `.vsix` file
+</Step>
+</Steps>
+
+### Alternative: REST Client Extension
+
+If you don't need hitspec-specific highlighting, the [REST Client extension](https://marketplace.visualstudio.com/items?itemName=humao.rest-client) provides basic HTTP syntax highlighting that works with `.http` files.
+
+<Note>
+  REST Client does not highlight hitspec assertion blocks (`>>> ... <<<`) or metadata directives (`# @name`, `# @depends`). For the best experience, use the official hitspec extension.
+</Note>
+
+## Shell Completions
+
+hitspec can generate completion scripts for your shell, giving you tab completion for commands and flags.
+
+<CodeGroup>
+
+```bash Bash
+hitspec completion bash > /etc/bash_completion.d/hitspec
+```
+
+```bash Zsh
+hitspec completion zsh > "${fpath[1]}/_hitspec"
+```
+
+```bash Fish
+hitspec completion fish > ~/.config/fish/completions/hitspec.fish
+```
+
+```powershell PowerShell
+hitspec completion powershell > hitspec.ps1
+```
+
+</CodeGroup>
+
+After installing completions, restart your shell or source the completion file for changes to take effect.
+
+<Tip>
+  On macOS with Homebrew, Bash completions are typically loaded from `/opt/homebrew/etc/bash_completion.d/`. For Zsh, you may need to add the completions directory to your `fpath` in `~/.zshrc` before `compinit` is called.
+</Tip>

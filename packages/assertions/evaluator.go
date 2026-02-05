@@ -24,6 +24,7 @@ type Result struct {
 	Actual   any
 	Subject  string
 	Operator string
+	Line     int
 }
 
 type Evaluator struct {
@@ -112,6 +113,7 @@ func (e *Evaluator) Evaluate(assertion *parser.Assertion) *Result {
 		Subject:  assertion.Subject,
 		Operator: assertion.Operator.String(),
 		Expected: resolvedExpected,
+		Line:     assertion.Line,
 	}
 
 	actual, err := e.getActualValue(assertion.Subject)

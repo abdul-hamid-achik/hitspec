@@ -1,0 +1,85 @@
+---
+title: "API Coverage"
+description: "Measure how much of your API is covered by tests using OpenAPI spec comparison and coverage reports."
+---
+
+API coverage tracking compares your test files against an OpenAPI specification to show which endpoints have tests and which do not. This helps identify gaps in your test suite.
+
+## Basic Usage
+
+Enable coverage with the `--coverage` flag and point to your OpenAPI spec:
+
+```bash
+hitspec run tests/ --coverage --openapi api-spec.yaml
+```
+
+## Coverage Output
+
+By default, coverage results are printed to the console. You can also generate HTML or JSON reports:
+
+```bash
+# HTML report
+hitspec run tests/ --coverage --openapi api-spec.yaml --coverage-output coverage.html
+
+# JSON report
+hitspec run tests/ --coverage --openapi api-spec.yaml --coverage-output coverage.json
+```
+
+## What Coverage Tracks
+
+The coverage report shows:
+
+- **Overall coverage percentage** -- the ratio of tested endpoints to total endpoints in the spec
+- **Covered endpoints** -- endpoints that have at least one test request matching the method and path
+- **Uncovered endpoints** -- endpoints defined in the spec with no matching test
+- **Coverage by tag/category** -- grouped by OpenAPI tags if present
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `--coverage` | Enable API coverage tracking |
+| `--openapi` | Path to the OpenAPI/Swagger specification file (YAML or JSON) |
+| `--coverage-output` | Output file path. File extension determines format (`.html` or `.json`) |
+
+## Example
+
+Given an OpenAPI spec with 20 endpoints and tests covering 15 of them:
+
+```bash
+$ hitspec run tests/ --coverage --openapi spec.yaml
+
+Tests: 15 passed, 0 failed
+Coverage: 15/20 endpoints (75%)
+
+Uncovered:
+  GET  /api/admin/settings
+  PUT  /api/admin/settings
+  POST /api/reports/generate
+  GET  /api/reports/{id}/download
+  DELETE /api/users/{id}/sessions
+```
+
+## CI/CD Integration
+
+Use coverage reporting in your CI pipeline to track coverage over time:
+
+```yaml
+- name: Run API tests with coverage
+  run: |
+    hitspec run tests/ \
+      --coverage \
+      --openapi api-spec.yaml \
+      --coverage-output coverage.html \
+      --output junit \
+      --output-file results.xml
+
+- uses: actions/upload-artifact@v4
+  with:
+    name: api-coverage
+    path: coverage.html
+```
+
+<Tip>
+  Run coverage checks locally before pushing to catch missing tests early. Pair coverage with the [OpenAPI import command](/reference/import-export) to generate test stubs for uncovered endpoints.
+</Tip>

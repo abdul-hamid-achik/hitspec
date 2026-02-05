@@ -35,6 +35,11 @@ func Parse(input, filename string) (*File, error) {
 	return p.ParseFile()
 }
 
+// getSnippet returns the current source line for error context.
+func (p *Parser) getSnippet() string {
+	return p.lexer.GetCurrentLine()
+}
+
 func (p *Parser) nextToken() {
 	p.curToken = p.lexer.NextToken()
 	for p.curToken.Type == TokenWhitespace || p.curToken.Type == TokenComment {
@@ -121,6 +126,7 @@ func (p *Parser) parseRequest() (*Request, error) {
 			Line:    p.curToken.Line,
 			Column:  p.curToken.Column,
 			Message: "expected HTTP method, got " + p.curToken.Value,
+			Snippet: p.getSnippet(),
 		}
 	}
 	req.Method = p.curToken.Value
@@ -826,6 +832,7 @@ func (p *Parser) parseAssertionOperator() (AssertionOperator, error) {
 		Line:    p.curToken.Line,
 		Column:  p.curToken.Column,
 		Message: "unknown operator: " + op,
+		Snippet: p.getSnippet(),
 	}
 }
 
@@ -924,6 +931,7 @@ func (p *Parser) parseCapture() (*Capture, error) {
 			Line:    p.curToken.Line,
 			Column:  p.curToken.Column,
 			Message: "expected 'from', got " + p.curToken.Value,
+			Snippet: p.getSnippet(),
 		}
 	}
 	p.nextTokenRaw()
@@ -1025,6 +1033,7 @@ func (p *Parser) parseDBExpectLine(line string, query string, queryLine int) (*D
 			File:    p.file,
 			Line:    queryLine,
 			Message: "invalid db expect syntax: " + line,
+			Snippet: p.getSnippet(),
 		}
 	}
 

@@ -1,0 +1,363 @@
+---
+title: "CI/CD Integration"
+description: "Run hitspec tests in GitHub Actions with JUnit output, environment variables, and pass/fail exit codes."
+---
+
+hitspec is designed for CI/CD. It produces JUnit XML output, uses standard exit codes, and has an official GitHub Action. This tutorial walks through setting up API tests in a GitHub Actions workflow.
+
+## Prerequisites
+
+- A GitHub repository
+- hitspec test files in your repo (see [Basic CRUD](/examples/basic-crud))
+
+## Quick Setup with the Official Action
+
+The fastest way to run hitspec in CI is with the official GitHub Action.
+
+<Steps>
+
+<Step title="Add test files to your repo">
+
+Create a `tests/` directory with your `.http` files:
+
+```http tests/api.http
+@baseUrl = https://jsonplaceholder.typicode.com
+
+### Health check
+# @name healthCheck
+# @tags smoke
+
+GET {{baseUrl}}/posts/1
+
+>>>
+expect status 200
+expect body.id == 1
+expect duration < 5000
+<<<
+
+### List posts
+# @name listPosts
+# @tags smoke
+
+GET {{baseUrl}}/posts
+
+>>>
+expect status 200
+expect body type array
+expect body length > 0
+<<<
+
+### Create post
+# @name createPost
+# @tags write
+
+POST {{baseUrl}}/posts
+Content-Type: application/json
+
+{
+  "title": "CI Test Post",
+  "body": "Created during CI pipeline",
+  "userId": 1
+}
+
+>>>
+expect status 201
+expect body.id exists
+<<<
+```
+
+</Step>
+
+<Step title="Create the workflow file">
+
+Create `.github/workflows/api-tests.yml`:
+
+```yaml .github/workflows/api-tests.yml
+name: API Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  api-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run API tests
+        uses: abdul-hamid-achik/hitspec@v1
+        with:
+          files: tests/
+          output: junit
+          output-file: test-results.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: test-results.xml
+```
+
+The `if: always()` on the upload step ensures test results are uploaded even when tests fail, so you can inspect failures in the GitHub UI.
+
+</Step>
+
+<Step title="Verify the results">
+
+When the workflow runs, it:
+
+1. Installs the latest hitspec binary
+2. Runs all `.http` files in the `tests/` directory
+3. Produces JUnit XML output at `test-results.xml`
+4. Exits with code 0 on success, 1 on failure
+5. Uploads the XML as a build artifact
+
+GitHub Actions natively understands JUnit XML and will show test results in the PR checks tab.
+
+</Step>
+
+</Steps>
+
+## Workflow Recipes
+
+### Run only smoke tests
+
+Filter by tags to run a fast subset in CI:
+
+```yaml
+- uses: abdul-hamid-achik/hitspec@v1
+  with:
+    files: tests/
+    tags: smoke
+    output: junit
+    output-file: smoke-results.xml
+```
+
+### Run tests against staging
+
+Use the `env` input to select an environment defined in your `.hitspec.env.json` or `hitspec.yaml`:
+
+```yaml
+- uses: abdul-hamid-achik/hitspec@v1
+  with:
+    files: tests/
+    env: staging
+    output: junit
+    output-file: test-results.xml
+```
+
+### Pass secrets via environment file
+
+Create a `.env` file at runtime from GitHub secrets:
+
+```yaml
+- name: Create env file
+  run: |
+    echo "API_TOKEN=${{ secrets.API_TOKEN }}" >> .env.ci
+    echo "API_BASE_URL=${{ secrets.STAGING_URL }}" >> .env.ci
+
+- uses: abdul-hamid-achik/hitspec@v1
+  with:
+    files: tests/
+    env-file: .env.ci
+    output: junit
+    output-file: test-results.xml
+```
+
+### Parallel execution
+
+Run independent tests concurrently for faster feedback:
+
+```yaml
+- uses: abdul-hamid-achik/hitspec@v1
+  with:
+    files: tests/
+    parallel: true
+    output: junit
+    output-file: test-results.xml
+```
+
+### Fail fast on first error
+
+Use `bail` to stop at the first failure:
+
+```yaml
+- uses: abdul-hamid-achik/hitspec@v1
+  with:
+    files: tests/
+    bail: true
+    output: junit
+    output-file: test-results.xml
+```
+
+### Stress testing in CI
+
+Run load tests with pass/fail thresholds as a quality gate:
+
+```yaml
+- uses: abdul-hamid-achik/hitspec@v1
+  with:
+    files: tests/api.http
+    stress: true
+    duration: 2m
+    rate: 50
+    threshold: "p95<500ms,errors<1%"
+```
+
+The workflow fails if the p95 latency exceeds 500ms or the error rate exceeds 1%.
+
+## Manual Installation (Without the Action)
+
+If you prefer to install hitspec yourself:
+
+```yaml
+name: API Tests (manual setup)
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  api-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install hitspec
+        run: |
+          curl -fsSL https://github.com/abdul-hamid-achik/hitspec/releases/latest/download/hitspec-linux-amd64.tar.gz | tar xz
+          sudo mv hitspec /usr/local/bin/
+
+      - name: Run tests
+        run: hitspec run tests/ -o junit --output-file test-results.xml
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: test-results.xml
+```
+
+## Exit Codes
+
+hitspec uses standard exit codes for CI integration:
+
+| Code | Meaning |
+|------|---------|
+| `0` | All tests passed |
+| `1` | One or more tests failed |
+
+CI platforms treat any non-zero exit code as a failure, so hitspec works out of the box with GitHub Actions, GitLab CI, CircleCI, Jenkins, and others.
+
+## Environment Variables
+
+All CLI flags can be set via environment variables with the `HITSPEC_` prefix. This is useful for CI where you want to configure hitspec without modifying the workflow:
+
+```yaml
+env:
+  HITSPEC_ENV: staging
+  HITSPEC_TIMEOUT: 60s
+  HITSPEC_BAIL: "true"
+  HITSPEC_OUTPUT: junit
+  HITSPEC_OUTPUT_FILE: results.xml
+```
+
+| Variable | CLI Flag | Description |
+|----------|----------|-------------|
+| `HITSPEC_ENV` | `--env` | Environment to use |
+| `HITSPEC_ENV_FILE` | `--env-file` | Path to .env file |
+| `HITSPEC_TAGS` | `--tags` | Filter by tags |
+| `HITSPEC_OUTPUT` | `--output` | Output format |
+| `HITSPEC_OUTPUT_FILE` | `--output-file` | Output file path |
+| `HITSPEC_BAIL` | `--bail` | Stop on first failure |
+| `HITSPEC_PARALLEL` | `--parallel` | Run in parallel |
+| `HITSPEC_TIMEOUT` | `--timeout` | Request timeout |
+
+## Complete Production Workflow
+
+Here is a full workflow that runs smoke tests on every push, full tests on PRs, and stress tests on merge to main:
+
+```yaml .github/workflows/api-tests-full.yml
+name: API Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: abdul-hamid-achik/hitspec@v1
+        with:
+          files: tests/
+          tags: smoke
+          bail: true
+          output: junit
+          output-file: smoke-results.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-results
+          path: smoke-results.xml
+
+  full:
+    name: Full Test Suite
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    needs: smoke
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create env file
+        run: |
+          echo "API_TOKEN=${{ secrets.API_TOKEN }}" >> .env.ci
+      - uses: abdul-hamid-achik/hitspec@v1
+        with:
+          files: tests/
+          env: staging
+          env-file: .env.ci
+          parallel: true
+          output: junit
+          output-file: full-results.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: full-results
+          path: full-results.xml
+
+  stress:
+    name: Load Test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: smoke
+    steps:
+      - uses: actions/checkout@v4
+      - uses: abdul-hamid-achik/hitspec@v1
+        with:
+          files: tests/api.http
+          tags: smoke
+          stress: true
+          duration: 2m
+          rate: 100
+          threshold: "p95<500ms,errors<0.5%"
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Output Formats" icon="table" href="/integrations/output-formats">
+    Learn about JUnit, JSON, TAP, and HTML output options.
+  </Card>
+  <Card title="Stress Testing" icon="bolt" href="/examples/stress-testing">
+    Configure load tests with profiles and thresholds.
+  </Card>
+</CardGroup>

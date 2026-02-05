@@ -1,0 +1,223 @@
+---
+title: "Variables"
+description: "Define variables, use built-in functions, reference environment values, and interpolate captured data."
+---
+
+Variables let you avoid hardcoding values in your test files. hitspec supports inline definitions, environment files, built-in functions, system environment references, and captured values from previous responses.
+
+## Defining Variables
+
+Use the `@variable = value` syntax at the top of a `.http` file:
+
+```http
+@baseUrl = https://api.example.com
+@token = my-api-token
+@userId = 42
+```
+
+## Interpolation
+
+Reference variables anywhere in your requests using double curly braces:
+
+```http
+GET {{baseUrl}}/users/{{userId}}
+Authorization: Bearer {{token}}
+```
+
+Variables can appear in:
+- URLs
+- Headers
+- Request bodies
+- Query parameters
+- Assertion values
+- Other variable definitions
+- Metadata directive arguments
+
+```http
+@baseUrl = https://api.example.com
+@apiPath = {{baseUrl}}/v1
+
+### Create user
+# @timeout {{timeout}}
+# @auth bearer {{token}}
+
+POST {{apiPath}}/users
+Content-Type: application/json
+
+{
+  "name": "User {{$random(1, 1000)}}",
+  "email": "{{$randomEmail()}}"
+}
+
+>>>
+expect status 201
+expect body.name startsWith "User"
+<<<
+```
+
+## Built-in Functions
+
+hitspec provides 17 built-in functions that generate dynamic values at runtime. Call them with the `$functionName()` syntax inside double curly braces.
+
+### Identity and Randomness
+
+| Function | Description | Example Output |
+|----------|-------------|----------------|
+| `{{$uuid()}}` | Generate a UUID v4 | `550e8400-e29b-41d4-a716-446655440000` |
+| `{{$random(min, max)}}` | Random integer in range | `42` |
+| `{{$randomString(len)}}` | Random alphanumeric string | `aB3kL9mN` |
+| `{{$randomAlphanumeric(len)}}` | Random alphanumeric string | `K8mNp2qRsT` |
+| `{{$randomEmail()}}` | Random email address | `user_abc123@example.com` |
+
+### Date and Time
+
+| Function | Description | Example Output |
+|----------|-------------|----------------|
+| `{{$timestamp()}}` | Unix timestamp in seconds | `1705612800` |
+| `{{$timestampMs()}}` | Unix timestamp in milliseconds | `1705612800000` |
+| `{{$now()}}` | Current datetime in RFC 3339 | `2024-01-18T12:00:00Z` |
+| `{{$isodate()}}` | ISO date (YYYY-MM-DD) | `2024-01-18` |
+| `{{$date(format)}}` | Custom date format (Go layout) | `2024-01-18` |
+
+<Note>
+The `$date()` function uses Go's reference time layout. The reference date is `Mon Jan 2 15:04:05 MST 2006`. For example, `{{$date(2006-01-02)}}` produces `2024-01-18`.
+</Note>
+
+### Encoding and Hashing
+
+| Function | Description | Example Output |
+|----------|-------------|----------------|
+| `{{$base64(value)}}` | Base64 encode | `aGVsbG8=` |
+| `{{$base64Decode(value)}}` | Base64 decode | `hello` |
+| `{{$md5(value)}}` | MD5 hash | `5d41402abc4b2a76...` |
+| `{{$sha256(value)}}` | SHA256 hash | `2cf24dba5fb0a30e...` |
+| `{{$urlEncode(value)}}` | URL-encode a string | `hello%20world` |
+| `{{$urlDecode(value)}}` | URL-decode a string | `hello world` |
+
+### Utilities
+
+| Function | Description | Example Output |
+|----------|-------------|----------------|
+| `{{$json(value)}}` | JSON passthrough | `{"key": "value"}` |
+| `{{$env(VAR, default)}}` | System environment variable with optional default | *(value of $VAR)* |
+
+### Practical Examples
+
+<Tabs>
+<Tab title="Unique test data">
+```http
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{
+  "id": "{{$uuid()}}",
+  "name": "Test User {{$random(1, 9999)}}",
+  "email": "{{$randomEmail()}}",
+  "createdAt": "{{$now()}}"
+}
+```
+</Tab>
+<Tab title="Authentication headers">
+```http
+@username = admin
+@password = secret
+
+GET {{baseUrl}}/api/data
+Authorization: Basic {{$base64({{username}}:{{password}})}}
+X-Request-Id: {{$uuid()}}
+X-Timestamp: {{$timestamp()}}
+```
+</Tab>
+<Tab title="URL construction">
+```http
+@searchTerm = hello world
+@startDate = {{$isodate()}}
+
+GET {{baseUrl}}/search
+? q = {{$urlEncode({{searchTerm}})}}
+? since = {{startDate}}
+? limit = 20
+```
+</Tab>
+</Tabs>
+
+## System Environment Variables
+
+Access system environment variables with `$env()`:
+
+```http
+@token = {{$env(API_TOKEN)}}
+@dbUrl = {{$env(DATABASE_URL, sqlite://./test.db)}}
+```
+
+The second argument is an optional default value used when the environment variable is not set.
+
+You can also reference system variables in your environment file (`.hitspec.env.json`):
+
+```json
+{
+  "prod": {
+    "baseUrl": "https://api.example.com",
+    "token": "{{$env.API_TOKEN}}",
+    "dbPassword": "{{$env.DB_PASSWORD}}"
+  }
+}
+```
+
+## Capture References
+
+When a request captures values from its response, subsequent requests can reference them using the `{{requestName.captureName}}` pattern:
+
+```http
+### Login
+# @name login
+
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{"email": "test@example.com", "password": "secret"}
+
+>>>capture
+token from body.access_token
+userId from body.user.id
+<<<
+
+### Get profile
+# @depends login
+
+GET {{baseUrl}}/users/{{login.userId}}
+Authorization: Bearer {{login.token}}
+
+>>>
+expect status 200
+expect body.id == "{{login.userId}}"
+<<<
+```
+
+<Warning>
+Capture references require that (1) the source request has a `@name` directive, (2) the source request has a `>>>capture` block, and (3) the consuming request declares `@depends` on the source request.
+</Warning>
+
+See [Captures](/concepts/captures) and [Dependencies](/concepts/dependencies) for more detail.
+
+## Variable Resolution Order
+
+When the same variable name is defined in multiple places, hitspec resolves it in this order (later sources override earlier ones):
+
+1. **Built-in functions** -- `$uuid()`, `$timestamp()`, etc.
+2. **Environment file** -- values from `.hitspec.env.json` for the active environment
+3. **hitspec.yaml environments** -- values from the `environments` section of config
+4. **Inline variables** -- `@variable = value` in the `.http` file
+5. **Captured values** -- `{{requestName.captureName}}` from prior responses
+
+<Tip>
+Inline variables (`@var = value`) override environment file values. This is useful for local overrides during development, but be careful not to accidentally shadow environment-specific configuration.
+</Tip>
+
+## Variable Scope
+
+Variables defined with `@variable = value` are scoped to the file in which they appear. Every request in that file can reference them.
+
+Captured variables are scoped to the entire test run. Any request in any file can reference a captured value, as long as the capturing request has already executed (enforced by `@depends`).
+
+Environment variables (from `.hitspec.env.json` or `hitspec.yaml`) are global and available to all files in the test run.

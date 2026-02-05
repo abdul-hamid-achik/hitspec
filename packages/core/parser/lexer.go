@@ -602,6 +602,21 @@ func (l *Lexer) CurrentColumn() int {
 	return l.column
 }
 
+// GetCurrentLine returns the text of the current line from the input.
+func (l *Lexer) GetCurrentLine() string {
+	// Find start of current line
+	start := l.pos
+	for start > 0 && l.input[start-1] != '\n' {
+		start--
+	}
+	// Find end of current line
+	end := l.pos
+	for end < len(l.input) && l.input[end] != '\n' && l.input[end] != '\r' {
+		end++
+	}
+	return l.input[start:end]
+}
+
 func isLetter(ch byte) bool {
 	return unicode.IsLetter(rune(ch)) || ch == '_'
 }

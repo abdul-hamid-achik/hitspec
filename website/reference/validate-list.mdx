@@ -1,0 +1,117 @@
+---
+title: "hitspec validate & list"
+description: "Validate syntax and list requests in hitspec files"
+---
+
+# hitspec validate
+
+Validate `.http` and `.hitspec` files for syntax errors without executing them.
+
+```bash
+hitspec validate <file|directory>
+```
+
+## Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `<file>` | Single `.http` or `.hitspec` file to validate |
+| `<directory>` | Directory to search recursively for test files |
+
+## Behavior
+
+The `validate` command parses each file and reports:
+
+- Syntax errors (malformed requests, invalid headers)
+- Invalid assertion syntax
+- Undefined variables
+- Circular dependencies
+
+If all files are valid, each is printed with a `Valid:` prefix. If any file has errors, the command prints the error and exits with a non-zero status.
+
+## Examples
+
+<CodeGroup>
+```bash Validate a single file
+hitspec validate tests/api.http
+```
+
+```bash Validate all files in a directory
+hitspec validate tests/
+```
+</CodeGroup>
+
+### Sample Output
+
+```
+Valid: tests/auth.http
+Valid: tests/users.http
+Error in tests/broken.http: line 15: unexpected token ">>>"
+```
+
+### Use in CI/CD
+
+```bash
+# Validate before running tests
+hitspec validate tests/ && hitspec run tests/ --env staging
+```
+
+```yaml
+# GitHub Actions
+- name: Validate test files
+  run: hitspec validate tests/
+```
+
+---
+
+# hitspec list
+
+List all requests defined in `.http` and `.hitspec` files.
+
+```bash
+hitspec list <file|directory>
+```
+
+## Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `<file>` | Single `.http` or `.hitspec` file |
+| `<directory>` | Directory to search recursively for test files |
+
+## Behavior
+
+The `list` command parses each file and prints each request with its name and tags. If a request has no `@name` annotation, the method and URL are used as the display name.
+
+## Examples
+
+<CodeGroup>
+```bash List requests in a file
+hitspec list tests/api.http
+```
+
+```bash List all requests in a directory
+hitspec list tests/
+```
+</CodeGroup>
+
+### Sample Output
+
+```
+tests/api.http:
+  - healthCheck
+    tags: [smoke]
+  - login
+    tags: [auth]
+  - getProfile
+    tags: [users]
+  - updateProfile
+    tags: [users]
+```
+
+### Use Cases
+
+- Discover available tests in a project
+- Verify request names before filtering with `--name`
+- Audit tag coverage across test files
+- Quick inventory of API endpoints under test

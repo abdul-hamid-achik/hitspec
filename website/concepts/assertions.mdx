@@ -1,0 +1,359 @@
+---
+title: "Assertions"
+description: "Validate HTTP responses with 24 assertion operators covering equality, strings, types, arrays, schemas, and snapshots."
+---
+
+Assertions let you validate every aspect of an HTTP response -- status codes, headers, body content, response times, and more. hitspec provides 24 operators grouped into six categories.
+
+## Assertion Block Syntax
+
+Wrap assertions in `>>>` and `<<<` markers:
+
+```http
+GET {{baseUrl}}/users
+
+>>>
+expect status 200
+expect body type array
+expect body[0].id exists
+expect duration < 500
+<<<
+```
+
+Each line inside the block follows this pattern:
+
+```
+expect <subject> <operator> <value>
+```
+
+When the operator is `==`, you can omit it:
+
+```http
+>>>
+expect status 200          # shorthand for: expect status == 200
+expect status == 200       # explicit form
+<<<
+```
+
+## Assertion Subjects
+
+| Subject | Description | Example |
+|---------|-------------|---------|
+| `status` | HTTP status code | `expect status 200` |
+| `duration` | Response time in milliseconds | `expect duration < 1000` |
+| `header <name>` | Response header value | `expect header Content-Type contains json` |
+| `body` | Full response body (as string) | `expect body contains "success"` |
+| `body.<path>` | JSON path into body | `expect body.user.name == "John"` |
+| `body[n]` | Array index | `expect body[0].id exists` |
+| `jsonpath $.<path>` | JSONPath expression | `expect jsonpath $.users[0].id exists` |
+
+---
+
+## Equality and Comparison
+
+Compare values using standard comparison operators.
+
+| Operator | Syntax | Description |
+|----------|--------|-------------|
+| `==` | `expect status == 200` | Equals |
+| `!=` | `expect body.error != null` | Not equals |
+| `>` | `expect body.count > 0` | Greater than |
+| `>=` | `expect body.count >= 1` | Greater than or equal |
+| `<` | `expect duration < 1000` | Less than |
+| `<=` | `expect duration <= 500` | Less than or equal |
+
+```http
+### Verify response timing and pagination
+GET {{baseUrl}}/users?page=1&limit=20
+
+>>>
+expect status == 200
+expect duration < 500
+expect body.total > 0
+expect body.page == 1
+expect body.perPage >= 20
+<<<
+```
+
+<Tip>
+Use `expect status 200` as shorthand for `expect status == 200`. The `==` operator is implied when omitted.
+</Tip>
+
+---
+
+## String Operators
+
+Match, search, and compare string values.
+
+| Operator | Syntax | Description |
+|----------|--------|-------------|
+| `contains` | `expect body contains "success"` | Contains substring |
+| `!contains` | `expect body !contains "error"` | Does not contain substring |
+| `startsWith` | `expect body.url startsWith "https"` | Starts with prefix |
+| `endsWith` | `expect body.email endsWith ".com"` | Ends with suffix |
+| `matches` | `expect body.id matches /^\d+$/` | Matches regular expression |
+
+```http
+### Check user profile fields
+GET {{baseUrl}}/users/1
+
+>>>
+expect status 200
+expect body.email endsWith "@example.com"
+expect body.website startsWith "https"
+expect body.bio !contains "<script>"
+expect body.phone matches /^\+?[\d\s\-()]+$/
+<<<
+```
+
+<Note>
+Regular expressions in `matches` are enclosed in forward slashes: `/pattern/`. The pattern uses Go's regexp syntax.
+</Note>
+
+---
+
+## Existence and Type
+
+Check whether values exist and validate their types.
+
+| Operator | Syntax | Description |
+|----------|--------|-------------|
+| `exists` | `expect body.id exists` | Value is present and not null |
+| `!exists` | `expect body.error !exists` | Value is absent or null |
+| `type` | `expect body.items type array` | Check value type |
+
+Supported types for the `type` operator: `null`, `boolean`, `number`, `string`, `array`, `object`.
+
+```http
+### Validate response structure
+GET {{baseUrl}}/users/1
+
+>>>
+expect status 200
+expect body.id exists
+expect body.name type string
+expect body.age type number
+expect body.active type boolean
+expect body.tags type array
+expect body.address type object
+expect body.deletedAt !exists
+<<<
+```
+
+---
+
+## Length and Arrays
+
+Validate array lengths and check array contents.
+
+| Operator | Syntax | Description |
+|----------|--------|-------------|
+| `length` | `expect body.items length 10` | Length equals exact value |
+| `length >` | `expect body.items length > 0` | Length greater than |
+| `length >=` | `expect body.items length >= 1` | Length greater than or equal |
+| `length <` | `expect body.items length < 100` | Length less than |
+| `length <=` | `expect body.items length <= 50` | Length less than or equal |
+| `includes` | `expect body.tags includes "admin"` | Array contains value |
+| `!includes` | `expect body.tags !includes "test"` | Array does not contain value |
+| `in` | `expect status in [200, 201, 204]` | Value is one of the listed values |
+| `!in` | `expect status !in [400, 404, 500]` | Value is not one of the listed values |
+| `each` | `expect body.items each type object` | Apply assertion to every element |
+
+```http
+### Validate paginated list
+GET {{baseUrl}}/users?role=admin
+
+>>>
+expect status 200
+expect body.users length > 0
+expect body.users length <= 100
+expect body.users each type object
+<<<
+```
+
+### The `each` Operator
+
+`each` applies an assertion to every element in an array. It is useful for validating the shape of list responses:
+
+```http
+>>>
+expect body.users each type object
+expect body.users each body.id exists
+expect body.users each body.email matches /^.+@.+\..+$/
+<<<
+```
+
+### The `in` Operator
+
+`in` checks whether a value is a member of a set. List values in square brackets:
+
+```http
+>>>
+expect status in [200, 201]
+expect body.role in ["admin", "editor", "viewer"]
+<<<
+```
+
+### The `includes` Operator
+
+`includes` checks whether an array contains a specific value:
+
+```http
+>>>
+expect body.permissions includes "read"
+expect body.permissions includes "write"
+expect body.permissions !includes "superadmin"
+<<<
+```
+
+---
+
+## Schema Validation
+
+Validate the entire response body against a JSON Schema file.
+
+| Operator | Syntax | Description |
+|----------|--------|-------------|
+| `schema` | `expect body schema ./schema.json` | Validate against JSON Schema |
+
+```http
+GET {{baseUrl}}/users/1
+
+>>>
+expect status 200
+expect body schema ./schemas/user.json
+<<<
+```
+
+Where `schemas/user.json` contains a standard JSON Schema:
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["id", "name", "email"],
+  "properties": {
+    "id": { "type": "integer" },
+    "name": { "type": "string", "minLength": 1 },
+    "email": { "type": "string", "format": "email" },
+    "role": { "enum": ["admin", "user", "guest"] }
+  }
+}
+```
+
+<Note>
+Schema file paths are resolved relative to the `.http` file that references them.
+</Note>
+
+---
+
+## Snapshot Testing
+
+Compare the response body against a previously saved baseline. On first run, the snapshot is created. On subsequent runs, the response is compared against it.
+
+| Operator | Syntax | Description |
+|----------|--------|-------------|
+| `snapshot` | `expect body snapshot "name"` | Compare against saved snapshot |
+
+```http
+GET {{baseUrl}}/config
+
+>>>
+expect status 200
+expect body snapshot "app-config"
+<<<
+```
+
+Snapshots are stored in a `__snapshots__` directory next to your test file. Update them when the response intentionally changes:
+
+```bash
+hitspec run tests/ --update-snapshots
+```
+
+<Tip>
+Snapshot testing works well for responses that should remain stable over time, such as configuration endpoints or reference data.
+</Tip>
+
+---
+
+## Combining Assertions
+
+A single assertion block can mix operators from any category:
+
+```http
+### Full response validation
+POST {{baseUrl}}/orders
+Content-Type: application/json
+
+{
+  "productId": "prod-123",
+  "quantity": 2
+}
+
+>>>
+expect status 201
+expect duration < 1000
+expect header Content-Type contains json
+expect body.id exists
+expect body.id type string
+expect body.status == "pending"
+expect body.items length 2
+expect body.items each type object
+expect body.total > 0
+expect body schema ./schemas/order.json
+<<<
+```
+
+## Header Assertions
+
+Assert on response headers using the `header <name>` subject:
+
+```http
+>>>
+expect header Content-Type contains "application/json"
+expect header X-Request-Id exists
+expect header X-RateLimit-Remaining > 0
+expect header Cache-Control contains "no-cache"
+<<<
+```
+
+## Testing Error Responses
+
+Assertions are equally useful for verifying error behavior:
+
+<CodeGroup>
+```http 401 Unauthorized
+### Missing authentication
+GET {{baseUrl}}/admin/users
+
+>>>
+expect status 401
+expect body.error exists
+expect body.message contains "unauthorized"
+<<<
+```
+
+```http 404 Not Found
+### Non-existent resource
+GET {{baseUrl}}/users/99999999
+
+>>>
+expect status 404
+expect body.error exists
+<<<
+```
+
+```http 400 Validation Error
+### Invalid input
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{"email": "not-an-email"}
+
+>>>
+expect status 400
+expect body.errors type array
+expect body.errors length > 0
+<<<
+```
+</CodeGroup>

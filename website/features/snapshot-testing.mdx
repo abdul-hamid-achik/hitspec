@@ -1,0 +1,121 @@
+---
+title: "Snapshot Testing"
+description: "Capture response bodies as baselines and automatically detect regressions with snapshot comparison."
+---
+
+Snapshot testing captures a response body and saves it to disk. On subsequent runs, hitspec compares the current response against the saved snapshot and reports any differences. This is useful for detecting unexpected changes in API responses.
+
+## How It Works
+
+1. **First run** -- hitspec saves the response body to a snapshot file.
+2. **Subsequent runs** -- hitspec compares the current response against the saved snapshot.
+3. **Mismatch** -- if the response has changed, the test fails with a diff.
+4. **Update** -- use `--update-snapshots` to accept the new response as the baseline.
+
+## Basic Usage
+
+Add the `snapshot` assertion operator in your expect block:
+
+```http
+### Get user details
+# @name getUser
+
+GET {{baseUrl}}/users/1
+
+>>>
+expect status 200
+expect body snapshot "getUserResponse"
+<<<
+```
+
+The string `"getUserResponse"` is the snapshot name. It must be unique within the test file.
+
+## Snapshot Files
+
+Snapshots are stored in a `__snapshots__/` directory next to your test file:
+
+```
+tests/
+  api.http
+  __snapshots__/
+    api/
+      getUserResponse.json
+```
+
+The directory structure mirrors your test file name, and each snapshot is saved as a separate `.json` file.
+
+<Tip>
+  Commit your `__snapshots__/` directories to version control. This allows your team to review snapshot changes in pull requests and catch unexpected API changes.
+</Tip>
+
+## Updating Snapshots
+
+When an API response changes intentionally (new fields, updated values), update the snapshots:
+
+```bash
+hitspec run tests/ --update-snapshots
+```
+
+This overwrites all existing snapshot files with the current responses. Review the changes in your version control diff to confirm they are expected.
+
+## Workflow
+
+A typical snapshot testing workflow:
+
+1. **Write the test** with `expect body snapshot "name"`
+2. **Run once** to generate the initial snapshot
+3. **Commit** the snapshot file alongside your test
+4. **CI runs** compare responses against the committed snapshots
+5. **When the API changes**, run `--update-snapshots` locally, review the diff, and commit
+
+## Combining with Other Assertions
+
+Snapshot testing works alongside other assertion operators:
+
+```http
+>>>
+expect status 200
+expect body.id exists
+expect body.items type array
+expect body snapshot "fullResponse"
+<<<
+```
+
+The snapshot assertion captures the entire response body. Other assertions run independently and can validate specific fields or structure.
+
+<Note>
+  Snapshots compare the full response body. If your API returns dynamic values (timestamps, UUIDs, etc.), those will cause snapshot mismatches on every run. Use field-level assertions for dynamic values and reserve snapshots for stable response shapes.
+</Note>
+
+## Example: API Regression Detection
+
+```http
+@baseUrl = https://api.example.com
+
+### List products
+# @name listProducts
+# @tags regression
+
+GET {{baseUrl}}/products?category=electronics
+
+>>>
+expect status 200
+expect body type array
+expect body length > 0
+expect body snapshot "productList"
+<<<
+
+### Product detail
+# @name productDetail
+# @tags regression
+
+GET {{baseUrl}}/products/1
+
+>>>
+expect status 200
+expect body.id == 1
+expect body snapshot "productDetail"
+<<<
+```
+
+Running these tests in CI will catch any unexpected changes to the product listing or detail endpoints.

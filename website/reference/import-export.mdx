@@ -1,0 +1,269 @@
+---
+title: "hitspec import & export"
+description: "Import from OpenAPI, Postman, curl, and Insomnia; export to curl"
+---
+
+# hitspec import
+
+Import API specifications from various formats and convert them to hitspec `.http` files.
+
+```bash
+hitspec import <format> <source> [flags]
+```
+
+## Supported Formats
+
+| Format | Description |
+|--------|-------------|
+| `openapi` | OpenAPI 3.0/3.1 specs (YAML or JSON, local file or URL) |
+| `postman` | Postman Collection v2.1 JSON files |
+| `curl` | curl commands (inline or from a file) |
+| `insomnia` | Insomnia export files (v4 format) |
+
+---
+
+## hitspec import openapi
+
+Import from an OpenAPI/Swagger specification.
+
+```bash
+hitspec import openapi <spec-file-or-url> [flags]
+```
+
+### Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--output` | `-o` | Output file path | stdout |
+| `--base-url` | | Override the base URL from the spec | |
+| `--tags` | | Filter operations by tags (comma-separated) | all |
+| `--no-tests` | | Skip generating test assertions | `false` |
+
+### Examples
+
+<CodeGroup>
+```bash From a local file
+hitspec import openapi api-spec.yaml -o tests/api.http
+```
+
+```bash From a URL
+hitspec import openapi https://petstore.swagger.io/v2/swagger.json -o petstore.http
+```
+
+```bash Filter by tags
+hitspec import openapi spec.yaml --tags users,auth -o api.http
+```
+
+```bash Override base URL
+hitspec import openapi spec.yaml --base-url http://localhost:3000 -o api.http
+```
+
+```bash Without test assertions
+hitspec import openapi spec.yaml --no-tests -o api.http
+```
+</CodeGroup>
+
+---
+
+## hitspec import postman
+
+Import from a Postman Collection v2.1 file.
+
+```bash
+hitspec import postman <collection.json> [flags]
+```
+
+### Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--output` | `-o` | Output file or directory path | stdout |
+
+### Features
+
+- Converts Postman folders into request groups
+- Maps Postman dynamic variables to hitspec built-in functions (`{{$guid}}` becomes `{{$uuid()}}`)
+- Converts Bearer, Basic, and API Key authentication
+- Supports raw, URL-encoded, and form-data bodies
+
+### Examples
+
+<CodeGroup>
+```bash Basic import
+hitspec import postman collection.json -o tests/api.http
+```
+
+```bash Print to stdout
+hitspec import postman collection.json
+```
+</CodeGroup>
+
+---
+
+## hitspec import curl
+
+Convert curl commands to hitspec format.
+
+```bash
+hitspec import curl <command-or-file> [flags]
+```
+
+### Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--output` | `-o` | Output file path | stdout |
+| `--no-tests` | | Skip generating test assertions | `false` |
+
+### Supported curl flags
+
+| curl Flag | Description |
+|-----------|-------------|
+| `-X, --request` | HTTP method |
+| `-H, --header` | Request header |
+| `-d, --data` | Request body |
+| `-u, --user` | Basic auth (`user:password`) |
+| `-k, --insecure` | Skip SSL verification |
+| `-L, --location` | Follow redirects |
+| `-A, --user-agent` | User-Agent header |
+| `-e, --referer` | Referer header |
+| `-b, --cookie` | Cookie header |
+
+### Examples
+
+<CodeGroup>
+```bash Inline curl command
+hitspec import curl "curl -X POST https://api.example.com/users -H 'Content-Type: application/json' -d '{\"name\":\"John\"}'"
+```
+
+```bash From a file (one command per line)
+hitspec import curl @commands.txt -o tests/api.http
+```
+
+```bash Without test assertions
+hitspec import curl @commands.txt --no-tests -o tests/api.http
+```
+</CodeGroup>
+
+<Note>
+Use `@filename` syntax to read curl commands from a file. The file supports line continuations with `\`.
+</Note>
+
+---
+
+## hitspec import insomnia
+
+Import from an Insomnia export file (v4 format).
+
+```bash
+hitspec import insomnia <export-file> [flags]
+```
+
+### Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--output` | `-o` | Output file path | stdout |
+| `--no-tests` | | Skip generating test assertions | `false` |
+
+### Features
+
+- Request folders as file separators
+- Environment variables
+- Authentication (Bearer, Basic, API Key)
+- Request bodies (JSON, form data, raw)
+- Headers
+
+### Examples
+
+<CodeGroup>
+```bash Basic import
+hitspec import insomnia insomnia-export.json -o tests/api.http
+```
+
+```bash Without test assertions
+hitspec import insomnia insomnia-export.json --no-tests -o tests/api.http
+```
+</CodeGroup>
+
+---
+
+# hitspec export curl
+
+Export hitspec requests as executable curl commands.
+
+```bash
+hitspec export curl <file> [flags]
+```
+
+## Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--name` | `-n` | Filter by request name (glob pattern) | all |
+| `--tags` | `-t` | Filter by tags (comma-separated) | all |
+| `--output` | `-o` | Output file path | stdout |
+| `--env` | `-e` | Environment for variable resolution | none |
+| `--exec` | | Execute the curl command directly | `false` |
+| `--verbose` | `-v` | Include `-v` in curl output | `false` |
+
+<Warning>
+The `--exec` flag requires exactly one matching request. Use `--name` to filter to a single request when using `--exec`.
+</Warning>
+
+## Auth Conversion
+
+| hitspec | curl |
+|---------|------|
+| `@auth bearer <token>` | `-H 'Authorization: Bearer <token>'` |
+| `@auth basic <user> <pass>` | `-u '<user>:<pass>'` |
+| `@auth apiKey <header> <key>` | `-H '<header>: <key>'` |
+| `@auth digest <user> <pass>` | `--digest -u '<user>:<pass>'` |
+
+## Examples
+
+<CodeGroup>
+```bash Export all requests
+hitspec export curl tests/api.http
+```
+
+```bash Filter by name
+hitspec export curl tests/api.http --name "Login*"
+```
+
+```bash Filter by tags
+hitspec export curl tests/api.http --tags smoke,auth
+```
+
+```bash Save to file
+hitspec export curl tests/api.http -o commands.sh
+```
+
+```bash Execute directly
+hitspec export curl tests/api.http --name "Login" --exec
+```
+
+```bash Resolve variables from environment
+hitspec export curl tests/api.http --env staging
+```
+</CodeGroup>
+
+### Sample Output
+
+```bash
+# Request: Login
+curl -X POST 'https://api.example.com/auth/login' \
+  -H 'Content-Type: application/json' \
+  -d '{"username": "john", "password": "secret"}'
+
+# Request: Get Profile
+curl -X GET 'https://api.example.com/profile' \
+  -H 'Authorization: Bearer {{login.token}}'
+```
+
+## Use Cases
+
+- Debug failing tests by running the raw curl command
+- Share API calls with teammates who do not use hitspec
+- Use exported commands in shell scripts or other tools
+- Quickly test an endpoint outside the test framework

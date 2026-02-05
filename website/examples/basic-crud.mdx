@@ -1,0 +1,315 @@
+---
+title: "Basic CRUD"
+description: "Walk through a complete CRUD test file that covers GET, POST, PUT, and DELETE operations against a REST API."
+---
+
+This tutorial builds a test file that exercises all four CRUD operations against the [JSONPlaceholder](https://jsonplaceholder.typicode.com) API. You will learn how to define variables, write assertions, capture response values, and chain requests with dependencies.
+
+## Prerequisites
+
+- hitspec installed ([Installation](/installation))
+- A terminal
+
+## The Complete Test File
+
+Here is the full test file you will build step by step. Create a file called `crud.http`:
+
+```http crud.http
+@baseUrl = https://jsonplaceholder.typicode.com
+
+### List all posts
+# @name listPosts
+# @tags smoke, read
+
+GET {{baseUrl}}/posts
+
+>>>
+expect status 200
+expect body type array
+expect body[0].id exists
+expect body[0].title exists
+expect body[0].userId exists
+<<<
+
+### Get a single post
+# @name getPost
+# @tags read
+
+GET {{baseUrl}}/posts/1
+
+>>>
+expect status 200
+expect body.id == 1
+expect body.title exists
+expect body.userId type number
+expect duration < 2000
+<<<
+
+### Create a post
+# @name createPost
+# @tags write
+
+POST {{baseUrl}}/posts
+Content-Type: application/json
+
+{
+  "title": "Testing with hitspec",
+  "body": "Plain text API tests. No magic.",
+  "userId": 1
+}
+
+>>>
+expect status 201
+expect body.id exists
+expect body.title == "Testing with hitspec"
+expect body.userId == 1
+<<<
+
+>>>capture
+newPostId from body.id
+<<<
+
+### Update the post
+# @name updatePost
+# @tags write
+# @depends createPost
+
+PUT {{baseUrl}}/posts/{{createPost.newPostId}}
+Content-Type: application/json
+
+{
+  "id": {{createPost.newPostId}},
+  "title": "Updated with hitspec",
+  "body": "This post has been updated.",
+  "userId": 1
+}
+
+>>>
+expect status 200
+expect body.title == "Updated with hitspec"
+<<<
+
+### Delete the post
+# @name deletePost
+# @tags write
+# @depends updatePost
+
+DELETE {{baseUrl}}/posts/{{createPost.newPostId}}
+
+>>>
+expect status 200
+<<<
+```
+
+## Step-by-Step Breakdown
+
+<Steps>
+
+<Step title="Define variables">
+
+The `@baseUrl` variable at the top of the file stores the API base URL. Reference it anywhere with `{{baseUrl}}`.
+
+```http
+@baseUrl = https://jsonplaceholder.typicode.com
+```
+
+Variables reduce duplication and make it easy to switch environments. You can override them with a `.hitspec.env.json` file or the `--env` flag.
+
+</Step>
+
+<Step title="List all posts (GET collection)">
+
+The first request fetches all posts and validates the response shape.
+
+```http
+### List all posts
+# @name listPosts
+# @tags smoke, read
+
+GET {{baseUrl}}/posts
+
+>>>
+expect status 200
+expect body type array
+expect body[0].id exists
+expect body[0].title exists
+expect body[0].userId exists
+<<<
+```
+
+Key concepts:
+- `###` separates requests within a file
+- `# @name listPosts` gives the request an identifier for captures and dependencies
+- `# @tags smoke, read` lets you filter with `--tags smoke`
+- The `>>> ... <<<` block contains assertions
+- `expect body type array` checks the response is a JSON array
+- `expect body[0].id exists` checks nested fields using JSON path syntax
+
+</Step>
+
+<Step title="Get a single post (GET by ID)">
+
+This request fetches a specific post and adds a response time assertion.
+
+```http
+### Get a single post
+# @name getPost
+# @tags read
+
+GET {{baseUrl}}/posts/1
+
+>>>
+expect status 200
+expect body.id == 1
+expect body.title exists
+expect body.userId type number
+expect duration < 2000
+<<<
+```
+
+- `expect body.id == 1` checks an exact value
+- `expect body.userId type number` validates the JSON type
+- `expect duration < 2000` fails if the response takes more than 2 seconds
+
+</Step>
+
+<Step title="Create a post (POST with JSON body)">
+
+This request creates a new resource and captures its ID for later use.
+
+```http
+### Create a post
+# @name createPost
+# @tags write
+
+POST {{baseUrl}}/posts
+Content-Type: application/json
+
+{
+  "title": "Testing with hitspec",
+  "body": "Plain text API tests. No magic.",
+  "userId": 1
+}
+
+>>>
+expect status 201
+expect body.id exists
+expect body.title == "Testing with hitspec"
+expect body.userId == 1
+<<<
+
+>>>capture
+newPostId from body.id
+<<<
+```
+
+The `>>>capture ... <<<` block extracts `body.id` from the response and stores it as `newPostId`. Later requests reference it as `{{createPost.newPostId}}` (request name dot capture name).
+
+</Step>
+
+<Step title="Update the post (PUT with dependency)">
+
+This request depends on `createPost` and uses the captured ID.
+
+```http
+### Update the post
+# @name updatePost
+# @tags write
+# @depends createPost
+
+PUT {{baseUrl}}/posts/{{createPost.newPostId}}
+Content-Type: application/json
+
+{
+  "id": {{createPost.newPostId}},
+  "title": "Updated with hitspec",
+  "body": "This post has been updated.",
+  "userId": 1
+}
+
+>>>
+expect status 200
+expect body.title == "Updated with hitspec"
+<<<
+```
+
+`# @depends createPost` ensures this request runs after `createPost` completes, even in parallel mode.
+
+</Step>
+
+<Step title="Delete the post (DELETE)">
+
+The final request deletes the resource. It depends on `updatePost` to preserve execution order.
+
+```http
+### Delete the post
+# @name deletePost
+# @tags write
+# @depends updatePost
+
+DELETE {{baseUrl}}/posts/{{createPost.newPostId}}
+
+>>>
+expect status 200
+<<<
+```
+
+</Step>
+
+<Step title="Run the tests">
+
+Run all requests:
+
+```bash
+hitspec run crud.http
+```
+
+Run only read operations:
+
+```bash
+hitspec run crud.http --tags read
+```
+
+Run only write operations:
+
+```bash
+hitspec run crud.http --tags write
+```
+
+Expected output:
+
+```
+  listPosts (142ms)
+  getPost (98ms)
+  createPost (201ms)
+  updatePost (156ms)
+  deletePost (113ms)
+
+5 passed, 0 failed
+```
+
+</Step>
+
+</Steps>
+
+## Key Concepts Used
+
+| Concept | Syntax | Purpose |
+|---------|--------|---------|
+| Variables | `@baseUrl = ...` | Reusable values |
+| Request names | `# @name createPost` | Identify requests for captures and dependencies |
+| Tags | `# @tags smoke, read` | Filter which requests to run |
+| Assertions | `expect status 200` | Validate responses |
+| Captures | `newPostId from body.id` | Extract values from responses |
+| Dependencies | `# @depends createPost` | Control execution order |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Auth Flow" icon="lock" href="/examples/auth-flow">
+    Chain login and authenticated requests with token capture.
+  </Card>
+  <Card title="Environments" icon="server" href="/concepts/environments">
+    Use different base URLs and variables per environment.
+  </Card>
+</CardGroup>

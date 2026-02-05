@@ -1,0 +1,155 @@
+---
+title: "Mock Server"
+description: "Start a mock HTTP server from your .http test files for frontend development and integration testing."
+---
+
+<Warning>
+  The mock server is an **experimental** feature. The syntax and behavior may change in future releases.
+</Warning>
+
+hitspec can start a mock HTTP server that serves responses based on your `.http` test files. This is useful for frontend development, integration testing, and working offline without a live backend.
+
+## Basic Usage
+
+```bash
+# Start mock server on port 3000
+hitspec mock api.http --port 3000
+
+# From a directory of .http files
+hitspec mock tests/ --port 8080
+```
+
+The mock server reads your test files and creates endpoints that return responses matching the expected assertions.
+
+## How It Works
+
+hitspec inspects the requests defined in your `.http` files and creates matching routes. When a request matches a route, the server returns a response based on:
+
+1. **`>>>mock` blocks** -- if present, this is used as the response body
+2. **Assertion expectations** -- if no mock block exists, a response is inferred from your assertions
+
+## Custom Mock Responses
+
+Use the `>>>mock` block to define the exact response body:
+
+```http
+### Get user by ID
+# @name getUser
+
+GET {{baseUrl}}/users/{{id}}
+
+>>>mock
+{
+  "id": {{id}},
+  "name": "Mock User",
+  "email": "mock@example.com"
+}
+<<<
+
+>>>
+expect status 200
+expect body.id exists
+<<<
+```
+
+When a GET request to `/users/123` hits the mock server, it returns the mock body with `{{id}}` resolved to `123`.
+
+## Flags
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--port` | Server port | `3000` |
+| `--delay` | Artificial response delay | `0` |
+
+## Adding Artificial Delay
+
+Simulate network latency with the `--delay` flag:
+
+```bash
+hitspec mock api.http --port 3000 --delay 100ms
+```
+
+This adds a 100ms delay before every response, which is useful for testing loading states in frontend applications.
+
+## Example
+
+Given this test file:
+
+```http
+@baseUrl = http://localhost:3000
+
+### List users
+# @name listUsers
+
+GET {{baseUrl}}/users
+
+>>>mock
+[
+  {"id": 1, "name": "Alice"},
+  {"id": 2, "name": "Bob"}
+]
+<<<
+
+>>>
+expect status 200
+expect body type array
+<<<
+
+### Get single user
+# @name getUser
+
+GET {{baseUrl}}/users/1
+
+>>>mock
+{
+  "id": 1,
+  "name": "Alice",
+  "email": "alice@example.com"
+}
+<<<
+
+>>>
+expect status 200
+<<<
+
+### Create user
+# @name createUser
+
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{
+  "name": "Charlie"
+}
+
+>>>mock
+{
+  "id": 3,
+  "name": "Charlie"
+}
+<<<
+
+>>>
+expect status 201
+<<<
+```
+
+Start the mock server:
+
+```bash
+hitspec mock api.http --port 3000
+```
+
+Then test against it:
+
+```bash
+curl http://localhost:3000/users
+# [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]
+
+curl http://localhost:3000/users/1
+# {"id": 1, "name": "Alice", "email": "alice@example.com"}
+```
+
+<Tip>
+  The mock server is especially useful during frontend development. Point your frontend at the mock server and develop against stable, predictable responses without needing a live backend.
+</Tip>

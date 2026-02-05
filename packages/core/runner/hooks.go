@@ -12,6 +12,9 @@ import (
 
 // executePreHooks runs all pre-hooks for a request
 func (r *Runner) executePreHooks(hooks []*parser.Hook, baseDir string, resolver func(string) string) error {
+	if !r.config.AllowShell {
+		return fmt.Errorf("hooks require --allow-shell flag")
+	}
 	for _, hook := range hooks {
 		if hook.Type != parser.HookExec {
 			continue
@@ -25,6 +28,9 @@ func (r *Runner) executePreHooks(hooks []*parser.Hook, baseDir string, resolver 
 
 // executePostHooks runs all post-hooks for a request
 func (r *Runner) executePostHooks(hooks []*parser.Hook, baseDir string, resolver func(string) string) error {
+	if !r.config.AllowShell {
+		return fmt.Errorf("hooks require --allow-shell flag")
+	}
 	var firstErr error
 	for _, hook := range hooks {
 		if hook.Type != parser.HookExec {
