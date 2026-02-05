@@ -2,6 +2,8 @@ module github.com/abdul-hamid-achik/hitspec
 
 go 1.25
 
+toolchain go1.25.7
+
 require (
 	github.com/HdrHistogram/hdrhistogram-go v1.1.2
 	github.com/fatih/color v1.16.0
