@@ -1,5 +1,5 @@
 {
-  "$schema": "https://mintlify.com/schema.json",
+  "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
   "name": "hitspec",
   "logo": {
@@ -8,115 +8,119 @@
   },
   "favicon": "/favicon.svg",
   "colors": {
-    "primary": "#0D9373",
-    "light": "#07C983",
-    "dark": "#0D9373",
-    "anchors": {
-      "from": "#0D9373",
-      "to": "#07C983"
+    "primary": "#88C0D0",
+    "light": "#8FBCBB",
+    "dark": "#5E81AC"
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "GitHub",
+        "href": "https://github.com/abdul-hamid-achik/hitspec"
+      },
+      {
+        "label": "Changelog",
+        "href": "https://github.com/abdul-hamid-achik/hitspec/blob/main/CHANGELOG.md"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Install",
+      "href": "/installation"
     }
   },
-  "topbarLinks": [
-    {
-      "name": "GitHub",
-      "url": "https://github.com/abdul-hamid-achik/hitspec"
-    }
-  ],
-  "topbarCtaButton": {
-    "name": "Install",
-    "url": "/installation"
+  "navigation": {
+    "global": {
+      "tabs": [
+        {
+          "tab": "Documentation",
+          "href": "/"
+        },
+        {
+          "tab": "Examples",
+          "href": "/examples"
+        },
+        {
+          "tab": "Reference",
+          "href": "/reference"
+        }
+      ],
+      "anchors": [
+        {
+          "anchor": "GitHub",
+          "icon": "github",
+          "href": "https://github.com/abdul-hamid-achik/hitspec"
+        }
+      ]
+    },
+    "groups": [
+      {
+        "group": "Getting Started",
+        "pages": [
+          "introduction",
+          "installation",
+          "quickstart",
+          "editor-setup"
+        ]
+      },
+      {
+        "group": "Core Concepts",
+        "pages": [
+          "concepts/file-format",
+          "concepts/variables",
+          "concepts/assertions",
+          "concepts/captures",
+          "concepts/dependencies",
+          "concepts/environments"
+        ]
+      },
+      {
+        "group": "Features",
+        "pages": [
+          "features/authentication",
+          "features/multipart-graphql",
+          "features/snapshot-testing",
+          "features/stress-testing",
+          "features/database-assertions",
+          "features/shell-commands",
+          "features/hooks",
+          "features/sse",
+          "features/api-coverage",
+          "features/mock-server"
+        ]
+      },
+      {
+        "group": "Examples",
+        "pages": [
+          "examples/basic-crud",
+          "examples/auth-flow",
+          "examples/graphql",
+          "examples/ci-cd",
+          "examples/stress-testing"
+        ]
+      },
+      {
+        "group": "CLI Reference",
+        "pages": [
+          "reference/run",
+          "reference/validate-list",
+          "reference/import-export",
+          "reference/mock-record",
+          "reference/contract-diff"
+        ]
+      },
+      {
+        "group": "Integrations",
+        "pages": [
+          "integrations/github-actions",
+          "integrations/output-formats"
+        ]
+      }
+    ]
   },
-  "tabs": [
-    {
-      "name": "Documentation",
-      "url": "/"
-    },
-    {
-      "name": "Examples",
-      "url": "/examples"
-    },
-    {
-      "name": "Reference",
-      "url": "/reference"
+  "footer": {
+    "socials": {
+      "github": "https://github.com/abdul-hamid-achik/hitspec"
     }
-  ],
-  "anchors": [
-    {
-      "name": "GitHub",
-      "icon": "github",
-      "url": "https://github.com/abdul-hamid-achik/hitspec"
-    },
-    {
-      "name": "Changelog",
-      "icon": "list",
-      "url": "https://github.com/abdul-hamid-achik/hitspec/blob/main/CHANGELOG.md"
-    }
-  ],
-  "navigation": [
-    {
-      "group": "Getting Started",
-      "pages": [
-        "introduction",
-        "installation",
-        "quickstart",
-        "editor-setup"
-      ]
-    },
-    {
-      "group": "Core Concepts",
-      "pages": [
-        "concepts/file-format",
-        "concepts/variables",
-        "concepts/assertions",
-        "concepts/captures",
-        "concepts/dependencies",
-        "concepts/environments"
-      ]
-    },
-    {
-      "group": "Features",
-      "pages": [
-        "features/authentication",
-        "features/multipart-graphql",
-        "features/snapshot-testing",
-        "features/stress-testing",
-        "features/database-assertions",
-        "features/shell-commands",
-        "features/hooks",
-        "features/sse",
-        "features/api-coverage",
-        "features/mock-server"
-      ]
-    },
-    {
-      "group": "Examples",
-      "pages": [
-        "examples/basic-crud",
-        "examples/auth-flow",
-        "examples/graphql",
-        "examples/ci-cd",
-        "examples/stress-testing"
-      ]
-    },
-    {
-      "group": "CLI Reference",
-      "pages": [
-        "reference/run",
-        "reference/validate-list",
-        "reference/import-export",
-        "reference/mock-record",
-        "reference/contract-diff"
-      ]
-    },
-    {
-      "group": "Integrations",
-      "pages": [
-        "integrations/github-actions",
-        "integrations/output-formats"
-      ]
-    }
-  ],
-  "footerSocials": {
-    "github": "https://github.com/abdul-hamid-achik/hitspec"
   }
 }

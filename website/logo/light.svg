@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 36" fill="none">
+  <path d="M8 8L16 4L24 8L24 20L16 24L8 20Z" fill="#5E81AC"/>
+  <path d="M16 4L24 8L24 20L16 16Z" fill="#81A1C1"/>
+  <path d="M16 16L24 20L16 24L8 20Z" fill="#88C0D0"/>
+  <text x="32" y="24" font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="700" fill="#2E3440">hitspec</text>
+</svg>
