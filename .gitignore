@@ -56,3 +56,4 @@ apps/client/dist/
 apps/client/.vite/
 packages/serve/dist/
 !packages/serve/dist/.gitkeep
+!packages/serve/dist/index.html
