@@ -26,9 +26,9 @@ describe('API Endpoints', () => {
     expect(client.get).toHaveBeenCalledWith('/api/v1/workspace')
   })
 
-  it('getWorkspace (files endpoint) calls correct endpoint', async () => {
+  it('getWorkspace (files endpoint) calls workspace endpoint', async () => {
     await getFilesWorkspace()
-    expect(client.get).toHaveBeenCalledWith('/api/v1/files')
+    expect(client.get).toHaveBeenCalledWith('/api/v1/workspace')
   })
 
   it('getFile encodes path', async () => {

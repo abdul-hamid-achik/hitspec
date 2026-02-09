@@ -6,14 +6,24 @@ import "time"
 
 // WorkspaceDTO describes the current workspace.
 type WorkspaceDTO struct {
-	Directory   string   `json:"directory"`
-	FileCount   int      `json:"fileCount"`
-	Files       []string `json:"files"`
-	Environment string   `json:"environment"`
-	HasConfig   bool     `json:"hasConfig"`
+	Root          string            `json:"root"`
+	Files         []FileTreeNodeDTO `json:"files"`
+	TotalRequests int               `json:"totalRequests"`
+	Environment   string            `json:"environment"`
+	HasConfig     bool              `json:"hasConfig"`
 }
 
-// FileInfoDTO describes a hitspec file.
+// FileTreeNodeDTO is a node in the file tree (file or directory).
+type FileTreeNodeDTO struct {
+	Path         string            `json:"path"`
+	Name         string            `json:"name"`
+	Dir          string            `json:"dir"`
+	IsDir        bool              `json:"isDir"`
+	Children     []FileTreeNodeDTO `json:"children,omitempty"`
+	RequestCount int               `json:"requestCount,omitempty"`
+}
+
+// FileInfoDTO describes a hitspec file (flat list).
 type FileInfoDTO struct {
 	Path         string `json:"path"`
 	RelativePath string `json:"relativePath"`

@@ -4,13 +4,15 @@ export interface FileInfo {
   dir: string
   isDir: boolean
   children?: FileInfo[]
-  requestCount: number
+  requestCount?: number
 }
 
 export interface WorkspaceInfo {
   root: string
   files: FileInfo[]
   totalRequests: number
+  environment: string
+  hasConfig: boolean
 }
 
 export interface HeaderDTO {
