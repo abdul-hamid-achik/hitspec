@@ -38,6 +38,7 @@ Thumbs.db
 
 # Build artifacts
 dist/
+!packages/serve/dist/
 
 # Generated files
 apps/cli/cmd/llms_content.go
@@ -54,6 +55,5 @@ debug
 apps/client/node_modules/
 apps/client/dist/
 apps/client/.vite/
-packages/serve/dist/
-!packages/serve/dist/.gitkeep
-!packages/serve/dist/index.html
+# packages/serve/dist/ is tracked (embedded SPA assets)
+# Rebuild with: cd apps/client && bun run build && cp -r dist/* ../../packages/serve/dist/

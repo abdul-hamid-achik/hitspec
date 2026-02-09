@@ -197,7 +197,9 @@ tasks:
       - go run -tags dev {{.MAIN_PATH}} serve {{.CLI_ARGS}}
 
   build:full:
-    desc: Build full binary with embedded web UI
-    deps: [client:build]
+    desc: Rebuild frontend and build binary with embedded web UI
     cmds:
+      - cd apps/client && bun run build
+      - mkdir -p packages/serve/dist
+      - cp -r apps/client/dist/* packages/serve/dist/
       - go build {{.LDFLAGS}} -o bin/{{.BINARY_NAME}} {{.MAIN_PATH}}
