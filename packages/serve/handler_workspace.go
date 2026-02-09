@@ -79,9 +79,6 @@ func buildFileTree(entries []fileEntry) []FileTreeNodeDTO {
 	}
 
 	// Add file nodes to their parent directory (or mark as top-level)
-	type rootFile struct {
-		node FileTreeNodeDTO
-	}
 	var topLevelFiles []FileTreeNodeDTO
 
 	for _, e := range entries {
