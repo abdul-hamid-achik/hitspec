@@ -6,6 +6,7 @@ toolchain go1.25.7
 
 require (
 	github.com/HdrHistogram/hdrhistogram-go v1.1.2
+	github.com/coder/websocket v1.8.14
 	github.com/fatih/color v1.16.0
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/getkin/kin-openapi v0.133.0
@@ -17,7 +18,6 @@ require (
 	github.com/xeipuuv/gojsonschema v1.2.0
 	golang.org/x/time v0.14.0
 	gopkg.in/yaml.v3 v3.0.1
-	nhooyr.io/websocket v1.8.17
 )
 
 require (

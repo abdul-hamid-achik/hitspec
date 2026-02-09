@@ -25,7 +25,7 @@ func spaHandler() http.Handler {
 		// Try to serve the file directly
 		if path != "/" && !strings.HasPrefix(path, "/api") {
 			if f, err := sub.Open(strings.TrimPrefix(path, "/")); err == nil {
-				f.Close()
+				_ = f.Close()
 				fileServer.ServeHTTP(w, r)
 				return
 			}
