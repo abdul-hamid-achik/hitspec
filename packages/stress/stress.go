@@ -520,6 +520,16 @@ type Result struct {
 	Passed     bool
 }
 
+// GetCurrentStats returns current stress test statistics for external consumers
+func (r *Runner) GetCurrentStats() CurrentStats {
+	return r.metrics.GetCurrentStats()
+}
+
+// GetSummary returns the final metrics summary
+func (r *Runner) GetSummary() *Summary {
+	return r.metrics.GetSummary()
+}
+
 // HasThresholdFailures returns true if any thresholds failed
 func (r *Result) HasThresholdFailures() bool {
 	for _, tr := range r.Thresholds {

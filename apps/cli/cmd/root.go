@@ -40,4 +40,5 @@ func init() {
 	rootCmd.AddCommand(mockCmd)
 	rootCmd.AddCommand(recordCmd)
 	rootCmd.AddCommand(contractCmd)
+	rootCmd.AddCommand(serveCmd)
 }

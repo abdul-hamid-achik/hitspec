@@ -48,3 +48,11 @@ debug
 
 # Vector search index
 .vecgrep/
+.vecai/
+
+# Frontend
+apps/client/node_modules/
+apps/client/dist/
+apps/client/.vite/
+packages/serve/dist/
+!packages/serve/dist/.gitkeep

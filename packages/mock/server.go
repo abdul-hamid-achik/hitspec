@@ -16,13 +16,17 @@ import (
 	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
 )
 
+// RequestCallback is called after each mock request is served
+type RequestCallback func(method, path string, status int, duration time.Duration)
+
 // Server is a mock HTTP server based on hitspec files
 type Server struct {
-	router   *Router
-	port     int
-	delay    time.Duration
-	verbose  bool
-	registry *builtin.Registry
+	router          *Router
+	port            int
+	delay           time.Duration
+	verbose         bool
+	registry        *builtin.Registry
+	requestCallback RequestCallback
 }
 
 // Option is a functional option for Server
@@ -46,6 +50,13 @@ func WithDelay(delay time.Duration) Option {
 func WithVerbose(verbose bool) Option {
 	return func(s *Server) {
 		s.verbose = verbose
+	}
+}
+
+// WithRequestCallback sets a callback that is invoked after each request is handled
+func WithRequestCallback(fn RequestCallback) Option {
+	return func(s *Server) {
+		s.requestCallback = fn
 	}
 }
 
@@ -335,8 +346,14 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write([]byte(body))
 
+	duration := time.Since(start)
+
 	if s.verbose {
-		log.Printf("%s %s -> %d (%s)", r.Method, r.URL.Path, resp.StatusCode, time.Since(start))
+		log.Printf("%s %s -> %d (%s)", r.Method, r.URL.Path, resp.StatusCode, duration)
+	}
+
+	if s.requestCallback != nil {
+		s.requestCallback(r.Method, r.URL.Path, resp.StatusCode, duration)
 	}
 }
 

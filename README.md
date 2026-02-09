@@ -101,10 +101,13 @@ hitspec run api.http
 ## Features
 
 - **Plain text test files** - `.http` format, readable and version-controllable
-- **20 assertion operators** - `==`, `!=`, `>`, `<`, `contains`, `matches`, `exists`, `length`, `type`, `schema`, `snapshot`, and more
+- **Web API Client Manager** - Browser-based UI via `hitspec serve` (like Postman, but file-backed)
+- **24 assertion operators** - `==`, `!=`, `>`, `<`, `contains`, `matches`, `exists`, `length`, `type`, `schema`, `snapshot`, and more
 - **16 metadata directives** - `@name`, `@tags`, `@depends`, `@timeout`, `@retry`, `@auth`, and more
 - **17 built-in functions** - `$uuid()`, `$timestamp()`, `$random()`, `$base64()`, `$sha256()`, and more
-- **6 authentication types** - Bearer, Basic, API Key, Digest, AWS Signature v4
+- **8 authentication types** - Bearer, Basic, API Key, Digest, AWS Signature v4, OAuth2
+- **Built-in stress testing** - Load test with `--stress` flag, real-time metrics dashboard
+- **Mock server** - Generate mock APIs from `.http` files
 - **Variable captures** - Chain requests by capturing response values
 - **Request dependencies** - Control execution order with `@depends`
 - **Multiple environments** - Dev, staging, prod configurations
@@ -112,11 +115,13 @@ hitspec run api.http
 - **Multiple output formats** - Console, JSON, JUnit, TAP, HTML
 - **Watch mode** - Re-run on file changes
 - **Snapshot testing** - Capture and compare response bodies against baselines
+- **Database assertions** - Verify database state after HTTP requests
+- **Shell commands** - Run scripts before/after requests
 - **API coverage reporting** - Measure test coverage against OpenAPI specs
-- **curl/Insomnia import** - Convert existing tests from curl commands or Insomnia exports
-- **Export to curl** - Export hitspec tests as executable curl commands for debugging and sharing
+- **curl/Insomnia/OpenAPI import** - Convert existing tests
+- **Export to curl** - Export hitspec tests as executable curl commands
 - **SSE support** - Test Server-Sent Events endpoints
-- **Custom annotations** - Extend metadata with `@x-custom` or namespaced annotations
+- **Contract testing** - Verify API contracts against providers
 
 ## Editor Support
 
@@ -213,6 +218,53 @@ GET {{baseUrl}}/users/{{login.userId}}
 Authorization: Bearer {{login.token}}
 ```
 
+## API Client Manager (`hitspec serve`)
+
+Launch a browser-based API Client Manager for visual test editing, execution, and debugging:
+
+```bash
+hitspec serve                         # Open UI at http://localhost:4000
+hitspec serve ./tests/                # Serve specific directory
+hitspec serve --port 8080             # Custom port
+hitspec serve --api-only              # REST API only, no UI
+hitspec serve --read-only --cors      # Safe mode for sharing
+```
+
+**Features:**
+- Three-panel workspace: file tree, request editor, response viewer
+- Real-time file watching with WebSocket updates
+- Stress testing dashboard with live ECharts metrics
+- Mock server management
+- Import from curl/Insomnia/OpenAPI
+- Environment switcher
+- Execution history
+
+**Serve Flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--port, -p` | 4000 | Server port |
+| `--host` | localhost | Bind address |
+| `--open` | true | Auto-open browser |
+| `--watch, -w` | true | Watch for file changes |
+| `--cors` | false | Enable CORS headers |
+| `--api-only` | false | REST API only, no SPA |
+| `--read-only` | false | Disallow file mutations |
+| `--env, -e` | dev | Default environment |
+| `--allow-shell` | false | Allow shell command execution |
+| `--allow-db` | false | Allow database assertions |
+
+**Development:**
+
+```bash
+# Two-terminal dev workflow
+task serve:dev                        # Go API server on :4000
+task client:dev                       # Vite dev server on :5173
+
+# Production build (single binary with embedded UI)
+task build:full
+```
+
 ## CLI Usage
 
 ```bash
@@ -228,6 +280,8 @@ hitspec validate tests/               # Validate syntax
 hitspec list tests/                   # List all requests
 hitspec import curl "curl ..."        # Import from curl
 hitspec import insomnia export.json   # Import from Insomnia
+hitspec serve                         # Launch API Client Manager
+hitspec serve ./tests/ --port 8080    # Serve specific directory
 ```
 
 ## Examples
@@ -578,17 +632,47 @@ hitspec run tests/
 
 See [.github/workflows/example-hitspec.yml](.github/workflows/example-hitspec.yml) for more examples.
 
+## Project Structure
+
+```
+hitspec/
+├── apps/
+│   ├── cli/              # CLI binary (Go + Cobra)
+│   ├── client/           # Web API Client Manager (Vue 3 + TypeScript)
+│   └── docs/             # Mintlify documentation site
+├── packages/
+│   ├── core/             # Parser + runner
+│   ├── serve/            # HTTP API server (embeds client SPA)
+│   ├── stress/           # Stress testing engine
+│   ├── mock/             # Mock server
+│   ├── http/             # HTTP client
+│   ├── assertions/       # Assertion evaluation
+│   ├── output/           # Output formatters
+│   ├── import/           # Importers (curl, Insomnia, OpenAPI)
+│   └── ...               # Other feature packages
+├── examples/             # Example .http files
+└── vscode-hitspec/       # VSCode extension
+```
+
 ## Development
 
 ```bash
 # Install dependencies
-task deps
+task deps                             # Go dependencies
+task client:install                   # Frontend dependencies (bun)
 
 # Run tests
-task test
+task test                             # Go tests
+task client:test                      # Frontend tests (vitest)
 
 # Build
-task build
+task build                            # CLI binary only
+task build:full                       # CLI + embedded web UI
+
+# Development servers
+task serve:dev                        # Go API server on :4000
+task client:dev                       # Vite dev server on :5173
+task docs:dev                         # Mintlify docs locally
 
 # Run with example
 task dev

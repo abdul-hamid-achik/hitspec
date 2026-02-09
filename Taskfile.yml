@@ -158,3 +158,46 @@ tasks:
     cmds:
       - gosec ./...
       - govulncheck ./...
+
+  client:install:
+    desc: Install API client frontend dependencies
+    dir: apps/client
+    cmds:
+      - bun install
+
+  client:dev:
+    desc: Run API client frontend dev server
+    dir: apps/client
+    cmds:
+      - bun run dev
+
+  client:test:
+    desc: Run API client frontend tests
+    dir: apps/client
+    cmds:
+      - bun run test
+
+  client:build:
+    desc: Build API client frontend and copy to embed directory
+    dir: apps/client
+    cmds:
+      - bun run build
+      - mkdir -p ../../packages/serve/dist
+      - cp -r dist/* ../../packages/serve/dist/
+
+  docs:dev:
+    desc: Run Mintlify docs locally
+    dir: apps/docs
+    cmds:
+      - npx mintlify dev
+
+  serve:dev:
+    desc: Run serve command in dev mode (no SPA embed)
+    cmds:
+      - go run -tags dev {{.MAIN_PATH}} serve {{.CLI_ARGS}}
+
+  build:full:
+    desc: Build full binary with embedded web UI
+    deps: [client:build]
+    cmds:
+      - go build {{.LDFLAGS}} -o bin/{{.BINARY_NAME}} {{.MAIN_PATH}}

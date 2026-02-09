@@ -17,6 +17,7 @@ require (
 	github.com/xeipuuv/gojsonschema v1.2.0
 	golang.org/x/time v0.14.0
 	gopkg.in/yaml.v3 v3.0.1
+	nhooyr.io/websocket v1.8.17
 )
 
 require (

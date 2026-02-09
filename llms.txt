@@ -72,7 +72,7 @@ varName from body.field
 <<<
 ```
 
-## Assertion Operators (20)
+## Assertion Operators (24)
 
 | Operator | Example |
 |----------|---------|
@@ -97,6 +97,7 @@ varName from body.field
 | `type` | `expect body.items type array` |
 | `schema` | `expect body schema ./schema.json` |
 | `each` | `expect body.items each type object` |
+| `snapshot` | `expect body snapshot "responseName"` |
 
 Types: `null`, `boolean`, `number`, `string`, `array`, `object`
 
@@ -326,7 +327,85 @@ hitspec record --port 8080 -o recorded.http
 
 # Verify API contracts
 hitspec contract verify <contracts-dir> --provider <url>
+
+# Launch browser-based API Client Manager
+hitspec serve [file|dir] [flags]
+
+# API-only mode (no web UI)
+hitspec serve --api-only --port 4000
 ```
+
+## Serve Command (API Client Manager)
+
+Launch a browser-based API Client Manager with `hitspec serve`. Serves a Vue.js SPA backed by a REST API, all embedded in a single binary.
+
+```bash
+hitspec serve                         # Open UI at http://localhost:4000
+hitspec serve ./tests/                # Serve specific directory
+hitspec serve --port 8080             # Custom port
+hitspec serve --api-only              # REST API only, no UI
+hitspec serve --read-only --cors      # Safe mode for sharing
+```
+
+### Serve Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--port, -p` | 4000 | Server port |
+| `--host` | localhost | Bind address |
+| `--open` | true | Auto-open browser |
+| `--watch, -w` | true | Watch for file changes |
+| `--cors` | false | Enable CORS headers |
+| `--api-only` | false | REST API only, no SPA |
+| `--read-only` | false | Disallow file mutations |
+| `--env, -e` | dev | Default environment |
+| `--allow-shell` | false | Allow shell command execution |
+| `--allow-db` | false | Allow database assertions |
+
+### REST API Endpoints
+
+All endpoints are prefixed with `/api/v1/`.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /workspace | Workspace info and file stats |
+| GET | /files | List .http/.hitspec files |
+| GET | /files/{path...} | Parse file as structured JSON |
+| POST | /execute | Execute single request |
+| POST | /run | Run all requests in a file |
+| GET | /environments | List environments |
+| GET | /environments/{name} | Get environment variables |
+| PUT | /environments/{name} | Update environment |
+| GET | /config | Get hitspec.yaml config |
+| PUT | /config | Update config |
+| GET | /history | Execution history |
+| POST | /stress/start | Start stress test |
+| POST | /stress/stop | Stop stress test |
+| GET | /stress/status | Stress test status/metrics |
+| POST | /mock/start | Start mock server |
+| POST | /mock/stop | Stop mock server |
+| GET | /mock/routes | List mock routes |
+| POST | /import/curl | Import from curl command |
+| POST | /import/insomnia | Import from Insomnia JSON |
+| POST | /import/openapi | Import from OpenAPI spec |
+| POST | /export/curl | Export request as curl |
+| GET | /system/info | Version and build info |
+| GET | /ws | WebSocket connection |
+
+### WebSocket Events
+
+Connect to `/api/v1/ws` for real-time updates. Message envelope: `{"type": "string", "payload": {...}}`
+
+| Type | Direction | Description |
+|------|-----------|-------------|
+| `file:changed` | server→client | File modified on disk |
+| `file:created` | server→client | New file detected |
+| `file:deleted` | server→client | File removed |
+| `exec:started` | server→client | Request execution began |
+| `exec:completed` | server→client | Request execution finished |
+| `stress:metrics` | server→client | Stress test progress (every 500ms) |
+| `mock:request` | server→client | Mock server received request |
+| `ping` | client→server | Heartbeat |
 
 ## Run Flags
 
