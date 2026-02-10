@@ -58,6 +58,11 @@ func NewServer(opts ...Option) *Server {
 		fileConfig, _ = config.FindAndLoadConfig(cfg.WorkDir)
 	}
 
+	// Use defaultEnvironment from config if user didn't explicitly set --env
+	if fileConfig != nil && fileConfig.DefaultEnvironment != "" && cfg.Env == "dev" {
+		cfg.Env = fileConfig.DefaultEnvironment
+	}
+
 	return &Server{
 		config:     cfg,
 		hub:        NewHub(),
