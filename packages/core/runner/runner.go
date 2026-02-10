@@ -1,7 +1,9 @@
 package runner
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -9,6 +11,7 @@ import (
 	"github.com/abdul-hamid-achik/hitspec/packages/assertions"
 	"github.com/abdul-hamid-achik/hitspec/packages/core/env"
 	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
+	"github.com/abdul-hamid-achik/hitspec/packages/history"
 	"github.com/abdul-hamid-achik/hitspec/packages/http"
 	"github.com/abdul-hamid-achik/hitspec/packages/snapshot"
 	"github.com/abdul-hamid-achik/hitspec/packages/sse"
@@ -45,6 +48,7 @@ type Config struct {
 	UpdateSnapshots    bool // Update snapshots instead of comparing
 	AllowShell         bool // Allow shell command execution (>>>shell blocks and hooks)
 	AllowDB            bool // Allow database assertions (>>>db blocks)
+	HistoryStore       *history.Store // Optional persistent history store
 }
 
 func NewRunner(cfg *Config) *Runner {
@@ -136,5 +140,87 @@ func (r *Runner) RunFile(path string) (*RunResult, error) {
 	snapshotManager := snapshot.NewManager(filepath.Dir(path), r.config.UpdateSnapshots)
 	snapshot.SetGlobalManager(snapshotManager)
 
-	return r.runRequests(file)
+	result, err := r.runRequests(file)
+	if err != nil {
+		return nil, err
+	}
+
+	// Record to persistent history in a background goroutine (non-blocking)
+	if r.config.HistoryStore != nil {
+		go r.recordHistory(result)
+	}
+
+	return result, nil
+}
+
+// recordHistory persists the run result to the history store.
+// Errors are logged but do not propagate.
+func (r *Runner) recordHistory(result *RunResult) {
+	ctx := context.Background()
+	store := r.config.HistoryStore
+
+	runID, err := store.RecordRun(ctx, result.File, r.config.Environment)
+	if err != nil {
+		log.Printf("history: failed to record run: %v", err)
+		return
+	}
+
+	for _, rr := range result.Results {
+		method, url := "", ""
+		statusCode := 0
+		if rr.Request != nil {
+			method = rr.Request.Method
+			url = rr.Request.URL
+		}
+		if rr.Response != nil {
+			statusCode = rr.Response.StatusCode
+		}
+		errMsg := ""
+		if rr.Error != nil {
+			errMsg = rr.Error.Error()
+		}
+
+		bodyPreview := ""
+		if rr.Response != nil && len(rr.Response.Body) > 0 {
+			preview := string(rr.Response.Body)
+			if len(preview) > 512 {
+				preview = preview[:512]
+			}
+			bodyPreview = preview
+		}
+
+		resultID, err := store.RecordResult(ctx, runID,
+			rr.Name, method, url, statusCode,
+			rr.Duration.Milliseconds(),
+			rr.Passed, rr.Skipped,
+			errMsg, rr.Description, bodyPreview,
+		)
+		if err != nil {
+			log.Printf("history: failed to record result %q: %v", rr.Name, err)
+			continue
+		}
+
+		if len(rr.Assertions) > 0 {
+			records := make([]history.AssertionRecord, 0, len(rr.Assertions))
+			for _, a := range rr.Assertions {
+				records = append(records, history.AssertionRecord{
+					Operator: a.Operator,
+					Subject:  a.Subject,
+					Expected: fmt.Sprintf("%v", a.Expected),
+					Actual:   fmt.Sprintf("%v", a.Actual),
+					Passed:   a.Passed,
+					Message:  a.Message,
+				})
+			}
+			if err := store.RecordAssertions(ctx, resultID, records); err != nil {
+				log.Printf("history: failed to record assertions for %q: %v", rr.Name, err)
+			}
+		}
+	}
+
+	if err := store.FinishRun(ctx, runID, result.Duration,
+		int64(result.Passed), int64(result.Failed), int64(result.Skipped),
+		int64(result.Passed+result.Failed+result.Skipped)); err != nil {
+		log.Printf("history: failed to finish run: %v", err)
+	}
 }

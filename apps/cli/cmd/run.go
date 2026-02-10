@@ -17,6 +17,7 @@ import (
 	"github.com/abdul-hamid-achik/hitspec/packages/core/runner"
 	"github.com/abdul-hamid-achik/hitspec/packages/coverage"
 	"github.com/abdul-hamid-achik/hitspec/packages/export/metrics"
+	"github.com/abdul-hamid-achik/hitspec/packages/history"
 	"github.com/abdul-hamid-achik/hitspec/packages/http"
 	"github.com/abdul-hamid-achik/hitspec/packages/notify"
 	"github.com/abdul-hamid-achik/hitspec/packages/output"
@@ -110,6 +111,10 @@ var (
 	// Coverage flags
 	coverageFlag bool
 	openapiFlag  string
+
+	// History flags
+	historyDBFlag string
+	noHistoryFlag bool
 )
 
 func init() {
@@ -177,6 +182,10 @@ func init() {
 	// Coverage flags
 	runCmd.Flags().BoolVar(&coverageFlag, "coverage", false, "Generate API coverage report against OpenAPI spec")
 	runCmd.Flags().StringVar(&openapiFlag, "openapi", "", "Path to OpenAPI spec file for coverage analysis")
+
+	// History flags
+	runCmd.Flags().StringVar(&historyDBFlag, "history-db", getEnvString("HITSPEC_HISTORY_DB", ""), "Path to history database (default: ~/.hitspec/history.db) (env: HITSPEC_HISTORY_DB)")
+	runCmd.Flags().BoolVar(&noHistoryFlag, "no-history", getEnvBool("HITSPEC_NO_HISTORY", false), "Disable run history recording (env: HITSPEC_NO_HISTORY)")
 }
 
 // Environment variable helpers
@@ -370,6 +379,30 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		UpdateSnapshots:    updateSnapshotsFlag,
 		AllowShell:         allowShellFlag,
 		AllowDB:            allowDBFlag,
+	}
+
+	// Open history store unless disabled
+	if !noHistoryFlag {
+		dbPath := historyDBFlag
+		if dbPath == "" {
+			home, err := os.UserHomeDir()
+			if err == nil {
+				dir := filepath.Join(home, ".hitspec")
+				_ = os.MkdirAll(dir, 0o755)
+				dbPath = filepath.Join(dir, "history.db")
+			}
+		}
+		if dbPath != "" {
+			// Ensure parent directory exists
+			_ = os.MkdirAll(filepath.Dir(dbPath), 0o755)
+			store, err := history.NewStore(dbPath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "warning: failed to open history db: %v\n", err)
+			} else {
+				cfg.HistoryStore = store
+				defer store.Close()
+			}
+		}
 	}
 
 	r := runner.NewRunner(cfg)

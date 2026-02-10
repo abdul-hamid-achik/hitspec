@@ -22,9 +22,15 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/config", s.handleGetConfig)
 	mux.HandleFunc("PUT /api/v1/config", s.handlePutConfig)
 
-	// History
+	// History (legacy in-memory)
 	mux.HandleFunc("GET /api/v1/history", s.handleGetHistory)
 	mux.HandleFunc("DELETE /api/v1/history", s.handleClearHistory)
+
+	// History (persistent, SQLite-backed)
+	mux.HandleFunc("GET /api/v1/history/runs", s.handleListRuns)
+	mux.HandleFunc("GET /api/v1/history/runs/{id}", s.handleGetRun)
+	mux.HandleFunc("DELETE /api/v1/history/runs", s.handleClearAllRuns)
+	mux.HandleFunc("DELETE /api/v1/history/runs/{id}", s.handleDeleteRun)
 
 	// Stress testing
 	mux.HandleFunc("POST /api/v1/stress/start", s.handleStressStart)

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/abdul-hamid-achik/hitspec/packages/core/config"
+	"github.com/abdul-hamid-achik/hitspec/packages/history"
 	"github.com/abdul-hamid-achik/hitspec/packages/mock"
 	"github.com/abdul-hamid-achik/hitspec/packages/proxy"
 	"github.com/abdul-hamid-achik/hitspec/packages/stress"
@@ -21,10 +22,11 @@ import (
 
 // Server is the hitspec serve HTTP server.
 type Server struct {
-	config  *ServeConfig
-	hub     *Hub
-	history *History
-	fileConfig *config.Config
+	config       *ServeConfig
+	hub          *Hub
+	history      *History
+	historyStore *history.Store
+	fileConfig   *config.Config
 
 	// Mutable state protected by mu
 	mu             sync.Mutex
@@ -69,12 +71,34 @@ func NewServer(opts ...Option) *Server {
 		cfg.Env = fileConfig.DefaultEnvironment
 	}
 
-	return &Server{
+	s := &Server{
 		config:     cfg,
 		hub:        NewHub(),
 		history:    NewHistory(),
 		fileConfig: fileConfig,
 	}
+
+	// Open persistent history database
+	dbPath := cfg.HistoryDBPath
+	if dbPath == "" {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			dir := filepath.Join(home, ".hitspec")
+			_ = os.MkdirAll(dir, 0o755)
+			dbPath = filepath.Join(dir, "history.db")
+		}
+	}
+	if dbPath != "" {
+		_ = os.MkdirAll(filepath.Dir(dbPath), 0o755)
+		store, err := history.NewStore(dbPath)
+		if err != nil {
+			log.Printf("warning: failed to open history db: %v", err)
+		} else {
+			s.historyStore = store
+		}
+	}
+
+	return s
 }
 
 // Start runs the server and blocks until shutdown.
@@ -122,6 +146,9 @@ func (s *Server) Start(ctx context.Context) error {
 	// Graceful shutdown goroutine
 	go func() {
 		<-s.ctx.Done()
+		if s.historyStore != nil {
+			_ = s.historyStore.Close()
+		}
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer shutdownCancel()
 		_ = server.Shutdown(shutdownCtx)

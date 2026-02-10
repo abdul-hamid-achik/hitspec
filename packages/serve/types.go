@@ -231,6 +231,58 @@ type HistoryEntryDTO struct {
 	Timestamp   string  `json:"timestamp"`
 }
 
+// --- Persistent History (SQLite-backed) ---
+
+// HistoryRunDTO is a run stored in the persistent history database.
+type HistoryRunDTO struct {
+	ID          int64   `json:"id"`
+	FilePath    string  `json:"filePath"`
+	Environment string  `json:"environment,omitempty"`
+	StartedAt   string  `json:"startedAt"`
+	FinishedAt  string  `json:"finishedAt,omitempty"`
+	DurationMs  int64   `json:"durationMs"`
+	Passed      int64   `json:"passed"`
+	Failed      int64   `json:"failed"`
+	Skipped     int64   `json:"skipped"`
+	Total       int64   `json:"total"`
+	Results     []HistoryResultDTO `json:"results,omitempty"`
+}
+
+// HistoryResultDTO is a single request result in persistent history.
+type HistoryResultDTO struct {
+	ID          int64   `json:"id"`
+	RequestName string  `json:"requestName"`
+	Method      string  `json:"method"`
+	URL         string  `json:"url"`
+	StatusCode  int     `json:"statusCode,omitempty"`
+	DurationMs  int64   `json:"durationMs"`
+	Passed      bool    `json:"passed"`
+	Skipped     bool    `json:"skipped,omitempty"`
+	Error       string  `json:"error,omitempty"`
+	Description string  `json:"description,omitempty"`
+	BodyPreview string  `json:"bodyPreview,omitempty"`
+	Assertions  []HistoryAssertionDTO `json:"assertions,omitempty"`
+}
+
+// HistoryAssertionDTO is an assertion result in persistent history.
+type HistoryAssertionDTO struct {
+	ID       int64  `json:"id"`
+	Operator string `json:"operator"`
+	Subject  string `json:"subject"`
+	Expected string `json:"expected,omitempty"`
+	Actual   string `json:"actual,omitempty"`
+	Passed   bool   `json:"passed"`
+	Message  string `json:"message,omitempty"`
+}
+
+// HistoryListDTO wraps paginated history results.
+type HistoryListDTO struct {
+	Runs   []HistoryRunDTO `json:"runs"`
+	Total  int64           `json:"total"`
+	Limit  int64           `json:"limit"`
+	Offset int64           `json:"offset"`
+}
+
 // --- Stress ---
 
 // StressStartReq is the request body for POST /stress/start.

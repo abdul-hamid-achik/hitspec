@@ -169,6 +169,54 @@ export interface HistoryEntry {
   passed: boolean
 }
 
+// --- Persistent History (SQLite-backed) ---
+
+export interface HistoryAssertion {
+  id: number
+  operator: string
+  subject: string
+  expected?: string
+  actual?: string
+  passed: boolean
+  message?: string
+}
+
+export interface HistoryResult {
+  id: number
+  requestName: string
+  method: string
+  url: string
+  statusCode?: number
+  durationMs: number
+  passed: boolean
+  skipped?: boolean
+  error?: string
+  description?: string
+  bodyPreview?: string
+  assertions?: HistoryAssertion[]
+}
+
+export interface HistoryRun {
+  id: number
+  filePath: string
+  environment?: string
+  startedAt: string
+  finishedAt?: string
+  durationMs: number
+  passed: number
+  failed: number
+  skipped: number
+  total: number
+  results?: HistoryResult[]
+}
+
+export interface HistoryList {
+  runs: HistoryRun[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export interface StressStartRequest {
   files: string[]
   duration: string

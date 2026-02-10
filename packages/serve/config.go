@@ -13,8 +13,9 @@ type ServeConfig struct {
 	Env        string
 	ConfigPath string
 	Verbose    bool
-	AllowShell bool
-	AllowDB    bool
+	AllowShell    bool
+	AllowDB       bool
+	HistoryDBPath string // Path to persistent history SQLite database
 }
 
 // Option configures ServeConfig.
@@ -83,6 +84,11 @@ func WithAllowShell(allow bool) Option {
 // WithAllowDB allows database assertions.
 func WithAllowDB(allow bool) Option {
 	return func(c *ServeConfig) { c.AllowDB = allow }
+}
+
+// WithHistoryDBPath sets the path to the persistent history database.
+func WithHistoryDBPath(path string) Option {
+	return func(c *ServeConfig) { c.HistoryDBPath = path }
 }
 
 // DefaultConfig returns a ServeConfig with default values.

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	// SQLite driver
-	_ "github.com/mattn/go-sqlite3"
+	// SQLite driver (pure Go, no CGo required)
+	_ "modernc.org/sqlite"
 )
 
 // QueryResult represents the result of a database query
@@ -128,10 +128,10 @@ func parseConnectionString(connStr string) (driver string, dsn string, err error
 
 	// Handle sqlite:// and sqlite: prefixes
 	if strings.HasPrefix(connStr, "sqlite://") {
-		return "sqlite3", strings.TrimPrefix(connStr, "sqlite://"), nil
+		return "sqlite", strings.TrimPrefix(connStr, "sqlite://"), nil
 	}
 	if strings.HasPrefix(connStr, "sqlite:") {
-		return "sqlite3", strings.TrimPrefix(connStr, "sqlite:"), nil
+		return "sqlite", strings.TrimPrefix(connStr, "sqlite:"), nil
 	}
 
 	// Parse as URL for postgres/mysql

@@ -104,9 +104,9 @@ func TestParseConnectionString(t *testing.T) {
 		dsn      string
 		hasError bool
 	}{
-		{"sqlite://test.db", "sqlite3", "test.db", false},
-		{"sqlite:./test.db", "sqlite3", "./test.db", false},
-		{"sqlite:///tmp/test.db", "sqlite3", "/tmp/test.db", false},
+		{"sqlite://test.db", "sqlite", "test.db", false},
+		{"sqlite:./test.db", "sqlite", "./test.db", false},
+		{"sqlite:///tmp/test.db", "sqlite", "/tmp/test.db", false},
 		{"postgres://user:pass@localhost:5432/db", "postgres", "postgres://user:pass@localhost:5432/db", false},
 		{"invalid", "", "", true},
 	}

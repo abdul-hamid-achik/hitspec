@@ -73,7 +73,7 @@ func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 		Timestamp: nowISO(),
 	})
 
-	// Add to history
+	// Add to in-memory history
 	for _, rr := range result.Results {
 		entry := HistoryEntryDTO{
 			ID:          generateID(),
@@ -92,6 +92,9 @@ func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 		}
 		s.history.Add(entry)
 	}
+
+	// Record to persistent history (non-blocking)
+	s.recordRunToHistory(req.File, env, dto)
 
 	writeJSON(w, http.StatusOK, dto)
 }
@@ -160,7 +163,7 @@ func (s *Server) handleRunFile(w http.ResponseWriter, r *http.Request) {
 		Timestamp: nowISO(),
 	})
 
-	// Add to history
+	// Add to in-memory history
 	for _, rr := range result.Results {
 		entry := HistoryEntryDTO{
 			ID:          generateID(),
@@ -179,6 +182,9 @@ func (s *Server) handleRunFile(w http.ResponseWriter, r *http.Request) {
 		}
 		s.history.Add(entry)
 	}
+
+	// Record to persistent history (non-blocking)
+	s.recordRunToHistory(req.File, env, dto)
 
 	writeJSON(w, http.StatusOK, dto)
 }
