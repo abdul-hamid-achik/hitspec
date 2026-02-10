@@ -1,0 +1,124 @@
+---
+title: "Migrating from Postman"
+description: "Import Postman collections into hitspec and learn the key differences."
+---
+
+hitspec can import Postman collections and convert them to `.http` files. This guide covers the import process and key differences.
+
+## Importing a Collection
+
+Export your Postman collection as JSON (Collection v2.1), then import:
+
+```bash
+hitspec import postman collection.json -o tests/api.http
+```
+
+This converts all requests in the collection, including folders, headers, and bodies.
+
+## What Gets Converted
+
+| Postman Feature | hitspec Equivalent |
+|-----------------|-------------------|
+| Request method + URL | `GET {{baseUrl}}/path` |
+| Headers | Headers below the request line |
+| Body (raw JSON) | JSON body block |
+| Body (form-urlencoded) | URL-encoded body |
+| Folders | Request sections with `###` separators |
+| Collection variables `{{var}}` | `{{var}}` (same syntax) |
+| Dynamic variables `{{$guid}}` | `{{$uuid()}}` |
+| Dynamic variables `{{$timestamp}}` | `{{$timestamp()}}` |
+| Dynamic variables `{{$randomInt}}` | `{{$random(0, 1000)}}` |
+| Dynamic variables `{{$randomEmail}}` | `{{$randomEmail()}}` |
+
+## Other Import Formats
+
+hitspec also imports from:
+
+### OpenAPI / Swagger
+
+```bash
+hitspec import openapi spec.yaml -o tests/api.http
+hitspec import openapi https://api.example.com/openapi.json -o tests/
+hitspec import openapi spec.yaml --tags users,auth --base-url http://localhost:3000
+```
+
+### curl Commands
+
+```bash
+hitspec import curl "curl -X POST https://api.example.com -d '{\"name\":\"John\"}'"
+hitspec import curl @commands.txt -o tests/api.http
+```
+
+### Insomnia
+
+```bash
+hitspec import insomnia export.json -o tests/api.http
+```
+
+## Key Differences from Postman
+
+### Test Syntax
+
+<Tabs>
+<Tab title="Postman (JavaScript)">
+```javascript
+pm.test("Status is 200", function() {
+  pm.response.to.have.status(200);
+});
+
+pm.test("Has user ID", function() {
+  var json = pm.response.json();
+  pm.expect(json.id).to.exist;
+});
+```
+</Tab>
+<Tab title="hitspec (declarative)">
+```http
+>>>
+expect status 200
+expect body.id exists
+<<<
+```
+</Tab>
+</Tabs>
+
+### Variables
+
+| Postman | hitspec |
+|---------|---------|
+| Collection variables | `@variable = value` in file |
+| Environment variables | `hitspec.yaml` environments |
+| `{{$guid}}` | `{{$uuid()}}` |
+| `pm.environment.set("key", val)` | `>>>capture` blocks |
+
+### Authentication
+
+| Postman | hitspec |
+|---------|---------|
+| Collection-level auth UI | `# @auth bearer {{token}}` per request |
+| Inherit from parent | Explicit per request or default headers in config |
+
+### Request Dependencies
+
+| Postman | hitspec |
+|---------|---------|
+| Execution order in Collection Runner | `# @depends requestName` |
+| `pm.environment.set()` for chaining | `>>>capture` blocks |
+
+## After Import
+
+After importing, you should:
+
+1. **Add assertions** -- the import generates basic `expect status == 200` assertions. Add more specific ones.
+2. **Replace hardcoded values** -- use variables and `{{$env()}}` for URLs, tokens, etc.
+3. **Add captures** -- chain requests with `>>>capture` blocks and `@depends`.
+4. **Set up environments** -- create `hitspec.yaml` with your environments.
+
+## Exporting Back to curl
+
+You can also export hitspec files to curl for debugging:
+
+```bash
+hitspec export curl tests/api.http
+hitspec export curl tests/api.http --name "Login" --exec
+```

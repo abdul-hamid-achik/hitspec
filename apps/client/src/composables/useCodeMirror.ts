@@ -8,6 +8,7 @@ import { tags } from '@lezer/highlight'
 
 const nordHighlight = HighlightStyle.define([
   { tag: tags.keyword, color: '#81A1C1' },
+  { tag: [tags.keyword, tags.strong], color: '#81A1C1', fontWeight: 'bold' },
   { tag: tags.string, color: '#A3BE8C' },
   { tag: tags.number, color: '#B48EAD' },
   { tag: tags.bool, color: '#81A1C1' },
@@ -16,6 +17,12 @@ const nordHighlight = HighlightStyle.define([
   { tag: tags.comment, color: '#616E88' },
   { tag: tags.operator, color: '#81A1C1' },
   { tag: tags.punctuation, color: '#ECEFF4' },
+  { tag: tags.heading, color: '#EBCB8B', fontWeight: 'bold' },
+  { tag: tags.url, color: '#8FBCBB' },
+  { tag: tags.attributeName, color: '#88C0D0' },
+  { tag: tags.variableName, color: '#D08770' },
+  { tag: [tags.variableName, tags.special], color: '#D08770', fontStyle: 'italic' },
+  { tag: tags.bracket, color: '#ECEFF4' },
 ])
 
 const nordTheme = EditorView.theme({
@@ -45,6 +52,28 @@ const nordTheme = EditorView.theme({
   '.cm-activeLineGutter': {
     backgroundColor: '#3B425220',
   },
+  '.cm-tooltip': {
+    backgroundColor: '#3B4252',
+    border: '1px solid #4C566A',
+    color: '#D8DEE9',
+  },
+  '.cm-tooltip.cm-tooltip-autocomplete': {
+    backgroundColor: '#3B4252',
+  },
+  '.cm-tooltip-autocomplete ul li': {
+    color: '#D8DEE9',
+  },
+  '.cm-tooltip-autocomplete ul li[aria-selected]': {
+    backgroundColor: '#434C5E',
+    color: '#ECEFF4',
+  },
+  '.cm-completionIcon': {
+    color: '#81A1C1',
+  },
+  '.cm-completionDetail': {
+    color: '#616E88',
+    fontStyle: 'italic',
+  },
 })
 
 export function useCodeMirror(
@@ -53,6 +82,7 @@ export function useCodeMirror(
   options: {
     readonly?: boolean
     language?: () => Promise<{ default: unknown }>
+    extraExtensions?: () => Promise<{ default: unknown }>
     onChange?: (value: string) => void
   } = {},
 ) {
@@ -95,6 +125,23 @@ export function useCodeMirror(
         }
       } catch {
         // language extension not available, proceed without
+      }
+    }
+
+    if (options.extraExtensions) {
+      try {
+        const extModule = await options.extraExtensions()
+        const ext = extModule as { default: unknown }
+        if (typeof ext.default === 'function') {
+          const result = (ext.default as () => unknown)()
+          if (Array.isArray(result)) {
+            extensions.push(...(result as never[]))
+          } else {
+            extensions.push(result as never)
+          }
+        }
+      } catch {
+        // extra extensions not available, proceed without
       }
     }
 

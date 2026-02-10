@@ -14,6 +14,7 @@ const contentRef = toRef(props, 'content')
 
 useCodeMirror(container, contentRef, {
   readonly: props.readonly,
+  extraExtensions: () => import('@/editor/index').then((m) => ({ default: m.hitspec })),
   onChange: (value) => emit('change', value),
 })
 </script>

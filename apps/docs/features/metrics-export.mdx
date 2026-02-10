@@ -1,0 +1,99 @@
+---
+title: "Metrics Export"
+description: "Export test metrics to Prometheus, DataDog, or JSON for monitoring and dashboards."
+---
+
+hitspec can export test execution metrics to external monitoring systems. This is especially useful for stress testing, where you want to track latency, error rates, and throughput over time.
+
+## Supported Formats
+
+| Format | Flag | Description |
+|--------|------|-------------|
+| Prometheus | `--metrics prometheus` | Exposes metrics on an HTTP endpoint |
+| DataDog | `--metrics datadog` | Sends metrics to DataDog API |
+| JSON | `--metrics json` | Writes metrics to a file or stdout |
+
+## Prometheus
+
+Exposes metrics on an HTTP endpoint (default port 9090) for Prometheus to scrape.
+
+```bash
+hitspec run api.http --stress -d 5m -r 100 \
+  --metrics prometheus \
+  --metrics-port 9090
+```
+
+Metrics are available at `http://localhost:9090/metrics` while the test runs.
+
+| Flag | Env Var | Default | Description |
+|------|---------|---------|-------------|
+| `--metrics-port` | `HITSPEC_METRICS_PORT` | `9090` | Port for the metrics endpoint |
+
+## DataDog
+
+Sends metrics directly to the DataDog API.
+
+```bash
+hitspec run api.http --stress -d 5m -r 100 \
+  --metrics datadog \
+  --datadog-api-key "$DD_API_KEY"
+```
+
+| Flag | Env Var | Default | Description |
+|------|---------|---------|-------------|
+| `--datadog-api-key` | `DD_API_KEY` | | DataDog API key (required) |
+| `--datadog-site` | `DD_SITE` | `datadoghq.com` | DataDog site |
+| `--datadog-tags` | `DD_TAGS` | | Comma-separated tags |
+
+```bash
+hitspec run api.http --stress -d 5m -r 100 \
+  --metrics datadog \
+  --datadog-api-key "$DD_API_KEY" \
+  --datadog-site "datadoghq.eu" \
+  --datadog-tags "env:staging,service:api"
+```
+
+## JSON
+
+Writes aggregate metrics to a file or stdout.
+
+```bash
+# Write to file
+hitspec run api.http --stress -d 1m -r 50 \
+  --metrics json \
+  --metrics-file metrics.json
+
+# Write to stdout
+hitspec run api.http --stress -d 1m -r 50 \
+  --metrics json
+```
+
+| Flag | Env Var | Description |
+|------|---------|-------------|
+| `--metrics-file` | `HITSPEC_METRICS_FILE` | Output file (defaults to stdout) |
+
+## Multiple Exporters
+
+Export to multiple formats simultaneously:
+
+```bash
+hitspec run api.http --stress -d 5m -r 100 \
+  --metrics prometheus,json \
+  --metrics-port 9090 \
+  --metrics-file metrics.json
+```
+
+## Exported Metrics
+
+The metrics include:
+
+| Metric | Description |
+|--------|-------------|
+| Total requests | Number of requests sent |
+| Success count | Number of successful responses |
+| Failure count | Number of failed responses |
+| Total duration | Overall test duration |
+| Min/Max/Avg latency | Latency statistics |
+| P50/P95/P99 latency | Percentile latencies |
+| Status codes | Breakdown by HTTP status code |
+| Per-test breakdown | Metrics for each named request |

@@ -35,6 +35,20 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/mock/stop", s.handleMockStop)
 	mux.HandleFunc("GET /api/v1/mock/routes", s.handleMockRoutes)
 
+	// Contract testing
+	mux.HandleFunc("POST /api/v1/contract/verify", s.handleContractVerify)
+	mux.HandleFunc("GET /api/v1/contract/files", s.handleContractFiles)
+
+	// Recording proxy
+	mux.HandleFunc("POST /api/v1/record/start", s.handleRecordStart)
+	mux.HandleFunc("POST /api/v1/record/stop", s.handleRecordStop)
+	mux.HandleFunc("GET /api/v1/record/status", s.handleRecordStatus)
+	mux.HandleFunc("POST /api/v1/record/export", s.handleRecordExport)
+	mux.HandleFunc("DELETE /api/v1/record/clear", s.handleRecordClear)
+
+	// Stress profiles
+	mux.HandleFunc("GET /api/v1/stress/profiles", s.handleStressProfiles)
+
 	// Import/export
 	mux.HandleFunc("POST /api/v1/import/curl", s.handleImportCurl)
 	mux.HandleFunc("POST /api/v1/import/insomnia", s.handleImportInsomnia)

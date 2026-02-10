@@ -1,0 +1,116 @@
+---
+title: "Recording Proxy"
+description: "Capture HTTP traffic and auto-generate hitspec test files using the recording proxy."
+---
+
+The recording proxy captures HTTP requests and responses flowing through it, then exports them as `.http` files. It is a fast way to bootstrap tests from existing API traffic.
+
+## How It Works
+
+1. Start the proxy pointing at your target server
+2. Send requests through the proxy (manually or from your app)
+3. Stop the proxy (Ctrl+C)
+4. hitspec exports all captured traffic as a `.http` file
+
+## Quick Start
+
+```bash
+# Start recording proxy
+hitspec record --port 8080 --target https://api.example.com
+
+# In another terminal, send requests through the proxy
+curl http://localhost:8080/users
+curl -X POST http://localhost:8080/users -d '{"name":"John"}'
+
+# Press Ctrl+C to stop and export
+```
+
+## Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--port` | `-p` | Port to run the proxy on | `8080` |
+| `--target` | `-t` | Target URL to proxy to (required) | |
+| `--output` | `-o` | Output file path (default: stdout) | |
+| `--exclude` | | Paths to exclude (comma-separated) | |
+| `--verbose` | `-v` | Enable verbose logging | `false` |
+| `--dedupe` | | Skip duplicate requests (same method+path) | `false` |
+| `--json` | | Export as JSON instead of `.http` format | `false` |
+
+## Examples
+
+<CodeGroup>
+```bash Basic recording
+hitspec record --target https://api.example.com -o recorded.http
+```
+
+```bash Exclude health checks
+hitspec record \
+  --target https://api.example.com \
+  --exclude "/health,/metrics" \
+  -o recorded.http
+```
+
+```bash Deduplicate requests
+hitspec record \
+  --target https://api.example.com \
+  --dedupe \
+  -o recorded.http
+```
+
+```bash JSON export
+hitspec record \
+  --target https://api.example.com \
+  --json \
+  -o recorded.json
+```
+</CodeGroup>
+
+## What Gets Recorded
+
+The proxy captures:
+- HTTP method and URL
+- Request headers
+- Request body
+- Response status code
+
+## What Gets Sanitized
+
+The proxy automatically sanitizes sensitive headers in the output:
+- `Authorization` headers are replaced with placeholders
+- `Cookie` headers are replaced with placeholders
+- Other sensitive headers are cleaned
+
+## Output Format
+
+The exported `.http` file follows standard hitspec format:
+
+```http
+### GET /users
+# @name get_users
+
+GET https://api.example.com/users
+Accept: application/json
+
+>>>
+expect status == 200
+<<<
+
+### POST /users
+# @name post_users
+
+POST https://api.example.com/users
+Content-Type: application/json
+
+{
+  "name": "John"
+}
+
+>>>
+expect status == 200
+<<<
+```
+
+<Tip>
+After recording, edit the generated file to add meaningful assertions, replace hardcoded values with variables, and add `@depends` directives for request ordering.
+</Tip>

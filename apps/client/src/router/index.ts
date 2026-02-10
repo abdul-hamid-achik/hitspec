@@ -16,6 +16,14 @@ const router = createRouter({
       component: () => import('@/views/MockView.vue'),
     },
     {
+      path: '/contract',
+      component: () => import('@/views/ContractView.vue'),
+    },
+    {
+      path: '/record',
+      component: () => import('@/views/RecordView.vue'),
+    },
+    {
       path: '/history',
       component: () => import('@/views/HistoryView.vue'),
     },

@@ -1,0 +1,110 @@
+---
+title: "Contract Testing Guide"
+description: "Step-by-step guide to consumer-driven contract testing with hitspec."
+---
+
+This guide walks through setting up contract testing with hitspec from scratch.
+
+## What is Contract Testing?
+
+Contract testing verifies that an API provider honors the agreements made with its consumers. Instead of running full integration tests, you define the expected interactions and verify them independently.
+
+## Step 1: Define Contracts
+
+Create a `contracts/` directory and define expected interactions:
+
+```http
+# contracts/user-service.http
+@baseUrl = {{baseUrl}}
+
+### Get user by ID
+# @name getUserById
+# @contract.provider UserService
+# @contract.state "user with id 1 exists"
+
+GET {{baseUrl}}/users/1
+
+>>>
+expect status 200
+expect body.id == 1
+expect body.name type string
+expect body.email type string
+<<<
+
+### Create user
+# @name createUser
+# @contract.provider UserService
+# @contract.state "database is empty"
+
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{
+  "name": "Jane Doe",
+  "email": "jane@example.com"
+}
+
+>>>
+expect status 201
+expect body.id exists
+expect body.name == "Jane Doe"
+<<<
+```
+
+## Step 2: Create a State Handler (Optional)
+
+If your contracts specify `@contract.state`, create a script that sets up those states:
+
+```bash
+#!/bin/bash
+# setup-states.sh
+case "$1" in
+  "user with id 1 exists")
+    curl -s -X POST http://localhost:3000/test/seed \
+      -d '{"table":"users","data":{"id":1,"name":"John","email":"john@example.com"}}' \
+      > /dev/null
+    ;;
+  "database is empty")
+    curl -s -X POST http://localhost:3000/test/reset > /dev/null
+    ;;
+esac
+```
+
+Make it executable: `chmod +x setup-states.sh`
+
+## Step 3: Verify Contracts
+
+```bash
+hitspec contract verify contracts/ \
+  --provider http://localhost:3000 \
+  --state-handler ./setup-states.sh \
+  -v
+```
+
+## Step 4: CI/CD Integration
+
+Run contract verification as part of the provider's CI pipeline:
+
+```yaml
+contract-test:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - name: Start provider
+      run: docker compose up -d
+    - name: Wait for health
+      run: timeout 30 bash -c 'until curl -s localhost:3000/health; do sleep 1; done'
+    - name: Verify contracts
+      run: |
+        hitspec contract verify contracts/ \
+          --provider http://localhost:3000 \
+          --state-handler ./setup-states.sh
+```
+
+## Best Practices
+
+1. **Keep contracts minimal** -- only assert on fields your consumer actually uses
+2. **Use a dedicated directory** -- separate contracts from integration tests
+3. **Version your contracts** -- treat them as API documentation
+4. **Run on both sides** -- consumers generate contracts, providers verify them
+5. **Use state handlers** -- ensure reproducible provider states for each interaction

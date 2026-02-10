@@ -1,0 +1,309 @@
+---
+title: "Built-in Functions"
+description: "Reference for all 17 built-in functions available in hitspec variable interpolation."
+---
+
+hitspec provides 17 built-in functions that generate dynamic values at runtime. Call them inside double curly braces with the `$functionName(args)` syntax.
+
+```http
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{
+  "id": "{{$uuid()}}",
+  "name": "User {{$random(1, 9999)}}",
+  "email": "{{$randomEmail()}}",
+  "createdAt": "{{$now()}}"
+}
+```
+
+---
+
+## Identity and Randomness
+
+### $uuid()
+
+Generates a random UUID v4 string.
+
+```http
+X-Request-Id: {{$uuid()}}
+```
+
+**Returns:** `string` -- e.g., `550e8400-e29b-41d4-a716-446655440000`
+
+---
+
+### $random(min, max)
+
+Generates a random integer between `min` and `max` (inclusive). Defaults to `0`-`100` when called without arguments.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `min` | integer | `0` | Minimum value (inclusive) |
+| `max` | integer | `100` | Maximum value (inclusive) |
+
+```http
+{
+  "quantity": {{$random(1, 10)}},
+  "score": {{$random(0, 100)}}
+}
+```
+
+**Returns:** `integer`
+
+---
+
+### $randomString(length)
+
+Generates a random string of mixed-case alphanumeric characters.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `length` | integer | `16` | Length of the generated string |
+
+```http
+{
+  "password": "{{$randomString(32)}}"
+}
+```
+
+**Returns:** `string` -- e.g., `aB3kL9mNpQ7rS2tU`
+
+---
+
+### $randomAlphanumeric(length)
+
+Generates a random alphanumeric string. Functionally identical to `$randomString`.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `length` | integer | `8` | Length of the generated string |
+
+**Returns:** `string`
+
+---
+
+### $randomEmail()
+
+Generates a random email address.
+
+```http
+{
+  "email": "{{$randomEmail()}}"
+}
+```
+
+**Returns:** `string` -- e.g., `abcdefgh@klmnop.com`
+
+---
+
+## Date and Time
+
+### $now()
+
+Returns the current UTC date and time in RFC 3339 format.
+
+```http
+{
+  "createdAt": "{{$now()}}"
+}
+```
+
+**Returns:** `string` -- e.g., `2026-02-09T15:04:05Z`
+
+---
+
+### $timestamp()
+
+Returns the current Unix timestamp in seconds.
+
+```http
+X-Timestamp: {{$timestamp()}}
+```
+
+**Returns:** `integer` -- e.g., `1707490800`
+
+---
+
+### $timestampMs()
+
+Returns the current Unix timestamp in milliseconds.
+
+```http
+{
+  "sentAt": {{$timestampMs()}}
+}
+```
+
+**Returns:** `integer` -- e.g., `1707490800000`
+
+---
+
+### $date(format)
+
+Returns the current UTC date formatted with a custom Go time layout. Defaults to `2006-01-02` (ISO date).
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `format` | string | `2006-01-02` | Go reference time layout |
+
+```http
+{
+  "date": "{{$date()}}",
+  "datetime": "{{$date(2006-01-02T15:04:05Z)}}"
+}
+```
+
+**Returns:** `string` -- e.g., `2026-02-09`
+
+<Note>
+Go time layouts use the reference date `Mon Jan 2 15:04:05 MST 2006`. For example, `{{$date(2006-01-02)}}` produces `2026-02-09`, and `{{$date(01/02/2006)}}` produces `02/09/2026`.
+</Note>
+
+---
+
+## Encoding and Hashing
+
+### $base64(value)
+
+Base64-encodes the given string.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `value` | string | String to encode |
+
+```http
+Authorization: Basic {{$base64(admin:secret)}}
+```
+
+**Returns:** `string` -- e.g., `YWRtaW46c2VjcmV0`
+
+---
+
+### $base64Decode(value)
+
+Decodes a Base64-encoded string.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `value` | string | Base64 string to decode |
+
+**Returns:** `string` -- Returns empty string on decode error.
+
+---
+
+### $md5(value)
+
+Returns the MD5 hex digest of the given string.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `value` | string | String to hash |
+
+```http
+{
+  "checksum": "{{$md5(file-contents)}}"
+}
+```
+
+**Returns:** `string` -- 32-character hex string
+
+---
+
+### $sha256(value)
+
+Returns the SHA-256 hex digest of the given string.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `value` | string | String to hash |
+
+**Returns:** `string` -- 64-character hex string
+
+---
+
+### $urlEncode(value)
+
+URL-encodes the given string (percent-encoding).
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `value` | string | String to encode |
+
+```http
+GET {{baseUrl}}/search?q={{$urlEncode(hello world)}}
+```
+
+**Returns:** `string` -- e.g., `hello+world`
+
+---
+
+### $urlDecode(value)
+
+URL-decodes a percent-encoded string.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `value` | string | URL-encoded string to decode |
+
+**Returns:** `string` -- Returns the original string on decode error.
+
+---
+
+## Utilities
+
+### $json(value)
+
+Passes through the value as-is. Useful for embedding raw JSON strings in variable interpolation contexts.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `value` | string | JSON string to pass through |
+
+**Returns:** `string`
+
+---
+
+### $env(name, default)
+
+Reads a system environment variable. Returns the optional default value if the variable is not set or empty.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `name` | string | *(required)* | Environment variable name |
+| `default` | string | `""` | Fallback value |
+
+```http
+@token = {{$env(API_TOKEN)}}
+@dbUrl = {{$env(DATABASE_URL, sqlite://./test.db)}}
+```
+
+**Returns:** `string`
+
+<Tip>
+Use `$env()` to keep secrets out of your test files. Store API tokens, passwords, and connection strings in environment variables and reference them with `{{$env(VAR_NAME)}}`.
+</Tip>
+
+---
+
+## Quick Reference Table
+
+| Function | Arguments | Default Args | Returns |
+|----------|-----------|-------------|---------|
+| `$now()` | -- | -- | RFC 3339 datetime |
+| `$timestamp()` | -- | -- | Unix seconds |
+| `$timestampMs()` | -- | -- | Unix milliseconds |
+| `$uuid()` | -- | -- | UUID v4 string |
+| `$random(min, max)` | min, max | 0, 100 | Random integer |
+| `$randomString(len)` | length | 16 | Random string |
+| `$randomAlphanumeric(len)` | length | 8 | Random string |
+| `$randomEmail()` | -- | -- | Random email |
+| `$base64(val)` | value | -- | Base64 encoded |
+| `$base64Decode(val)` | value | -- | Decoded string |
+| `$md5(val)` | value | -- | MD5 hex digest |
+| `$sha256(val)` | value | -- | SHA-256 hex digest |
+| `$urlEncode(val)` | value | -- | URL-encoded string |
+| `$urlDecode(val)` | value | -- | URL-decoded string |
+| `$date(fmt)` | format | `2006-01-02` | Formatted date |
+| `$json(val)` | value | -- | Passthrough string |
+| `$env(name, def)` | name, default | -- | Env var value |

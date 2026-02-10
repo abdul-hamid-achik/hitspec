@@ -1,0 +1,143 @@
+---
+title: "Load Testing Guide"
+description: "Run stress tests with hitspec to validate API performance under load."
+---
+
+hitspec includes a built-in stress testing engine. Use the same `.http` files you write for functional tests to run load tests -- no separate tool needed.
+
+## Quick Start
+
+```bash
+# Rate-based: 100 requests/second for 1 minute
+hitspec run api.http --stress --duration 1m --rate 100
+
+# Virtual user mode: 50 concurrent users for 2 minutes
+hitspec run api.http --stress --vus 50 --duration 2m --think-time 1s
+```
+
+## Two Modes
+
+### Rate Mode (default)
+
+Sends requests at a fixed rate (requests per second):
+
+```bash
+hitspec run api.http --stress -d 1m -r 100
+```
+
+### Virtual User Mode
+
+Simulates concurrent users, each sending requests sequentially with optional think time:
+
+```bash
+hitspec run api.http --stress --vus 50 --think-time 500ms --duration 2m
+```
+
+## Ramp-Up
+
+Gradually increase load instead of starting at full capacity:
+
+```bash
+hitspec run api.http --stress -d 5m -r 200 --ramp-up 30s
+```
+
+This takes 30 seconds to ramp from 0 to 200 req/s, then sustains 200 req/s for the remaining 4m30s.
+
+## Thresholds
+
+Set pass/fail criteria based on performance metrics:
+
+```bash
+hitspec run api.http --stress -d 1m -r 100 \
+  --threshold "p95<200ms,errors<0.1%"
+```
+
+If any threshold is exceeded, hitspec exits with code `1`.
+
+Available threshold metrics:
+- `p50` -- 50th percentile latency
+- `p95` -- 95th percentile latency
+- `p99` -- 99th percentile latency
+- `errors` -- Error rate percentage
+
+## Stress Profiles
+
+Define reusable profiles in `hitspec.yaml`:
+
+```yaml
+stress:
+  profiles:
+    smoke:
+      duration: "10s"
+      rate: 5
+    load:
+      duration: "5m"
+      rate: 100
+      thresholds:
+        p95: "200ms"
+        errors: "1%"
+    spike:
+      duration: "2m"
+      vus: 200
+      maxVUs: 500
+      rampUp: "30s"
+      thinkTime: "500ms"
+```
+
+Use a profile:
+
+```bash
+hitspec run api.http --stress --profile load --env staging
+```
+
+CLI flags override profile values.
+
+## Multiple Files
+
+Stress test across multiple files:
+
+```bash
+hitspec run users.http orders.http --stress -d 1m -r 50
+```
+
+Or an entire directory:
+
+```bash
+hitspec run ./tests/ --stress -d 1m -r 50
+```
+
+## Output
+
+### Real-time Progress
+
+By default, hitspec shows a live progress bar with current RPS, latency, and error count. Disable with `--no-progress`.
+
+### JSON Output
+
+```bash
+hitspec run api.http --stress -d 1m -r 100 --stress-json
+```
+
+### Metrics Export
+
+Export to Prometheus, DataDog, or JSON for dashboards:
+
+```bash
+hitspec run api.http --stress -d 5m -r 100 \
+  --metrics prometheus --metrics-port 9090
+```
+
+See [Metrics Export](/features/metrics-export) for details.
+
+## CI/CD Integration
+
+```bash
+hitspec run api.http --stress -d 1m -r 100 \
+  --threshold "p95<200ms,errors<1%" \
+  --env staging \
+  --stress-json > stress-results.json
+```
+
+The exit code indicates whether thresholds passed:
+- `0` -- all thresholds met
+- `1` -- one or more thresholds exceeded

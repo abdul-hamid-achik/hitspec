@@ -1,0 +1,155 @@
+---
+title: "Variable Interpolation"
+description: "Deep-dive into hitspec's {{var}} syntax, $env() references, capture chains, and resolution order."
+---
+
+Variable interpolation is the mechanism that replaces `{{placeholder}}` expressions with actual values at runtime. This page covers all interpolation contexts, resolution rules, and advanced patterns.
+
+## Interpolation Syntax
+
+All interpolation uses double curly braces:
+
+```
+{{variableName}}
+```
+
+## Where Interpolation Works
+
+Variables can appear in:
+
+| Context | Example |
+|---------|---------|
+| URLs | `GET {{baseUrl}}/users/{{userId}}` |
+| Headers | `Authorization: Bearer {{token}}` |
+| Request bodies | `{"name": "{{userName}}"}` |
+| Query parameters | `? key = {{apiKey}}` |
+| Assertion values | `expect body.name == "{{expectedName}}"` |
+| Variable definitions | `@apiPath = {{baseUrl}}/v1` |
+| Metadata directives | `# @auth bearer {{token}}` |
+| Metadata arguments | `# @timeout {{timeoutMs}}` |
+
+## Variable Sources
+
+### Inline Variables
+
+Defined at the top of a `.http` file:
+
+```http
+@baseUrl = https://api.example.com
+@token = my-secret-token
+@version = v2
+```
+
+### Environment Variables
+
+From `hitspec.yaml` environments section:
+
+```yaml
+environments:
+  dev:
+    baseUrl: http://localhost:3000
+    token: dev-token
+```
+
+### System Environment Variables
+
+Using the `$env()` function:
+
+```http
+@token = {{$env(API_TOKEN)}}
+@dbUrl = {{$env(DATABASE_URL, sqlite://./test.db)}}
+```
+
+### Built-in Functions
+
+Dynamic values generated at runtime:
+
+```http
+{
+  "id": "{{$uuid()}}",
+  "timestamp": {{$timestamp()}},
+  "email": "{{$randomEmail()}}"
+}
+```
+
+### Captured Values
+
+Values extracted from prior responses:
+
+```http
+GET {{baseUrl}}/users/{{login.userId}}
+Authorization: Bearer {{login.token}}
+```
+
+## Resolution Order
+
+When the same variable name exists in multiple sources, hitspec resolves in this order (later sources win):
+
+1. **Built-in functions** -- `$uuid()`, `$now()`, etc.
+2. **Environment file** -- `.hitspec.env.json` values
+3. **Config environments** -- `hitspec.yaml` `environments` section
+4. **Inline variables** -- `@variable = value` in the file
+5. **Captured values** -- `{{requestName.captureName}}`
+
+## Capture Chains
+
+Chain captures across dependent requests:
+
+```http
+### Step 1: Login
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{"email": "admin@example.com", "password": "secret"}
+
+>>>capture
+token from body.access_token
+<<<
+
+### Step 2: Create resource
+# @name createResource
+# @depends login
+
+POST {{baseUrl}}/resources
+Authorization: Bearer {{login.token}}
+Content-Type: application/json
+
+{"name": "New Resource"}
+
+>>>capture
+resourceId from body.id
+<<<
+
+### Step 3: Get resource
+# @depends createResource
+
+GET {{baseUrl}}/resources/{{createResource.resourceId}}
+Authorization: Bearer {{login.token}}
+
+>>>
+expect status 200
+<<<
+```
+
+Step 3 references captures from both Step 1 (`login.token`) and Step 2 (`createResource.resourceId`).
+
+## Nested Interpolation
+
+Variables can reference other variables:
+
+```http
+@baseUrl = https://api.example.com
+@apiPath = {{baseUrl}}/v2
+@usersEndpoint = {{apiPath}}/users
+
+GET {{usersEndpoint}}
+```
+
+## Unresolved Variables
+
+If a variable cannot be resolved, it remains as the literal `{{variableName}}` string in the request. hitspec does not error on unresolved variables -- the request is sent with the raw placeholder, which typically causes a server-side error that surfaces through your assertions.
+
+<Tip>
+Use `--verbose` (or `-v`) to see resolved variable values in the output, which helps debug interpolation issues.
+</Tip>

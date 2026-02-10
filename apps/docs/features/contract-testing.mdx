@@ -1,0 +1,122 @@
+---
+title: "Contract Testing"
+description: "Verify API contracts against live providers with hitspec's built-in contract testing support."
+---
+
+Contract testing verifies that an API provider honors the agreements (contracts) defined by its consumers. hitspec supports consumer-driven contract testing using standard `.http` files annotated with contract metadata.
+
+## How It Works
+
+1. Define expected interactions in `.http` files with contract annotations
+2. Run `hitspec contract verify` against a live provider
+3. hitspec sends each request and validates the response against your assertions
+
+## Contract Annotations
+
+Add contract metadata to your requests using custom annotations:
+
+```http
+### Get user by ID
+# @name getUserById
+# @contract.provider UserService
+# @contract.state "user exists with id 1"
+
+GET {{baseUrl}}/users/1
+
+>>>
+expect status 200
+expect body.id == 1
+expect body.name type string
+expect body.email type string
+<<<
+```
+
+| Annotation | Description |
+|------------|-------------|
+| `@contract.provider` | Name of the provider service |
+| `@contract.state` | Provider state that must be set up before the interaction |
+
+## Running Contract Verification
+
+```bash
+# Verify contracts against a provider
+hitspec contract verify contracts/ --provider http://localhost:3000
+
+# With a state handler script
+hitspec contract verify contracts/ \
+  --provider http://localhost:3000 \
+  --state-handler ./setup-states.sh
+
+# Verbose output
+hitspec contract verify contracts/ --provider http://localhost:3000 -v
+```
+
+## State Handlers
+
+A state handler is an executable script that sets up the provider's state before each interaction. hitspec calls it with the state description as an argument:
+
+```bash
+#!/bin/bash
+# setup-states.sh
+case "$1" in
+  "user exists with id 1")
+    curl -s -X POST http://localhost:3000/test/seed-user -d '{"id": 1, "name": "John"}' > /dev/null
+    ;;
+  "no users exist")
+    curl -s -X POST http://localhost:3000/test/clear-users > /dev/null
+    ;;
+esac
+```
+
+## CLI Reference
+
+```bash
+hitspec contract verify <contracts-dir> [flags]
+```
+
+| Flag | Short | Description | Required |
+|------|-------|-------------|----------|
+| `--provider` | `-p` | Provider URL | Yes |
+| `--state-handler` | | Path to state handler script | No |
+| `--verbose` | `-v` | Verbose output | No |
+
+## Example Contract File
+
+```http
+@baseUrl = {{baseUrl}}
+
+### List all users
+# @name listUsers
+# @contract.provider UserService
+
+GET {{baseUrl}}/users
+
+>>>
+expect status 200
+expect body type array
+expect body length >= 0
+<<<
+
+### Create a user
+# @name createUser
+# @contract.provider UserService
+# @contract.state "database is empty"
+
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{
+  "name": "Jane Doe",
+  "email": "jane@example.com"
+}
+
+>>>
+expect status 201
+expect body.id exists
+expect body.name == "Jane Doe"
+<<<
+```
+
+<Tip>
+Keep contract files in a dedicated `contracts/` directory, separate from your integration tests. This makes it clear which tests define API agreements vs. which tests validate behavior.
+</Tip>

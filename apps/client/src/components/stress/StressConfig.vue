@@ -44,6 +44,13 @@ async function handleStop() {
 <template>
   <div class="rounded-lg border border-border bg-nord-0 p-4">
     <h3 class="mb-3 text-sm font-medium text-foreground">Configuration</h3>
+    <div v-if="!collection.activeFilePath" class="mb-3 rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-warning">
+      No file selected. Open a .http file in the Workspace first.
+    </div>
+    <div v-else class="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+      <span>Target file:</span>
+      <span class="rounded bg-surface px-2 py-0.5 font-mono text-foreground">{{ collection.activeFilePath.split('/').pop() }}</span>
+    </div>
     <div class="grid grid-cols-3 gap-4">
       <div>
         <label class="mb-1 block text-xs text-muted-foreground">Concurrency</label>
@@ -51,7 +58,7 @@ async function handleStop() {
           v-model.number="concurrency"
           type="number"
           min="1"
-          class="w-full rounded-md border border-border bg-input px-3 py-1.5 text-sm text-foreground"
+          class="w-full rounded-md border border-border bg-input px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
         />
       </div>
       <div>
@@ -60,7 +67,7 @@ async function handleStop() {
           v-model="duration"
           type="text"
           placeholder="30s"
-          class="w-full rounded-md border border-border bg-input px-3 py-1.5 text-sm text-foreground"
+          class="w-full rounded-md border border-border bg-input px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
         />
       </div>
       <div>
@@ -69,7 +76,7 @@ async function handleStop() {
           v-model.number="rps"
           type="number"
           min="1"
-          class="w-full rounded-md border border-border bg-input px-3 py-1.5 text-sm text-foreground"
+          class="w-full rounded-md border border-border bg-input px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
         />
       </div>
     </div>

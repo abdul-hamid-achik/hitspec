@@ -193,6 +193,117 @@ export interface SystemInfo {
   uptime: number
 }
 
+// --- Contract Testing ---
+
+export interface ContractVerifyRequest {
+  files: string[]
+  providerUrl: string
+  stateHandler?: string
+}
+
+export interface ContractInteraction {
+  name: string
+  provider?: string
+  state?: string
+  passed: boolean
+  error?: string
+  duration: number
+}
+
+export interface ContractResult {
+  file: string
+  passed: number
+  failed: number
+  skipped: number
+  duration: number
+  results: ContractInteraction[]
+}
+
+export interface ContractStatus {
+  files: string[]
+  results?: ContractResult[]
+}
+
+// --- Record Proxy ---
+
+export interface RecordStartRequest {
+  targetUrl: string
+  port?: number
+  exclude?: string[]
+  sanitize?: string[]
+  deduplicate?: boolean
+}
+
+export interface RecordingEntry {
+  method: string
+  path: string
+  url: string
+  contentType?: string
+  statusCode?: number
+  duration?: number
+}
+
+export interface RecordStatus {
+  running: boolean
+  targetUrl?: string
+  port?: number
+  count: number
+  recordings?: RecordingEntry[]
+}
+
+// --- Stress Profiles ---
+
+export interface StressProfile {
+  name: string
+  duration?: string
+  rate?: number
+  vus?: number
+  maxVUs?: number
+  thinkTime?: string
+  rampUp?: string
+  thresholds?: Record<string, string>
+}
+
+// --- Assertion Operators ---
+
+export const ASSERTION_OPERATORS = [
+  { value: '==', label: 'Equals', description: 'Exact equality' },
+  { value: '!=', label: 'Not Equals', description: 'Not equal to' },
+  { value: '>', label: 'Greater Than', description: 'Numeric greater than' },
+  { value: '>=', label: 'Greater or Equal', description: 'Numeric greater or equal' },
+  { value: '<', label: 'Less Than', description: 'Numeric less than' },
+  { value: '<=', label: 'Less or Equal', description: 'Numeric less or equal' },
+  { value: 'contains', label: 'Contains', description: 'String contains substring' },
+  { value: 'not contains', label: 'Not Contains', description: 'String does not contain' },
+  { value: 'startsWith', label: 'Starts With', description: 'String starts with' },
+  { value: 'endsWith', label: 'Ends With', description: 'String ends with' },
+  { value: 'matches', label: 'Matches', description: 'Regex pattern match' },
+  { value: 'exists', label: 'Exists', description: 'Field exists' },
+  { value: 'not exists', label: 'Not Exists', description: 'Field does not exist' },
+  { value: 'length', label: 'Length', description: 'Exact length' },
+  { value: 'length >', label: 'Length >', description: 'Length greater than' },
+  { value: 'length >=', label: 'Length >=', description: 'Length greater or equal' },
+  { value: 'length <', label: 'Length <', description: 'Length less than' },
+  { value: 'length <=', label: 'Length <=', description: 'Length less or equal' },
+  { value: 'includes', label: 'Includes', description: 'Array includes value' },
+  { value: 'not includes', label: 'Not Includes', description: 'Array does not include' },
+  { value: 'in', label: 'In', description: 'Value in list' },
+  { value: 'not in', label: 'Not In', description: 'Value not in list' },
+  { value: 'type', label: 'Type', description: 'JSON type check' },
+  { value: 'each', label: 'Each', description: 'Every element matches' },
+  { value: 'schema', label: 'Schema', description: 'JSON Schema validation' },
+  { value: 'snapshot', label: 'Snapshot', description: 'Snapshot comparison' },
+] as const
+
+export const ASSERTION_SUBJECTS = [
+  { value: 'status', label: 'Status Code', group: 'Response' },
+  { value: 'header', label: 'Header', group: 'Response' },
+  { value: 'body', label: 'Body (raw)', group: 'Body' },
+  { value: 'jsonpath', label: 'JSONPath', group: 'Body' },
+  { value: 'duration', label: 'Duration (ms)', group: 'Timing' },
+  { value: 'size', label: 'Body Size', group: 'Timing' },
+] as const
+
 export type WSMessageType =
   | 'file_changed'
   | 'execution_start'

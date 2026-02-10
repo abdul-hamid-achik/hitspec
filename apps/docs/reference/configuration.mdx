@@ -1,0 +1,246 @@
+---
+title: "Configuration Reference"
+description: "Complete reference for hitspec.yaml configuration file options with defaults and examples."
+---
+
+hitspec is configured through a `hitspec.yaml` (or `hitspec.yml`) file in your project root. All settings are optional -- hitspec uses sensible defaults when no config file is present.
+
+## Creating a Config File
+
+Run `hitspec init` to generate a starter configuration:
+
+```bash
+hitspec init
+```
+
+This creates a `hitspec.yaml` and an `example.http` file.
+
+---
+
+## Full Configuration Reference
+
+```yaml
+# hitspec.yaml - Complete configuration reference
+
+# Default environment used when --env is not specified
+defaultEnvironment: dev
+
+# Request timeout in milliseconds
+timeout: 30000
+
+# Number of automatic retries on failure (0 = no retries)
+retries: 0
+
+# Delay between retries in milliseconds
+retryDelay: 1000
+
+# Follow HTTP redirects (3xx responses)
+followRedirects: true
+
+# Maximum number of redirects to follow
+maxRedirects: 10
+
+# Validate SSL/TLS certificates
+validateSSL: true
+
+# HTTP proxy URL for all requests
+proxy: ""
+
+# Default headers added to every request
+headers:
+  User-Agent: "hitspec/1.0"
+  Accept: "application/json"
+
+# Output reporters (can specify multiple)
+reporters:
+  - console
+
+# Directory for output files (reports, coverage, etc.)
+outputDir: ""
+
+# Run independent requests in parallel
+parallel: false
+
+# Number of concurrent requests in parallel mode
+concurrency: 5
+
+# Stop execution on first failure
+bail: false
+
+# Enable verbose output
+verbose: false
+
+# Disable colored terminal output
+noColor: false
+
+# Inline environment definitions
+environments:
+  dev:
+    baseUrl: "http://localhost:3000"
+    token: "dev-token"
+  staging:
+    baseUrl: "https://staging.api.example.com"
+    token: "staging-token"
+  prod:
+    baseUrl: "https://api.example.com"
+
+# Stress testing profiles
+stress:
+  profiles:
+    smoke:
+      duration: "10s"
+      rate: 5
+    load:
+      duration: "5m"
+      rate: 100
+      thresholds:
+        p95: "200ms"
+        errors: "1%"
+    spike:
+      duration: "2m"
+      vus: 200
+      maxVUs: 500
+      rampUp: "30s"
+      thinkTime: "500ms"
+```
+
+---
+
+## Options Reference
+
+### General
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `defaultEnvironment` | string | `"dev"` | Environment used when `--env` is not specified |
+| `timeout` | integer | `30000` | Request timeout in milliseconds |
+| `retries` | integer | `0` | Number of automatic retries on failure |
+| `retryDelay` | integer | `1000` | Delay between retries in milliseconds |
+
+### Network
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `followRedirects` | boolean | `true` | Follow HTTP 3xx redirects |
+| `maxRedirects` | integer | `10` | Maximum number of redirects to follow |
+| `validateSSL` | boolean | `true` | Validate SSL/TLS certificates |
+| `proxy` | string | `""` | HTTP proxy URL (e.g., `http://proxy:8080`) |
+
+### Headers
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `headers` | map | `null` | Default headers added to every request |
+
+```yaml
+headers:
+  User-Agent: "hitspec/1.0"
+  Accept: "application/json"
+  X-Custom-Header: "value"
+```
+
+Headers defined in individual requests override config-level headers with the same name.
+
+### Output
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `reporters` | string[] | `["console"]` | Output format(s): `console`, `json`, `junit`, `tap`, `html` |
+| `outputDir` | string | `""` | Directory for output files |
+
+### Execution
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `parallel` | boolean | `false` | Run independent requests in parallel |
+| `concurrency` | integer | `5` | Max concurrent requests in parallel mode |
+| `bail` | boolean | `false` | Stop on first failure |
+| `verbose` | boolean | `false` | Enable verbose output |
+| `noColor` | boolean | `false` | Disable colored terminal output |
+
+### Environments
+
+Define per-environment variables inline:
+
+```yaml
+environments:
+  dev:
+    baseUrl: "http://localhost:3000"
+    dbUrl: "sqlite://./dev.db"
+  staging:
+    baseUrl: "https://staging.api.example.com"
+    dbUrl: "postgres://user:pass@staging-db:5432/app"
+  prod:
+    baseUrl: "https://api.example.com"
+```
+
+Select the active environment with `--env`:
+
+```bash
+hitspec run tests/ --env staging
+```
+
+Variables defined in the active environment are available via `{{variableName}}` interpolation in your test files.
+
+### Stress Testing Profiles
+
+Define reusable stress test profiles:
+
+```yaml
+stress:
+  profiles:
+    load:
+      duration: "5m"       # Test duration
+      rate: 100            # Requests per second
+      thresholds:
+        p95: "200ms"       # 95th percentile must be under 200ms
+        errors: "1%"       # Error rate must be under 1%
+    vuser:
+      duration: "2m"
+      vus: 50              # Virtual users (alternative to rate)
+      maxVUs: 100          # Max concurrent requests
+      thinkTime: "1s"      # Pause between requests per VU
+      rampUp: "30s"        # Time to ramp up to target VUs
+```
+
+| Profile Option | Type | Description |
+|----------------|------|-------------|
+| `duration` | string | Test duration (e.g., `"30s"`, `"5m"`, `"1h"`) |
+| `rate` | float | Target requests per second |
+| `vus` | integer | Number of virtual users |
+| `maxVUs` | integer | Maximum concurrent requests |
+| `thinkTime` | string | Pause between requests per VU |
+| `rampUp` | string | Ramp-up time to reach target |
+| `thresholds` | map | Pass/fail thresholds (e.g., `p95: "200ms"`, `errors: "1%"`) |
+
+Use a profile with the `--profile` flag:
+
+```bash
+hitspec run api.http --stress --profile load
+```
+
+---
+
+## Config File Search
+
+hitspec looks for config files in this order:
+
+1. Path specified by `--config` flag
+2. `hitspec.yaml` in the current directory
+3. `hitspec.yml` in the current directory
+
+If no config file is found, all default values are used.
+
+---
+
+## CLI Overrides
+
+CLI flags always override config file values:
+
+```bash
+# Config says timeout: 30000, but this overrides to 60s
+hitspec run tests/ --timeout 60s
+
+# Config says parallel: false, but this enables it
+hitspec run tests/ --parallel --concurrency 10
+```

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { X, Copy, Check } from 'lucide-vue-next'
+import { DialogRoot, DialogPortal, DialogOverlay, DialogContent, DialogTitle } from 'reka-ui'
+import { X, Copy, Check, Download } from 'lucide-vue-next'
 import type { RequestDTO } from '@/types/api'
 import { exporters, formatLabels, type ExportFormat } from '@/lib/exporters'
 
@@ -40,23 +41,16 @@ async function copyToClipboard() {
 function close() {
   emit('update:modelValue', false)
 }
-
-function onOverlayClick(e: MouseEvent) {
-  if (e.target === e.currentTarget) close()
-}
 </script>
 
 <template>
-  <Teleport to="body">
-    <div
-      v-if="modelValue"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      @click="onOverlayClick"
-    >
-      <div class="mx-4 w-full max-w-2xl rounded-lg border border-border bg-surface shadow-xl">
+  <DialogRoot :open="modelValue" @update:open="emit('update:modelValue', $event)">
+    <DialogPortal>
+      <DialogOverlay class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+      <DialogContent class="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-surface shadow-2xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
         <!-- Header -->
         <div class="flex items-center justify-between border-b border-border px-4 py-3">
-          <h2 class="text-sm font-semibold text-foreground">Export Request</h2>
+          <DialogTitle class="text-sm font-semibold text-foreground">Export Request</DialogTitle>
           <button
             class="rounded p-1 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
             @click="close"
@@ -66,15 +60,15 @@ function onOverlayClick(e: MouseEvent) {
         </div>
 
         <!-- Format tabs -->
-        <div class="flex gap-1 border-b border-border px-4 pt-3 pb-0">
+        <div class="flex gap-1 border-b border-border px-4 py-2">
           <button
             v-for="fmt in formats"
             :key="fmt"
-            class="-mb-px rounded-t px-3 py-1.5 text-sm transition-colors"
+            class="rounded-md px-3 py-1 text-xs font-medium transition-colors"
             :class="
               activeFormat === fmt
-                ? 'border border-b-surface border-border bg-surface text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
+                ? 'bg-accent/15 text-accent'
+                : 'text-muted-foreground hover:bg-surface-hover hover:text-foreground'
             "
             @click="activeFormat = fmt"
           >
@@ -85,32 +79,30 @@ function onOverlayClick(e: MouseEvent) {
         <!-- Code block -->
         <div class="relative px-4 py-3">
           <pre
-            class="max-h-80 overflow-auto rounded border border-border bg-background p-4 font-mono text-sm text-foreground"
+            class="max-h-80 overflow-auto rounded-lg border border-border bg-background p-4 font-mono text-xs leading-relaxed text-foreground"
           ><code>{{ code }}</code></pre>
 
           <!-- Copy button -->
           <button
-            class="absolute top-5 right-6 rounded border border-border bg-surface px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+            class="absolute top-5 right-6 flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
             @click="copyToClipboard"
           >
-            <span class="flex items-center gap-1">
-              <Check v-if="copied" class="h-3 w-3 text-success" />
-              <Copy v-else class="h-3 w-3" />
-              {{ copied ? 'Copied' : 'Copy' }}
-            </span>
+            <Check v-if="copied" class="h-3 w-3 text-success" />
+            <Copy v-else class="h-3 w-3" />
+            {{ copied ? 'Copied!' : 'Copy' }}
           </button>
         </div>
 
         <!-- Footer -->
-        <div class="flex justify-end border-t border-border px-4 py-3">
+        <div class="flex justify-end gap-2 border-t border-border px-4 py-3">
           <button
-            class="rounded bg-accent px-4 py-1.5 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent/80"
+            class="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
             @click="close"
           >
             Close
           </button>
         </div>
-      </div>
-    </div>
-  </Teleport>
+      </DialogContent>
+    </DialogPortal>
+  </DialogRoot>
 </template>

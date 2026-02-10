@@ -1,85 +1,126 @@
 <script setup lang="ts">
 import AppShell from '@/components/layout/AppShell.vue'
-import EmptyState from '@/components/common/EmptyState.vue'
-import { Zap } from 'lucide-vue-next'
-import { ref } from 'vue'
-import { startStress, stopStress, getStressStatus } from '@/api/endpoints/stress'
-import type { StressStatus } from '@/types/api'
+import StressConfig from '@/components/stress/StressConfig.vue'
+import StressProfiles from '@/components/stress/StressProfiles.vue'
+import { Zap, Square, Activity, Clock, AlertTriangle, BarChart3 } from 'lucide-vue-next'
+import { ref, onMounted } from 'vue'
+import { getStressStatus, stopStress } from '@/api/endpoints/stress'
+import type { StressStatus, StressProfile } from '@/types/api'
+import { toast } from 'vue-sonner'
 
 const status = ref<StressStatus | null>(null)
-const loading = ref(false)
 
 async function loadStatus() {
-  status.value = await getStressStatus()
-}
-
-async function handleStart() {
-  loading.value = true
   try {
-    await startStress({
-      filePath: '',
-      requestIndex: 0,
-      concurrency: 10,
-      duration: '30s',
-      rps: 100,
-    })
-    await loadStatus()
-  } finally {
-    loading.value = false
+    status.value = await getStressStatus()
+  } catch {
+    status.value = { running: false }
   }
 }
 
 async function handleStop() {
-  await stopStress()
-  await loadStatus()
+  try {
+    await stopStress()
+    toast.success('Stress test stopped')
+    await loadStatus()
+  } catch (e) {
+    toast.error(e instanceof Error ? e.message : 'Failed to stop stress test')
+  }
 }
 
-loadStatus()
+function handleProfileSelected(profile: StressProfile) {
+  // Profile selected - shown as reference panel
+}
+
+onMounted(loadStatus)
 </script>
 
 <template>
   <AppShell>
     <div class="p-6">
-      <h1 class="mb-4 text-lg font-semibold text-foreground">Stress Testing</h1>
+      <div class="mb-4 flex items-center justify-between">
+        <h1 class="text-lg font-semibold text-foreground">Stress Testing</h1>
+        <button
+          v-if="status?.running"
+          class="flex items-center gap-1.5 rounded-md border border-destructive/50 px-3 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
+          @click="handleStop"
+        >
+          <Square class="h-3 w-3" />
+          Stop Test
+        </button>
+      </div>
+
       <div v-if="status?.running" class="space-y-4">
+        <!-- Running indicator -->
         <div class="flex items-center gap-2">
           <div class="h-2 w-2 animate-pulse rounded-full bg-success" />
-          <span class="text-sm text-foreground">Running</span>
-          <button
-            class="ml-4 rounded bg-destructive px-3 py-1 text-sm text-foreground hover:bg-destructive/80"
-            @click="handleStop"
-          >
-            Stop
-          </button>
+          <span class="text-sm font-medium text-foreground">Running</span>
+          <span v-if="status.metrics" class="text-xs text-muted-foreground/50">{{ status.metrics.elapsed.toFixed(0) }}s elapsed</span>
         </div>
-        <div v-if="status.metrics" class="grid grid-cols-4 gap-4">
-          <div class="rounded border border-border bg-surface p-3">
-            <div class="text-xs text-muted-foreground">Total Requests</div>
-            <div class="mt-1 text-lg font-semibold text-foreground">{{ status.metrics.totalRequests }}</div>
+
+        <!-- Metrics grid -->
+        <div v-if="status.metrics" class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div class="rounded-lg border border-border bg-surface p-3">
+            <div class="flex items-center gap-1.5 text-[10px] uppercase text-muted-foreground/50">
+              <BarChart3 class="h-3 w-3" />
+              Total Requests
+            </div>
+            <div class="mt-1.5 text-xl font-bold tabular-nums text-foreground">{{ status.metrics.totalRequests.toLocaleString() }}</div>
           </div>
-          <div class="rounded border border-border bg-surface p-3">
-            <div class="text-xs text-muted-foreground">RPS</div>
-            <div class="mt-1 text-lg font-semibold text-foreground">{{ status.metrics.rps.toFixed(1) }}</div>
+          <div class="rounded-lg border border-border bg-surface p-3">
+            <div class="flex items-center gap-1.5 text-[10px] uppercase text-muted-foreground/50">
+              <Activity class="h-3 w-3" />
+              RPS
+            </div>
+            <div class="mt-1.5 text-xl font-bold tabular-nums text-accent">{{ status.metrics.rps.toFixed(1) }}</div>
           </div>
-          <div class="rounded border border-border bg-surface p-3">
-            <div class="text-xs text-muted-foreground">P95 Latency</div>
-            <div class="mt-1 text-lg font-semibold text-foreground">{{ status.metrics.p95Latency.toFixed(0) }}ms</div>
+          <div class="rounded-lg border border-border bg-surface p-3">
+            <div class="flex items-center gap-1.5 text-[10px] uppercase text-muted-foreground/50">
+              <Clock class="h-3 w-3" />
+              P95 Latency
+            </div>
+            <div class="mt-1.5 text-xl font-bold tabular-nums text-foreground">{{ status.metrics.p95Latency.toFixed(0) }}<span class="text-sm font-normal text-muted-foreground">ms</span></div>
           </div>
-          <div class="rounded border border-border bg-surface p-3">
-            <div class="text-xs text-muted-foreground">Errors</div>
-            <div class="mt-1 text-lg font-semibold text-destructive">{{ status.metrics.failCount }}</div>
+          <div class="rounded-lg border border-border bg-surface p-3">
+            <div class="flex items-center gap-1.5 text-[10px] uppercase text-muted-foreground/50">
+              <AlertTriangle class="h-3 w-3" />
+              Errors
+            </div>
+            <div class="mt-1.5 text-xl font-bold tabular-nums" :class="status.metrics.failCount > 0 ? 'text-destructive' : 'text-success'">{{ status.metrics.failCount }}</div>
+          </div>
+        </div>
+
+        <!-- Latency percentiles -->
+        <div v-if="status.metrics" class="rounded-lg border border-border bg-surface p-4">
+          <h3 class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground/50">Latency Percentiles</h3>
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <div class="text-[10px] text-muted-foreground/50">P50</div>
+              <div class="font-mono text-sm tabular-nums text-foreground">{{ status.metrics.p50Latency.toFixed(1) }}ms</div>
+            </div>
+            <div>
+              <div class="text-[10px] text-muted-foreground/50">P95</div>
+              <div class="font-mono text-sm tabular-nums text-foreground">{{ status.metrics.p95Latency.toFixed(1) }}ms</div>
+            </div>
+            <div>
+              <div class="text-[10px] text-muted-foreground/50">P99</div>
+              <div class="font-mono text-sm tabular-nums text-foreground">{{ status.metrics.p99Latency.toFixed(1) }}ms</div>
+            </div>
           </div>
         </div>
       </div>
-      <EmptyState v-else :icon="Zap" title="No stress test running" description="Configure and start a stress test">
-        <button
-          class="mt-2 rounded bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent/80"
-          :disabled="loading"
-          @click="handleStart"
-        >
-          Start Stress Test
-        </button>
-      </EmptyState>
+
+      <!-- Configuration when not running -->
+      <div v-else class="space-y-4">
+        <div class="grid grid-cols-3 gap-4">
+          <div class="col-span-2">
+            <StressConfig :running="false" />
+          </div>
+          <div>
+            <StressProfiles @select="handleProfileSelected" />
+          </div>
+        </div>
+      </div>
     </div>
   </AppShell>
 </template>

@@ -1,0 +1,68 @@
+---
+title: "hitspec docs & hitspec serve"
+description: "Reference for the docs and serve commands -- AI documentation and the web-based API client."
+---
+
+# hitspec docs
+
+Output AI-readable documentation (`llms.txt`) for AI agents to learn hitspec syntax.
+
+```bash
+hitspec docs
+```
+
+This prints the complete hitspec specification in a format optimized for LLM consumption. Useful for integrating hitspec with AI coding assistants.
+
+---
+
+# hitspec serve
+
+Start a browser-based API Client Manager for working with hitspec files.
+
+```bash
+hitspec serve [file|directory] [flags]
+```
+
+## What It Provides
+
+- Web-based UI for editing and running API tests
+- REST API for programmatic access
+- Real-time file watching with WebSocket updates
+- Stress testing dashboard
+- Mock server management
+
+## Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--port` | `-p` | Port to run the server on | `4000` |
+| `--host` | | Bind address | `localhost` |
+| `--open` | | Auto-open browser | `true` |
+| `--watch` | `-w` | Watch for file changes | `true` |
+| `--cors` | | Enable CORS headers | `false` |
+| `--api-only` | | REST API only, no web UI | `false` |
+| `--read-only` | | Disallow file mutations | `false` |
+| `--env` | `-e` | Default environment | `dev` |
+| `--config` | | Path to hitspec.yaml | |
+| `--verbose` | `-v` | Verbose logging | `false` |
+| `--allow-shell` | | Allow shell command execution | `false` |
+| `--allow-db` | | Allow database assertions | `false` |
+
+## Examples
+
+```bash
+# Start with defaults (opens browser at localhost:4000)
+hitspec serve
+
+# Serve a specific directory
+hitspec serve ./tests/
+
+# Custom port, no auto-open
+hitspec serve --port 8080 --open=false
+
+# API-only mode for headless/CI usage
+hitspec serve --api-only --cors
+
+# Read-only mode for shared environments
+hitspec serve --read-only --cors --host 0.0.0.0
+```

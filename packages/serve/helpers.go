@@ -18,10 +18,14 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	}
 }
 
+// maxRequestBody is the maximum size for JSON request bodies (10MB).
+const maxRequestBody = 10 * 1024 * 1024
+
 func readJSON(r *http.Request, v any) error {
 	if r.Body == nil {
 		return fmt.Errorf("empty request body")
 	}
+	r.Body = http.MaxBytesReader(nil, r.Body, maxRequestBody)
 	defer r.Body.Close()
 	return json.NewDecoder(r.Body).Decode(v)
 }

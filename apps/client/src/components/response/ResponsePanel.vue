@@ -8,7 +8,10 @@ import ResponseBody from './ResponseBody.vue'
 import ResponseHeaders from './ResponseHeaders.vue'
 import ResponseAssertions from './ResponseAssertions.vue'
 import RunResultsList from './RunResultsList.vue'
-import { CheckCircle, XCircle, Send } from 'lucide-vue-next'
+import {
+  CheckCircle, XCircle, Send, AlignLeft, Globe, ShieldCheck, List,
+  Timer, HardDrive,
+} from 'lucide-vue-next'
 import type { RunResult } from '@/types/api'
 
 const requestStore = useRequestStore()
@@ -19,9 +22,13 @@ const hasRunResults = computed(() =>
 )
 
 const tabs = computed(() => {
-  const base = ['body', 'headers', 'assertions'] as const
+  const base = [
+    { key: 'body' as const, label: 'Body', icon: AlignLeft },
+    { key: 'headers' as const, label: 'Headers', icon: Globe },
+    { key: 'assertions' as const, label: 'Assertions', icon: ShieldCheck },
+  ]
   if (hasRunResults.value) {
-    return ['results', ...base] as const
+    return [{ key: 'results' as const, label: 'Results', icon: List }, ...base]
   }
   return base
 })
@@ -41,41 +48,67 @@ function selectResult(result: RunResult) {
 
 <template>
   <div class="flex h-full flex-col">
-    <LoadingSpinner v-if="requestStore.isExecuting" />
+    <!-- Loading state -->
+    <div v-if="requestStore.isExecuting" class="flex flex-1 flex-col items-center justify-center gap-3">
+      <LoadingSpinner size="lg" label="Executing request..." />
+    </div>
+
+    <!-- Response content -->
     <template v-else-if="requestStore.lastResult || hasRunResults">
-      <div class="flex items-center gap-3 border-b border-border px-4 py-2">
+      <!-- Status bar -->
+      <div class="flex items-center gap-2 border-b border-border px-4 py-2">
         <StatusBadge v-if="requestStore.lastResult?.response?.statusCode" :code="requestStore.lastResult.response.statusCode" />
-        <span v-if="requestStore.lastResult" class="text-xs text-muted-foreground">{{ requestStore.lastResult.response?.duration ?? requestStore.lastResult.duration }}ms</span>
-        <span v-if="requestStore.lastResult" class="text-xs text-muted-foreground">{{ ((requestStore.lastResult.response?.size ?? 0) / 1024).toFixed(1) }}KB</span>
+        <div class="flex items-center gap-3 text-xs text-muted-foreground/60">
+          <span v-if="requestStore.lastResult" class="flex items-center gap-1">
+            <Timer class="h-3 w-3" />
+            {{ requestStore.lastResult.response?.duration ?? requestStore.lastResult.duration }}ms
+          </span>
+          <span v-if="requestStore.lastResult?.response?.size" class="flex items-center gap-1">
+            <HardDrive class="h-3 w-3" />
+            {{ ((requestStore.lastResult.response.size) / 1024).toFixed(1) }}KB
+          </span>
+        </div>
         <div class="flex-1" />
-        <component
-          v-if="requestStore.lastResult"
-          :is="requestStore.lastResult.passed ? CheckCircle : XCircle"
-          class="h-4 w-4"
-          :class="requestStore.lastResult.passed ? 'text-success' : 'text-destructive'"
-        />
+        <div v-if="requestStore.lastResult" class="flex items-center gap-1 text-xs font-medium">
+          <CheckCircle v-if="requestStore.lastResult.passed" class="h-3.5 w-3.5 text-success" />
+          <XCircle v-else class="h-3.5 w-3.5 text-destructive" />
+          <span :class="requestStore.lastResult.passed ? 'text-success' : 'text-destructive'">
+            {{ requestStore.lastResult.passed ? 'Passed' : 'Failed' }}
+          </span>
+        </div>
       </div>
+
+      <!-- Tabs -->
       <div class="border-b border-border">
-        <div class="flex">
+        <div class="flex gap-0.5 px-2">
           <button
             v-for="tab in tabs"
-            :key="tab"
-            class="border-b-2 px-4 py-2 text-xs font-medium capitalize transition-colors"
-            :class="activeTab === tab
+            :key="tab.key"
+            class="flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors"
+            :class="activeTab === tab.key
               ? 'border-accent text-foreground'
               : 'border-transparent text-muted-foreground hover:text-foreground'"
-            @click="activeTab = tab"
+            @click="activeTab = tab.key"
           >
-            {{ tab }}
-            <span v-if="tab === 'assertions' && requestStore.lastResult" class="ml-1 text-muted-foreground/60">
-              ({{ requestStore.lastResult.assertions?.length ?? 0 }})
+            <component :is="tab.icon" class="h-3 w-3" />
+            {{ tab.label }}
+            <span
+              v-if="tab.key === 'assertions' && requestStore.lastResult"
+              class="rounded-full bg-surface px-1.5 py-px text-[10px] tabular-nums text-muted-foreground/60"
+            >
+              {{ requestStore.lastResult.assertions?.length ?? 0 }}
             </span>
-            <span v-if="tab === 'results' && requestStore.lastRunResult" class="ml-1 text-muted-foreground/60">
-              ({{ requestStore.lastRunResult.results.length }})
+            <span
+              v-if="tab.key === 'results' && requestStore.lastRunResult"
+              class="rounded-full bg-surface px-1.5 py-px text-[10px] tabular-nums text-muted-foreground/60"
+            >
+              {{ requestStore.lastRunResult.results.length }}
             </span>
           </button>
         </div>
       </div>
+
+      <!-- Tab content -->
       <div class="flex-1 overflow-auto">
         <RunResultsList
           v-if="activeTab === 'results' && requestStore.lastRunResult"
@@ -89,7 +122,19 @@ function selectResult(result: RunResult) {
         </template>
       </div>
     </template>
-    <EmptyState v-else-if="requestStore.error" :icon="XCircle" :title="'Error'" :description="requestStore.error" />
-    <EmptyState v-else :icon="Send" title="No response yet" description="Send a request to see the response here" />
+
+    <!-- Error state -->
+    <div v-else-if="requestStore.error" class="flex flex-1 flex-col items-center justify-center gap-3 p-8">
+      <div class="rounded-xl bg-destructive/10 p-3">
+        <XCircle class="h-10 w-10 text-destructive/60" />
+      </div>
+      <div class="space-y-1 text-center">
+        <h3 class="text-sm font-medium text-foreground">Request Failed</h3>
+        <p class="max-w-sm text-xs text-muted-foreground">{{ requestStore.error }}</p>
+      </div>
+    </div>
+
+    <!-- Empty state -->
+    <EmptyState v-else :icon="Send" title="No response yet" description="Send a request or press Cmd+Enter to run the file" />
   </div>
 </template>

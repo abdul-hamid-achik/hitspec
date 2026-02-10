@@ -1,0 +1,141 @@
+---
+title: "Database Testing Guide"
+description: "Use database assertions to verify side effects of API calls against PostgreSQL, MySQL, and SQLite."
+---
+
+Database assertions let you verify that API calls produce the expected side effects in your database. After sending a request, query the database and assert on the results.
+
+## Supported Databases
+
+| Database | Connection String |
+|----------|-------------------|
+| SQLite | `sqlite://path/to/db.sqlite` or `sqlite:./test.db` |
+| PostgreSQL | `postgres://user:pass@host:port/dbname` |
+| MySQL | `mysql://user:pass@host:port/dbname` |
+
+## Security
+
+Database assertions are disabled by default. Enable them with `--allow-db`:
+
+```bash
+hitspec run tests/ --allow-db
+```
+
+<Warning>
+The `--allow-db` flag is required for security. Database blocks execute arbitrary SQL queries, so you must explicitly opt in.
+</Warning>
+
+## Syntax
+
+Use `>>>db` blocks after a request to query the database and assert on results:
+
+```http
+### Create user
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{"name": "John", "email": "john@example.com"}
+
+>>>
+expect status 201
+<<<
+
+>>>db sqlite:./test.db
+SELECT * FROM users WHERE email = 'john@example.com'
+<<<
+
+>>>
+expect db.rows length 1
+expect db.rows[0].name == "John"
+expect db.rows[0].email == "john@example.com"
+<<<
+```
+
+## Connection Strings
+
+### SQLite
+
+```
+sqlite://./test.db
+sqlite:./relative/path.db
+sqlite:///absolute/path.db
+```
+
+### PostgreSQL
+
+```
+postgres://username:password@localhost:5432/mydb
+postgres://username:password@localhost:5432/mydb?sslmode=disable
+```
+
+### MySQL
+
+```
+mysql://username:password@localhost:3306/mydb
+```
+
+## Use Cases
+
+### Verify record creation
+
+```http
+POST {{baseUrl}}/orders
+Content-Type: application/json
+
+{"product": "Widget", "quantity": 5}
+
+>>>
+expect status 201
+<<<
+
+>>>db {{dbUrl}}
+SELECT COUNT(*) as count FROM orders WHERE product = 'Widget'
+<<<
+
+>>>
+expect db.rows[0].count == 1
+<<<
+```
+
+### Verify cascade deletes
+
+```http
+DELETE {{baseUrl}}/users/1
+
+>>>
+expect status 204
+<<<
+
+>>>db {{dbUrl}}
+SELECT COUNT(*) as count FROM user_sessions WHERE user_id = 1
+<<<
+
+>>>
+expect db.rows[0].count == 0
+<<<
+```
+
+### Verify data transformation
+
+```http
+PUT {{baseUrl}}/users/1
+Content-Type: application/json
+
+{"name": "  John Doe  "}
+
+>>>
+expect status 200
+<<<
+
+>>>db {{dbUrl}}
+SELECT name FROM users WHERE id = 1
+<<<
+
+>>>
+expect db.rows[0].name == "John Doe"
+<<<
+```
+
+<Tip>
+Store database connection strings in environment variables: `@dbUrl = {{$env(DATABASE_URL)}}`. This keeps credentials out of test files and lets you target different databases per environment.
+</Tip>

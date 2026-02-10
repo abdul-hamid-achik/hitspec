@@ -1,0 +1,106 @@
+---
+title: "CI/CD Pipeline Integration"
+description: "Set up hitspec in GitHub Actions, GitLab CI, and other CI/CD systems."
+---
+
+hitspec integrates with any CI/CD system. This guide covers common patterns for automated API testing.
+
+## GitHub Actions
+
+```yaml
+name: API Tests
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install hitspec
+        run: |
+          curl -fsSL https://hitspec.dev/install.sh | sh
+          echo "$HOME/.hitspec/bin" >> $GITHUB_PATH
+
+      - name: Run API tests
+        run: |
+          hitspec run tests/ \
+            --env staging \
+            --output junit \
+            --output-file results.xml \
+            --bail
+        env:
+          HITSPEC_ENV: staging
+
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: results.xml
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          hitspec run tests/ \
+            --notify slack \
+            --notify-on failure
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+```
+
+## GitLab CI
+
+```yaml
+api-tests:
+  stage: test
+  script:
+    - curl -fsSL https://hitspec.dev/install.sh | sh
+    - hitspec run tests/ --env staging --output junit --output-file results.xml
+  artifacts:
+    when: always
+    reports:
+      junit: results.xml
+  variables:
+    HITSPEC_ENV: staging
+```
+
+## General CI/CD Tips
+
+### Exit Codes
+
+hitspec uses standard exit codes. See [Exit Codes](/reference/exit-codes) for the full list.
+
+- `0` -- all tests passed
+- `1` -- one or more tests failed
+- `2` -- parse error
+- `3` -- config error
+
+### Recommended Flags
+
+| Flag | Why |
+|------|-----|
+| `--output junit` | Machine-readable results for CI reporting |
+| `--output-file results.xml` | Write to a file for artifact upload |
+| `--bail` | Fail fast on first error |
+| `--no-color` | Clean output in CI logs |
+| `--env staging` | Target the correct environment |
+
+### Environment Variables
+
+Store sensitive values as CI/CD secrets:
+
+```bash
+export HITSPEC_ENV=staging
+export API_TOKEN=${{ secrets.API_TOKEN }}
+export SLACK_WEBHOOK=${{ secrets.SLACK_WEBHOOK }}
+```
+
+### Parallel Testing in CI
+
+```bash
+hitspec run tests/ --parallel --concurrency 10 --env staging
+```
+
+<Tip>
+Use `--output json --output-file results.json` to generate output compatible with `hitspec diff` for regression detection between builds.
+</Tip>

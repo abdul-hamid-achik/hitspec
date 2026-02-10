@@ -1,0 +1,231 @@
+---
+title: "Assertion Operators"
+description: "Complete reference for all 24 assertion operators in hitspec, with syntax and examples for each."
+---
+
+hitspec provides 24 assertion operators organized into six categories. Every assertion follows this pattern:
+
+```
+expect <subject> <operator> <value>
+```
+
+When the operator is `==`, you can omit it: `expect status 200` is shorthand for `expect status == 200`.
+
+---
+
+## Equality and Comparison (6 operators)
+
+| Operator | Syntax | Description |
+|----------|--------|-------------|
+| `==` | `expect status == 200` | Equals (deep equality for objects/arrays, numeric coercion for numbers) |
+| `!=` | `expect body.error != null` | Not equals |
+| `>` | `expect body.count > 0` | Greater than (numeric) |
+| `>=` | `expect body.count >= 1` | Greater than or equal (numeric) |
+| `<` | `expect duration < 1000` | Less than (numeric) |
+| `<=` | `expect duration <= 500` | Less than or equal (numeric) |
+
+```http
+>>>
+expect status == 200
+expect duration < 500
+expect body.total > 0
+expect body.page >= 1
+expect body.errors != null
+<<<
+```
+
+<Note>
+Numeric comparison coerces strings to numbers when possible. `"42"` and `42` are considered equal by `==`.
+</Note>
+
+---
+
+## String Operators (5 operators)
+
+| Operator | Syntax | Description |
+|----------|--------|-------------|
+| `contains` | `expect body contains "success"` | Actual value contains the expected substring |
+| `!contains` | `expect body !contains "error"` | Actual value does not contain the substring |
+| `startsWith` | `expect body.url startsWith "https"` | Actual value starts with the expected prefix |
+| `endsWith` | `expect body.email endsWith ".com"` | Actual value ends with the expected suffix |
+| `matches` | `expect body.id matches /^\d+$/` | Actual value matches a regular expression |
+
+```http
+>>>
+expect body.email endsWith "@example.com"
+expect body.website startsWith "https"
+expect body.bio !contains "<script>"
+expect body.phone matches /^\+?[\d\s\-()]+$/
+<<<
+```
+
+<Note>
+Regular expressions use Go's `regexp` syntax and are enclosed in forward slashes: `/pattern/`.
+</Note>
+
+---
+
+## Existence and Type (3 operators)
+
+| Operator | Syntax | Description |
+|----------|--------|-------------|
+| `exists` | `expect body.id exists` | Value is present and not null |
+| `!exists` | `expect body.error !exists` | Value is absent or null |
+| `type` | `expect body.items type array` | Value matches the expected type |
+
+Supported type values: `null`, `boolean`, `number`, `string`, `array`, `object`.
+
+```http
+>>>
+expect body.id exists
+expect body.name type string
+expect body.age type number
+expect body.active type boolean
+expect body.tags type array
+expect body.address type object
+expect body.deletedAt !exists
+<<<
+```
+
+---
+
+## Length Operators (5 operators)
+
+| Operator | Syntax | Description |
+|----------|--------|-------------|
+| `length` | `expect body.items length 10` | Length equals exact value |
+| `length >` | `expect body.items length > 0` | Length greater than |
+| `length >=` | `expect body.items length >= 1` | Length greater than or equal |
+| `length <` | `expect body.items length < 100` | Length less than |
+| `length <=` | `expect body.items length <= 50` | Length less than or equal |
+
+Works on strings, arrays, and objects (counts keys).
+
+```http
+>>>
+expect body.users length > 0
+expect body.users length <= 100
+expect body.name length >= 1
+<<<
+```
+
+---
+
+## Array Operators (5 operators)
+
+| Operator | Syntax | Description |
+|----------|--------|-------------|
+| `includes` | `expect body.tags includes "admin"` | Array contains the value |
+| `!includes` | `expect body.tags !includes "test"` | Array does not contain the value |
+| `in` | `expect status in [200, 201, 204]` | Value is one of the listed values |
+| `!in` | `expect status !in [400, 404, 500]` | Value is not one of the listed values |
+| `each` | `expect body.items each type object` | Assertion applied to every array element |
+
+### includes / !includes
+
+Checks whether an array contains (or does not contain) a specific value:
+
+```http
+>>>
+expect body.permissions includes "read"
+expect body.permissions !includes "superadmin"
+<<<
+```
+
+### in / !in
+
+Checks whether a scalar value is a member of a set. List values in square brackets:
+
+```http
+>>>
+expect status in [200, 201]
+expect body.role in ["admin", "editor", "viewer"]
+expect body.status !in ["deleted", "banned"]
+<<<
+```
+
+### each
+
+Applies an assertion to every element in an array. Useful for validating list shapes:
+
+```http
+>>>
+expect body.users each type object
+<<<
+```
+
+You can also use `each` with an operator/value map:
+
+```http
+>>>
+expect body.items each {"operator": "type", "value": "object"}
+<<<
+```
+
+---
+
+## Schema and Snapshot (2 operators)
+
+| Operator | Syntax | Description |
+|----------|--------|-------------|
+| `schema` | `expect body schema ./schema.json` | Validate against a JSON Schema file |
+| `snapshot` | `expect body snapshot "name"` | Compare against a saved snapshot |
+
+### schema
+
+Validates the response body against a JSON Schema file. File paths are relative to the `.http` file.
+
+```http
+>>>
+expect body schema ./schemas/user.json
+<<<
+```
+
+### snapshot
+
+Compares the response body against a previously saved baseline. On first run, the snapshot is created. On subsequent runs, differences cause failure.
+
+```http
+>>>
+expect body snapshot "user-profile"
+<<<
+```
+
+Update snapshots when the response intentionally changes:
+
+```bash
+hitspec run tests/ --update-snapshots
+```
+
+---
+
+## Quick Reference
+
+| # | Operator | Category | Example |
+|---|----------|----------|---------|
+| 1 | `==` | Equality | `expect status == 200` |
+| 2 | `!=` | Equality | `expect body.error != null` |
+| 3 | `>` | Comparison | `expect body.count > 0` |
+| 4 | `>=` | Comparison | `expect body.count >= 1` |
+| 5 | `<` | Comparison | `expect duration < 1000` |
+| 6 | `<=` | Comparison | `expect duration <= 500` |
+| 7 | `contains` | String | `expect body contains "ok"` |
+| 8 | `!contains` | String | `expect body !contains "error"` |
+| 9 | `startsWith` | String | `expect body.url startsWith "https"` |
+| 10 | `endsWith` | String | `expect body.email endsWith ".com"` |
+| 11 | `matches` | String | `expect body.id matches /^\d+$/` |
+| 12 | `exists` | Existence | `expect body.id exists` |
+| 13 | `!exists` | Existence | `expect body.error !exists` |
+| 14 | `type` | Type | `expect body.items type array` |
+| 15 | `length` | Length | `expect body.items length 10` |
+| 16 | `length >` | Length | `expect body.items length > 0` |
+| 17 | `length >=` | Length | `expect body.items length >= 1` |
+| 18 | `length <` | Length | `expect body.items length < 100` |
+| 19 | `length <=` | Length | `expect body.items length <= 50` |
+| 20 | `includes` | Array | `expect body.tags includes "admin"` |
+| 21 | `!includes` | Array | `expect body.tags !includes "test"` |
+| 22 | `in` | Array | `expect status in [200, 201]` |
+| 23 | `!in` | Array | `expect status !in [400, 500]` |
+| 24 | `each` | Array | `expect body.items each type object` |
+| -- | `schema` | Validation | `expect body schema ./schema.json` |
+| -- | `snapshot` | Validation | `expect body snapshot "name"` |

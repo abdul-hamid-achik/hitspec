@@ -1,0 +1,50 @@
+---
+title: "Prometheus"
+description: "Export hitspec stress test metrics to Prometheus for monitoring dashboards."
+---
+
+hitspec exposes a Prometheus-compatible metrics endpoint during stress tests, allowing you to scrape metrics into Prometheus and visualize them in Grafana.
+
+## Setup
+
+```bash
+hitspec run api.http --stress -d 5m -r 100 \
+  --metrics prometheus \
+  --metrics-port 9090
+```
+
+Metrics are available at `http://localhost:9090/metrics` while the stress test runs.
+
+## Prometheus Configuration
+
+Add hitspec as a scrape target in your `prometheus.yml`:
+
+```yaml
+scrape_configs:
+  - job_name: 'hitspec'
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['localhost:9090']
+```
+
+## Available Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `hitspec_requests_total` | Counter | Total number of requests |
+| `hitspec_requests_success` | Counter | Successful requests |
+| `hitspec_requests_failed` | Counter | Failed requests |
+| `hitspec_request_duration_ms` | Histogram | Request duration in milliseconds |
+| `hitspec_request_duration_p50` | Gauge | 50th percentile latency |
+| `hitspec_request_duration_p95` | Gauge | 95th percentile latency |
+| `hitspec_request_duration_p99` | Gauge | 99th percentile latency |
+
+## Custom Port
+
+```bash
+hitspec run api.http --stress -d 5m -r 100 \
+  --metrics prometheus \
+  --metrics-port 9100
+```
+
+Environment variable: `HITSPEC_METRICS_PORT`

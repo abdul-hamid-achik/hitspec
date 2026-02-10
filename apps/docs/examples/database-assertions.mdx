@@ -1,0 +1,108 @@
+---
+title: "Database Assertions"
+description: "Example: Verify API side effects with database queries."
+---
+
+This example shows how to use database assertions to verify that API calls produce the expected database changes.
+
+<Warning>
+Run with `--allow-db` to enable database assertions: `hitspec run tests/ --allow-db`
+</Warning>
+
+## Setup
+
+```http
+@baseUrl = http://localhost:3000
+@dbUrl = sqlite://./test.db
+```
+
+## Create and Verify
+
+```http
+### Create a user
+# @name createUser
+# @tags db
+
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "email": "john@example.com"
+}
+
+>>>
+expect status 201
+expect body.id exists
+<<<
+
+>>>capture
+userId from body.id
+<<<
+
+>>>db {{dbUrl}}
+SELECT * FROM users WHERE id = {{createUser.userId}}
+<<<
+
+>>>
+expect db.rows length 1
+expect db.rows[0].name == "John Doe"
+expect db.rows[0].email == "john@example.com"
+<<<
+```
+
+## Update and Verify
+
+```http
+### Update user email
+# @name updateUser
+# @depends createUser
+# @tags db
+
+PUT {{baseUrl}}/users/{{createUser.userId}}
+Content-Type: application/json
+
+{
+  "email": "john.doe@newdomain.com"
+}
+
+>>>
+expect status 200
+<<<
+
+>>>db {{dbUrl}}
+SELECT email FROM users WHERE id = {{createUser.userId}}
+<<<
+
+>>>
+expect db.rows[0].email == "john.doe@newdomain.com"
+<<<
+```
+
+## Delete and Verify
+
+```http
+### Delete user
+# @depends updateUser
+# @tags db
+
+DELETE {{baseUrl}}/users/{{createUser.userId}}
+
+>>>
+expect status 204
+<<<
+
+>>>db {{dbUrl}}
+SELECT COUNT(*) as count FROM users WHERE id = {{createUser.userId}}
+<<<
+
+>>>
+expect db.rows[0].count == 0
+<<<
+```
+
+## Run It
+
+```bash
+hitspec run examples/database-assertions.http --allow-db --env dev
+```

@@ -1,0 +1,200 @@
+---
+title: "Authentication Types"
+description: "Reference for all 8 authentication methods supported by hitspec's @auth directive."
+---
+
+hitspec supports 8 authentication methods through the `# @auth` metadata directive. Instead of manually constructing `Authorization` headers, declare your auth method and hitspec handles the rest.
+
+## Syntax
+
+```
+# @auth <method> <params...>
+```
+
+All parameters support `{{variable}}` interpolation.
+
+---
+
+## Methods
+
+### bearer
+
+Sends an `Authorization: Bearer <token>` header.
+
+```http
+# @auth bearer {{token}}
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `token` | The bearer token value |
+
+**Generated header:** `Authorization: Bearer <token>`
+
+---
+
+### basic
+
+Sends a Base64-encoded `Authorization: Basic <credentials>` header.
+
+```http
+# @auth basic {{username}}, {{password}}
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `username` | Username |
+| `password` | Password |
+
+**Generated header:** `Authorization: Basic <base64(username:password)>`
+
+---
+
+### apiKey
+
+Sends the API key as a custom request header.
+
+```http
+# @auth apiKey X-API-Key, {{apiKey}}
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `headerName` | Name of the header to set |
+| `value` | API key value |
+
+**Generated header:** `<headerName>: <value>`
+
+---
+
+### apiKeyQuery
+
+Appends the API key as a URL query parameter.
+
+```http
+# @auth apiKeyQuery api_key, {{apiKey}}
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `paramName` | Query parameter name |
+| `value` | API key value |
+
+**Effect:** Appends `?api_key=<value>` to the request URL.
+
+---
+
+### digest
+
+HTTP Digest authentication. hitspec handles the challenge-response handshake automatically.
+
+```http
+# @auth digest {{username}}, {{password}}
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `username` | Username |
+| `password` | Password |
+
+---
+
+### aws
+
+Signs requests using AWS Signature Version 4 for AWS services or compatible APIs (e.g., MinIO, LocalStack).
+
+```http
+# @auth aws {{accessKey}}, {{secretKey}}, {{region}}, {{service}}
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `accessKey` | AWS Access Key ID |
+| `secretKey` | AWS Secret Access Key |
+| `region` | AWS region (e.g., `us-east-1`) |
+| `service` | AWS service name (e.g., `s3`, `execute-api`) |
+
+---
+
+### oauth2 client_credentials
+
+Fetches an access token using the OAuth2 Client Credentials grant, then sends it as a Bearer token.
+
+```http
+# @auth oauth2 client_credentials {{tokenUrl}}, {{clientId}}, {{clientSecret}}, scope1,scope2
+```
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `tokenUrl` | Yes | OAuth2 token endpoint |
+| `clientId` | Yes | Application client ID |
+| `clientSecret` | Yes | Application client secret |
+| `scopes` | No | Comma-separated list of scopes |
+
+---
+
+### oauth2 password
+
+Fetches an access token using the OAuth2 Resource Owner Password Credentials grant.
+
+```http
+# @auth oauth2 password {{tokenUrl}}, {{clientId}}, {{clientSecret}}, {{username}}, {{password}}, scope1,scope2
+```
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `tokenUrl` | Yes | OAuth2 token endpoint |
+| `clientId` | Yes | Application client ID |
+| `clientSecret` | Yes | Application client secret |
+| `username` | Yes | Resource owner username |
+| `password` | Yes | Resource owner password |
+| `scopes` | No | Comma-separated list of scopes |
+
+---
+
+## Quick Reference
+
+| Method | Syntax | Params |
+|--------|--------|--------|
+| Bearer | `# @auth bearer <token>` | 1 |
+| Basic | `# @auth basic <user>, <pass>` | 2 |
+| API Key (Header) | `# @auth apiKey <header>, <value>` | 2 |
+| API Key (Query) | `# @auth apiKeyQuery <param>, <value>` | 2 |
+| Digest | `# @auth digest <user>, <pass>` | 2 |
+| AWS Sig v4 | `# @auth aws <key>, <secret>, <region>, <service>` | 4 |
+| OAuth2 Client Creds | `# @auth oauth2 client_credentials <url>, <id>, <secret>, <scopes>` | 3-4 |
+| OAuth2 Password | `# @auth oauth2 password <url>, <id>, <secret>, <user>, <pass>, <scopes>` | 5-6 |
+
+---
+
+## Using Auth with Captures
+
+Capture a token from a login response and use it in subsequent requests:
+
+```http
+### Login
+# @name login
+
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{"email": "test@example.com", "password": "secret"}
+
+>>>capture
+token from body.access_token
+<<<
+
+### Protected resource
+# @depends login
+# @auth bearer {{login.token}}
+
+GET {{baseUrl}}/me
+
+>>>
+expect status 200
+<<<
+```
+
+<Tip>
+Store credentials in environment variables or `hitspec.yaml` environments to keep them out of your test files. Reference them with `{{$env(VAR)}}` or `{{variableName}}`.
+</Tip>

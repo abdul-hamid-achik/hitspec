@@ -1,0 +1,55 @@
+---
+title: "Exit Codes"
+description: "Reference for all hitspec CLI exit codes for use in scripts and CI/CD pipelines."
+---
+
+hitspec uses specific exit codes to indicate the result of a test run. These are useful for scripting and CI/CD integration.
+
+## Exit Codes
+
+| Code | Constant | Description |
+|------|----------|-------------|
+| `0` | `ExitSuccess` | All tests passed |
+| `1` | `ExitTestFailure` | One or more tests failed or thresholds exceeded |
+| `2` | `ExitParseError` | File parsing error (invalid syntax in `.http` / `.hitspec` file) |
+| `3` | `ExitConfigError` | Configuration error (invalid `hitspec.yaml`, missing required flags) |
+| `4` | `ExitNetworkError` | Network or connection error |
+| `64` | `ExitUsageError` | Invalid CLI usage (wrong arguments, missing required flags) |
+
+## Usage in Scripts
+
+```bash
+hitspec run tests/ --env staging
+EXIT_CODE=$?
+
+case $EXIT_CODE in
+  0) echo "All tests passed" ;;
+  1) echo "Tests failed" ;;
+  2) echo "Parse error in test files" ;;
+  3) echo "Configuration error" ;;
+  4) echo "Network error" ;;
+  64) echo "Invalid CLI usage" ;;
+  *) echo "Unknown exit code: $EXIT_CODE" ;;
+esac
+```
+
+## CI/CD Usage
+
+Most CI systems treat any non-zero exit code as failure. hitspec's exit codes let you distinguish between test failures and infrastructure issues:
+
+```yaml
+# GitHub Actions
+- name: Run API tests
+  run: hitspec run tests/ --output junit --output-file results.xml
+  continue-on-error: true
+
+- name: Check results
+  run: |
+    if [ ${{ steps.test.outcome }} == 'failure' ]; then
+      echo "Tests failed - check results.xml"
+    fi
+```
+
+<Tip>
+Use `--bail` to stop on the first failure and exit immediately with code `1`. Without `--bail`, hitspec runs all tests before exiting.
+</Tip>

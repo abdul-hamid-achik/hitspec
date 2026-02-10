@@ -1,0 +1,85 @@
+---
+title: "Environment Variables"
+description: "Complete list of HITSPEC_* environment variables for configuring hitspec without flags."
+---
+
+All hitspec CLI flags that support environment variables are listed here. Environment variables are read at startup and can be overridden by explicit CLI flags.
+
+## Core Variables
+
+| Variable | Flag | Default | Description |
+|----------|------|---------|-------------|
+| `HITSPEC_ENV` | `--env` | `dev` | Active environment name |
+| `HITSPEC_ENV_FILE` | `--env-file` | | Path to `.env` file |
+| `HITSPEC_CONFIG` | `--config` | | Path to config file |
+| `HITSPEC_TAGS` | `--tags` | | Tags filter (comma-separated) |
+
+## Output Variables
+
+| Variable | Flag | Default | Description |
+|----------|------|---------|-------------|
+| `HITSPEC_OUTPUT` | `--output` | `console` | Output format |
+| `HITSPEC_OUTPUT_FILE` | `--output-file` | | Output file path |
+| `HITSPEC_QUIET` | `--quiet` | `false` | Suppress all output |
+| `HITSPEC_NO_COLOR` | `--no-color` | `false` | Disable colored output |
+
+## Execution Variables
+
+| Variable | Flag | Default | Description |
+|----------|------|---------|-------------|
+| `HITSPEC_TIMEOUT` | `--timeout` | `30s` | Request timeout |
+| `HITSPEC_BAIL` | `--bail` | `false` | Stop on first failure |
+| `HITSPEC_PARALLEL` | `--parallel` | `false` | Run in parallel |
+| `HITSPEC_CONCURRENCY` | `--concurrency` | `5` | Max concurrent requests |
+
+## Network Variables
+
+| Variable | Flag | Default | Description |
+|----------|------|---------|-------------|
+| `HITSPEC_PROXY` | `--proxy` | | HTTP proxy URL |
+| `HITSPEC_INSECURE` | `--insecure` | `false` | Disable SSL validation |
+
+## Metrics Variables
+
+| Variable | Flag | Default | Description |
+|----------|------|---------|-------------|
+| `HITSPEC_METRICS` | `--metrics` | | Metrics export format |
+| `HITSPEC_METRICS_PORT` | `--metrics-port` | `9090` | Prometheus endpoint port |
+| `HITSPEC_METRICS_FILE` | `--metrics-file` | | JSON metrics output file |
+| `DD_API_KEY` | `--datadog-api-key` | | DataDog API key |
+| `DD_SITE` | `--datadog-site` | `datadoghq.com` | DataDog site |
+| `DD_TAGS` | `--datadog-tags` | | DataDog tags (comma-separated) |
+
+## Notification Variables
+
+| Variable | Flag | Default | Description |
+|----------|------|---------|-------------|
+| `HITSPEC_NOTIFY` | `--notify` | | Notification service |
+| `HITSPEC_NOTIFY_ON` | `--notify-on` | `failure` | When to notify |
+| `SLACK_WEBHOOK` | `--slack-webhook` | | Slack webhook URL |
+| `SLACK_CHANNEL` | `--slack-channel` | | Slack channel override |
+| `TEAMS_WEBHOOK` | `--teams-webhook` | | Teams webhook URL |
+
+## Usage
+
+Set variables in your shell profile, `.env` file, or CI/CD configuration:
+
+```bash
+# Shell profile
+export HITSPEC_ENV=staging
+export HITSPEC_TIMEOUT=60s
+export HITSPEC_OUTPUT=json
+export HITSPEC_BAIL=true
+```
+
+```bash
+# CI/CD environment
+HITSPEC_ENV=staging \
+HITSPEC_OUTPUT=junit \
+HITSPEC_OUTPUT_FILE=results.xml \
+  hitspec run tests/
+```
+
+<Note>
+Boolean variables accept `true`, `1`, or `yes` as truthy values. Everything else is falsy.
+</Note>

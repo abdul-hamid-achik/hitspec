@@ -1,0 +1,73 @@
+---
+title: "hitspec init"
+description: "Initialize a new hitspec project with a config file and example test."
+---
+
+# hitspec init
+
+Initialize a new hitspec project in the current directory.
+
+```bash
+hitspec init [flags]
+```
+
+## What It Creates
+
+| File | Description |
+|------|-------------|
+| `hitspec.yaml` | Configuration file with default environments (dev, staging, prod) |
+| `example.http` | Example test file with CRUD operations and captures |
+
+## Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--force` | `-f` | Overwrite existing files | `false` |
+
+## Examples
+
+```bash
+# Initialize a new project
+hitspec init
+
+# Overwrite existing files
+hitspec init --force
+```
+
+## Generated Config
+
+The generated `hitspec.yaml` includes:
+
+```yaml
+defaultEnvironment: dev
+timeout: 30s
+retries: 0
+followRedirects: true
+maxRedirects: 10
+validateSSL: true
+headers:
+  User-Agent: hitspec/1.0
+environments:
+  dev:
+    baseUrl: http://localhost:3000
+  staging:
+    baseUrl: https://staging.api.example.com
+  prod:
+    baseUrl: https://api.example.com
+```
+
+## Generated Example
+
+The generated `example.http` demonstrates:
+
+- Variable definitions with `@baseUrl`
+- Request metadata (`@name`, `@description`, `@tags`)
+- Assertion blocks with `>>>` / `<<<`
+- Capture blocks with `>>>capture` / `<<<`
+- Dependencies with `@depends`
+
+Run the example:
+
+```bash
+hitspec run example.http
+```

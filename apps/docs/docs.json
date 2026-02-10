@@ -37,12 +37,16 @@
           "href": "/"
         },
         {
-          "tab": "Examples",
-          "href": "/examples"
+          "tab": "Guides",
+          "href": "/guides"
         },
         {
           "tab": "Reference",
           "href": "/reference"
+        },
+        {
+          "tab": "Examples",
+          "href": "/examples"
         }
       ],
       "anchors": [
@@ -68,6 +72,7 @@
         "pages": [
           "concepts/file-format",
           "concepts/variables",
+          "concepts/variable-interpolation",
           "concepts/assertions",
           "concepts/captures",
           "concepts/dependencies",
@@ -86,7 +91,24 @@
           "features/hooks",
           "features/sse",
           "features/api-coverage",
-          "features/mock-server"
+          "features/mock-server",
+          "features/contract-testing",
+          "features/recording-proxy",
+          "features/watch-mode",
+          "features/parallel-execution",
+          "features/notifications",
+          "features/metrics-export"
+        ]
+      },
+      {
+        "group": "Guides",
+        "pages": [
+          "guides/ci-cd-pipeline",
+          "guides/regression-testing",
+          "guides/database-testing",
+          "guides/load-testing",
+          "guides/contract-testing",
+          "guides/migrating-from-postman"
         ]
       },
       {
@@ -96,7 +118,10 @@
           "examples/auth-flow",
           "examples/graphql",
           "examples/ci-cd",
-          "examples/stress-testing"
+          "examples/stress-testing",
+          "examples/database-assertions",
+          "examples/contract-testing",
+          "examples/mock-server"
         ]
       },
       {
@@ -104,16 +129,54 @@
         "pages": [
           "reference/run",
           "reference/validate-list",
+          "reference/init",
           "reference/import-export",
           "reference/mock-record",
-          "reference/contract-diff"
+          "reference/contract-diff",
+          "reference/docs-serve",
+          "reference/exit-codes"
+        ]
+      },
+      {
+        "group": "Configuration",
+        "pages": [
+          "reference/configuration",
+          "reference/environment-variables"
+        ]
+      },
+      {
+        "group": "Assertions Reference",
+        "pages": [
+          "reference/assertion-operators",
+          "reference/assertion-subjects"
+        ]
+      },
+      {
+        "group": "Built-in Functions",
+        "pages": [
+          "reference/builtin-functions"
+        ]
+      },
+      {
+        "group": "Authentication",
+        "pages": [
+          "reference/auth-types"
+        ]
+      },
+      {
+        "group": "Output Formats",
+        "pages": [
+          "reference/output-formats"
         ]
       },
       {
         "group": "Integrations",
         "pages": [
           "integrations/github-actions",
-          "integrations/output-formats"
+          "integrations/output-formats",
+          "integrations/prometheus",
+          "integrations/datadog",
+          "integrations/slack-teams"
         ]
       }
     ]

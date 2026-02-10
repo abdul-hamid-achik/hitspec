@@ -1,17 +1,27 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { RouterView } from 'vue-router'
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import Sidebar from './Sidebar.vue'
 import TopBar from './TopBar.vue'
 import StatusBar from './StatusBar.vue'
+import CommandPalette from '@/components/command/CommandPalette.vue'
+import KeyboardShortcuts from '@/components/command/KeyboardShortcuts.vue'
 import { useCollectionStore } from '@/stores/collection'
 import { useEnvironmentStore } from '@/stores/environment'
 import { useSettingsStore } from '@/stores/settings'
+import { useRequestStore } from '@/stores/request'
+import { useKeyboard } from '@/composables/useKeyboard'
 import { ws } from '@/api/websocket'
 
+const router = useRouter()
 const collection = useCollectionStore()
 const environment = useEnvironmentStore()
 const settings = useSettingsStore()
+const requestStore = useRequestStore()
+
+const commandPaletteOpen = ref(false)
+const shortcutsOpen = ref(false)
+const sidebarCollapsed = ref(false)
 
 onMounted(() => {
   ws.connect()
@@ -19,18 +29,53 @@ onMounted(() => {
   environment.loadEnvironments()
   settings.loadConfig()
 })
+
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+}
+
+useKeyboard({
+  'mod+k': () => { commandPaletteOpen.value = true },
+  'mod+b': () => { toggleSidebar() },
+  'mod+?': () => { shortcutsOpen.value = true },
+  'mod+enter': () => {
+    if (collection.activeFilePath) {
+      requestStore.runFile(collection.activeFilePath, environment.activeEnvName)
+    }
+  },
+  'mod+1': () => router.push('/'),
+  'mod+2': () => router.push('/stress'),
+  'mod+3': () => router.push('/mock'),
+  'mod+4': () => router.push('/contract'),
+  'mod+5': () => router.push('/record'),
+  'mod+6': () => router.push('/history'),
+  'mod+7': () => router.push('/import'),
+  'mod+8': () => router.push('/settings'),
+})
 </script>
 
 <template>
   <div class="flex h-screen flex-col overflow-hidden bg-background text-foreground">
-    <TopBar />
+    <TopBar
+      @open-command-palette="commandPaletteOpen = true"
+      @toggle-sidebar="toggleSidebar"
+    />
     <div class="flex flex-1 overflow-hidden">
-      <Sidebar :width="settings.sidebarWidth" />
+      <Sidebar
+        :width="settings.sidebarWidth"
+        :collapsed="sidebarCollapsed"
+        @collapse="toggleSidebar"
+      />
       <main class="flex-1 overflow-auto">
         <slot />
-        <RouterView />
       </main>
     </div>
     <StatusBar />
+
+    <CommandPalette
+      v-model:open="commandPaletteOpen"
+      @show-shortcuts="shortcutsOpen = true; commandPaletteOpen = false"
+    />
+    <KeyboardShortcuts v-model:open="shortcutsOpen" />
   </div>
 </template>

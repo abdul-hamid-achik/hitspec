@@ -3,13 +3,20 @@ import { ref } from 'vue'
 import UrlBar from './UrlBar.vue'
 import HeadersEditor from './HeadersEditor.vue'
 import BodyEditor from './BodyEditor.vue'
-import AssertionsEditor from './AssertionsEditor.vue'
+import AssertionBuilder from './AssertionBuilder.vue'
 import { useRequestStore } from '@/stores/request'
 import EmptyState from '@/components/common/EmptyState.vue'
-import { FileText } from 'lucide-vue-next'
+import { FileText, Globe, AlignLeft, ShieldCheck, Link2 } from 'lucide-vue-next'
 
 const requestStore = useRequestStore()
 const activeTab = ref<'headers' | 'body' | 'assertions' | 'captures'>('headers')
+
+const tabs = [
+  { key: 'headers' as const, label: 'Headers', icon: Globe },
+  { key: 'body' as const, label: 'Body', icon: AlignLeft },
+  { key: 'assertions' as const, label: 'Assertions', icon: ShieldCheck },
+  { key: 'captures' as const, label: 'Captures', icon: Link2 },
+] as const
 </script>
 
 <template>
@@ -17,22 +24,29 @@ const activeTab = ref<'headers' | 'body' | 'assertions' | 'captures'>('headers')
     <template v-if="requestStore.activeRequest">
       <UrlBar />
       <div class="border-b border-border">
-        <div class="flex">
+        <div class="flex gap-0.5 px-2">
           <button
-            v-for="tab in (['headers', 'body', 'assertions', 'captures'] as const)"
-            :key="tab"
-            class="border-b-2 px-4 py-2 text-xs font-medium capitalize transition-colors"
-            :class="activeTab === tab
+            v-for="tab in tabs"
+            :key="tab.key"
+            class="flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors"
+            :class="activeTab === tab.key
               ? 'border-accent text-foreground'
               : 'border-transparent text-muted-foreground hover:text-foreground'"
-            @click="activeTab = tab"
+            @click="activeTab = tab.key"
           >
-            {{ tab }}
-            <span v-if="tab === 'headers'" class="ml-1 text-muted-foreground/60">
-              ({{ requestStore.activeRequest.headers?.length ?? 0 }})
+            <component :is="tab.icon" class="h-3 w-3" />
+            {{ tab.label }}
+            <span
+              v-if="tab.key === 'headers'"
+              class="rounded-full bg-surface px-1.5 py-px text-[10px] tabular-nums text-muted-foreground/60"
+            >
+              {{ requestStore.activeRequest.headers?.length ?? 0 }}
             </span>
-            <span v-if="tab === 'assertions'" class="ml-1 text-muted-foreground/60">
-              ({{ requestStore.activeRequest.assertions?.length ?? 0 }})
+            <span
+              v-if="tab.key === 'assertions'"
+              class="rounded-full bg-surface px-1.5 py-px text-[10px] tabular-nums text-muted-foreground/60"
+            >
+              {{ requestStore.activeRequest.assertions?.length ?? 0 }}
             </span>
           </button>
         </div>
@@ -40,18 +54,28 @@ const activeTab = ref<'headers' | 'body' | 'assertions' | 'captures'>('headers')
       <div class="flex-1 overflow-auto p-3">
         <HeadersEditor v-if="activeTab === 'headers'" :headers="requestStore.activeRequest.headers ?? []" />
         <BodyEditor v-else-if="activeTab === 'body'" :body="requestStore.activeRequest.body" />
-        <AssertionsEditor v-else-if="activeTab === 'assertions'" :assertions="requestStore.activeRequest.assertions ?? []" />
-        <div v-else-if="activeTab === 'captures'" class="space-y-1">
+        <AssertionBuilder
+          v-else-if="activeTab === 'assertions'"
+          :assertions="requestStore.activeRequest.assertions ?? []"
+          @copy="(text: string) => navigator.clipboard.writeText(text)"
+        />
+        <div v-else-if="activeTab === 'captures'" class="space-y-1.5">
+          <div v-if="!requestStore.activeRequest.captures?.length" class="text-xs text-muted-foreground/60">No captures defined</div>
           <div v-for="(cap, i) in requestStore.activeRequest.captures ?? []" :key="i"
-            class="flex items-center gap-2 font-mono text-xs">
-            <span class="text-nord-14">{{ cap.name }}</span>
-            <span class="text-muted-foreground">&larr;</span>
+            class="flex items-center gap-2 rounded-md bg-background/50 px-2.5 py-1.5 font-mono text-xs">
+            <span class="font-medium text-nord-14">{{ cap.name }}</span>
+            <span class="text-muted-foreground/40">&larr;</span>
             <span class="text-nord-8">{{ cap.source }}</span>
             <span class="text-muted-foreground">{{ cap.expression }}</span>
           </div>
         </div>
       </div>
     </template>
-    <EmptyState v-else :icon="FileText" title="No request selected" description="Select a request from the sidebar to get started" />
+    <EmptyState
+      v-else
+      :icon="FileText"
+      title="No request selected"
+      description="Select a request from the sidebar or use Cmd+K to search"
+    />
   </div>
 </template>

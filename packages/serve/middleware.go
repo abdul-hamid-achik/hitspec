@@ -65,13 +65,14 @@ func loggingMiddleware(verbose bool) Middleware {
 }
 
 // readOnlyMiddleware blocks mutating methods when read-only.
+// In read-only mode, only GET and OPTIONS requests are allowed.
 func readOnlyMiddleware(readOnly bool) Middleware {
 	return func(next http.Handler) http.Handler {
 		if !readOnly {
 			return next
 		}
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodPut || r.Method == http.MethodDelete {
+			if r.Method != http.MethodGet && r.Method != http.MethodOptions {
 				writeError(w, http.StatusForbidden, "server is in read-only mode")
 				return
 			}

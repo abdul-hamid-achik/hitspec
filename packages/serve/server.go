@@ -15,6 +15,7 @@ import (
 
 	"github.com/abdul-hamid-achik/hitspec/packages/core/config"
 	"github.com/abdul-hamid-achik/hitspec/packages/mock"
+	"github.com/abdul-hamid-achik/hitspec/packages/proxy"
 	"github.com/abdul-hamid-achik/hitspec/packages/stress"
 )
 
@@ -26,11 +27,15 @@ type Server struct {
 	fileConfig *config.Config
 
 	// Mutable state protected by mu
-	mu          sync.Mutex
-	stressRunner *stress.Runner
-	stressCancel context.CancelFunc
-	mockServer   *mock.Server
-	mockCancel   context.CancelFunc
+	mu             sync.Mutex
+	stressRunner   *stress.Runner
+	stressCancel   context.CancelFunc
+	mockServer     *mock.Server
+	mockCancel     context.CancelFunc
+	recorder       *proxy.Recorder
+	recorderCancel context.CancelFunc
+	recorderPort   int
+	recorderTarget string
 
 	ctx    context.Context
 	cancel context.CancelFunc

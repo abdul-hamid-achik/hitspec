@@ -1,0 +1,94 @@
+---
+title: "Contract Testing"
+description: "Example: Define and verify API contracts between services."
+---
+
+This example shows a consumer-driven contract for a User Service API.
+
+## Contract File
+
+```http
+# contracts/user-service.http
+@baseUrl = {{baseUrl}}
+
+### List users
+# @name listUsers
+# @contract.provider UserService
+
+GET {{baseUrl}}/users
+
+>>>
+expect status 200
+expect body type array
+<<<
+
+### Get user by ID
+# @name getUserById
+# @contract.provider UserService
+# @contract.state "user with id 1 exists"
+
+GET {{baseUrl}}/users/1
+
+>>>
+expect status 200
+expect body.id == 1
+expect body.name type string
+expect body.email type string
+expect body.email matches /^.+@.+\..+$/
+<<<
+
+### Create user
+# @name createUser
+# @contract.provider UserService
+
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{
+  "name": "New User",
+  "email": "new@example.com"
+}
+
+>>>
+expect status 201
+expect body.id exists
+expect body.id type number
+expect body.name == "New User"
+<<<
+
+### User not found
+# @name userNotFound
+# @contract.provider UserService
+# @contract.state "no users exist"
+
+GET {{baseUrl}}/users/999
+
+>>>
+expect status 404
+<<<
+```
+
+## State Handler
+
+```bash
+#!/bin/bash
+# setup-states.sh
+case "$1" in
+  "user with id 1 exists")
+    curl -s -X POST localhost:3000/test/seed \
+      -H "Content-Type: application/json" \
+      -d '{"id":1,"name":"John","email":"john@example.com"}'
+    ;;
+  "no users exist")
+    curl -s -X POST localhost:3000/test/reset
+    ;;
+esac
+```
+
+## Verify
+
+```bash
+hitspec contract verify contracts/ \
+  --provider http://localhost:3000 \
+  --state-handler ./setup-states.sh
+```

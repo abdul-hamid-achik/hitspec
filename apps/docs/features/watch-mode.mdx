@@ -1,0 +1,57 @@
+---
+title: "Watch Mode"
+description: "Automatically re-run tests when files change during development."
+---
+
+Watch mode monitors your `.http` and `.hitspec` files for changes and automatically re-runs tests when a file is saved. This creates a fast feedback loop during API development.
+
+## Usage
+
+```bash
+hitspec run tests/ --watch
+```
+
+Short form:
+
+```bash
+hitspec run tests/ -w
+```
+
+## How It Works
+
+1. hitspec runs all matching tests once
+2. It then watches the directories containing your test files
+3. When a `.http` or `.hitspec` file is modified, tests re-run automatically
+4. Press `Ctrl+C` to stop watching
+
+## Combining with Filters
+
+Combine watch mode with filters for focused development:
+
+```bash
+# Watch only smoke tests
+hitspec run tests/ --watch --tags smoke
+
+# Watch and filter by name
+hitspec run tests/ --watch --name "createUser"
+
+# Watch with a specific environment
+hitspec run tests/ --watch --env dev
+```
+
+## Debouncing
+
+hitspec debounces file change events with a 300ms delay. Rapid consecutive saves (e.g., from auto-formatting) only trigger a single test re-run.
+
+## Output in Watch Mode
+
+Each re-run creates fresh output. For structured formats (JSON, JUnit), the formatter is re-initialized on each change so you always get complete, valid output.
+
+```bash
+# Watch with JSON output
+hitspec run tests/ --watch --output json
+```
+
+<Note>
+Watch mode currently watches directories containing your test files. Changes to environment files (`hitspec.yaml`, `.env`) do not trigger re-runs -- restart the command to pick up config changes.
+</Note>

@@ -3,17 +3,15 @@ import AppShell from '@/components/layout/AppShell.vue'
 import RequestPanel from '@/components/request/RequestPanel.vue'
 import ResponsePanel from '@/components/response/ResponsePanel.vue'
 import { useCollectionStore } from '@/stores/collection'
-import { useEnvironmentStore } from '@/stores/environment'
 import { useRequestStore } from '@/stores/request'
 import { onMounted, watch } from 'vue'
 
 const collection = useCollectionStore()
-const envStore = useEnvironmentStore()
 const requestStore = useRequestStore()
 
 onMounted(() => {
-  collection.loadFiles()
-  envStore.loadEnvironments()
+  // File loading and env loading is handled by AppShell.
+  // Init sets up the WebSocket file-change listener (idempotent).
   collection.init()
 })
 

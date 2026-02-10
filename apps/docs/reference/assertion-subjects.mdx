@@ -1,0 +1,179 @@
+---
+title: "Assertion Subjects"
+description: "Reference for all assertion subjects: status, duration, headers, body paths, and percentiles."
+---
+
+The assertion subject is the left-hand side of every `expect` statement. It specifies which part of the HTTP response to validate.
+
+```
+expect <subject> <operator> <value>
+```
+
+---
+
+## status
+
+The HTTP response status code as an integer.
+
+```http
+>>>
+expect status 200
+expect status != 500
+expect status in [200, 201, 204]
+<<<
+```
+
+---
+
+## duration
+
+The response time in milliseconds (float). Measured from the start of the request to the end of the response.
+
+```http
+>>>
+expect duration < 500
+expect duration <= 1000
+<<<
+```
+
+---
+
+## Percentile Subjects
+
+For stress testing, percentile subjects represent latency distribution:
+
+| Subject | Description |
+|---------|-------------|
+| `p50` | 50th percentile (median) response time in ms |
+| `p95` | 95th percentile response time in ms |
+| `p99` | 99th percentile response time in ms |
+
+```http
+>>>
+expect p95 < 200
+expect p99 < 500
+<<<
+```
+
+<Note>
+For single (non-stress) requests, `p50`, `p95`, and `p99` all equal the `duration` value. These subjects are most useful in stress testing mode.
+</Note>
+
+---
+
+## header
+
+Response header values. Use `header <name>` to access a specific header.
+
+```http
+>>>
+expect header Content-Type contains "application/json"
+expect header X-Request-Id exists
+expect header X-RateLimit-Remaining > 0
+expect header Cache-Control contains "no-cache"
+<<<
+```
+
+Header names are case-insensitive as per HTTP specification.
+
+Using `header` without a name returns all headers as an object:
+
+```http
+>>>
+expect header exists
+<<<
+```
+
+---
+
+## body
+
+The full response body. If the response is JSON, `body` gives you the parsed JSON value. Otherwise, it returns the raw body as a string.
+
+```http
+>>>
+expect body contains "success"
+expect body type object
+expect body length > 0
+<<<
+```
+
+### JSON Path Access
+
+Use dot notation to access nested JSON fields:
+
+```http
+>>>
+expect body.user.name == "John"
+expect body.user.email endsWith "@example.com"
+expect body.user.roles type array
+<<<
+```
+
+### Array Index Access
+
+Use bracket notation for array indices:
+
+```http
+>>>
+expect body[0].id exists
+expect body.users[0].name == "Admin"
+expect body.items[2].price > 0
+<<<
+```
+
+### Nested Paths
+
+Combine dot and bracket notation for deep access:
+
+```http
+>>>
+expect body.data.users[0].address.city == "New York"
+expect body.results[0].tags[1] == "featured"
+<<<
+```
+
+### Implicit body Prefix
+
+When the subject doesn't match a known keyword (`status`, `duration`, `header`, `jsonpath`, etc.), hitspec treats it as a body path. These are equivalent:
+
+```http
+>>>
+expect body.user.name == "John"
+expect user.name == "John"
+<<<
+```
+
+---
+
+## jsonpath
+
+Alternative to body dot-notation using JSONPath-style expressions:
+
+```http
+>>>
+expect jsonpath $.users[0].id exists
+expect jsonpath $.data.count > 0
+<<<
+```
+
+<Tip>
+For most cases, the `body.path` syntax is simpler and recommended. Use `jsonpath` when you need explicit JSONPath semantics.
+</Tip>
+
+---
+
+## Quick Reference
+
+| Subject | Type | Example |
+|---------|------|---------|
+| `status` | integer | `expect status 200` |
+| `duration` | float (ms) | `expect duration < 500` |
+| `p50` | float (ms) | `expect p50 < 100` |
+| `p95` | float (ms) | `expect p95 < 200` |
+| `p99` | float (ms) | `expect p99 < 500` |
+| `header <name>` | string | `expect header Content-Type contains json` |
+| `body` | any | `expect body contains "ok"` |
+| `body.<path>` | any | `expect body.user.id exists` |
+| `body[n]` | any | `expect body[0].id == 1` |
+| `jsonpath <expr>` | any | `expect jsonpath $.users[0].id exists` |

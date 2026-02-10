@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronRight, FileText, Folder } from 'lucide-vue-next'
+import { ChevronRight, FileText, Folder, FolderOpen } from 'lucide-vue-next'
 import { ref } from 'vue'
 import type { FileInfo } from '@/types/api'
 import { useCollectionStore } from '@/stores/collection'
@@ -41,23 +41,29 @@ function handleRequestClick(filePath: string, request: import('@/types/api').Req
       :key="item.path"
     >
       <button
-        class="flex w-full items-center gap-1.5 rounded px-1 py-1 text-left text-sm transition-colors hover:bg-surface-hover"
+        class="group flex w-full items-center gap-1 rounded-md px-1.5 py-[5px] text-left text-[13px] transition-colors hover:bg-surface-hover"
         :class="[
-          collection.activeFilePath === item.path ? 'bg-surface-hover text-foreground' : 'text-muted-foreground',
+          collection.activeFilePath === item.path
+            ? 'bg-accent/10 text-foreground'
+            : 'text-muted-foreground',
         ]"
-        :style="{ paddingLeft: `${(depth ?? 0) * 12 + 4}px` }"
+        :style="{ paddingLeft: `${(depth ?? 0) * 12 + 6}px` }"
         @click="item.isDir ? toggleDir(item.path) : handleFileClick(item)"
       >
         <ChevronRight
           v-if="item.isDir || (!item.isDir && item.requestCount && item.requestCount > 0)"
-          class="h-3.5 w-3.5 shrink-0 transition-transform"
+          class="h-3 w-3 shrink-0 text-muted-foreground/40 transition-transform"
           :class="{ 'rotate-90': item.isDir ? expandedDirs.has(item.path) : collection.expandedFiles.has(item.path) }"
         />
-        <span v-else class="w-3.5 shrink-0" />
-        <Folder v-if="item.isDir" class="h-3.5 w-3.5 shrink-0 text-nord-13" />
-        <FileText v-else class="h-3.5 w-3.5 shrink-0 text-nord-8" />
+        <span v-else class="w-3 shrink-0" />
+        <FolderOpen v-if="item.isDir && expandedDirs.has(item.path)" class="h-3.5 w-3.5 shrink-0 text-nord-13" />
+        <Folder v-else-if="item.isDir" class="h-3.5 w-3.5 shrink-0 text-nord-13/70" />
+        <FileText v-else class="h-3.5 w-3.5 shrink-0 text-nord-8/70" />
         <span class="flex-1 truncate">{{ item.name }}</span>
-        <span v-if="!item.isDir && item.requestCount && item.requestCount > 0" class="text-xs text-muted-foreground/60">
+        <span
+          v-if="!item.isDir && item.requestCount && item.requestCount > 0"
+          class="rounded-full px-1.5 text-[10px] tabular-nums text-muted-foreground/40 group-hover:text-muted-foreground/60"
+        >
           {{ item.requestCount }}
         </span>
       </button>
@@ -76,7 +82,7 @@ function handleRequestClick(filePath: string, request: import('@/types/api').Req
         <button
           v-for="(req, idx) in collection.openFiles.get(item.path)!.requests"
           :key="idx"
-          class="flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left text-sm transition-colors hover:bg-surface-hover"
+          class="flex w-full items-center gap-1.5 rounded-md px-1.5 py-[3px] text-left text-[12px] transition-colors hover:bg-surface-hover"
           :class="[
             requestStore.activeRequest === req ? 'bg-accent/10 text-foreground' : 'text-muted-foreground',
           ]"

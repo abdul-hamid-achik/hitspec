@@ -1,5 +1,7 @@
 package parser
 
+import "strconv"
+
 type File struct {
 	Path      string
 	Variables []*Variable
@@ -318,24 +320,12 @@ type ParseError struct {
 func (e *ParseError) Error() string {
 	var msg string
 	if e.File != "" {
-		msg = e.File + ":" + itoa(e.Line) + ":" + itoa(e.Column) + ": " + e.Message
+		msg = e.File + ":" + strconv.Itoa(e.Line) + ":" + strconv.Itoa(e.Column) + ": " + e.Message
 	} else {
-		msg = "line " + itoa(e.Line) + ": " + e.Message
+		msg = "line " + strconv.Itoa(e.Line) + ": " + e.Message
 	}
 	if e.Snippet != "" {
 		msg += "\n  " + e.Snippet
 	}
 	return msg
-}
-
-func itoa(i int) string {
-	if i == 0 {
-		return "0"
-	}
-	s := ""
-	for i > 0 {
-		s = string(rune('0'+i%10)) + s
-		i /= 10
-	}
-	return s
 }

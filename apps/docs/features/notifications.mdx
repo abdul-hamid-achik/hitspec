@@ -1,0 +1,98 @@
+---
+title: "Notifications"
+description: "Send test results to Slack and Microsoft Teams via webhooks."
+---
+
+hitspec can send notifications to Slack and Microsoft Teams when tests complete. This is especially useful for CI/CD pipelines to alert teams about test failures.
+
+## Supported Services
+
+| Service | Flag | Webhook Variable |
+|---------|------|-----------------|
+| Slack | `--notify slack` | `SLACK_WEBHOOK` |
+| Microsoft Teams | `--notify teams` | `TEAMS_WEBHOOK` |
+
+## Quick Start
+
+```bash
+# Notify Slack on failure
+hitspec run tests/ \
+  --notify slack \
+  --slack-webhook "$SLACK_WEBHOOK"
+
+# Notify Teams on failure
+hitspec run tests/ \
+  --notify teams \
+  --teams-webhook "$TEAMS_WEBHOOK"
+```
+
+## Notification Triggers
+
+Control when notifications are sent with `--notify-on`:
+
+| Value | Description |
+|-------|-------------|
+| `failure` | Send only when tests fail (default) |
+| `always` | Send on every run |
+| `success` | Send only when all tests pass |
+| `recovery` | Send on failure and when tests recover from a previous failure |
+
+```bash
+# Always notify
+hitspec run tests/ --notify slack --slack-webhook "$SLACK_WEBHOOK" --notify-on always
+
+# Notify on recovery (useful for monitoring)
+hitspec run tests/ --notify slack --slack-webhook "$SLACK_WEBHOOK" --notify-on recovery
+```
+
+## Slack Configuration
+
+| Flag | Env Var | Description |
+|------|---------|-------------|
+| `--slack-webhook` | `SLACK_WEBHOOK` | Slack incoming webhook URL (required) |
+| `--slack-channel` | `SLACK_CHANNEL` | Override the default channel |
+
+The Slack notification includes:
+- Pass/fail summary with test counts
+- Duration
+- Environment name
+- Failed test details (names, files, errors)
+
+## Teams Configuration
+
+| Flag | Env Var | Description |
+|------|---------|-------------|
+| `--teams-webhook` | `TEAMS_WEBHOOK` | Teams incoming webhook URL (required) |
+
+The Teams notification uses Adaptive Cards and includes the same information as Slack notifications.
+
+## Multiple Services
+
+Send to both Slack and Teams simultaneously:
+
+```bash
+hitspec run tests/ \
+  --notify slack,teams \
+  --slack-webhook "$SLACK_WEBHOOK" \
+  --teams-webhook "$TEAMS_WEBHOOK"
+```
+
+## CI/CD Example
+
+```yaml
+# GitHub Actions
+- name: Run API tests
+  run: |
+    hitspec run tests/ \
+      --env staging \
+      --output junit \
+      --output-file results.xml \
+      --notify slack \
+      --notify-on failure
+  env:
+    SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+```
+
+<Tip>
+Store webhook URLs in environment variables or CI/CD secrets. Never commit them to your repository.
+</Tip>

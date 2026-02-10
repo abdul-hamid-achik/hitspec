@@ -20,25 +20,25 @@ function handleSend() {
 </script>
 
 <template>
-  <div v-if="requestStore.activeRequest" class="flex items-center gap-2 border-b border-border p-3">
+  <div v-if="requestStore.activeRequest" class="flex items-center gap-2 border-b border-border px-3 py-2.5">
     <MethodBadge :method="requestStore.activeRequest.method" size="md" />
-    <div class="flex-1 rounded border border-border bg-background px-3 py-1.5 font-mono text-sm text-foreground">
-      {{ requestStore.activeRequest.url }}
+    <div class="flex-1 overflow-hidden rounded-md border border-border bg-background px-3 py-1.5 font-mono text-xs text-foreground/80">
+      <span class="block truncate">{{ requestStore.activeRequest.url }}</span>
     </div>
     <button
-      class="rounded border border-border p-1.5 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+      class="rounded-md border border-border p-1.5 text-muted-foreground/60 transition-colors hover:bg-surface-hover hover:text-foreground"
       title="Export request"
       @click="showExport = true"
     >
-      <Share2 class="h-4 w-4" />
+      <Share2 class="h-3.5 w-3.5" />
     </button>
     <button
-      class="flex items-center gap-1.5 rounded bg-accent px-4 py-1.5 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent/80 disabled:opacity-50"
+      class="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/80 disabled:opacity-50"
       :disabled="requestStore.isExecuting"
       @click="handleSend"
     >
-      <Loader2 v-if="requestStore.isExecuting" class="h-4 w-4 animate-spin" />
-      <Play v-else class="h-4 w-4" />
+      <Loader2 v-if="requestStore.isExecuting" class="h-3.5 w-3.5 animate-spin" />
+      <Play v-else class="h-3.5 w-3.5" />
       Send
     </button>
 

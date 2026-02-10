@@ -3,6 +3,7 @@ package serve
 import (
 	"context"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	"github.com/abdul-hamid-achik/hitspec/packages/mock"
@@ -38,6 +39,18 @@ func (s *Server) handleMockStart(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Validate all file paths are within the workspace
+	absFiles := make([]string, 0, len(req.Files))
+	for _, f := range req.Files {
+		absPath := filepath.Join(s.config.WorkDir, f)
+		if !isPathWithin(s.config.WorkDir, absPath) {
+			s.mu.Unlock()
+			writeError(w, http.StatusForbidden, "path outside workspace: "+f)
+			return
+		}
+		absFiles = append(absFiles, absPath)
+	}
+
 	mockSrv := mock.NewServer(
 		mock.WithPort(port),
 		mock.WithDelay(delay),
@@ -54,7 +67,7 @@ func (s *Server) handleMockStart(w http.ResponseWriter, r *http.Request) {
 		}),
 	)
 
-	if err := mockSrv.LoadFiles(req.Files); err != nil {
+	if err := mockSrv.LoadFiles(absFiles); err != nil {
 		s.mu.Unlock()
 		writeError(w, http.StatusBadRequest, err.Error())
 		return

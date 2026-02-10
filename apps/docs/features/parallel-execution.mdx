@@ -1,0 +1,89 @@
+---
+title: "Parallel Execution"
+description: "Run independent API tests concurrently for faster test suites."
+---
+
+Parallel execution runs independent requests concurrently, reducing total test suite time. Requests with dependencies (`@depends`) always run sequentially.
+
+## Enabling Parallel Mode
+
+```bash
+hitspec run tests/ --parallel
+```
+
+Short form:
+
+```bash
+hitspec run tests/ -p
+```
+
+## Concurrency Limit
+
+Control the maximum number of simultaneous requests:
+
+```bash
+hitspec run tests/ --parallel --concurrency 10
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--parallel` | `false` | Enable parallel execution |
+| `--concurrency` | `5` | Maximum concurrent requests |
+
+## Configuration
+
+Set parallel mode in `hitspec.yaml` to avoid passing flags every time:
+
+```yaml
+parallel: true
+concurrency: 10
+```
+
+## How Dependencies Work
+
+hitspec respects the dependency graph when running in parallel:
+
+```http
+### Create user
+# @name createUser
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{"name": "John"}
+
+>>>capture
+userId from body.id
+<<<
+
+### Get user (depends on createUser)
+# @name getUser
+# @depends createUser
+
+GET {{baseUrl}}/users/{{createUser.userId}}
+
+>>>
+expect status 200
+<<<
+
+### List products (independent)
+# @name listProducts
+
+GET {{baseUrl}}/products
+
+>>>
+expect status 200
+<<<
+```
+
+In this example, `listProducts` runs concurrently with `createUser`. But `getUser` waits for `createUser` to complete because of the `@depends` directive.
+
+<Warning>
+Captured variables from parallel requests are not shared. Only use captures across requests connected by `@depends`.
+</Warning>
+
+## Environment Variables
+
+| Variable | Flag | Default |
+|----------|------|---------|
+| `HITSPEC_PARALLEL` | `--parallel` | `false` |
+| `HITSPEC_CONCURRENCY` | `--concurrency` | `5` |

@@ -1,0 +1,92 @@
+---
+title: "Regression Testing with hitspec diff"
+description: "Compare test runs to detect performance regressions and behavior changes."
+---
+
+`hitspec diff` compares two JSON test result files and highlights differences in pass/fail status and response times. This is useful for detecting regressions between builds, branches, or deployments.
+
+## Workflow
+
+1. Run tests and save results as JSON
+2. Make changes (deploy, merge PR, etc.)
+3. Run tests again and save new results
+4. Compare with `hitspec diff`
+
+```bash
+# Before changes
+hitspec run tests/ --output json --output-file baseline.json
+
+# ... make changes ...
+
+# After changes
+hitspec run tests/ --output json --output-file current.json
+
+# Compare
+hitspec diff baseline.json current.json
+```
+
+## Output Formats
+
+### Console (default)
+
+```bash
+hitspec diff baseline.json current.json
+```
+
+Shows a color-coded summary with improved/regressed/unchanged counts and per-test duration changes.
+
+### JSON
+
+```bash
+hitspec diff baseline.json current.json --output json
+```
+
+### HTML
+
+```bash
+hitspec diff baseline.json current.json --output html > diff-report.html
+```
+
+Generates a self-contained HTML report with a dark theme, summary cards, and a comparison table.
+
+## Threshold Checks
+
+Fail the diff if any test regresses beyond a threshold:
+
+```bash
+hitspec diff baseline.json current.json --threshold 10%
+```
+
+This exits with code `1` if any test's response time increased by more than 10%. Useful as a CI/CD gate.
+
+## CI/CD Integration
+
+```yaml
+# GitHub Actions
+- name: Run baseline tests
+  run: hitspec run tests/ --output json --output-file baseline.json
+  continue-on-error: true
+
+- name: Deploy staging
+  run: ./deploy.sh staging
+
+- name: Run current tests
+  run: hitspec run tests/ --output json --output-file current.json
+
+- name: Check for regressions
+  run: hitspec diff baseline.json current.json --threshold 15%
+```
+
+## What Gets Compared
+
+| Metric | Description |
+|--------|-------------|
+| Pass/fail status | Tests that changed from pass to fail (or vice versa) |
+| Duration | Response time changes with percentage |
+| New tests | Tests present only in the second file |
+| Removed tests | Tests present only in the first file |
+
+A test is classified as:
+- **Improved** -- went from fail to pass, or duration decreased by >10%
+- **Regressed** -- went from pass to fail, or duration increased by >10%
+- **Unchanged** -- same status and duration within 10%

@@ -1,0 +1,155 @@
+---
+title: "Output Formats"
+description: "Reference for all 5 output formats supported by hitspec: console, JSON, JUnit XML, TAP, and HTML."
+---
+
+hitspec supports 5 output formats for test results. Select the format with the `--output` flag (or `-o`).
+
+```bash
+hitspec run tests/ --output json
+hitspec run tests/ -o junit --output-file results.xml
+```
+
+---
+
+## console (default)
+
+Human-readable colored terminal output with pass/fail indicators, response times, and a summary.
+
+```bash
+hitspec run tests/
+```
+
+Supports verbosity levels:
+- `-v` -- show request/response details
+- `-vv` -- show headers
+- `-vvv` -- show full bodies
+
+Options:
+- `--no-color` -- disable colored output
+- `--quiet` -- suppress all output except errors
+
+---
+
+## json
+
+Machine-readable JSON output containing test results, durations, and assertion details. Useful for integration with other tools.
+
+```bash
+hitspec run tests/ --output json
+hitspec run tests/ --output json --output-file results.json
+```
+
+Output structure:
+
+```json
+{
+  "summary": {
+    "total": 10,
+    "passed": 9,
+    "failed": 1,
+    "skipped": 0
+  },
+  "tests": [
+    {
+      "name": "getUser",
+      "file": "tests/api.http",
+      "passed": true,
+      "duration": 45.2
+    }
+  ],
+  "duration": 1234.5
+}
+```
+
+<Tip>
+JSON output is the format used by `hitspec diff` for comparing test runs.
+</Tip>
+
+---
+
+## junit
+
+JUnit XML format compatible with CI/CD systems like GitHub Actions, GitLab CI, Jenkins, and CircleCI.
+
+```bash
+hitspec run tests/ --output junit --output-file test-results.xml
+```
+
+Most CI systems can parse JUnit XML natively for test result visualization.
+
+### GitHub Actions Example
+
+```yaml
+- name: Run API tests
+  run: hitspec run tests/ --output junit --output-file results.xml
+
+- name: Publish Test Results
+  uses: EnricoMi/publish-unit-test-result-action@v2
+  if: always()
+  with:
+    files: results.xml
+```
+
+---
+
+## tap
+
+[Test Anything Protocol](https://testanything.org/) output, compatible with TAP consumers and harnesses.
+
+```bash
+hitspec run tests/ --output tap
+```
+
+Output:
+
+```
+TAP version 13
+1..10
+ok 1 - getUser (45ms)
+ok 2 - createUser (120ms)
+not ok 3 - deleteUser (89ms)
+  ---
+  message: expected status 204, got 403
+  ...
+```
+
+---
+
+## html
+
+Self-contained HTML report with styling, suitable for sharing or archiving.
+
+```bash
+hitspec run tests/ --output html --output-file report.html
+```
+
+The report includes:
+- Summary dashboard with pass/fail counts
+- Individual test results with durations
+- Assertion details for failed tests
+- Dark theme styling
+
+---
+
+## Writing to Files
+
+By default, all formats write to stdout. Use `--output-file` to write to a file instead:
+
+```bash
+hitspec run tests/ --output json --output-file results.json
+hitspec run tests/ --output junit --output-file results.xml
+hitspec run tests/ --output html --output-file report.html
+```
+
+---
+
+## Quick Reference
+
+| Format | Flag | Use Case |
+|--------|------|----------|
+| `console` | `--output console` | Development, interactive use |
+| `json` | `--output json` | Tool integration, `hitspec diff` |
+| `junit` | `--output junit` | CI/CD test reporting |
+| `tap` | `--output tap` | TAP-compatible tools |
+| `html` | `--output html` | Shareable test reports |

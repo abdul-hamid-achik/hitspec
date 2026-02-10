@@ -1,0 +1,46 @@
+---
+title: "DataDog"
+description: "Send hitspec stress test metrics directly to DataDog for monitoring."
+---
+
+hitspec can send test execution metrics directly to the DataDog API during stress tests.
+
+## Setup
+
+```bash
+hitspec run api.http --stress -d 5m -r 100 \
+  --metrics datadog \
+  --datadog-api-key "$DD_API_KEY"
+```
+
+## Configuration
+
+| Flag | Env Var | Default | Description |
+|------|---------|---------|-------------|
+| `--datadog-api-key` | `DD_API_KEY` | *(required)* | Your DataDog API key |
+| `--datadog-site` | `DD_SITE` | `datadoghq.com` | DataDog site (EU: `datadoghq.eu`) |
+| `--datadog-tags` | `DD_TAGS` | | Comma-separated tags |
+
+## Tags
+
+Add custom tags to your metrics for filtering in DataDog dashboards:
+
+```bash
+hitspec run api.http --stress -d 5m -r 100 \
+  --metrics datadog \
+  --datadog-api-key "$DD_API_KEY" \
+  --datadog-tags "env:staging,service:user-api,team:backend"
+```
+
+## CI/CD Example
+
+```yaml
+# GitHub Actions
+- name: Stress test with DataDog metrics
+  run: |
+    hitspec run api.http --stress -d 5m -r 100 \
+      --metrics datadog \
+      --datadog-tags "env:staging,branch:${{ github.ref_name }}"
+  env:
+    DD_API_KEY: ${{ secrets.DD_API_KEY }}
+```

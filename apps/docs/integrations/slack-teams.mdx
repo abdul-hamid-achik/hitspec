@@ -1,0 +1,82 @@
+---
+title: "Slack & Teams Notifications"
+description: "Send hitspec test results to Slack and Microsoft Teams via webhooks."
+---
+
+hitspec can notify your team about test results through Slack and Microsoft Teams webhooks. See [Notifications](/features/notifications) for full details.
+
+## Slack
+
+### Setup
+
+1. Create a [Slack Incoming Webhook](https://api.slack.com/messaging/webhooks)
+2. Set the webhook URL as an environment variable or pass it via flag
+
+```bash
+hitspec run tests/ \
+  --notify slack \
+  --slack-webhook "$SLACK_WEBHOOK" \
+  --notify-on failure
+```
+
+### Configuration
+
+| Flag | Env Var | Description |
+|------|---------|-------------|
+| `--slack-webhook` | `SLACK_WEBHOOK` | Webhook URL (required) |
+| `--slack-channel` | `SLACK_CHANNEL` | Override default channel |
+| `--notify-on` | `HITSPEC_NOTIFY_ON` | When to notify: `always`, `failure`, `success`, `recovery` |
+
+### What You Get
+
+The Slack notification includes:
+- Color-coded attachment (green for pass, red for fail)
+- Test count summary (total, passed, failed)
+- Duration
+- Environment name
+- Failed test details with error messages
+
+---
+
+## Microsoft Teams
+
+### Setup
+
+1. Create a [Teams Incoming Webhook](https://learn.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook)
+2. Set the webhook URL as an environment variable or pass it via flag
+
+```bash
+hitspec run tests/ \
+  --notify teams \
+  --teams-webhook "$TEAMS_WEBHOOK" \
+  --notify-on failure
+```
+
+### Configuration
+
+| Flag | Env Var | Description |
+|------|---------|-------------|
+| `--teams-webhook` | `TEAMS_WEBHOOK` | Webhook URL (required) |
+| `--notify-on` | `HITSPEC_NOTIFY_ON` | When to notify |
+
+### What You Get
+
+The Teams notification uses an Adaptive Card with:
+- Summary title with pass/fail status
+- Column layout with test counts
+- Failed test details
+- Timestamp footer
+
+---
+
+## Both Services
+
+Send to both simultaneously:
+
+```bash
+hitspec run tests/ \
+  --notify slack,teams \
+  --slack-webhook "$SLACK_WEBHOOK" \
+  --teams-webhook "$TEAMS_WEBHOOK" \
+  --notify-on failure
+```

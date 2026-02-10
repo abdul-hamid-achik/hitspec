@@ -1,0 +1,94 @@
+---
+title: "Mock Server"
+description: "Example: Generate mock servers from your hitspec test files."
+---
+
+hitspec can generate a mock HTTP server from your `.http` files. The mock server uses request definitions and assertions to create realistic responses.
+
+## Define Endpoints
+
+```http
+# api.http
+@baseUrl = http://localhost:3000
+
+### List users
+# @name listUsers
+
+GET {{baseUrl}}/users
+
+>>>
+expect status 200
+expect body type array
+expect body[0].id type number
+expect body[0].name type string
+<<<
+
+### Get user by ID
+# @name getUser
+
+GET {{baseUrl}}/users/{{id}}
+
+>>>
+expect status 200
+expect body.id type number
+expect body.name type string
+expect body.email type string
+<<<
+
+### Create user
+# @name createUser
+
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "email": "john@example.com"
+}
+
+>>>
+expect status 201
+expect body.id exists
+expect body.name == "John Doe"
+<<<
+```
+
+## Start the Mock Server
+
+```bash
+hitspec mock api.http --port 3000
+```
+
+The mock server:
+- Parses your `.http` files to extract routes
+- Generates responses from assertions and explicit mock blocks
+- Supports path parameters (`/users/{{id}}`)
+
+## With Delay
+
+Simulate network latency:
+
+```bash
+hitspec mock api.http --port 3000 --delay 100ms
+```
+
+## From a Directory
+
+```bash
+hitspec mock ./tests/ --port 3000 --verbose
+```
+
+## Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--port` | `-p` | Server port | `3000` |
+| `--delay` | `-d` | Response delay | `0` |
+| `--verbose` | `-v` | Verbose logging | `false` |
+
+## Use Cases
+
+- **Frontend development** -- mock the API while the backend is in progress
+- **Integration testing** -- replace external services with mocks
+- **Demos** -- show API behavior without a running backend
+- **Offline development** -- work without network access
