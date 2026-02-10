@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ChevronRight, FileText, Folder, FolderOpen, Play } from 'lucide-vue-next'
-import { ref } from 'vue'
+import { shallowRef, triggerRef } from 'vue'
 import type { FileInfo } from '@/types/api'
 import { useCollectionStore } from '@/stores/collection'
 import { useRequestStore } from '@/stores/request'
@@ -12,7 +12,7 @@ defineProps<{ items: FileInfo[]; depth?: number }>()
 const collection = useCollectionStore()
 const requestStore = useRequestStore()
 const envStore = useEnvironmentStore()
-const expandedDirs = ref<Set<string>>(new Set())
+const expandedDirs = shallowRef<Set<string>>(new Set())
 
 function toggleDir(path: string) {
   if (expandedDirs.value.has(path)) {
@@ -20,6 +20,7 @@ function toggleDir(path: string) {
   } else {
     expandedDirs.value.add(path)
   }
+  triggerRef(expandedDirs)
 }
 
 async function handleFileClick(item: FileInfo) {
