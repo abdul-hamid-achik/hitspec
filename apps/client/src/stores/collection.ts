@@ -8,6 +8,7 @@ export const useCollectionStore = defineStore('collection', () => {
   const files = ref<FileInfo[]>([])
   const openFiles = ref<Map<string, ParsedFile>>(new Map())
   const activeFilePath = ref<string | null>(null)
+  const expandedFiles = ref<Set<string>>(new Set())
   const loading = ref(false)
 
   const activeFile = computed(() => {
@@ -43,6 +44,15 @@ export const useCollectionStore = defineStore('collection', () => {
       openFiles.value.set(path, parsed)
     }
     activeFilePath.value = path
+    expandedFiles.value.add(path)
+  }
+
+  function toggleFileExpanded(path: string) {
+    if (expandedFiles.value.has(path)) {
+      expandedFiles.value.delete(path)
+    } else {
+      expandedFiles.value.add(path)
+    }
   }
 
   function closeFile(path: string) {
@@ -64,5 +74,5 @@ export const useCollectionStore = defineStore('collection', () => {
     })
   }
 
-  return { files, openFiles, activeFilePath, activeFile, fileCount, loading, loadFiles, openFile, closeFile, init }
+  return { files, openFiles, activeFilePath, expandedFiles, activeFile, fileCount, loading, loadFiles, openFile, closeFile, toggleFileExpanded, init }
 })
