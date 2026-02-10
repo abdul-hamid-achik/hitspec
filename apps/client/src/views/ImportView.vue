@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { importCurl, importInsomnia, importOpenAPI } from '@/api/endpoints/import'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { Copy, Check, AlertCircle } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
@@ -152,10 +153,21 @@ async function copyResult() {
         </button>
       </div>
 
+      <!-- Loading spinner -->
+      <div v-if="loading" class="mt-4">
+        <LoadingSpinner label="Importing..." />
+      </div>
+
       <!-- Error -->
       <div v-if="error" class="mt-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
         <AlertCircle class="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-        <span class="text-xs text-destructive">{{ error }}</span>
+        <span class="flex-1 text-xs text-destructive">{{ error }}</span>
+        <button
+          class="shrink-0 rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+          @click="error = null"
+        >
+          Dismiss
+        </button>
       </div>
 
       <!-- Result -->

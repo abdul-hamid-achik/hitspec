@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import StressConfig from '@/components/stress/StressConfig.vue'
 import StressProfiles from '@/components/stress/StressProfiles.vue'
-import { Square, Activity, Clock, AlertTriangle, BarChart3 } from 'lucide-vue-next'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import { Square, Activity, Clock, AlertTriangle, BarChart3, AlertCircle } from 'lucide-vue-next'
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { getStressStatus, stopStress } from '@/api/endpoints/stress'
 import { ws } from '@/api/websocket'
@@ -9,14 +10,21 @@ import type { StressStatus, StressStatsDTO, StressProfile } from '@/types/api'
 import { toast } from 'vue-sonner'
 
 const status = ref<StressStatus | null>(null)
+const loadingStatus = ref(true)
+const loadError = ref<string | null>(null)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let unsubWs: (() => void) | null = null
 
 async function loadStatus() {
+  loadError.value = null
+  loadingStatus.value = true
   try {
     status.value = await getStressStatus()
-  } catch {
+  } catch (e) {
+    loadError.value = e instanceof Error ? e.message : 'Failed to load stress test status'
     status.value = { running: false, elapsed: 0 }
+  } finally {
+    loadingStatus.value = false
   }
   syncPolling()
 }
@@ -72,6 +80,19 @@ onBeforeUnmount(() => {
         >
           <Square class="h-3 w-3" />
           Stop Test
+        </button>
+      </div>
+
+      <LoadingSpinner v-if="loadingStatus && !status?.running" label="Loading stress test status..." />
+
+      <div v-if="loadError" class="mb-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+        <AlertCircle class="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+        <span class="flex-1 text-xs text-destructive">{{ loadError }}</span>
+        <button
+          class="shrink-0 rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+          @click="loadStatus"
+        >
+          Retry
         </button>
       </div>
 

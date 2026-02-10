@@ -15,6 +15,7 @@ const sections = [
       { keys: [mod, 'K'], label: 'Command palette' },
       { keys: [mod, 'Enter'], label: 'Run current file' },
       { keys: [mod, '?'], label: 'Show keyboard shortcuts' },
+      { keys: ['Esc'], label: 'Dismiss errors / close dialogs' },
     ],
   },
   {

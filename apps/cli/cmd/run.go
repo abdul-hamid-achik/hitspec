@@ -227,6 +227,12 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		defer outWriter.Close()
 	}
 
+	// Validate output format
+	validFormats := map[string]bool{"console": true, "json": true, "junit": true, "tap": true, "html": true}
+	if !validFormats[strings.ToLower(outputFlag)] {
+		return fmt.Errorf("unknown output format %q (valid formats: console, json, junit, tap, html)", outputFlag)
+	}
+
 	// Create formatter based on output flag
 	var formatter Formatter
 	switch strings.ToLower(outputFlag) {
@@ -306,8 +312,9 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(files) == 0 {
-		formatter.FormatError(fmt.Errorf("no .http or .hitspec files found"))
-		return fmt.Errorf("no files found")
+		err := fmt.Errorf("no .http or .hitspec files found in %v", args)
+		formatter.FormatError(err)
+		return err
 	}
 
 	var tagsFilter []string
@@ -573,6 +580,9 @@ func collectFiles(args []string) ([]string, error) {
 	for _, arg := range args {
 		info, err := os.Stat(arg)
 		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, fmt.Errorf("file or directory not found: %s", arg)
+			}
 			return nil, fmt.Errorf("cannot access %s: %w", arg, err)
 		}
 
@@ -590,9 +600,10 @@ func collectFiles(args []string) ([]string, error) {
 				return nil, err
 			}
 		} else {
-			if isHitspecFile(arg) {
-				files = append(files, arg)
+			if !isHitspecFile(arg) {
+				return nil, fmt.Errorf("%s is not a .http or .hitspec file", arg)
 			}
+			files = append(files, arg)
 		}
 	}
 

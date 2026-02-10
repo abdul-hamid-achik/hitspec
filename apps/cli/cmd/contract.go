@@ -19,7 +19,14 @@ var (
 var contractCmd = &cobra.Command{
 	Use:   "contract",
 	Short: "Contract testing commands",
-	Long:  `Contract testing commands for verifying API contracts against providers.`,
+	Long: `Verify API contracts against live providers.
+
+Use contract annotations in your hitspec files to define provider states
+and then verify them against a running service.
+
+Examples:
+  hitspec contract verify contracts/ --provider http://localhost:3000
+  hitspec contract verify contracts/ --provider http://localhost:3000 --state-handler ./setup.sh`,
 }
 
 var contractVerifyCmd = &cobra.Command{

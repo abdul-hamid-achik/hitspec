@@ -22,27 +22,19 @@ var (
 
 var importCmd = &cobra.Command{
 	Use:   "import <format> <source>",
-	Short: "Import API specs from various formats",
-	Long: `Import API specifications from various formats and convert them to hitspec format.
+	Short: "Import API definitions into hitspec format",
+	Long: `Convert API definitions from other formats into .http files.
 
 Supported formats:
-  openapi - OpenAPI 3.0/3.1 (YAML or JSON)
-  postman - Postman Collection v2.1
-  curl    - curl commands
+  openapi   OpenAPI 3.0/3.1 specification (YAML or JSON, local file or URL)
+  postman   Postman Collection v2.1
+  curl      curl commands (inline or from a file with @filename)
+  insomnia  Insomnia export (v4 format)
 
 Examples:
-  hitspec import openapi spec.yaml
   hitspec import openapi spec.yaml -o tests/api.http
-  hitspec import openapi https://petstore.swagger.io/v2/swagger.json
-  hitspec import openapi spec.yaml --tags users,auth --base-url http://localhost:3000
-
-  hitspec import postman collection.json
   hitspec import postman collection.json -o tests/
-
-  hitspec import curl "curl -X POST https://api.example.com -d '{\"name\":\"John\"}'"
-  hitspec import curl @commands.txt -o tests/api.http
-
-  hitspec import insomnia export.json
+  hitspec import curl "curl https://api.example.com/users"
   hitspec import insomnia export.json -o tests/api.http`,
 }
 

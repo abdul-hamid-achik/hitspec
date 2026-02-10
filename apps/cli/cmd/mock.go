@@ -63,7 +63,7 @@ func mockCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(files) == 0 {
-		return fmt.Errorf("no .http or .hitspec files found")
+		return fmt.Errorf("no .http or .hitspec files found in %v", args)
 	}
 
 	// Create server
@@ -80,10 +80,10 @@ func mockCommand(cmd *cobra.Command, args []string) error {
 
 	routes := server.GetRoutes()
 	if len(routes) == 0 {
-		return fmt.Errorf("no routes found in the provided files")
+		return fmt.Errorf("no routes found in the provided files; make sure your .http files contain HTTP requests")
 	}
 
-	fmt.Printf("Loaded %d routes from %d files\n", len(routes), len(files))
+	fmt.Fprintf(cmd.OutOrStdout(), "Mock server: loaded %d route(s) from %d file(s)\n", len(routes), len(files))
 
 	// Setup graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())

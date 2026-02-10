@@ -13,13 +13,30 @@ function normalizeKey(e: KeyboardEvent): string {
   return parts.join('+')
 }
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!target || !(target instanceof HTMLElement)) return false
+  const tag = target.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
+  return target.isContentEditable
+}
+
 export function useKeyboard(shortcuts: ShortcutMap) {
   function handler(e: KeyboardEvent) {
     const key = normalizeKey(e)
-    if (shortcuts[key]) {
+    const action = shortcuts[key]
+    if (!action) return
+
+    // For shortcuts without modifiers (like Escape), skip when the user is
+    // typing in an input so we don't steal keystrokes.  Modifier shortcuts
+    // (Cmd/Ctrl+...) are always safe to intercept.
+    const hasModifier = e.ctrlKey || e.metaKey || e.altKey
+    if (!hasModifier && key !== 'escape' && isEditableTarget(e.target)) return
+
+    // Don't preventDefault on Escape -- let Reka UI dialogs close natively
+    if (key !== 'escape') {
       e.preventDefault()
-      shortcuts[key]()
     }
+    action()
   }
 
   onMounted(() => {

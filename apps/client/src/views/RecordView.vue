@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import EmptyState from '@/components/common/EmptyState.vue'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MethodBadge from '@/components/common/MethodBadge.vue'
-import { Play, Square, Trash2, Download, Copy } from 'lucide-vue-next'
+import { Play, Square, Trash2, Download, Copy, AlertCircle } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue'
 import { getRecordStatus, startRecording, stopRecording, exportRecordings, clearRecordings } from '@/api/endpoints/record'
 import type { RecordStatus } from '@/types/api'
@@ -13,12 +14,19 @@ const port = ref(8081)
 const deduplicate = ref(true)
 const loading = ref(false)
 const exported = ref<string | null>(null)
+const loadingStatus = ref(true)
+const loadError = ref<string | null>(null)
 
 async function loadStatus() {
+  loadError.value = null
+  loadingStatus.value = true
   try {
     status.value = await getRecordStatus()
-  } catch {
+  } catch (e) {
+    loadError.value = e instanceof Error ? e.message : 'Failed to load recording status'
     status.value = { running: false, count: 0 }
+  } finally {
+    loadingStatus.value = false
   }
 }
 
@@ -92,6 +100,19 @@ onMounted(loadStatus)
 <template>
   <div class="h-full overflow-auto p-6">
       <h1 class="mb-4 text-lg font-semibold text-foreground">Record Proxy</h1>
+
+      <LoadingSpinner v-if="loadingStatus" label="Loading recording status..." />
+
+      <div v-if="loadError" class="mb-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+        <AlertCircle class="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+        <span class="flex-1 text-xs text-destructive">{{ loadError }}</span>
+        <button
+          class="shrink-0 rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+          @click="loadStatus"
+        >
+          Retry
+        </button>
+      </div>
 
       <div v-if="status?.running" class="space-y-4">
         <!-- Running status -->

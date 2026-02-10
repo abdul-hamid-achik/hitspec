@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import {
   FolderTree, Zap, Server, History, Settings, Import,
-  ChevronDown, Search, PanelLeftClose, FileCheck, Video,
+  ChevronDown, Search, PanelLeftClose, FileCheck, Video, AlertCircle,
 } from 'lucide-vue-next'
 import FileTree from '@/components/sidebar/FileTree.vue'
 import SearchInput from '@/components/sidebar/SearchInput.vue'
@@ -99,6 +99,16 @@ function handleSearch(value: string) {
     <div v-if="filesExpanded" class="min-h-0 flex-1 overflow-auto p-1.5">
       <div v-if="collection.loading" class="flex items-center justify-center py-6">
         <div class="h-4 w-4 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
+      </div>
+      <div v-else-if="collection.error && collection.files.length === 0" class="flex flex-col items-center gap-2 px-2 py-4 text-center">
+        <AlertCircle class="h-5 w-5 text-destructive/60" />
+        <p class="text-xs text-destructive/80">{{ collection.error }}</p>
+        <button
+          class="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+          @click="collection.loadFiles()"
+        >
+          Retry
+        </button>
       </div>
       <div v-else-if="filteredFiles.length === 0" class="px-2 py-4 text-center text-xs text-muted-foreground/60">
         {{ searchQuery ? 'No files match your search' : 'No files found' }}

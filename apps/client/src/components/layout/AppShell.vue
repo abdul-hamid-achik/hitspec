@@ -49,6 +49,12 @@ useKeyboard({
       requestStore.runFile(collection.activeFilePath, environment.activeEnvName)
     }
   },
+  'escape': () => {
+    // Dismiss response error state on Escape
+    if (requestStore.error) {
+      requestStore.error = null
+    }
+  },
   'mod+1': () => router.push('/'),
   'mod+2': () => router.push('/stress'),
   'mod+3': () => router.push('/mock'),

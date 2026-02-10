@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
 	"github.com/spf13/cobra"
@@ -26,22 +27,24 @@ func validateCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(files) == 0 {
-		return fmt.Errorf("no .http or .hitspec files found")
+		return fmt.Errorf("no .http or .hitspec files found in %v", args)
 	}
 
-	hasErrors := false
+	errorCount := 0
 	for _, file := range files {
 		_, err := parser.ParseFile(file)
 		if err != nil {
-			fmt.Fprintf(cmd.OutOrStderr(), "Error in %s: %v\n", file, err)
-			hasErrors = true
+			fmt.Fprintf(cmd.OutOrStderr(), "FAIL  %s\n      %v\n", file, err)
+			errorCount++
 		} else {
-			fmt.Fprintf(cmd.OutOrStdout(), "Valid: %s\n", file)
+			fmt.Fprintf(cmd.OutOrStdout(), "OK    %s\n", file)
 		}
 	}
 
-	if hasErrors {
-		return fmt.Errorf("validation failed")
+	fmt.Fprintf(cmd.OutOrStdout(), "\n%d file(s) checked, %d error(s)\n", len(files), errorCount)
+
+	if errorCount > 0 {
+		os.Exit(ExitParseError)
 	}
 
 	return nil

@@ -26,9 +26,10 @@ func listCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(files) == 0 {
-		return fmt.Errorf("no .http or .hitspec files found")
+		return fmt.Errorf("no .http or .hitspec files found in %v", args)
 	}
 
+	totalRequests := 0
 	for _, file := range files {
 		f, err := parser.ParseFile(file)
 		if err != nil {
@@ -47,7 +48,10 @@ func listCommand(cmd *cobra.Command, args []string) error {
 				fmt.Fprintf(cmd.OutOrStdout(), "    tags: %v\n", req.Tags)
 			}
 		}
+		totalRequests += len(f.Requests)
 	}
+
+	fmt.Fprintf(cmd.OutOrStdout(), "\n%d request(s) in %d file(s)\n", totalRequests, len(files))
 
 	return nil
 }

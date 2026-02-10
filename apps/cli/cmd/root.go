@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -16,13 +17,26 @@ var rootCmd = &cobra.Command{
 	Short: "Plain text API tests. No magic.",
 	Long: `hitspec is a file-based HTTP API testing tool that emphasizes
 simplicity and readability. Write your API tests in plain text files
-that look like actual HTTP requests.`,
+that look like actual HTTP requests.
+
+Quick start:
+  hitspec init                          Create a new project
+  hitspec run api.http                  Run tests in a file
+  hitspec run ./tests/ --env staging    Run all tests with an environment
+  hitspec serve                         Open the web UI
+  hitspec import openapi spec.yaml      Import from OpenAPI spec`,
+	Version:       version,
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 
 func Execute(v, bt string) {
 	version = v
 	buildTime = bt
+	rootCmd.Version = version
+	rootCmd.SetVersionTemplate("hitspec version {{.Version}}\n")
 	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }

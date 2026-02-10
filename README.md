@@ -103,7 +103,7 @@ hitspec run api.http
 - **Plain text test files** - `.http` format, readable and version-controllable
 - **Web API Client Manager** - Browser-based UI via `hitspec serve` (like Postman, but file-backed)
 - **26 assertion operators** - `==`, `!=`, `>`, `<`, `contains`, `matches`, `exists`, `length`, `type`, `schema`, `snapshot`, and more
-- **18 metadata directives** - `@name`, `@tags`, `@depends`, `@timeout`, `@retry`, `@auth`, `@waitFor`, and more
+- **22 metadata directives** - `@name`, `@tags`, `@depends`, `@timeout`, `@retry`, `@auth`, `@waitFor`, and more
 - **17 built-in functions** - `$uuid()`, `$timestamp()`, `$random()`, `$base64()`, `$sha256()`, `$env()`, and more
 - **8 authentication types** - Bearer, Basic, API Key, Digest, AWS Signature v4, OAuth2
 - **Built-in stress testing** - Load test with `--stress` flag, real-time metrics dashboard
@@ -489,12 +489,16 @@ query GetUser($id: ID!) {
 | `@depends` | Dependencies | `# @depends login, setupData` |
 | `@if` | Conditional execution | `# @if {{runTests}}` |
 | `@unless` | Conditional skip | `# @unless {{skipAuth}}` |
+| `@auth` | Authentication method | `# @auth bearer {{token}}` |
 | `@before` | Run script before request | `# @before ./setup.sh` |
 | `@after` | Run script after request | `# @after ./cleanup.sh` |
 | `@db` | Database connection string | `# @db sqlite://./test.db` |
 | `@waitFor` | Poll URL until ready | `# @waitFor {{baseUrl}}/health 200 30000 1000` |
 | `@stress.weight` | Relative weight for stress testing | `# @stress.weight 3` |
+| `@stress.think` | Think time in ms after request | `# @stress.think 500` |
 | `@stress.skip` | Exclude from stress tests | `# @stress.skip` |
+| `@stress.setup` | Run once before stress test starts | `# @stress.setup` |
+| `@stress.teardown` | Run once after stress test ends | `# @stress.teardown` |
 
 ### Authentication Methods
 
@@ -516,6 +520,12 @@ query GetUser($id: ID!) {
 
 # AWS Signature v4
 # @auth aws {{accessKey}}, {{secretKey}}, {{region}}, {{service}}
+
+# OAuth2 Client Credentials
+# @auth oauth2 client_credentials {{tokenUrl}}, {{clientId}}, {{clientSecret}}, scope1,scope2
+
+# OAuth2 Password Grant
+# @auth oauth2 password {{tokenUrl}}, {{clientId}}, {{clientSecret}}, {{username}}, {{password}}, scope1,scope2
 ```
 
 ### Captures
@@ -582,7 +592,7 @@ Use the official hitspec action to run API tests in your CI pipeline:
 | `files` | Files/directories to test | (required) |
 | `env` | Environment name | `dev` |
 | `env-file` | Path to .env file | - |
-| `output` | Output format (console, json, junit, tap) | `junit` |
+| `output` | Output format (console, json, junit, tap, html) | `junit` |
 | `output-file` | Write output to file | - |
 | `tags` | Filter by tags | - |
 | `parallel` | Run in parallel | `false` |

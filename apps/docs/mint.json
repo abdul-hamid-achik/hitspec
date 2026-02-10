@@ -66,6 +66,7 @@
       "pages": [
         "concepts/file-format",
         "concepts/variables",
+        "concepts/variable-interpolation",
         "concepts/assertions",
         "concepts/captures",
         "concepts/dependencies",
@@ -84,7 +85,24 @@
         "features/hooks",
         "features/sse",
         "features/api-coverage",
-        "features/mock-server"
+        "features/mock-server",
+        "features/contract-testing",
+        "features/recording-proxy",
+        "features/watch-mode",
+        "features/parallel-execution",
+        "features/notifications",
+        "features/metrics-export"
+      ]
+    },
+    {
+      "group": "Guides",
+      "pages": [
+        "guides/ci-cd-pipeline",
+        "guides/load-testing",
+        "guides/database-testing",
+        "guides/contract-testing",
+        "guides/regression-testing",
+        "guides/migrating-from-postman"
       ]
     },
     {
@@ -94,13 +112,18 @@
         "examples/auth-flow",
         "examples/graphql",
         "examples/ci-cd",
-        "examples/stress-testing"
+        "examples/stress-testing",
+        "examples/database-assertions",
+        "examples/contract-testing",
+        "examples/mock-server"
       ]
     },
     {
       "group": "CLI Reference",
       "pages": [
         "reference/run",
+        "reference/init",
+        "reference/docs-serve",
         "reference/validate-list",
         "reference/import-export",
         "reference/mock-record",
@@ -108,10 +131,26 @@
       ]
     },
     {
+      "group": "Reference",
+      "pages": [
+        "reference/assertion-operators",
+        "reference/assertion-subjects",
+        "reference/builtin-functions",
+        "reference/auth-types",
+        "reference/configuration",
+        "reference/environment-variables",
+        "reference/exit-codes",
+        "reference/output-formats"
+      ]
+    },
+    {
       "group": "Integrations",
       "pages": [
         "integrations/github-actions",
-        "integrations/output-formats"
+        "integrations/output-formats",
+        "integrations/prometheus",
+        "integrations/datadog",
+        "integrations/slack-teams"
       ]
     }
   ],

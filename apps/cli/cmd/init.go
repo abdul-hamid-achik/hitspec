@@ -130,8 +130,10 @@ expect body.id == {{createResource.resourceId}}
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Created: %s\n", exampleFile)
 
-	fmt.Fprintf(cmd.OutOrStdout(), "\nhitspec project initialized!\n")
-	fmt.Fprintf(cmd.OutOrStdout(), "Run 'hitspec run example.http' to execute the example tests.\n")
+	fmt.Fprintf(cmd.OutOrStdout(), "\nProject initialized. Next steps:\n")
+	fmt.Fprintf(cmd.OutOrStdout(), "  hitspec run example.http          Run the example tests\n")
+	fmt.Fprintf(cmd.OutOrStdout(), "  hitspec run example.http -v       Run with verbose output\n")
+	fmt.Fprintf(cmd.OutOrStdout(), "  hitspec serve                     Open the web UI\n")
 
 	return nil
 }

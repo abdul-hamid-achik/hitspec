@@ -73,6 +73,13 @@ You can pass multiple files and directories as arguments.
 | `--allow-shell` | Allow shell command execution (`>>>shell` blocks and hooks) | `false` |
 | `--allow-db` | Allow database assertions (`>>>db` blocks) | `false` |
 
+### Coverage Flags
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--coverage` | Generate API coverage report against OpenAPI spec | `false` |
+| `--openapi` | Path to OpenAPI spec file for coverage analysis | |
+
 <Warning>
 Shell and database blocks are disabled by default for security. You must explicitly opt in with `--allow-shell` or `--allow-db` when your test files use these features.
 </Warning>

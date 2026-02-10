@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import EmptyState from '@/components/common/EmptyState.vue'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MethodBadge from '@/components/common/MethodBadge.vue'
-import { Server, Square } from 'lucide-vue-next'
+import { Server, Square, AlertCircle } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue'
 import { getMockStatus, startMock, stopMock } from '@/api/endpoints/mock'
 import type { MockStatusDTO } from '@/types/api'
@@ -10,12 +11,19 @@ import { toast } from 'vue-sonner'
 const status = ref<MockStatusDTO | null>(null)
 const mockPort = ref(8080)
 const starting = ref(false)
+const loadingStatus = ref(true)
+const loadError = ref<string | null>(null)
 
 async function loadStatus() {
+  loadError.value = null
+  loadingStatus.value = true
   try {
     status.value = await getMockStatus()
-  } catch {
+  } catch (e) {
+    loadError.value = e instanceof Error ? e.message : 'Failed to load mock server status'
     status.value = null
+  } finally {
+    loadingStatus.value = false
   }
 }
 
@@ -57,6 +65,19 @@ onMounted(loadStatus)
         >
           <Square class="h-3 w-3" />
           Stop Server
+        </button>
+      </div>
+
+      <LoadingSpinner v-if="loadingStatus" label="Loading mock server status..." />
+
+      <div v-if="loadError" class="mb-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+        <AlertCircle class="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+        <span class="flex-1 text-xs text-destructive">{{ loadError }}</span>
+        <button
+          class="shrink-0 rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+          @click="loadStatus"
+        >
+          Retry
         </button>
       </div>
 

@@ -23,22 +23,22 @@ var (
 )
 
 var recordCmd = &cobra.Command{
-	Use:   "record",
+	Use:   "record --target <url>",
 	Short: "Start a recording proxy to capture HTTP requests",
 	Long: `Start an HTTP proxy that records requests and responses, then exports
-them to hitspec format.
+them to hitspec format. Press Ctrl+C to stop and export.
 
 The proxy:
-- Forwards all requests to the target server
-- Records requests and responses
-- Sanitizes sensitive headers (Authorization, Cookie, etc.)
-- Exports to .http format on exit
+  - Forwards all requests to the target server
+  - Records requests and responses
+  - Sanitizes sensitive headers (Authorization, Cookie, etc.)
+  - Exports to .http format on exit
 
 Examples:
-  hitspec record --port 8080 --target https://api.example.com
-  hitspec record --port 8080 --target https://api.example.com -o recorded.http
-  hitspec record --port 8080 --target https://api.example.com --exclude "/health,/metrics"
-  hitspec record --port 8080 --target https://api.example.com --dedupe`,
+  hitspec record --target https://api.example.com
+  hitspec record --target https://api.example.com -o recorded.http
+  hitspec record --target https://api.example.com --exclude "/health,/metrics"
+  hitspec record --target https://api.example.com --dedupe --port 9090`,
 	RunE: recordCommand,
 }
 

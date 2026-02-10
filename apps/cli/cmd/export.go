@@ -23,17 +23,17 @@ var (
 )
 
 var exportCmd = &cobra.Command{
-	Use:   "export",
-	Short: "Export hitspec files to various formats",
-	Long: `Export hitspec files to various executable formats.
+	Use:   "export <format> <file>",
+	Short: "Export hitspec files to other formats",
+	Long: `Export hitspec requests to executable formats like curl.
 
-Available formats:
-  curl - Export requests as curl commands
+Supported formats:
+  curl    Export as curl commands (can pipe to shell or save to .sh file)
 
 Examples:
   hitspec export curl tests/api.http
   hitspec export curl tests/api.http --name "Login*"
-  hitspec export curl tests/api.http --tags smoke,auth`,
+  hitspec export curl tests/api.http --exec`,
 }
 
 var exportCurlCmd = &cobra.Command{

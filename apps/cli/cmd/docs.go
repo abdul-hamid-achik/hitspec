@@ -10,8 +10,12 @@ import (
 
 var docsCmd = &cobra.Command{
 	Use:   "docs",
-	Short: "Output AI-readable documentation (llms.txt)",
-	Long:  "Print the llms.txt content for AI agents to learn hitspec usage.",
+	Short: "Output machine-readable documentation (llms.txt)",
+	Long: `Print structured documentation suitable for AI coding assistants.
+
+Pipe the output to a file or directly into an LLM context:
+  hitspec docs > llms.txt
+  hitspec docs | pbcopy`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Fprint(cmd.OutOrStdout(), llmsTxt)
 	},
