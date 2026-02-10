@@ -22,25 +22,30 @@ export const useRequestStore = defineStore('request', () => {
 
   // Monotonic counter to detect stale responses from concurrent executions
   let executionId = 0
+  // Track the current server-side execution ID to scope WebSocket progress events
+  let currentExecId: string | null = null
 
   function handleProgress(progress: WSRequestProgress) {
     if (!isExecuting.value) return
+    // Ignore events from other executions
+    if (currentExecId && progress.execId !== currentExecId) return
     if (progress.status === 'started') {
+      // Latch onto the first execution ID we see
+      if (!currentExecId) currentExecId = progress.execId
       executionProgress.value = {
         currentRequest: progress.requestName || `Request ${progress.index + 1}`,
         index: progress.index,
         total: progress.total,
         completed: executionProgress.value?.completed ?? 0,
-        results: executionProgress.value?.results ?? [],
+        results: [...(executionProgress.value?.results ?? [])],
       }
     } else if (progress.status === 'completed') {
       const prev = executionProgress.value
-      const results = prev?.results ?? []
-      results.push({
+      const results = [...(prev?.results ?? []), {
         name: progress.requestName || `Request ${progress.index + 1}`,
         passed: progress.passed ?? false,
         duration: progress.duration ?? 0,
-      })
+      }]
       executionProgress.value = {
         currentRequest: prev?.currentRequest ?? '',
         index: progress.index,
@@ -54,6 +59,7 @@ export const useRequestStore = defineStore('request', () => {
   async function execute(filePath: string, requestName?: string, environment?: string) {
     if (isExecuting.value) return
     const thisId = ++executionId
+    currentExecId = null
     isExecuting.value = true
     error.value = null
     lastResult.value = null
@@ -87,6 +93,7 @@ export const useRequestStore = defineStore('request', () => {
   async function runFile(filePath: string, environment?: string) {
     if (isExecuting.value) return
     const thisId = ++executionId
+    currentExecId = null
     isExecuting.value = true
     error.value = null
     lastResult.value = null

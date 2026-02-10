@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, nextTick } from 'vue'
 import { useRequestStore } from '@/stores/request'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -46,6 +46,19 @@ function selectResult(result: RunResult) {
   requestStore.lastResult = result
   activeTab.value = 'body'
 }
+
+// Auto-scroll progress list to bottom as results arrive
+const progressListRef = ref<HTMLElement | null>(null)
+watch(
+  () => requestStore.executionProgress?.results.length,
+  () => {
+    nextTick(() => {
+      if (progressListRef.value) {
+        progressListRef.value.scrollTop = progressListRef.value.scrollHeight
+      }
+    })
+  },
+)
 </script>
 
 <template>
@@ -73,7 +86,7 @@ function selectResult(result: RunResult) {
             <span class="truncate text-foreground/80">{{ requestStore.executionProgress.currentRequest }}</span>
           </div>
           <!-- Completed results -->
-          <div v-if="requestStore.executionProgress.results.length > 0" class="max-h-48 space-y-1 overflow-y-auto">
+          <div v-if="requestStore.executionProgress.results.length > 0" ref="progressListRef" class="max-h-48 space-y-1 overflow-y-auto">
             <div
               v-for="(r, i) in requestStore.executionProgress.results"
               :key="i"
