@@ -410,6 +410,7 @@ export type WSMessageType =
   | 'file_changed'
   | 'execution_start'
   | 'execution_complete'
+  | 'request_progress'
   | 'stress_update'
   | 'mock_request'
   | 'environment_changed'
@@ -419,5 +420,17 @@ export type WSMessageType =
 export interface WSMessage<T = unknown> {
   type: WSMessageType
   payload: T
+  timestamp: string
+}
+
+export interface WSRequestProgress {
+  execId: string
+  file: string
+  requestName: string
+  status: 'started' | 'completed'
+  index: number
+  total: number
+  passed?: boolean
+  duration?: number
   timestamp: string
 }

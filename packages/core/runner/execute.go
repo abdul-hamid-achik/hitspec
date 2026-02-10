@@ -92,7 +92,7 @@ func (r *Runner) runRequests(file *parser.File) (*RunResult, error) {
 		// Run sequentially with dependency checking
 		executed := make(map[string]*RequestResult)
 
-		for _, req := range filteredRequests {
+		for i, req := range filteredRequests {
 			// Check dependencies - if any dependency failed, skip this request
 			if req.Metadata != nil && len(req.Metadata.Depends) > 0 {
 				dependencyFailed := false
@@ -116,12 +116,33 @@ func (r *Runner) runRequests(file *parser.File) (*RunResult, error) {
 				}
 			}
 
+			// Notify progress: request starting
+			if r.config.OnProgress != nil {
+				r.config.OnProgress(ProgressEvent{
+					RequestName: req.Name,
+					Status:      "started",
+					Index:       i,
+					Total:       len(filteredRequests),
+				})
+			}
+
 			reqResult := r.runRequest(req, baseDir, file.Path)
 			result.Results = append(result.Results, reqResult)
 
 			// Track executed request
 			if req.Name != "" {
 				executed[req.Name] = reqResult
+			}
+
+			// Notify progress: request completed
+			if r.config.OnProgress != nil {
+				r.config.OnProgress(ProgressEvent{
+					RequestName: req.Name,
+					Status:      "completed",
+					Index:       i,
+					Total:       len(filteredRequests),
+					Result:      reqResult,
+				})
 			}
 
 			if reqResult.Passed {
@@ -148,7 +169,8 @@ func (r *Runner) runParallel(requests []*parser.Request, baseDir string, filePat
 		concurrency = DefaultConcurrency
 	}
 
-	results := make([]*RequestResult, len(requests))
+	total := len(requests)
+	results := make([]*RequestResult, total)
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, concurrency)
 
@@ -160,7 +182,26 @@ func (r *Runner) runParallel(requests []*parser.Request, baseDir string, filePat
 			defer wg.Done()
 			defer func() { <-sem }() // release semaphore
 
+			if r.config.OnProgress != nil {
+				r.config.OnProgress(ProgressEvent{
+					RequestName: request.Name,
+					Status:      "started",
+					Index:       idx,
+					Total:       total,
+				})
+			}
+
 			results[idx] = r.runRequestWithRetry(request, baseDir, filePath, true)
+
+			if r.config.OnProgress != nil {
+				r.config.OnProgress(ProgressEvent{
+					RequestName: request.Name,
+					Status:      "completed",
+					Index:       idx,
+					Total:       total,
+					Result:      results[idx],
+				})
+			}
 		}(i, req)
 	}
 

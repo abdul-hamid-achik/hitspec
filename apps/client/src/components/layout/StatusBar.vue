@@ -70,7 +70,11 @@ onUnmounted(() => {
     <div class="flex items-center gap-3">
       <span v-if="requestStore.isExecuting" class="flex items-center gap-1 text-accent">
         <div class="h-3 w-3 animate-spin rounded-full border border-accent/30 border-t-accent" />
-        Executing...
+        <template v-if="requestStore.executionProgress">
+          {{ requestStore.executionProgress.completed }}/{{ requestStore.executionProgress.total }}
+          <span class="max-w-[140px] truncate text-muted-foreground">{{ requestStore.executionProgress.currentRequest }}</span>
+        </template>
+        <template v-else>Executing...</template>
       </span>
       <span v-else-if="requestStore.lastResult" class="flex items-center gap-1">
         <Timer class="h-3 w-3" />

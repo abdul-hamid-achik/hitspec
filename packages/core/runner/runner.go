@@ -49,6 +49,7 @@ type Config struct {
 	AllowShell         bool // Allow shell command execution (>>>shell blocks and hooks)
 	AllowDB            bool // Allow database assertions (>>>db blocks)
 	HistoryStore       *history.Store // Optional persistent history store
+	OnProgress         func(event ProgressEvent) // Optional callback for per-request progress
 }
 
 func NewRunner(cfg *Config) *Runner {
@@ -117,6 +118,15 @@ type RequestResult struct {
 	SSEEvents    []sse.Event
 	Captures     map[string]any
 	Error        error
+}
+
+// ProgressEvent is fired before and after each request execution.
+type ProgressEvent struct {
+	RequestName string         `json:"requestName"`
+	Status      string         `json:"status"` // "started" or "completed"
+	Index       int            `json:"index"`
+	Total       int            `json:"total"`
+	Result      *RequestResult `json:"-"` // Only set for "completed" events
 }
 
 func (r *Runner) RunFile(path string) (*RunResult, error) {

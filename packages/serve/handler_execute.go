@@ -52,6 +52,23 @@ func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 		AllowDB:            s.config.AllowDB,
 	}
 
+	cfg.OnProgress = func(event runner.ProgressEvent) {
+		progress := WSRequestProgress{
+			ExecID:      execID,
+			File:        req.File,
+			RequestName: event.RequestName,
+			Status:      event.Status,
+			Index:       event.Index,
+			Total:       event.Total,
+			Timestamp:   nowISO(),
+		}
+		if event.Status == "completed" && event.Result != nil {
+			progress.Passed = event.Result.Passed
+			progress.Duration = float64(event.Result.Duration.Milliseconds())
+		}
+		s.hub.Broadcast("request_progress", progress)
+	}
+
 	rn := runner.NewRunner(cfg)
 	result, err := rn.RunFile(absPath)
 	if err != nil {
@@ -145,6 +162,8 @@ func (s *Server) handleRunFile(w http.ResponseWriter, r *http.Request) {
 		env = req.Environment
 	}
 
+	execID := generateID()
+
 	cfg := &runner.Config{
 		Environment:        env,
 		Timeout:            30 * time.Second,
@@ -155,7 +174,23 @@ func (s *Server) handleRunFile(w http.ResponseWriter, r *http.Request) {
 		AllowDB:            s.config.AllowDB,
 	}
 
-	execID := generateID()
+	cfg.OnProgress = func(event runner.ProgressEvent) {
+		progress := WSRequestProgress{
+			ExecID:      execID,
+			File:        req.File,
+			RequestName: event.RequestName,
+			Status:      event.Status,
+			Index:       event.Index,
+			Total:       event.Total,
+			Timestamp:   nowISO(),
+		}
+		if event.Status == "completed" && event.Result != nil {
+			progress.Passed = event.Result.Passed
+			progress.Duration = float64(event.Result.Duration.Milliseconds())
+		}
+		s.hub.Broadcast("request_progress", progress)
+	}
+
 	s.logger.Info("run file started", "exec_id", execID, "file", req.File, "environment", env)
 
 	s.hub.Broadcast("execution_start", WSExecEvent{

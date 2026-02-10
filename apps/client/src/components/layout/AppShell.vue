@@ -25,6 +25,9 @@ const sidebarCollapsed = ref(false)
 
 onMounted(async () => {
   ws.connect()
+  ws.on('request_progress', (msg) => {
+    requestStore.handleProgress(msg.payload as import('@/types/api').WSRequestProgress)
+  })
   collection.init()
   environment.init()
   // Load workspace first so we can seed the active environment from the server

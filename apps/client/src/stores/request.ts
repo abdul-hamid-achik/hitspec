@@ -1,7 +1,15 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
-import type { RequestDTO, RunResult, ExecuteResult } from '@/types/api'
+import type { RequestDTO, RunResult, ExecuteResult, WSRequestProgress } from '@/types/api'
 import { executeRequest as apiExecute, executeFile as executeFileApi } from '@/api/endpoints/execute'
+
+export interface ExecutionProgress {
+  currentRequest: string
+  index: number
+  total: number
+  completed: number
+  results: Array<{ name: string; passed: boolean; duration: number }>
+}
 
 export const useRequestStore = defineStore('request', () => {
   const activeRequest = ref<RequestDTO | null>(null)
@@ -10,9 +18,38 @@ export const useRequestStore = defineStore('request', () => {
   const lastRunResult = ref<ExecuteResult | null>(null)
   const isExecuting = ref(false)
   const error = ref<string | null>(null)
+  const executionProgress = ref<ExecutionProgress | null>(null)
 
   // Monotonic counter to detect stale responses from concurrent executions
   let executionId = 0
+
+  function handleProgress(progress: WSRequestProgress) {
+    if (!isExecuting.value) return
+    if (progress.status === 'started') {
+      executionProgress.value = {
+        currentRequest: progress.requestName || `Request ${progress.index + 1}`,
+        index: progress.index,
+        total: progress.total,
+        completed: executionProgress.value?.completed ?? 0,
+        results: executionProgress.value?.results ?? [],
+      }
+    } else if (progress.status === 'completed') {
+      const prev = executionProgress.value
+      const results = prev?.results ?? []
+      results.push({
+        name: progress.requestName || `Request ${progress.index + 1}`,
+        passed: progress.passed ?? false,
+        duration: progress.duration ?? 0,
+      })
+      executionProgress.value = {
+        currentRequest: prev?.currentRequest ?? '',
+        index: progress.index,
+        total: progress.total,
+        completed: results.length,
+        results,
+      }
+    }
+  }
 
   async function execute(filePath: string, requestName?: string, environment?: string) {
     if (isExecuting.value) return
@@ -21,6 +58,7 @@ export const useRequestStore = defineStore('request', () => {
     error.value = null
     lastResult.value = null
     lastRunResult.value = null
+    executionProgress.value = null
     try {
       const result = await apiExecute({ file: filePath, requestName, environment })
       if (thisId !== executionId) return // superseded by a newer execution
@@ -41,6 +79,7 @@ export const useRequestStore = defineStore('request', () => {
     } finally {
       if (thisId === executionId) {
         isExecuting.value = false
+        executionProgress.value = null
       }
     }
   }
@@ -51,6 +90,7 @@ export const useRequestStore = defineStore('request', () => {
     isExecuting.value = true
     error.value = null
     lastResult.value = null
+    executionProgress.value = null
     try {
       const result = await executeFileApi(filePath, environment)
       if (thisId !== executionId) return
@@ -65,6 +105,7 @@ export const useRequestStore = defineStore('request', () => {
     } finally {
       if (thisId === executionId) {
         isExecuting.value = false
+        executionProgress.value = null
       }
     }
   }
@@ -86,5 +127,5 @@ export const useRequestStore = defineStore('request', () => {
     error.value = null
   }
 
-  return { activeRequest, activeRequestIndex, lastResult, lastRunResult, isExecuting, error, execute, runFile, setActiveRequest }
+  return { activeRequest, activeRequestIndex, lastResult, lastRunResult, isExecuting, error, executionProgress, execute, runFile, setActiveRequest, handleProgress }
 })

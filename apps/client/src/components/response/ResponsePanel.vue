@@ -50,9 +50,45 @@ function selectResult(result: RunResult) {
 
 <template>
   <div class="flex h-full flex-col">
-    <!-- Loading state -->
-    <div v-if="requestStore.isExecuting" class="flex flex-1 flex-col items-center justify-center gap-3">
-      <LoadingSpinner size="lg" label="Executing request..." />
+    <!-- Loading / Progress state -->
+    <div v-if="requestStore.isExecuting" class="flex flex-1 flex-col items-center justify-center gap-4 p-6">
+      <template v-if="requestStore.executionProgress">
+        <div class="w-full max-w-md space-y-4">
+          <!-- Progress bar -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{{ requestStore.executionProgress.completed }}/{{ requestStore.executionProgress.total }} requests</span>
+              <span>{{ Math.round((requestStore.executionProgress.completed / requestStore.executionProgress.total) * 100) }}%</span>
+            </div>
+            <div class="h-1.5 w-full overflow-hidden rounded-full bg-surface">
+              <div
+                class="h-full rounded-full bg-accent transition-all duration-300"
+                :style="{ width: `${(requestStore.executionProgress.completed / requestStore.executionProgress.total) * 100}%` }"
+              />
+            </div>
+          </div>
+          <!-- Current request -->
+          <div class="flex items-center gap-2 text-sm">
+            <div class="h-4 w-4 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
+            <span class="truncate text-foreground/80">{{ requestStore.executionProgress.currentRequest }}</span>
+          </div>
+          <!-- Completed results -->
+          <div v-if="requestStore.executionProgress.results.length > 0" class="max-h-48 space-y-1 overflow-y-auto">
+            <div
+              v-for="(r, i) in requestStore.executionProgress.results"
+              :key="i"
+              class="flex items-center gap-2 rounded px-2 py-1 text-xs"
+              :class="r.passed ? 'text-success/80' : 'text-destructive/80'"
+            >
+              <CheckCircle v-if="r.passed" class="h-3 w-3 shrink-0" />
+              <XCircle v-else class="h-3 w-3 shrink-0" />
+              <span class="flex-1 truncate">{{ r.name }}</span>
+              <span class="tabular-nums text-muted-foreground/50">{{ r.duration }}ms</span>
+            </div>
+          </div>
+        </div>
+      </template>
+      <LoadingSpinner v-else size="lg" label="Executing request..." />
     </div>
 
     <!-- Response content -->

@@ -414,6 +414,19 @@ type WSExecEvent struct {
 	Timestamp string          `json:"timestamp"`
 }
 
+// WSRequestProgress is a per-request progress event during execution.
+type WSRequestProgress struct {
+	ExecID      string  `json:"execId"`
+	File        string  `json:"file"`
+	RequestName string  `json:"requestName"`
+	Status      string  `json:"status"` // "started" or "completed"
+	Index       int     `json:"index"`
+	Total       int     `json:"total"`
+	Passed      bool    `json:"passed,omitempty"`
+	Duration    float64 `json:"duration,omitempty"`
+	Timestamp   string  `json:"timestamp"`
+}
+
 // WSStressMetrics is a stress metrics broadcast.
 type WSStressMetrics struct {
 	Stats     StressStatsDTO `json:"stats"`
