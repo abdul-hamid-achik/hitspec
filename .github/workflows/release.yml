@@ -23,6 +23,20 @@ jobs:
           go-version: '1.25.7'
           cache: true
 
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install frontend dependencies
+        run: bun install
+        working-directory: apps/client
+
+      - name: Build frontend
+        run: bun run build
+        working-directory: apps/client
+
+      - name: Copy frontend to embed directory
+        run: cp -r apps/client/dist/* packages/serve/dist/
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
