@@ -32,6 +32,7 @@ type Server struct {
 	stressCancel   context.CancelFunc
 	mockServer     *mock.Server
 	mockCancel     context.CancelFunc
+	mockPort       int
 	recorder       *proxy.Recorder
 	recorderCancel context.CancelFunc
 	recorderPort   int

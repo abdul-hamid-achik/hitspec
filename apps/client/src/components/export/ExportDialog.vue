@@ -8,7 +8,7 @@ import { exporters, formatLabels, type ExportFormat } from '@/lib/exporters'
 const props = defineProps<{
   modelValue: boolean
   request: RequestDTO
-  variables: Record<string, string>
+  variables: Record<string, unknown>
 }>()
 
 const emit = defineEmits<{
@@ -20,9 +20,17 @@ const copied = ref(false)
 
 const formats: ExportFormat[] = ['curl', 'fetch', 'wget', 'python', 'httpie']
 
+const stringVars = computed(() => {
+  const result: Record<string, string> = {}
+  for (const [k, v] of Object.entries(props.variables)) {
+    result[k] = String(v ?? '')
+  }
+  return result
+})
+
 const code = computed(() => {
   const fn = exporters[activeFormat.value]
-  return fn(props.request, props.variables)
+  return fn(props.request, stringVars.value)
 })
 
 watch(
@@ -33,9 +41,13 @@ watch(
 )
 
 async function copyToClipboard() {
-  await navigator.clipboard.writeText(code.value)
-  copied.value = true
-  setTimeout(() => (copied.value = false), 2000)
+  try {
+    await navigator.clipboard.writeText(code.value)
+    copied.value = true
+    setTimeout(() => (copied.value = false), 2000)
+  } catch {
+    // Clipboard API may fail in non-secure contexts
+  }
 }
 
 function close() {

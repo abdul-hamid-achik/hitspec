@@ -6,11 +6,15 @@ import { getHistory, clearHistory as apiClearHistory } from '@/api/endpoints/his
 export const useHistoryStore = defineStore('history', () => {
   const entries = ref<HistoryEntry[]>([])
   const loading = ref(false)
+  const error = ref<string | null>(null)
 
   async function loadHistory() {
     loading.value = true
+    error.value = null
     try {
       entries.value = await getHistory()
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to load history'
     } finally {
       loading.value = false
     }
@@ -24,9 +28,13 @@ export const useHistoryStore = defineStore('history', () => {
   }
 
   async function clearAll() {
-    await apiClearHistory()
-    entries.value = []
+    try {
+      await apiClearHistory()
+      entries.value = []
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to clear history'
+    }
   }
 
-  return { entries, loading, loadHistory, addEntry, clearAll }
+  return { entries, loading, error, loadHistory, addEntry, clearAll }
 })

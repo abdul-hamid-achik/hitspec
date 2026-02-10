@@ -14,9 +14,9 @@ const assertions = computed(() => requestStore.activeRequest?.assertions ?? [])
       <div
         v-for="(assertion, i) in assertions"
         :key="i"
-        class="flex items-center gap-2 rounded-md border border-border bg-nord-0 px-3 py-2 font-mono text-sm"
+        class="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 font-mono text-sm"
       >
-        <span class="text-accent">{{ assertion.field }}</span>
+        <span class="text-accent">{{ assertion.subject }}</span>
         <span class="text-nord-15">{{ assertion.operator }}</span>
         <span class="text-nord-14">{{ assertion.expected }}</span>
         <span class="ml-auto text-xs text-nord-3">L{{ assertion.line }}</span>

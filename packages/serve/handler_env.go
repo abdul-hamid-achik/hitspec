@@ -70,6 +70,10 @@ func (s *Server) handlePutEnvironment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.fileConfig == nil {
+		writeError(w, http.StatusBadRequest, "no config file found")
+		return
+	}
 	if s.fileConfig.Environments == nil {
 		s.fileConfig.Environments = make(map[string]map[string]any)
 	}

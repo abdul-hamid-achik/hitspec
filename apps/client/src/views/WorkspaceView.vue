@@ -26,11 +26,11 @@ watch(() => collection.activeFile, (file) => {
 
 <template>
   <AppShell>
-    <div class="flex h-full">
-      <div class="flex-1 border-r border-border">
+    <div class="flex h-full overflow-hidden">
+      <div class="flex-1 overflow-hidden border-r border-border">
         <RequestPanel />
       </div>
-      <div class="flex-1">
+      <div class="flex-1 overflow-hidden">
         <ResponsePanel />
       </div>
     </div>

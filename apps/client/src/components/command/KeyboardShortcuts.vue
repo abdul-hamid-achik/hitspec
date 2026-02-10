@@ -34,7 +34,6 @@ const sections = [
     title: 'Sidebar',
     shortcuts: [
       { keys: [mod, 'B'], label: 'Toggle sidebar' },
-      { keys: [mod, 'Shift', 'F'], label: 'Search files' },
     ],
   },
 ]

@@ -1,22 +1,18 @@
 import { post } from '@/api/client'
+import type { ImportResultDTO, ExportResultDTO } from '@/types/api'
 
-export interface ImportResult {
-  content: string
-  fileName: string
+export function importCurl(command: string): Promise<ImportResultDTO> {
+  return post<ImportResultDTO>('/api/v1/import/curl', { command })
 }
 
-export function importCurl(command: string): Promise<ImportResult> {
-  return post<ImportResult>('/api/v1/import/curl', { command })
+export function importInsomnia(data: string): Promise<ImportResultDTO> {
+  return post<ImportResultDTO>('/api/v1/import/insomnia', { data })
 }
 
-export function importInsomnia(data: string): Promise<ImportResult> {
-  return post<ImportResult>('/api/v1/import/insomnia', { data })
+export function importOpenAPI(specPath: string, baseUrl?: string): Promise<ImportResultDTO> {
+  return post<ImportResultDTO>('/api/v1/import/openapi', { specPath, baseUrl })
 }
 
-export function importOpenAPI(spec: string): Promise<ImportResult> {
-  return post<ImportResult>('/api/v1/import/openapi', { spec })
-}
-
-export function exportCurl(file: string, requestIndex?: number): Promise<{ commands: string[] }> {
-  return post<{ commands: string[] }>('/api/v1/export/curl', { file, requestIndex })
+export function exportCurl(file: string, requestName?: string): Promise<ExportResultDTO> {
+  return post<ExportResultDTO>('/api/v1/export/curl', { file, requestName })
 }

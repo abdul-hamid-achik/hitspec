@@ -56,7 +56,7 @@ func (s *Server) handleMockStart(w http.ResponseWriter, r *http.Request) {
 		mock.WithDelay(delay),
 		mock.WithVerbose(s.config.Verbose),
 		mock.WithRequestCallback(func(method, path string, status int, duration time.Duration) {
-			s.hub.Broadcast("mock:request", WSMockEvent{
+			s.hub.Broadcast("mock_request", WSMockEvent{
 				Event:     "request",
 				Method:    method,
 				Path:      path,
@@ -76,17 +76,18 @@ func (s *Server) handleMockStart(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(s.ctx)
 	s.mockServer = mockSrv
 	s.mockCancel = cancel
+	s.mockPort = port
 	s.mu.Unlock()
 
 	go func() {
-		s.hub.Broadcast("mock:started", WSMockEvent{
+		s.hub.Broadcast("mock_request", WSMockEvent{
 			Event:     "started",
 			Timestamp: nowISO(),
 		})
 
 		_ = mockSrv.StartWithContext(ctx)
 
-		s.hub.Broadcast("mock:stopped", WSMockEvent{
+		s.hub.Broadcast("mock_request", WSMockEvent{
 			Event:     "stopped",
 			Timestamp: nowISO(),
 		})
@@ -94,6 +95,7 @@ func (s *Server) handleMockStart(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		s.mockServer = nil
 		s.mockCancel = nil
+		s.mockPort = 0
 		s.mu.Unlock()
 	}()
 
@@ -132,6 +134,7 @@ func (s *Server) handleMockStop(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleMockRoutes(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	mockSrv := s.mockServer
+	port := s.mockPort
 	s.mu.Unlock()
 
 	if mockSrv == nil {
@@ -153,6 +156,7 @@ func (s *Server) handleMockRoutes(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, MockStatusDTO{
 		Running: true,
+		Port:    port,
 		Routes:  routeDTOs,
 	})
 }

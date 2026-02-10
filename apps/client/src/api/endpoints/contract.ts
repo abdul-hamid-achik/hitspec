@@ -1,8 +1,8 @@
 import { get, post } from '@/api/client'
-import type { ContractResult, ContractStatus, ContractVerifyRequest } from '@/types/api'
+import type { ContractResult, ContractStatusDTO, ContractVerifyRequest } from '@/types/api'
 
-export function getContractFiles(): Promise<ContractStatus> {
-  return get<ContractStatus>('/api/v1/contract/files')
+export function getContractFiles(): Promise<ContractStatusDTO> {
+  return get<ContractStatusDTO>('/api/v1/contract/files')
 }
 
 export function verifyContracts(req: ContractVerifyRequest): Promise<ContractResult[]> {

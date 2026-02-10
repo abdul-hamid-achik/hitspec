@@ -9,7 +9,7 @@ import ResponseHeaders from './ResponseHeaders.vue'
 import ResponseAssertions from './ResponseAssertions.vue'
 import RunResultsList from './RunResultsList.vue'
 import {
-  CheckCircle, XCircle, Send, AlignLeft, Globe, ShieldCheck, List,
+  CheckCircle, XCircle, MinusCircle, Send, AlignLeft, Globe, ShieldCheck, List,
   Timer, HardDrive,
 } from 'lucide-vue-next'
 import type { RunResult } from '@/types/api'
@@ -58,6 +58,8 @@ function selectResult(result: RunResult) {
       <!-- Status bar -->
       <div class="flex items-center gap-2 border-b border-border px-4 py-2">
         <StatusBadge v-if="requestStore.lastResult?.response?.statusCode" :code="requestStore.lastResult.response.statusCode" />
+        <span v-else-if="requestStore.lastResult?.error" class="rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">ERROR</span>
+        <span v-else-if="requestStore.lastResult?.skipped" class="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">SKIPPED</span>
         <div class="flex items-center gap-3 text-xs text-muted-foreground/60">
           <span v-if="requestStore.lastResult" class="flex items-center gap-1">
             <Timer class="h-3 w-3" />
@@ -67,13 +69,17 @@ function selectResult(result: RunResult) {
             <HardDrive class="h-3 w-3" />
             {{ ((requestStore.lastResult.response.size) / 1024).toFixed(1) }}KB
           </span>
+          <span v-if="requestStore.lastResult?.skipReason" class="text-muted-foreground">
+            {{ requestStore.lastResult.skipReason }}
+          </span>
         </div>
         <div class="flex-1" />
         <div v-if="requestStore.lastResult" class="flex items-center gap-1 text-xs font-medium">
           <CheckCircle v-if="requestStore.lastResult.passed" class="h-3.5 w-3.5 text-success" />
-          <XCircle v-else class="h-3.5 w-3.5 text-destructive" />
-          <span :class="requestStore.lastResult.passed ? 'text-success' : 'text-destructive'">
-            {{ requestStore.lastResult.passed ? 'Passed' : 'Failed' }}
+          <XCircle v-else-if="!requestStore.lastResult.skipped" class="h-3.5 w-3.5 text-destructive" />
+          <MinusCircle v-else class="h-3.5 w-3.5 text-muted-foreground" />
+          <span :class="requestStore.lastResult.passed ? 'text-success' : requestStore.lastResult.skipped ? 'text-muted-foreground' : 'text-destructive'">
+            {{ requestStore.lastResult.passed ? 'Passed' : requestStore.lastResult.skipped ? 'Skipped' : 'Failed' }}
           </span>
         </div>
       </div>
@@ -116,7 +122,7 @@ function selectResult(result: RunResult) {
           @select="selectResult"
         />
         <template v-else-if="requestStore.lastResult">
-          <ResponseBody v-if="activeTab === 'body'" :body="requestStore.lastResult.response?.body" />
+          <ResponseBody v-if="activeTab === 'body'" :body="requestStore.lastResult.response?.body" :error="requestStore.lastResult.error" />
           <ResponseHeaders v-else-if="activeTab === 'headers'" :headers="requestStore.lastResult.response?.headers ?? {}" />
           <ResponseAssertions v-else-if="activeTab === 'assertions'" :assertions="requestStore.lastResult.assertions ?? []" />
         </template>
@@ -135,6 +141,6 @@ function selectResult(result: RunResult) {
     </div>
 
     <!-- Empty state -->
-    <EmptyState v-else :icon="Send" title="No response yet" description="Send a request or press Cmd+Enter to run the file" />
+    <EmptyState v-else class="flex-1" :icon="Send" title="No response yet" description="Send a request or press Cmd+Enter to run the file" />
   </div>
 </template>

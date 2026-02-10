@@ -14,7 +14,7 @@ async function loadStatus() {
   try {
     status.value = await getStressStatus()
   } catch {
-    status.value = { running: false }
+    status.value = { running: false, elapsed: 0 }
   }
 }
 
@@ -37,7 +37,7 @@ onMounted(loadStatus)
 
 <template>
   <AppShell>
-    <div class="p-6">
+    <div class="h-full overflow-auto p-6">
       <div class="mb-4 flex items-center justify-between">
         <h1 class="text-lg font-semibold text-foreground">Stress Testing</h1>
         <button
@@ -55,56 +55,56 @@ onMounted(loadStatus)
         <div class="flex items-center gap-2">
           <div class="h-2 w-2 animate-pulse rounded-full bg-success" />
           <span class="text-sm font-medium text-foreground">Running</span>
-          <span v-if="status.metrics" class="text-xs text-muted-foreground/50">{{ status.metrics.elapsed.toFixed(0) }}s elapsed</span>
+          <span v-if="status.elapsed" class="text-xs text-muted-foreground/50">{{ status.elapsed.toFixed(0) }}s elapsed</span>
         </div>
 
         <!-- Metrics grid -->
-        <div v-if="status.metrics" class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div v-if="status.stats" class="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div class="rounded-lg border border-border bg-surface p-3">
             <div class="flex items-center gap-1.5 text-[10px] uppercase text-muted-foreground/50">
               <BarChart3 class="h-3 w-3" />
               Total Requests
             </div>
-            <div class="mt-1.5 text-xl font-bold tabular-nums text-foreground">{{ status.metrics.totalRequests.toLocaleString() }}</div>
+            <div class="mt-1.5 text-xl font-bold tabular-nums text-foreground">{{ status.stats.total.toLocaleString() }}</div>
           </div>
           <div class="rounded-lg border border-border bg-surface p-3">
             <div class="flex items-center gap-1.5 text-[10px] uppercase text-muted-foreground/50">
               <Activity class="h-3 w-3" />
               RPS
             </div>
-            <div class="mt-1.5 text-xl font-bold tabular-nums text-accent">{{ status.metrics.rps.toFixed(1) }}</div>
+            <div class="mt-1.5 text-xl font-bold tabular-nums text-accent">{{ status.stats.rps.toFixed(1) }}</div>
           </div>
           <div class="rounded-lg border border-border bg-surface p-3">
             <div class="flex items-center gap-1.5 text-[10px] uppercase text-muted-foreground/50">
               <Clock class="h-3 w-3" />
               P95 Latency
             </div>
-            <div class="mt-1.5 text-xl font-bold tabular-nums text-foreground">{{ status.metrics.p95Latency.toFixed(0) }}<span class="text-sm font-normal text-muted-foreground">ms</span></div>
+            <div class="mt-1.5 text-xl font-bold tabular-nums text-foreground">{{ status.stats.p95Ms.toFixed(0) }}<span class="text-sm font-normal text-muted-foreground">ms</span></div>
           </div>
           <div class="rounded-lg border border-border bg-surface p-3">
             <div class="flex items-center gap-1.5 text-[10px] uppercase text-muted-foreground/50">
               <AlertTriangle class="h-3 w-3" />
               Errors
             </div>
-            <div class="mt-1.5 text-xl font-bold tabular-nums" :class="status.metrics.failCount > 0 ? 'text-destructive' : 'text-success'">{{ status.metrics.failCount }}</div>
+            <div class="mt-1.5 text-xl font-bold tabular-nums" :class="status.stats.errors > 0 ? 'text-destructive' : 'text-success'">{{ status.stats.errors }}</div>
           </div>
         </div>
 
         <!-- Latency percentiles -->
-        <div v-if="status.metrics" class="rounded-lg border border-border bg-surface p-4">
+        <div v-if="status.stats" class="rounded-lg border border-border bg-surface p-4">
           <h3 class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground/50">Latency Percentiles</h3>
           <div class="grid grid-cols-3 gap-4">
             <div>
               <div class="text-[10px] text-muted-foreground/50">P50</div>
-              <div class="font-mono text-sm tabular-nums text-foreground">{{ status.metrics.p50Latency.toFixed(1) }}ms</div>
+              <div class="font-mono text-sm tabular-nums text-foreground">{{ status.stats.p50Ms.toFixed(1) }}ms</div>
             </div>
             <div>
               <div class="text-[10px] text-muted-foreground/50">P95</div>
-              <div class="font-mono text-sm tabular-nums text-foreground">{{ status.metrics.p95Latency.toFixed(1) }}ms</div>
+              <div class="font-mono text-sm tabular-nums text-foreground">{{ status.stats.p95Ms.toFixed(1) }}ms</div>
             </div>
             <div>
               <div class="text-[10px] text-muted-foreground/50">P99</div>
-              <div class="font-mono text-sm tabular-nums text-foreground">{{ status.metrics.p99Latency.toFixed(1) }}ms</div>
+              <div class="font-mono text-sm tabular-nums text-foreground">{{ status.stats.p99Ms.toFixed(1) }}ms</div>
             </div>
           </div>
         </div>
@@ -112,8 +112,8 @@ onMounted(loadStatus)
 
       <!-- Configuration when not running -->
       <div v-else class="space-y-4">
-        <div class="grid grid-cols-3 gap-4">
-          <div class="col-span-2">
+        <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div class="lg:col-span-2">
             <StressConfig :running="false" />
           </div>
           <div>

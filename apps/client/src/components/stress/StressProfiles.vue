@@ -16,6 +16,8 @@ async function loadProfiles() {
   loading.value = true
   try {
     profiles.value = await getStressProfiles()
+  } catch {
+    // Profiles are optional; silently handle failure
   } finally {
     loading.value = false
   }
@@ -30,7 +32,7 @@ onMounted(loadProfiles)
 </script>
 
 <template>
-  <div class="rounded-lg border border-border bg-nord-0 p-4">
+  <div class="rounded-lg border border-border bg-background p-4">
     <div class="mb-3 flex items-center gap-2">
       <Layers :size="14" class="text-muted-foreground" />
       <h3 class="text-sm font-medium text-foreground">Profiles</h3>

@@ -19,11 +19,10 @@ async function handleStart() {
   }
   try {
     await startStress({
-      filePath: collection.activeFilePath,
-      requestIndex: 0,
-      concurrency: concurrency.value,
+      files: [collection.activeFilePath],
       duration: duration.value,
-      rps: rps.value,
+      rate: rps.value,
+      vus: concurrency.value,
     })
     toast.success('Stress test started')
   } catch (e) {
@@ -42,7 +41,7 @@ async function handleStop() {
 </script>
 
 <template>
-  <div class="rounded-lg border border-border bg-nord-0 p-4">
+  <div class="rounded-lg border border-border bg-background p-4">
     <h3 class="mb-3 text-sm font-medium text-foreground">Configuration</h3>
     <div v-if="!collection.activeFilePath" class="mb-3 rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-warning">
       No file selected. Open a .http file in the Workspace first.
@@ -51,7 +50,7 @@ async function handleStop() {
       <span>Target file:</span>
       <span class="rounded bg-surface px-2 py-0.5 font-mono text-foreground">{{ collection.activeFilePath.split('/').pop() }}</span>
     </div>
-    <div class="grid grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
       <div>
         <label class="mb-1 block text-xs text-muted-foreground">Concurrency</label>
         <input

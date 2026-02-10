@@ -9,26 +9,43 @@ export const useSettingsStore = defineStore('settings', () => {
   const systemInfo = ref<SystemInfo | null>(null)
   const sidebarWidth = ref(260)
   const loading = ref(false)
+  const loaded = ref(false)
+  const error = ref<string | null>(null)
 
-  async function loadConfig() {
+  async function loadConfig(force = false) {
+    if (loaded.value && !force) return
     loading.value = true
+    error.value = null
     try {
       config.value = await getConfig()
+      loaded.value = true
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to load config'
     } finally {
       loading.value = false
     }
   }
 
   async function loadSystemInfo() {
-    systemInfo.value = await getSystemInfo()
-  }
-
-  async function saveConfig(updates: Partial<ConfigDTO>) {
-    await updateConfig(updates)
-    if (config.value) {
-      config.value = { ...config.value, ...updates }
+    try {
+      systemInfo.value = await getSystemInfo()
+    } catch {
+      // System info is non-critical; silently ignore
     }
   }
 
-  return { config, systemInfo, sidebarWidth, loading, loadConfig, loadSystemInfo, saveConfig }
+  async function saveConfig(updates: Partial<ConfigDTO>) {
+    const prev = config.value ? { ...config.value } : null
+    if (config.value) {
+      config.value = { ...config.value, ...updates }
+    }
+    try {
+      await updateConfig(updates)
+    } catch {
+      // Rollback optimistic update on failure
+      config.value = prev
+    }
+  }
+
+  return { config, systemInfo, sidebarWidth, loading, error, loadConfig, loadSystemInfo, saveConfig }
 })

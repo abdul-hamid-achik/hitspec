@@ -57,7 +57,7 @@ const tabs = [
         <AssertionBuilder
           v-else-if="activeTab === 'assertions'"
           :assertions="requestStore.activeRequest.assertions ?? []"
-          @copy="(text: string) => navigator.clipboard.writeText(text)"
+          @copy="(text: string) => navigator.clipboard.writeText(text).catch(() => {})"
         />
         <div v-else-if="activeTab === 'captures'" class="space-y-1.5">
           <div v-if="!requestStore.activeRequest.captures?.length" class="text-xs text-muted-foreground/60">No captures defined</div>
@@ -66,13 +66,14 @@ const tabs = [
             <span class="font-medium text-nord-14">{{ cap.name }}</span>
             <span class="text-muted-foreground/40">&larr;</span>
             <span class="text-nord-8">{{ cap.source }}</span>
-            <span class="text-muted-foreground">{{ cap.expression }}</span>
+            <span class="text-muted-foreground">{{ cap.path }}</span>
           </div>
         </div>
       </div>
     </template>
     <EmptyState
       v-else
+      class="flex-1"
       :icon="FileText"
       title="No request selected"
       description="Select a request from the sidebar or use Cmd+K to search"

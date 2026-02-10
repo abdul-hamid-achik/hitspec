@@ -19,7 +19,17 @@ export const useRequestStore = defineStore('request', () => {
     lastResult.value = null
     try {
       const result = await apiExecute({ file: filePath, requestName, environment })
-      if (result.results.length > 0) {
+      // Store the full run result so Results tab works
+      lastRunResult.value = result
+      // Find the matching result for the specific request
+      if (requestName) {
+        const match = result.results.find(r => r.name === requestName)
+        if (match) {
+          lastResult.value = match
+        } else if (result.results.length > 0) {
+          lastResult.value = result.results[0]
+        }
+      } else if (result.results.length > 0) {
         lastResult.value = result.results[0]
       }
     } catch (e) {
@@ -50,6 +60,16 @@ export const useRequestStore = defineStore('request', () => {
   function setActiveRequest(request: RequestDTO | null, index: number = 0) {
     activeRequest.value = request
     activeRequestIndex.value = index
+    // If we have run results, try to find the matching result for this request
+    if (lastRunResult.value && request) {
+      const match = lastRunResult.value.results.find(r => r.name === request.name)
+      if (match) {
+        lastResult.value = match
+        return
+      }
+    }
+    // Only clear lastResult if switching to a different file context
+    // Keep lastRunResult intact so the Results tab persists
     lastResult.value = null
     error.value = null
   }

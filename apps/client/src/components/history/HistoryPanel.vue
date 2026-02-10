@@ -18,7 +18,7 @@ onMounted(() => {
       <button
         v-if="historyStore.entries.length > 0"
         class="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-surface-hover hover:text-foreground"
-        @click="historyStore.clearAll()"
+        @click="window.confirm('Clear all history? This cannot be undone.') && historyStore.clearAll()"
       >
         <Trash2 :size="12" /> Clear
       </button>

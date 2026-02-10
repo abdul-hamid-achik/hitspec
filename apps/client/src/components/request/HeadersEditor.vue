@@ -15,7 +15,6 @@ defineProps<{ headers: HeaderDTO[] }>()
       v-for="(header, i) in headers"
       :key="i"
       class="flex items-center gap-2 rounded-md bg-background/50 px-2.5 py-1.5 font-mono text-xs"
-      :class="{ 'opacity-40': !header.enabled }"
     >
       <span class="font-medium text-nord-8">{{ header.key }}</span>
       <span class="text-muted-foreground/40">:</span>

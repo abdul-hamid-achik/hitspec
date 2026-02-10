@@ -94,7 +94,7 @@ function handleSearch(value: string) {
     </div>
 
     <!-- File tree -->
-    <div v-if="filesExpanded" class="flex-1 overflow-auto p-1.5">
+    <div v-if="filesExpanded" class="min-h-0 flex-1 overflow-auto p-1.5">
       <div v-if="collection.loading" class="flex items-center justify-center py-6">
         <div class="h-4 w-4 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
       </div>
@@ -106,7 +106,7 @@ function handleSearch(value: string) {
     <div v-else class="flex-1" />
 
     <!-- Bottom nav -->
-    <nav class="border-t border-border p-1.5">
+    <nav class="shrink-0 border-t border-border p-1.5 overflow-y-auto max-h-[50%]">
       <router-link
         v-for="item in navItems"
         :key="item.to"

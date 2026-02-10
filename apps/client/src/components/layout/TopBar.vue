@@ -58,8 +58,9 @@ function handleRun() {
 
       <!-- Environment selector -->
       <select
-        v-model="envStore.activeEnvName"
+        :value="envStore.activeEnvName"
         class="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+        @change="envStore.selectEnv(($event.target as HTMLSelectElement).value)"
       >
         <option v-for="name in envStore.envNames" :key="name" :value="name">{{ name }}</option>
       </select>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { importFile } from '@/api/endpoints/import'
+import { importCurl } from '@/api/endpoints/import'
 import { toast } from 'vue-sonner'
 
 const curlCommand = ref('')
@@ -12,8 +12,8 @@ async function handleImport() {
     return
   }
   try {
-    const parsed = await importFile({ format: 'curl', content: curlCommand.value })
-    result.value = parsed.requests.map((r) => `${r.method} ${r.url}`).join('\n')
+    const parsed = await importCurl(curlCommand.value)
+    result.value = parsed.content
     toast.success('Imported successfully')
   } catch (e) {
     toast.error(e instanceof Error ? e.message : 'Import failed')

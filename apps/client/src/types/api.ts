@@ -18,47 +18,74 @@ export interface WorkspaceInfo {
 export interface HeaderDTO {
   key: string
   value: string
-  enabled: boolean
+  line: number
+}
+
+export interface QueryDTO {
+  key: string
+  value: string
+  line: number
 }
 
 export interface BodyDTO {
-  type: string
-  content: string
-  filePath?: string
+  contentType: string
+  raw?: string
+  line: number
 }
 
 export interface AssertionDTO {
-  field: string
+  subject: string
   operator: string
-  expected: string
+  expected: unknown
   line: number
 }
 
 export interface CaptureDTO {
   name: string
   source: string
-  expression: string
+  path?: string
   line: number
 }
 
+export interface AuthDTO {
+  type: string
+  params?: string[]
+}
+
+export interface MetadataDTO {
+  skip?: string
+  only?: boolean
+  timeout?: number
+  retry?: number
+  depends?: string[]
+  auth?: AuthDTO
+}
+
 export interface RequestDTO {
+  name: string
+  description?: string
+  tags?: string[]
   method: string
   url: string
-  headers: HeaderDTO[]
+  headers?: HeaderDTO[]
+  queryParams?: QueryDTO[]
   body?: BodyDTO
-  assertions: AssertionDTO[]
-  captures: CaptureDTO[]
-  name: string
-  tags: string[]
+  assertions?: AssertionDTO[]
+  captures?: CaptureDTO[]
   line: number
-  auth?: Record<string, string>
+  metadata?: MetadataDTO
+}
+
+export interface VariableDTO {
+  name: string
+  value: string
+  line: number
 }
 
 export interface ParsedFile {
   path: string
+  variables: VariableDTO[]
   requests: RequestDTO[]
-  variables: Record<string, string>
-  errors: string[]
 }
 
 export interface ExecuteRequest {
@@ -107,24 +134,29 @@ export interface ExecuteResult {
 
 export interface EnvironmentDTO {
   name: string
-  variables: Record<string, string>
-  isActive: boolean
+  variables: Record<string, unknown>
 }
 
 export interface ConfigDTO {
-  timeout: number
-  followRedirects: boolean
-  maxRedirects: number
-  insecure: boolean
+  defaultEnvironment?: string
+  timeout?: number
+  retries?: number
+  followRedirects?: boolean
+  maxRedirects?: number
+  validateSSL?: boolean
+  insecure?: boolean
+  verbose?: boolean
   proxy?: string
-  verbose: boolean
+  headers?: Record<string, string>
+  parallel?: boolean
+  concurrency?: number
 }
 
 export interface HistoryEntry {
   id: string
   timestamp: string
-  filePath: string
-  requestName: string
+  file: string
+  requestName?: string
   method: string
   url: string
   statusCode: number
@@ -132,65 +164,82 @@ export interface HistoryEntry {
   passed: boolean
 }
 
-export interface StressConfig {
-  filePath: string
-  requestIndex: number
-  concurrency: number
+export interface StressStartRequest {
+  files: string[]
   duration: string
-  rps: number
-  environment?: string
+  rate?: number
+  vus?: number
+  maxVUs?: number
 }
 
-export interface StressMetrics {
-  totalRequests: number
-  successCount: number
-  failCount: number
-  avgLatency: number
-  p50Latency: number
-  p95Latency: number
-  p99Latency: number
+export interface StressStatsDTO {
+  total: number
+  success: number
+  errors: number
   rps: number
-  elapsed: number
-  statusCodes: Record<number, number>
+  p50Ms: number
+  p95Ms: number
+  p99Ms: number
+  maxMs: number
+  errorRate: number
+  activeVUs: number
 }
 
 export interface StressStatus {
   running: boolean
-  config?: StressConfig
-  metrics?: StressMetrics
+  elapsed: number
+  stats?: StressStatsDTO
 }
 
-export interface MockConfig {
-  port: number
-  routes: MockRoute[]
-}
-
-export interface MockRoute {
+export interface MockRouteDTO {
   method: string
   path: string
-  status: number
-  headers: Record<string, string>
-  body: string
-  delay: number
+  name?: string
+  statusCode: number
+  contentType: string
 }
 
-export interface ImportRequest {
-  format: string
+export interface MockStatusDTO {
+  running: boolean
+  port?: number
+  routes?: MockRouteDTO[]
+}
+
+export interface ImportResultDTO {
   content: string
+  requestCount: number
+}
+
+export interface ImportCurlRequest {
+  command?: string
   filePath?: string
 }
 
-export interface ExportRequest {
-  filePath: string
-  format: string
+export interface ImportInsomniaRequest {
+  data?: string
+  filePath?: string
+}
+
+export interface ImportOpenAPIRequest {
+  specPath: string
+  baseUrl?: string
+}
+
+export interface ExportCurlRequest {
+  file: string
+  requestName?: string
+}
+
+export interface ExportResultDTO {
+  commands: string[]
 }
 
 export interface SystemInfo {
   version: string
+  buildTime: string
   goVersion: string
-  platform: string
-  workDir: string
-  uptime: number
+  os: string
+  arch: string
 }
 
 // --- Contract Testing ---
@@ -219,7 +268,7 @@ export interface ContractResult {
   results: ContractInteraction[]
 }
 
-export interface ContractStatus {
+export interface ContractStatusDTO {
   files: string[]
   results?: ContractResult[]
 }

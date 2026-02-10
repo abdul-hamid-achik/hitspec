@@ -62,7 +62,7 @@ func (s *Server) startWatcher() {
 						relPath = ev.Name
 					}
 
-					s.hub.Broadcast("file:"+op, WSFileEvent{
+					s.hub.Broadcast("file_changed", WSFileEvent{
 						Path:      relPath,
 						Operation: op,
 						Timestamp: nowISO(),

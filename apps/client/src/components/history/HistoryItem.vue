@@ -2,14 +2,14 @@
 import dayjs from 'dayjs'
 import type { HistoryEntry } from '@/types/api'
 import MethodBadge from '@/components/common/MethodBadge.vue'
-import StatusBadge from '@/components/response/StatusBadge.vue'
+import StatusBadge from '@/components/common/StatusBadge.vue'
 import { CheckCircle2, XCircle } from 'lucide-vue-next'
 
 defineProps<{ entry: HistoryEntry }>()
 </script>
 
 <template>
-  <div class="flex items-center gap-3 rounded-md border border-border bg-nord-0 px-3 py-2">
+  <div class="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2">
     <component
       :is="entry.passed ? CheckCircle2 : XCircle"
       :size="14"
@@ -19,7 +19,7 @@ defineProps<{ entry: HistoryEntry }>()
     <div class="min-w-0 flex-1">
       <div class="truncate font-mono text-sm text-foreground">{{ entry.url }}</div>
       <div class="text-xs text-muted-foreground">
-        {{ entry.requestName }} - {{ entry.filePath }}
+        {{ entry.requestName }} - {{ entry.file }}
       </div>
     </div>
     <StatusBadge :code="entry.statusCode" />

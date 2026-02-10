@@ -10,6 +10,7 @@ export const useCollectionStore = defineStore('collection', () => {
   const activeFilePath = ref<string | null>(null)
   const expandedFiles = ref<Set<string>>(new Set())
   const loading = ref(false)
+  const error = ref<string | null>(null)
 
   const activeFile = computed(() => {
     if (!activeFilePath.value) return null
@@ -30,9 +31,12 @@ export const useCollectionStore = defineStore('collection', () => {
 
   async function loadFiles() {
     loading.value = true
+    error.value = null
     try {
       const workspace = await getWorkspace()
       files.value = workspace.files
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to load workspace'
     } finally {
       loading.value = false
     }
@@ -40,8 +44,13 @@ export const useCollectionStore = defineStore('collection', () => {
 
   async function openFile(path: string) {
     if (!openFiles.value.has(path)) {
-      const parsed = await getFile(path)
-      openFiles.value.set(path, parsed)
+      try {
+        const parsed = await getFile(path)
+        openFiles.value.set(path, parsed)
+      } catch (e) {
+        error.value = e instanceof Error ? e.message : `Failed to open ${path}`
+        return
+      }
     }
     activeFilePath.value = path
     expandedFiles.value.add(path)
@@ -63,16 +72,28 @@ export const useCollectionStore = defineStore('collection', () => {
     }
   }
 
+  let initialized = false
+
   function init() {
+    if (initialized) return
+    initialized = true
     ws.on('file_changed', () => {
       loadFiles()
-      if (activeFilePath.value && openFiles.value.has(activeFilePath.value)) {
-        getFile(activeFilePath.value).then((parsed) => {
-          openFiles.value.set(activeFilePath.value!, parsed)
+      // Refresh all open files, not just the active one
+      for (const path of openFiles.value.keys()) {
+        getFile(path).then((parsed) => {
+          openFiles.value.set(path, parsed)
+        }).catch(() => {
+          // File may have been deleted; remove from open files
+          openFiles.value.delete(path)
+          if (activeFilePath.value === path) {
+            const remaining = [...openFiles.value.keys()]
+            activeFilePath.value = remaining.length > 0 ? remaining[remaining.length - 1] : null
+          }
         })
       }
     })
   }
 
-  return { files, openFiles, activeFilePath, expandedFiles, activeFile, fileCount, loading, loadFiles, openFile, closeFile, toggleFileExpanded, init }
+  return { files, openFiles, activeFilePath, expandedFiles, activeFile, fileCount, loading, error, loadFiles, openFile, closeFile, toggleFileExpanded, init }
 })

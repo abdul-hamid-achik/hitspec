@@ -2,18 +2,22 @@
 import AppShell from '@/components/layout/AppShell.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import MethodBadge from '@/components/common/MethodBadge.vue'
-import StatusBadge from '@/components/common/StatusBadge.vue'
-import { Server, Square, Globe, Timer } from 'lucide-vue-next'
+import { Server, Square, Globe } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue'
-import { getMockStatus, startMock, stopMock, type MockStatus } from '@/api/endpoints/mock'
+import { getMockStatus, startMock, stopMock } from '@/api/endpoints/mock'
+import type { MockStatusDTO } from '@/types/api'
 import { toast } from 'vue-sonner'
 
-const status = ref<MockStatus | null>(null)
+const status = ref<MockStatusDTO | null>(null)
 const mockPort = ref(8080)
 const starting = ref(false)
 
 async function loadStatus() {
-  status.value = await getMockStatus()
+  try {
+    status.value = await getMockStatus()
+  } catch {
+    status.value = null
+  }
 }
 
 async function handleStart() {
@@ -44,7 +48,7 @@ onMounted(loadStatus)
 
 <template>
   <AppShell>
-    <div class="p-6">
+    <div class="h-full overflow-auto p-6">
       <div class="mb-4 flex items-center justify-between">
         <h1 class="text-lg font-semibold text-foreground">Mock Server</h1>
         <button
@@ -79,11 +83,10 @@ onMounted(loadStatus)
             <MethodBadge :method="route.method" size="sm" />
             <span class="flex-1 font-mono text-xs text-foreground/80">{{ route.path }}</span>
             <span class="rounded-md bg-background/50 px-2 py-0.5 font-mono text-[11px] tabular-nums text-muted-foreground">
-              {{ route.status }}
+              {{ route.statusCode }}
             </span>
-            <span v-if="route.delay > 0" class="flex items-center gap-1 text-[11px] text-muted-foreground/50">
-              <Timer class="h-3 w-3" />
-              {{ route.delay }}ms
+            <span v-if="route.contentType" class="text-[11px] text-muted-foreground/50">
+              {{ route.contentType }}
             </span>
           </div>
         </div>

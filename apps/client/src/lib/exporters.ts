@@ -5,7 +5,7 @@ export function substituteVars(str: string, vars: Record<string, string>): strin
 }
 
 function enabledHeaders(req: RequestDTO): Array<{ key: string; value: string }> {
-  return req.headers.filter((h) => h.enabled && h.key)
+  return (req.headers ?? []).filter((h) => h.key)
 }
 
 function shellEscape(s: string): string {
@@ -27,8 +27,8 @@ export function toCurl(req: RequestDTO, vars: Record<string, string>): string {
     parts.push(`-H ${shellEscape(`${h.key}: ${val}`)}`)
   }
 
-  if (req.body?.content) {
-    const body = substituteVars(req.body.content, vars)
+  if (req.body?.raw) {
+    const body = substituteVars(req.body.raw, vars)
     parts.push(`-d ${shellEscape(body)}`)
   }
 
@@ -39,7 +39,7 @@ export function toFetch(req: RequestDTO, vars: Record<string, string>): string {
   const url = substituteVars(req.url, vars)
   const headers = enabledHeaders(req)
   const hasHeaders = headers.length > 0
-  const hasBody = !!req.body?.content
+  const hasBody = !!req.body?.raw
 
   if (req.method === 'GET' && !hasHeaders && !hasBody) {
     return `const response = await fetch('${url}');`
@@ -59,7 +59,7 @@ export function toFetch(req: RequestDTO, vars: Record<string, string>): string {
   }
 
   if (hasBody) {
-    const body = substituteVars(req.body!.content, vars)
+    const body = substituteVars(req.body!.raw!, vars)
     const isJson = headers.some(
       (h) => h.key.toLowerCase() === 'content-type' && h.value.includes('json'),
     )
@@ -87,8 +87,8 @@ export function toWget(req: RequestDTO, vars: Record<string, string>): string {
     parts.push(`--header=${shellEscape(`${h.key}: ${val}`)}`)
   }
 
-  if (req.body?.content) {
-    const body = substituteVars(req.body.content, vars)
+  if (req.body?.raw) {
+    const body = substituteVars(req.body.raw, vars)
     parts.push(`--body-data=${shellEscape(body)}`)
   }
 
@@ -104,7 +104,7 @@ export function toPythonRequests(req: RequestDTO, vars: Record<string, string>):
   const lines: string[] = ['import requests', '']
 
   const hasHeaders = headers.length > 0
-  const hasBody = !!req.body?.content
+  const hasBody = !!req.body?.raw
   const isJson = headers.some(
     (h) => h.key.toLowerCase() === 'content-type' && h.value.includes('json'),
   )
@@ -120,11 +120,11 @@ export function toPythonRequests(req: RequestDTO, vars: Record<string, string>):
   }
 
   if (hasBody && isJson) {
-    const body = substituteVars(req.body!.content, vars)
+    const body = substituteVars(req.body!.raw!, vars)
     lines.push(`data = ${body}`)
     lines.push('')
   } else if (hasBody) {
-    const body = substituteVars(req.body!.content, vars)
+    const body = substituteVars(req.body!.raw!, vars)
     lines.push(`data = '${body.replace(/'/g, "\\'")}'`)
     lines.push('')
   }
@@ -152,8 +152,8 @@ export function toHTTPie(req: RequestDTO, vars: Record<string, string>): string 
     parts.push(`${h.key}:${shellEscape(val)}`)
   }
 
-  if (req.body?.content) {
-    const body = substituteVars(req.body.content, vars)
+  if (req.body?.raw) {
+    const body = substituteVars(req.body.raw, vars)
     const isJson = headers.some(
       (h) => h.key.toLowerCase() === 'content-type' && h.value.includes('json'),
     )

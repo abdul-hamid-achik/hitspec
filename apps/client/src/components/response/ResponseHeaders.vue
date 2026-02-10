@@ -13,7 +13,7 @@ defineProps<{ headers: Record<string, string | string[]> }>()
         class="flex gap-2 rounded-md bg-background/50 px-2.5 py-1.5 font-mono text-xs"
       >
         <span class="shrink-0 font-medium text-nord-8">{{ key }}:</span>
-        <span class="text-foreground/80">{{ Array.isArray(values) ? values.join(', ') : values }}</span>
+        <span class="min-w-0 break-all text-foreground/80">{{ Array.isArray(values) ? values.join(', ') : values }}</span>
       </div>
     </template>
     <div v-else class="flex flex-col items-center gap-2 py-6 text-center">

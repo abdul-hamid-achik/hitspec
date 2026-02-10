@@ -21,8 +21,8 @@ const router = useRouter()
 onMounted(() => historyStore.loadHistory())
 
 async function openHistoryEntry(entry: HistoryEntry) {
-  await collection.openFile(entry.filePath)
-  const parsed = collection.openFiles.get(entry.filePath)
+  await collection.openFile(entry.file)
+  const parsed = collection.openFiles.get(entry.file)
   if (parsed) {
     const req = parsed.requests.find((r) => r.name === entry.requestName)
     if (req) {
@@ -41,7 +41,7 @@ function confirmClear() {
 
 <template>
   <AppShell>
-    <div class="p-6">
+    <div class="h-full overflow-auto p-6">
       <div class="mb-4 flex items-center justify-between">
         <h1 class="text-lg font-semibold text-foreground">History</h1>
         <button

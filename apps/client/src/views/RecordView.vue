@@ -65,6 +65,7 @@ async function handleExport() {
 }
 
 async function handleClear() {
+  if (!window.confirm('Clear all recordings? This cannot be undone.')) return
   try {
     await clearRecordings()
     await loadStatus()
@@ -74,10 +75,14 @@ async function handleClear() {
   }
 }
 
-function copyExported() {
+async function copyExported() {
   if (exported.value) {
-    navigator.clipboard.writeText(exported.value)
-    toast.success('Copied to clipboard')
+    try {
+      await navigator.clipboard.writeText(exported.value)
+      toast.success('Copied to clipboard')
+    } catch {
+      toast.error('Failed to copy to clipboard')
+    }
   }
 }
 
@@ -86,7 +91,7 @@ onMounted(loadStatus)
 
 <template>
   <AppShell>
-    <div class="p-6">
+    <div class="h-full overflow-auto p-6">
       <h1 class="mb-4 text-lg font-semibold text-foreground">Record Proxy</h1>
 
       <div v-if="status?.running" class="space-y-4">
@@ -140,7 +145,7 @@ onMounted(loadStatus)
         </div>
 
         <!-- Exported content -->
-        <div v-if="exported" class="rounded-lg border border-border bg-nord-0 p-4 space-y-2">
+        <div v-if="exported" class="rounded-lg border border-border bg-background p-4 space-y-2">
           <div class="flex items-center justify-between">
             <h3 class="text-sm font-medium text-foreground">Exported .http content</h3>
             <button

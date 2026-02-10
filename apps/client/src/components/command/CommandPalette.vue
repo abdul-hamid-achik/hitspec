@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
-import { DialogRoot, DialogPortal, DialogOverlay, DialogContent } from 'reka-ui'
+import { DialogRoot, DialogPortal, DialogOverlay, DialogContent, DialogTitle } from 'reka-ui'
 import {
   Search, FileText, Zap, Server, History, Settings, Import, Play,
   Keyboard, ArrowRight, Command, FileCheck, Video,
@@ -156,6 +156,7 @@ function execute(item: CommandItem) {
 
 function onKeydown(e: KeyboardEvent) {
   const items = filtered.value
+  if (items.length === 0) return
   if (e.key === 'ArrowDown') {
     e.preventDefault()
     selectedIndex.value = (selectedIndex.value + 1) % items.length
@@ -177,6 +178,7 @@ function onKeydown(e: KeyboardEvent) {
         class="fixed left-1/2 top-[20%] z-50 w-full max-w-lg -translate-x-1/2 rounded-xl border border-border bg-surface shadow-2xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=open]:slide-in-from-left-1/2"
         @keydown="onKeydown"
       >
+        <DialogTitle class="sr-only">Command Palette</DialogTitle>
         <!-- Search input -->
         <div class="flex items-center gap-2 border-b border-border px-4 py-3">
           <Search class="h-4 w-4 shrink-0 text-muted-foreground" />

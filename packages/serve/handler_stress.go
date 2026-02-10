@@ -83,7 +83,7 @@ func (s *Server) handleStressStart(w http.ResponseWriter, r *http.Request) {
 			select {
 			case <-done:
 				stats := stressRunner.GetCurrentStats()
-				s.hub.Broadcast("stress:completed", WSStressMetrics{
+				s.hub.Broadcast("stress_update", WSStressMetrics{
 					Stats:     convertStressStats(stats),
 					Elapsed:   stats.Elapsed.Seconds(),
 					Timestamp: nowISO(),
@@ -97,7 +97,7 @@ func (s *Server) handleStressStart(w http.ResponseWriter, r *http.Request) {
 
 			case <-ticker.C:
 				stats := stressRunner.GetCurrentStats()
-				s.hub.Broadcast("stress:metrics", WSStressMetrics{
+				s.hub.Broadcast("stress_update", WSStressMetrics{
 					Stats:     convertStressStats(stats),
 					Elapsed:   stats.Elapsed.Seconds(),
 					Timestamp: nowISO(),

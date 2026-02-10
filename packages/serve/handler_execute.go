@@ -32,7 +32,7 @@ func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	execID := generateID()
-	s.hub.Broadcast("exec:started", WSExecEvent{
+	s.hub.Broadcast("execution_start", WSExecEvent{
 		ID:        execID,
 		File:      req.File,
 		Status:    "started",
@@ -53,7 +53,7 @@ func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 	rn := runner.NewRunner(cfg)
 	result, err := rn.RunFile(absPath)
 	if err != nil {
-		s.hub.Broadcast("exec:error", WSExecEvent{
+		s.hub.Broadcast("error", WSExecEvent{
 			ID:        execID,
 			File:      req.File,
 			Status:    "error",
@@ -65,7 +65,7 @@ func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dto := convertRunResult(result)
-	s.hub.Broadcast("exec:completed", WSExecEvent{
+	s.hub.Broadcast("execution_complete", WSExecEvent{
 		ID:        execID,
 		File:      req.File,
 		Status:    "completed",

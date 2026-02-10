@@ -30,7 +30,7 @@ func NewHub() *Hub {
 
 // Broadcast sends a message to all connected clients.
 func (h *Hub) Broadcast(msgType string, payload any) {
-	msg := WSMessage{Type: msgType, Payload: payload}
+	msg := WSMessage{Type: msgType, Payload: payload, Timestamp: nowISO()}
 	data, err := json.Marshal(msg)
 	if err != nil {
 		log.Printf("ws broadcast marshal error: %v", err)
@@ -113,11 +113,21 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// Reader loop (reads and discards client messages / pings)
+	// Reader loop: handle ping messages, discard others
 	for {
-		_, _, err := conn.Read(ctx)
+		_, data, err := conn.Read(ctx)
 		if err != nil {
 			break
+		}
+		var incoming struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(data, &incoming) == nil && incoming.Type == "ping" {
+			pong := WSMessage{Type: "pong", Payload: nil, Timestamp: nowISO()}
+			pongData, _ := json.Marshal(pong)
+			writeCtx, writeCancel := context.WithTimeout(ctx, 5*time.Second)
+			_ = conn.Write(writeCtx, websocket.MessageText, pongData)
+			writeCancel()
 		}
 	}
 }

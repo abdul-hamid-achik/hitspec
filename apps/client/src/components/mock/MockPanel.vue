@@ -1,19 +1,20 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { Play, Square } from 'lucide-vue-next'
-import type { MockConfig } from '@/types/api'
-import { getMockConfig, startMock, stopMock } from '@/api/endpoints/mock'
+import type { MockStatusDTO } from '@/types/api'
+import { getMockStatus, startMock, stopMock } from '@/api/endpoints/mock'
 import MockRouteList from './MockRouteList.vue'
 import { toast } from 'vue-sonner'
 
-const config = ref<MockConfig | null>(null)
+const status = ref<MockStatusDTO | null>(null)
 const running = ref(false)
 const port = ref(9090)
 
 onMounted(async () => {
   try {
-    config.value = await getMockConfig()
-    running.value = true
+    const s = await getMockStatus()
+    running.value = s.running
+    status.value = s
   } catch {
     running.value = false
   }
@@ -21,8 +22,9 @@ onMounted(async () => {
 
 async function handleStart() {
   try {
-    await startMock({ port: port.value, routes: [] })
+    const result = await startMock({ files: [], port: port.value })
     running.value = true
+    status.value = result
     toast.success('Mock server started')
   } catch (e) {
     toast.error(e instanceof Error ? e.message : 'Failed to start')
@@ -33,6 +35,7 @@ async function handleStop() {
   try {
     await stopMock()
     running.value = false
+    status.value = null
     toast.success('Mock server stopped')
   } catch (e) {
     toast.error(e instanceof Error ? e.message : 'Failed to stop')
@@ -42,7 +45,7 @@ async function handleStop() {
 
 <template>
   <div class="space-y-6">
-    <div class="rounded-lg border border-border bg-nord-0 p-4">
+    <div class="rounded-lg border border-border bg-background p-4">
       <h3 class="mb-3 text-sm font-medium text-foreground">Mock Server</h3>
       <div class="flex items-center gap-4">
         <div>
@@ -71,6 +74,6 @@ async function handleStop() {
         </div>
       </div>
     </div>
-    <MockRouteList v-if="config" :routes="config.routes" />
+    <MockRouteList v-if="status?.routes" :routes="status.routes" />
   </div>
 </template>

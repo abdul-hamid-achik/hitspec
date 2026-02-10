@@ -52,7 +52,7 @@ function handleAdd() {
   if (!builtField.value) return
 
   emit('add', {
-    field: builtField.value,
+    subject: builtField.value,
     operator: operator.value,
     expected: needsExpected.value ? expected.value : '',
     line: 0,
@@ -65,8 +65,8 @@ function handleAdd() {
 
 function copyAsHitspec() {
   const lines = props.assertions.map((a) => {
-    const parts = [a.field, a.operator]
-    if (a.expected) parts.push(a.expected)
+    const parts = [a.subject, a.operator]
+    if (a.expected) parts.push(String(a.expected))
     return parts.join(' ')
   })
   emit('copy', lines.join('\n'))
@@ -105,8 +105,8 @@ const groupedSubjects = computed(() => {
     </div>
 
     <!-- Builder Form -->
-    <div v-if="showBuilder" class="rounded-lg border border-border bg-nord-0 p-3 space-y-3">
-      <div class="grid grid-cols-3 gap-3">
+    <div v-if="showBuilder" class="rounded-lg border border-border bg-background p-3 space-y-3">
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <!-- Subject -->
         <div>
           <label class="mb-1 block text-xs text-muted-foreground">Subject</label>
@@ -180,9 +180,9 @@ const groupedSubjects = computed(() => {
       <div
         v-for="(assertion, i) in assertions"
         :key="i"
-        class="group flex items-center gap-2 rounded-md border border-border bg-nord-0 px-3 py-2 font-mono text-sm"
+        class="group flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 font-mono text-sm"
       >
-        <span class="text-accent">{{ assertion.field }}</span>
+        <span class="text-accent">{{ assertion.subject }}</span>
         <span class="text-nord-15">{{ assertion.operator }}</span>
         <span class="text-nord-14">{{ assertion.expected }}</span>
         <span class="ml-auto flex items-center gap-2">

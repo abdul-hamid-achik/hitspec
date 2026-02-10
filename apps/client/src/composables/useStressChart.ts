@@ -1,11 +1,11 @@
 import { ref, computed } from 'vue'
-import type { StressMetrics } from '@/types/api'
+import type { StressStatsDTO } from '@/types/api'
 
 interface DataPoint {
   time: number
   rps: number
-  avgLatency: number
-  p95Latency: number
+  p50Ms: number
+  p95Ms: number
   errorRate: number
 }
 
@@ -13,19 +13,17 @@ const MAX_POINTS = 120
 
 export function useStressChart() {
   const dataPoints = ref<DataPoint[]>([])
+  let elapsedCounter = 0
 
-  function addMetrics(metrics: StressMetrics) {
-    const errorRate =
-      metrics.totalRequests > 0
-        ? (metrics.failCount / metrics.totalRequests) * 100
-        : 0
+  function addMetrics(metrics: StressStatsDTO) {
+    elapsedCounter += 0.5
 
     dataPoints.value.push({
-      time: metrics.elapsed,
+      time: elapsedCounter,
       rps: metrics.rps,
-      avgLatency: metrics.avgLatency,
-      p95Latency: metrics.p95Latency,
-      errorRate,
+      p50Ms: metrics.p50Ms,
+      p95Ms: metrics.p95Ms,
+      errorRate: metrics.errorRate * 100,
     })
 
     if (dataPoints.value.length > MAX_POINTS) {
@@ -35,6 +33,7 @@ export function useStressChart() {
 
   function reset() {
     dataPoints.value = []
+    elapsedCounter = 0
   }
 
   const chartOption = computed(() => ({
@@ -47,7 +46,7 @@ export function useStressChart() {
       left: 60,
     },
     legend: {
-      data: ['RPS', 'Avg Latency', 'P95 Latency'],
+      data: ['RPS', 'P50 Latency', 'P95 Latency'],
       textStyle: { color: '#D8DEE9' },
       top: 5,
     },
@@ -87,13 +86,13 @@ export function useStressChart() {
         data: dataPoints.value.map((p) => [p.time, p.rps]),
       },
       {
-        name: 'Avg Latency',
+        name: 'P50 Latency',
         type: 'line',
         smooth: true,
         symbol: 'none',
         yAxisIndex: 1,
         lineStyle: { color: '#88C0D0', width: 2 },
-        data: dataPoints.value.map((p) => [p.time, p.avgLatency]),
+        data: dataPoints.value.map((p) => [p.time, p.p50Ms]),
       },
       {
         name: 'P95 Latency',
@@ -102,7 +101,7 @@ export function useStressChart() {
         symbol: 'none',
         yAxisIndex: 1,
         lineStyle: { color: '#D08770', width: 2, type: 'dashed' as const },
-        data: dataPoints.value.map((p) => [p.time, p.p95Latency]),
+        data: dataPoints.value.map((p) => [p.time, p.p95Ms]),
       },
     ],
   }))

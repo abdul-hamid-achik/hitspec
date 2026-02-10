@@ -331,8 +331,9 @@ type SystemInfoDTO struct {
 
 // WSMessage is the WebSocket message envelope.
 type WSMessage struct {
-	Type    string `json:"type"`
-	Payload any    `json:"payload"`
+	Type      string `json:"type"`
+	Payload   any    `json:"payload"`
+	Timestamp string `json:"timestamp"`
 }
 
 // WSFileEvent is a file change event.

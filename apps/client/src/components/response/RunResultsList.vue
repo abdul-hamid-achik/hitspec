@@ -43,7 +43,7 @@ function resultIconClass(result: RunResult) {
       <button
         v-for="(result, i) in results.results"
         :key="i"
-        class="flex w-full items-center gap-2.5 border-b border-border px-4 py-2 text-left transition-colors hover:bg-muted/50"
+        class="flex w-full items-center gap-2.5 border-b border-border px-4 py-2 text-left transition-colors hover:bg-surface-hover"
         @click="emit('select', result)"
       >
         <component

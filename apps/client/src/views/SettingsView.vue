@@ -26,7 +26,7 @@ onMounted(() => {
 
 <template>
   <AppShell>
-    <div class="mx-auto max-w-2xl p-6">
+    <div class="h-full overflow-auto"><div class="mx-auto max-w-2xl p-6">
       <h1 class="mb-6 text-lg font-semibold text-foreground">Settings</h1>
 
       <LoadingSpinner v-if="settings.loading" label="Loading configuration..." />
@@ -213,8 +213,8 @@ onMounted(() => {
             <div v-for="(item, i) in [
               { label: 'Version', value: settings.systemInfo.version },
               { label: 'Go Version', value: settings.systemInfo.goVersion },
-              { label: 'Platform', value: settings.systemInfo.platform },
-              { label: 'Work Directory', value: settings.systemInfo.workDir },
+              { label: 'Platform', value: `${settings.systemInfo.os}/${settings.systemInfo.arch}` },
+              { label: 'Build Time', value: settings.systemInfo.buildTime },
             ]" :key="item.label">
               <div v-if="i > 0" class="mx-4 border-t border-border/50" />
               <div class="flex items-center justify-between px-4 py-2.5 text-sm">
@@ -225,6 +225,6 @@ onMounted(() => {
           </div>
         </section>
       </div>
-    </div>
+    </div></div>
   </AppShell>
 </template>

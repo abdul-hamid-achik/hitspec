@@ -1,3 +1,7 @@
+<script lang="ts">
+let appInitialized = false
+</script>
+
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -24,10 +28,14 @@ const shortcutsOpen = ref(false)
 const sidebarCollapsed = ref(false)
 
 onMounted(() => {
-  ws.connect()
-  collection.loadFiles()
-  environment.loadEnvironments()
-  settings.loadConfig()
+  if (!appInitialized) {
+    appInitialized = true
+    ws.connect()
+    collection.loadFiles()
+    environment.loadEnvironments()
+    settings.loadConfig()
+  }
+  collection.init()
 })
 
 function toggleSidebar() {
@@ -37,7 +45,7 @@ function toggleSidebar() {
 useKeyboard({
   'mod+k': () => { commandPaletteOpen.value = true },
   'mod+b': () => { toggleSidebar() },
-  'mod+?': () => { shortcutsOpen.value = true },
+  'mod+shift+?': () => { shortcutsOpen.value = true },
   'mod+enter': () => {
     if (collection.activeFilePath) {
       requestStore.runFile(collection.activeFilePath, environment.activeEnvName)
@@ -66,7 +74,7 @@ useKeyboard({
         :collapsed="sidebarCollapsed"
         @collapse="toggleSidebar"
       />
-      <main class="flex-1 overflow-auto">
+      <main class="flex-1 overflow-hidden">
         <slot />
       </main>
     </div>

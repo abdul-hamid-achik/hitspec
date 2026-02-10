@@ -79,7 +79,7 @@ onMounted(loadFiles)
 
 <template>
   <AppShell>
-    <div class="p-6">
+    <div class="h-full overflow-auto p-6">
       <div class="mb-4 flex items-center justify-between">
         <h1 class="text-lg font-semibold text-foreground">Contract Testing</h1>
         <button
@@ -182,7 +182,7 @@ onMounted(loadFiles)
                 <CheckCircle v-if="interaction.passed" :size="14" class="shrink-0 text-success" />
                 <XCircle v-else :size="14" class="shrink-0 text-destructive" />
                 <span class="text-sm text-foreground">{{ interaction.name || 'Unnamed' }}</span>
-                <span v-if="interaction.state" class="rounded bg-nord-0 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                <span v-if="interaction.state" class="rounded bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground">
                   state: {{ interaction.state }}
                 </span>
                 <span class="ml-auto text-xs text-muted-foreground">{{ interaction.duration.toFixed(0) }}ms</span>

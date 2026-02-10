@@ -13,10 +13,9 @@ defineProps<{ body?: BodyDTO | null }>()
     </div>
     <div v-else>
       <div class="mb-2 flex items-center gap-2">
-        <span class="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium uppercase text-accent">{{ body.type }}</span>
-        <span v-if="body.filePath" class="truncate font-mono text-[10px] text-muted-foreground/50">{{ body.filePath }}</span>
+        <span class="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium uppercase text-accent">{{ body.contentType }}</span>
       </div>
-      <pre class="overflow-auto rounded border border-border bg-background p-3 font-mono text-xs text-foreground">{{ body.content }}</pre>
+      <pre class="overflow-auto rounded border border-border bg-background p-3 font-mono text-xs text-foreground">{{ body.raw }}</pre>
     </div>
   </div>
 </template>

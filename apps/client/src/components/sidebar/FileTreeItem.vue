@@ -42,7 +42,7 @@ const isActive = () => collection.activeFilePath === props.file.path
       />
       <component :is="file.isDir ? Folder : FileText" :size="14" class="shrink-0 text-nord-9" />
       <span class="truncate">{{ file.name }}</span>
-      <span v-if="!file.isDir && file.requestCount > 0" class="ml-auto text-xs text-nord-3">
+      <span v-if="!file.isDir && (file.requestCount ?? 0) > 0" class="ml-auto text-xs text-nord-3">
         {{ file.requestCount }}
       </span>
     </button>

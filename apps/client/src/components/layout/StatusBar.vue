@@ -14,6 +14,7 @@ const watchActive = ref(false)
 const lastFileChange = ref<string | null>(null)
 let interval: ReturnType<typeof setInterval>
 let fileChangeTimeout: ReturnType<typeof setTimeout> | null = null
+let unsubFileChanged: (() => void) | null = null
 
 onMounted(() => {
   interval = setInterval(() => {
@@ -21,7 +22,7 @@ onMounted(() => {
   }, 1000)
 
   // Listen for file change events to show watch mode indicator
-  ws.on('file_changed', (msg) => {
+  unsubFileChanged = ws.on('file_changed', (msg) => {
     watchActive.value = true
     const payload = msg.payload as { path?: string } | undefined
     lastFileChange.value = payload?.path ?? 'file changed'
@@ -32,7 +33,14 @@ onMounted(() => {
   })
 })
 
-onUnmounted(() => clearInterval(interval))
+onUnmounted(() => {
+  clearInterval(interval)
+  unsubFileChanged?.()
+  if (fileChangeTimeout) {
+    clearTimeout(fileChangeTimeout)
+    fileChangeTimeout = null
+  }
+})
 </script>
 
 <template>

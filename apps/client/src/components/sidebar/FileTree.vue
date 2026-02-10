@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { ChevronRight, FileText, Folder, FolderOpen } from 'lucide-vue-next'
+import { ChevronRight, FileText, Folder, FolderOpen, Play } from 'lucide-vue-next'
 import { ref } from 'vue'
 import type { FileInfo } from '@/types/api'
 import { useCollectionStore } from '@/stores/collection'
 import { useRequestStore } from '@/stores/request'
+import { useEnvironmentStore } from '@/stores/environment'
 import MethodBadge from '@/components/common/MethodBadge.vue'
 
 defineProps<{ items: FileInfo[]; depth?: number }>()
 
 const collection = useCollectionStore()
 const requestStore = useRequestStore()
+const envStore = useEnvironmentStore()
 const expandedDirs = ref<Set<string>>(new Set())
 
 function toggleDir(path: string) {
@@ -21,6 +23,17 @@ function toggleDir(path: string) {
 }
 
 async function handleFileClick(item: FileInfo) {
+  // If file is already open and expanded, toggle collapse
+  if (collection.activeFilePath === item.path && collection.expandedFiles.has(item.path)) {
+    collection.toggleFileExpanded(item.path)
+    return
+  }
+  // If file is open but collapsed, just expand it
+  if (collection.openFiles.has(item.path) && !collection.expandedFiles.has(item.path)) {
+    collection.toggleFileExpanded(item.path)
+    collection.activeFilePath = item.path
+    return
+  }
   await collection.openFile(item.path)
   const parsed = collection.openFiles.get(item.path)
   if (parsed && parsed.requests.length > 0) {
@@ -31,6 +44,59 @@ async function handleFileClick(item: FileInfo) {
 function handleRequestClick(filePath: string, request: import('@/types/api').RequestDTO, index: number) {
   collection.activeFilePath = filePath
   requestStore.setActiveRequest(request, index)
+}
+
+async function runFolder(item: FileInfo, event: Event) {
+  event.stopPropagation()
+  // Collect all .http/.hitspec file paths under this directory
+  const filePaths: string[] = []
+  function collectFiles(items: FileInfo[]) {
+    for (const f of items) {
+      if (f.isDir && f.children) collectFiles(f.children)
+      else if (!f.isDir) filePaths.push(f.path)
+    }
+  }
+  if (item.children) collectFiles(item.children)
+  if (filePaths.length === 0) return
+
+  // Run the first file to show results (the backend runs full files)
+  // For a proper "run folder", we run each file sequentially and aggregate
+  requestStore.isExecuting = true
+  requestStore.error = null
+  try {
+    const { executeFile } = await import('@/api/endpoints/execute')
+    const allResults: import('@/types/api').RunResult[] = []
+    let totalPassed = 0, totalFailed = 0, totalSkipped = 0, totalDuration = 0
+    for (const fp of filePaths) {
+      const result = await executeFile(fp, envStore.activeEnvName)
+      allResults.push(...result.results)
+      totalPassed += result.passed
+      totalFailed += result.failed
+      totalSkipped += result.skipped
+      totalDuration += result.duration
+    }
+    requestStore.lastRunResult = {
+      file: item.path,
+      duration: totalDuration,
+      passed: totalPassed,
+      failed: totalFailed,
+      skipped: totalSkipped,
+      results: allResults,
+    }
+    if (allResults.length > 0) {
+      requestStore.lastResult = allResults[0]
+    }
+  } catch (e) {
+    requestStore.error = e instanceof Error ? e.message : String(e)
+  } finally {
+    requestStore.isExecuting = false
+  }
+}
+
+async function runFile(item: FileInfo, event: Event) {
+  event.stopPropagation()
+  await collection.openFile(item.path)
+  requestStore.runFile(item.path, envStore.activeEnvName)
 }
 </script>
 
@@ -60,6 +126,22 @@ function handleRequestClick(filePath: string, request: import('@/types/api').Req
         <Folder v-else-if="item.isDir" class="h-3.5 w-3.5 shrink-0 text-nord-13/70" />
         <FileText v-else class="h-3.5 w-3.5 shrink-0 text-nord-8/70" />
         <span class="flex-1 truncate">{{ item.name }}</span>
+        <button
+          v-if="item.isDir"
+          class="invisible rounded p-0.5 text-muted-foreground/40 transition-colors hover:bg-accent/20 hover:text-accent group-hover:visible"
+          title="Run all files in folder"
+          @click="runFolder(item, $event)"
+        >
+          <Play class="h-3 w-3" />
+        </button>
+        <button
+          v-else-if="item.requestCount && item.requestCount > 0"
+          class="invisible rounded p-0.5 text-muted-foreground/40 transition-colors hover:bg-accent/20 hover:text-accent group-hover:visible"
+          title="Run file"
+          @click="runFile(item, $event)"
+        >
+          <Play class="h-3 w-3" />
+        </button>
         <span
           v-if="!item.isDir && item.requestCount && item.requestCount > 0"
           class="rounded-full px-1.5 text-[10px] tabular-nums text-muted-foreground/40 group-hover:text-muted-foreground/60"
