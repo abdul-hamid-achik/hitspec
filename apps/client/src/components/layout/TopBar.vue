@@ -4,6 +4,7 @@ import { useEnvironmentStore } from '@/stores/environment'
 import { useRequestStore } from '@/stores/request'
 import { useCollectionStore } from '@/stores/collection'
 import MethodBadge from '@/components/common/MethodBadge.vue'
+import ThemeToggle from '@/components/common/ThemeToggle.vue'
 
 const envStore = useEnvironmentStore()
 const requestStore = useRequestStore()
@@ -57,6 +58,9 @@ function handleRun() {
         <span class="hidden sm:inline">Search...</span>
         <kbd class="rounded border border-border/50 bg-surface px-1 py-px text-[10px]">{{ modKey }}K</kbd>
       </button>
+
+      <!-- Theme toggle -->
+      <ThemeToggle />
 
       <!-- Environment selector -->
       <select

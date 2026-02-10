@@ -5,11 +5,12 @@ import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { Copy, Check, AlertCircle } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
-const activeTab = ref<'curl' | 'insomnia' | 'openapi'>('curl')
+const activeTab = ref<'curl' | 'insomnia' | 'openapi' | 'postman'>('curl')
 const curlCommand = ref('')
 const insomniaJson = ref('')
 const openapiSpec = ref('')
 const openapiBaseUrl = ref('')
+const postmanJson = ref('')
 const result = ref<string | null>(null)
 const error = ref<string | null>(null)
 const loading = ref(false)
@@ -57,6 +58,66 @@ async function handleImportOpenAPI() {
   }
 }
 
+interface PostmanItem {
+  name?: string
+  request?: {
+    method?: string
+    url?: string | { raw?: string }
+    header?: Array<{ key: string; value: string }>
+    body?: { mode?: string; raw?: string }
+  }
+  item?: PostmanItem[]
+}
+
+function convertPostmanItems(items: PostmanItem[], indent = ''): string {
+  const lines: string[] = []
+  for (const item of items) {
+    if (item.item) {
+      // Folder — recurse
+      if (item.name) lines.push(`# ${indent}${item.name}`)
+      lines.push(convertPostmanItems(item.item, indent))
+      continue
+    }
+    if (!item.request) continue
+    const req = item.request
+    const method = req.method || 'GET'
+    const url = typeof req.url === 'string' ? req.url : req.url?.raw || ''
+
+    lines.push(`### ${item.name || url}`)
+    lines.push(`${method} ${url}`)
+
+    if (req.header) {
+      for (const h of req.header) {
+        lines.push(`${h.key}: ${h.value}`)
+      }
+    }
+
+    if (req.body?.raw) {
+      lines.push('')
+      lines.push(req.body.raw)
+    }
+
+    lines.push('')
+  }
+  return lines.join('\n')
+}
+
+function handleImportPostman() {
+  error.value = null
+  result.value = null
+  try {
+    const collection = JSON.parse(postmanJson.value)
+    const items: PostmanItem[] = collection.item || []
+    if (items.length === 0) {
+      error.value = 'No requests found in collection'
+      return
+    }
+    result.value = convertPostmanItems(items).trim()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Invalid JSON'
+  }
+}
+
 async function copyResult() {
   if (!result.value) return
   try {
@@ -76,7 +137,7 @@ async function copyResult() {
       <!-- Tab bar -->
       <div class="mb-4 flex gap-1">
         <button
-          v-for="tab in (['curl', 'insomnia', 'openapi'] as const)"
+          v-for="tab in (['curl', 'insomnia', 'openapi', 'postman'] as const)"
           :key="tab"
           class="rounded-md px-3 py-1.5 text-xs font-medium capitalize transition-colors"
           :class="activeTab === tab
@@ -84,7 +145,7 @@ async function copyResult() {
             : 'text-muted-foreground hover:bg-surface-hover hover:text-foreground'"
           @click="activeTab = tab"
         >
-          {{ tab === 'openapi' ? 'OpenAPI' : tab }}
+          {{ tab === 'openapi' ? 'OpenAPI' : tab === 'postman' ? 'Postman' : tab }}
         </button>
       </div>
 
@@ -150,6 +211,27 @@ async function copyResult() {
           @click="handleImportOpenAPI"
         >
           {{ loading ? 'Importing...' : 'Import' }}
+        </button>
+      </div>
+
+      <!-- Postman tab -->
+      <div v-else-if="activeTab === 'postman'" class="space-y-3">
+        <div class="relative">
+          <textarea
+            v-model="postmanJson"
+            placeholder='Paste your Postman Collection v2.1 JSON here... {"info":{"name":"..."},"item":[...]}'
+            class="h-32 w-full resize-none rounded-lg border border-border bg-background p-3 font-mono text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        <p class="text-[10px] text-muted-foreground/50">
+          Export from Postman: Collection &rarr; Export &rarr; Collection v2.1
+        </p>
+        <button
+          class="rounded-md bg-accent px-4 py-1.5 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/80 disabled:opacity-50"
+          :disabled="!postmanJson.trim()"
+          @click="handleImportPostman"
+        >
+          Import
         </button>
       </div>
 

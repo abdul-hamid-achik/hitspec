@@ -30,6 +30,8 @@ export interface QueryDTO {
 export interface BodyDTO {
   contentType: string
   raw?: string
+  graphql?: string
+  variables?: string
   line: number
 }
 

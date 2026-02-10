@@ -1,23 +1,46 @@
 <script setup lang="ts">
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { useSettingsStore } from '@/stores/settings'
-import { AlertCircle } from 'lucide-vue-next'
-import { onMounted, ref } from 'vue'
+import { useThemeStore, type ThemeMode } from '@/stores/theme'
+import { AlertCircle, Sun, Moon, Monitor } from 'lucide-vue-next'
+import { onMounted, ref, watch } from 'vue'
 
 const settings = useSettingsStore()
+const theme = useThemeStore()
 
-// TODO: Notification settings are local-only and lost on page refresh.
-// Wire these to a backend endpoint (e.g. PATCH /api/v1/config) or persist in localStorage.
-const slackWebhook = ref('')
-const teamsWebhook = ref('')
-const notifyOnFailure = ref(true)
-const notifyOnSuccess = ref(false)
+const themeOptions: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
+  { value: 'light', label: 'Light', icon: Sun },
+  { value: 'dark', label: 'Dark', icon: Moon },
+  { value: 'system', label: 'System', icon: Monitor },
+]
 
-// TODO: Database assertion settings are local-only and lost on page refresh.
-// Wire these to backend config or persist in localStorage.
-const dbType = ref<'postgresql' | 'mysql' | 'sqlite'>('postgresql')
-const dbConnectionString = ref('')
-const dbEnabled = ref(false)
+// Persist notification and DB settings to localStorage
+function loadLocal<T>(key: string, fallback: T): T {
+  try {
+    const v = localStorage.getItem(`hitspec-${key}`)
+    return v !== null ? JSON.parse(v) as T : fallback
+  } catch { return fallback }
+}
+function saveLocal(key: string, value: unknown) {
+  localStorage.setItem(`hitspec-${key}`, JSON.stringify(value))
+}
+
+const slackWebhook = ref(loadLocal('slack-webhook', ''))
+const teamsWebhook = ref(loadLocal('teams-webhook', ''))
+const notifyOnFailure = ref(loadLocal('notify-failure', true))
+const notifyOnSuccess = ref(loadLocal('notify-success', false))
+const dbType = ref<'postgresql' | 'mysql' | 'sqlite'>(loadLocal('db-type', 'postgresql'))
+const dbConnectionString = ref(loadLocal('db-connection', ''))
+const dbEnabled = ref(loadLocal('db-enabled', false))
+
+// Watch and persist changes
+watch(slackWebhook, v => saveLocal('slack-webhook', v))
+watch(teamsWebhook, v => saveLocal('teams-webhook', v))
+watch(notifyOnFailure, v => saveLocal('notify-failure', v))
+watch(notifyOnSuccess, v => saveLocal('notify-success', v))
+watch(dbType, v => saveLocal('db-type', v))
+watch(dbConnectionString, v => saveLocal('db-connection', v))
+watch(dbEnabled, v => saveLocal('db-enabled', v))
 
 onMounted(() => {
   settings.loadConfig()
@@ -43,6 +66,34 @@ onMounted(() => {
         </button>
       </div>
       <div v-else-if="settings.config" class="space-y-6">
+        <!-- Appearance -->
+        <section>
+          <h2 class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Appearance</h2>
+          <div class="rounded-lg border border-border bg-surface">
+            <div class="flex items-center justify-between px-4 py-3">
+              <div>
+                <span class="text-sm text-foreground">Theme</span>
+                <p class="text-xs text-muted-foreground/50">Select your preferred color scheme</p>
+              </div>
+              <div class="flex gap-1 rounded-lg border border-border bg-background p-0.5">
+                <button
+                  v-for="opt in themeOptions"
+                  :key="opt.value"
+                  :aria-label="`Switch to ${opt.label} theme`"
+                  class="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors"
+                  :class="theme.mode === opt.value
+                    ? 'bg-accent text-accent-foreground'
+                    : 'text-muted-foreground hover:text-foreground'"
+                  @click="theme.setMode(opt.value)"
+                >
+                  <component :is="opt.icon" class="h-3.5 w-3.5" />
+                  {{ opt.label }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- Request Defaults -->
         <section>
           <h2 class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Request Defaults</h2>
@@ -154,8 +205,8 @@ onMounted(() => {
               </div>
             </label>
           </div>
-          <p class="mt-2 text-[10px] text-warning/70">
-            These settings are not persisted and will be lost on page refresh. Configure in hitspec.yaml for CI/CD use.
+          <p class="mt-2 text-[10px] text-muted-foreground/50">
+            Saved locally in your browser. Configure in hitspec.yaml for CI/CD use.
           </p>
         </section>
 

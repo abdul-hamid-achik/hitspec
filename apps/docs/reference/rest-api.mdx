@@ -1,0 +1,1653 @@
+---
+title: 'REST API'
+description: 'Complete reference for the hitspec server HTTP API'
+icon: 'code'
+---
+
+The hitspec server exposes a REST API on `http://localhost:8080` (default) when you run `hitspec serve`. All endpoints are prefixed with `/api/v1`. Responses are JSON with `Content-Type: application/json`.
+
+```bash
+hitspec serve --port 8080
+```
+
+## Error Format
+
+All error responses follow a consistent structure:
+
+```json
+{
+  "error": "Bad Request",
+  "message": "file is required"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `error` | string | HTTP status text (e.g., `"Bad Request"`, `"Not Found"`) |
+| `message` | string | Human-readable error detail |
+
+---
+
+## Workspace & Files
+
+### Get Workspace Overview
+
+Returns the workspace file tree, total request count, active environment, and whether a config file exists.
+
+<CodeGroup>
+```bash curl
+curl http://localhost:8080/api/v1/workspace
+```
+</CodeGroup>
+
+**Response** `200 OK`
+
+```json
+{
+  "root": "/Users/you/project",
+  "files": [
+    {
+      "path": "tests",
+      "name": "tests",
+      "dir": "",
+      "isDir": true,
+      "children": [
+        {
+          "path": "tests/api.http",
+          "name": "api.http",
+          "dir": "tests",
+          "isDir": false,
+          "requestCount": 5
+        }
+      ]
+    },
+    {
+      "path": "smoke.http",
+      "name": "smoke.http",
+      "dir": "",
+      "isDir": false,
+      "requestCount": 3
+    }
+  ],
+  "totalRequests": 8,
+  "environment": "dev",
+  "hasConfig": true
+}
+```
+
+---
+
+### List Files
+
+Returns a flat list of all `.http` and `.hitspec` files in the workspace with metadata.
+
+<CodeGroup>
+```bash curl
+curl http://localhost:8080/api/v1/files
+```
+</CodeGroup>
+
+**Response** `200 OK`
+
+```json
+[
+  {
+    "path": "/Users/you/project/tests/api.http",
+    "relativePath": "tests/api.http",
+    "name": "api.http",
+    "size": 1234,
+    "modTime": "2026-02-10T12:00:00Z",
+    "requestCount": 5
+  }
+]
+```
+
+---
+
+### Get Parsed File
+
+Returns the fully parsed content of a single `.http` or `.hitspec` file, including all requests, variables, assertions, and captures.
+
+<CodeGroup>
+```bash curl
+curl http://localhost:8080/api/v1/files/tests/api.http
+```
+</CodeGroup>
+
+<ParamField path="path" type="string" required>
+  Relative path to the file within the workspace. Uses wildcard path matching (`{path...}`).
+</ParamField>
+
+**Response** `200 OK`
+
+```json
+{
+  "path": "tests/api.http",
+  "variables": [
+    { "name": "baseUrl", "value": "http://localhost:3000", "line": 1 }
+  ],
+  "requests": [
+    {
+      "name": "Get Users",
+      "description": "Fetch all users",
+      "tags": ["users"],
+      "method": "GET",
+      "url": "{{baseUrl}}/users",
+      "headers": [
+        { "key": "Accept", "value": "application/json", "line": 5 }
+      ],
+      "queryParams": [
+        { "key": "limit", "value": "10", "line": 6 }
+      ],
+      "assertions": [
+        { "subject": "status", "operator": "equals", "expected": 200, "line": 8 }
+      ],
+      "captures": [
+        { "name": "userId", "source": "body", "path": "$.data[0].id", "line": 9 }
+      ],
+      "line": 3,
+      "metadata": {
+        "timeout": 5000,
+        "retry": 2,
+        "depends": ["Auth Login"]
+      }
+    }
+  ]
+}
+```
+
+---
+
+## Execution
+
+### Execute Request
+
+Execute one or more requests from a specific file. When `requestName` is provided, only that request runs (filtered by name). When omitted, all requests in the file execute.
+
+Real-time progress is broadcast over the [WebSocket](#websocket) connection during execution.
+
+<CodeGroup>
+```bash curl
+curl -X POST http://localhost:8080/api/v1/execute \
+  -H "Content-Type: application/json" \
+  -d '{"file": "tests/api.http", "requestName": "Get Users", "environment": "dev"}'
+```
+</CodeGroup>
+
+**Request Body**
+
+```typescript
+{
+  file: string;          // Required. Relative path to the .http/.hitspec file
+  requestName?: string;  // Optional. Filter to a single request by name
+  environment?: string;  // Optional. Override the active environment
+}
+```
+
+<ParamField body="file" type="string" required>
+  Relative path to the `.http` or `.hitspec` file within the workspace.
+</ParamField>
+
+<ParamField body="requestName" type="string">
+  Name of a specific request to execute. When omitted, all requests in the file are executed.
+</ParamField>
+
+<ParamField body="environment" type="string">
+  Environment name to use for variable interpolation. Overrides the server's active environment.
+</ParamField>
+
+**Response** `200 OK`
+
+```json
+{
+  "file": "tests/api.http",
+  "duration": 245,
+  "passed": 1,
+  "failed": 0,
+  "skipped": 0,
+  "results": [
+    {
+      "name": "Get Users",
+      "description": "Fetch all users",
+      "passed": true,
+      "duration": 245,
+      "request": {
+        "method": "GET",
+        "url": "http://localhost:3000/users",
+        "headers": { "Accept": "application/json" }
+      },
+      "response": {
+        "statusCode": 200,
+        "status": "200 OK",
+        "headers": { "Content-Type": "application/json" },
+        "body": "{\"data\":[{\"id\":1,\"name\":\"Alice\"}]}",
+        "duration": 243,
+        "size": 42
+      },
+      "assertions": [
+        {
+          "subject": "status",
+          "operator": "equals",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        }
+      ],
+      "captures": { "userId": 1 }
+    }
+  ]
+}
+```
+
+---
+
+### Run File
+
+Run all requests in a file. Similar to `execute` but always runs every request (no name filter).
+
+<CodeGroup>
+```bash curl
+curl -X POST http://localhost:8080/api/v1/run \
+  -H "Content-Type: application/json" \
+  -d '{"file": "tests/api.http", "environment": "staging"}'
+```
+</CodeGroup>
+
+**Request Body**
+
+```typescript
+{
+  file: string;          // Required. Relative path to the file
+  environment?: string;  // Optional. Override the active environment
+}
+```
+
+<ParamField body="file" type="string" required>
+  Relative path to the `.http` or `.hitspec` file within the workspace.
+</ParamField>
+
+<ParamField body="environment" type="string">
+  Environment name to use. Overrides the server's active environment.
+</ParamField>
+
+**Response** `200 OK` -- same `RunResultDTO` structure as the [Execute Request](#execute-request) endpoint.
+
+---
+
+## Environments
+
+### List Environments
+
+Returns all environments defined in `hitspec.yaml`, including the currently active environment.
+
+<CodeGroup>
+```bash curl
+curl http://localhost:8080/api/v1/environments
+```
+</CodeGroup>
+
+**Response** `200 OK`
+
+```json
+[
+  {
+    "name": "dev",
+    "variables": {
+      "baseUrl": "http://localhost:3000",
+      "token": "dev-token"
+    }
+  },
+  {
+    "name": "staging",
+    "variables": {
+      "baseUrl": "https://staging.api.example.com",
+      "token": "staging-token"
+    }
+  }
+]
+```
+
+---
+
+### Set Active Environment
+
+Switch the server's active environment. Broadcasts an `environment_changed` event over WebSocket.
+
+<CodeGroup>
+```bash curl
+curl -X PUT http://localhost:8080/api/v1/environments/active \
+  -H "Content-Type: application/json" \
+  -d '{"name": "staging"}'
+```
+</CodeGroup>
+
+**Request Body**
+
+```typescript
+{
+  name: string;  // Required. Environment name to activate
+}
+```
+
+<ParamField body="name" type="string" required>
+  The name of the environment to set as active.
+</ParamField>
+
+**Response** `204 No Content`
+
+---
+
+### Get Environment
+
+Get the variables for a specific environment.
+
+<CodeGroup>
+```bash curl
+curl http://localhost:8080/api/v1/environments/dev
+```
+</CodeGroup>
+
+<ParamField path="name" type="string" required>
+  Environment name.
+</ParamField>
+
+**Response** `200 OK`
+
+```json
+{
+  "name": "dev",
+  "variables": {
+    "baseUrl": "http://localhost:3000",
+    "token": "dev-token"
+  }
+}
+```
+
+---
+
+### Update Environment
+
+Create or update the variables for a named environment.
+
+<CodeGroup>
+```bash curl
+curl -X PUT http://localhost:8080/api/v1/environments/dev \
+  -H "Content-Type: application/json" \
+  -d '{"variables": {"baseUrl": "http://localhost:4000", "token": "new-token"}}'
+```
+</CodeGroup>
+
+<ParamField path="name" type="string" required>
+  Environment name.
+</ParamField>
+
+**Request Body**
+
+```typescript
+{
+  variables: Record<string, any>;  // Key-value pairs of environment variables
+}
+```
+
+<ParamField body="variables" type="object" required>
+  Map of variable names to values for this environment.
+</ParamField>
+
+**Response** `200 OK`
+
+```json
+{
+  "name": "dev",
+  "variables": {
+    "baseUrl": "http://localhost:4000",
+    "token": "new-token"
+  }
+}
+```
+
+---
+
+## Config
+
+### Get Configuration
+
+Returns the current `hitspec.yaml` configuration. Returns an empty object if no config file is present.
+
+<CodeGroup>
+```bash curl
+curl http://localhost:8080/api/v1/config
+```
+</CodeGroup>
+
+**Response** `200 OK`
+
+```json
+{
+  "defaultEnvironment": "dev",
+  "timeout": 30000,
+  "retries": 0,
+  "followRedirects": true,
+  "validateSSL": true,
+  "proxy": "",
+  "headers": {
+    "User-Agent": "hitspec/1.0"
+  },
+  "parallel": false,
+  "concurrency": 5
+}
+```
+
+---
+
+### Update Configuration
+
+Partially update the server configuration. Only provided fields are updated; omitted fields remain unchanged.
+
+<CodeGroup>
+```bash curl
+curl -X PUT http://localhost:8080/api/v1/config \
+  -H "Content-Type: application/json" \
+  -d '{"timeout": 60000, "parallel": true, "concurrency": 10}'
+```
+</CodeGroup>
+
+**Request Body**
+
+```typescript
+{
+  defaultEnvironment?: string;
+  timeout?: number;              // Milliseconds
+  retries?: number;
+  followRedirects?: boolean;
+  validateSSL?: boolean;
+  proxy?: string;
+  headers?: Record<string, string>;
+  parallel?: boolean;
+  concurrency?: number;
+}
+```
+
+<ParamField body="timeout" type="number">
+  Request timeout in milliseconds. Must be greater than 0.
+</ParamField>
+
+<ParamField body="retries" type="number">
+  Number of automatic retries on failure. Must be greater than 0.
+</ParamField>
+
+<ParamField body="followRedirects" type="boolean">
+  Whether to follow HTTP 3xx redirects.
+</ParamField>
+
+<ParamField body="validateSSL" type="boolean">
+  Whether to validate SSL/TLS certificates.
+</ParamField>
+
+<ParamField body="proxy" type="string">
+  HTTP proxy URL (e.g., `http://proxy:8080`).
+</ParamField>
+
+<ParamField body="parallel" type="boolean">
+  Whether to run independent requests in parallel.
+</ParamField>
+
+<ParamField body="concurrency" type="number">
+  Maximum number of concurrent requests in parallel mode. Must be greater than 0.
+</ParamField>
+
+**Response** `200 OK` -- returns the updated configuration object.
+
+---
+
+## History
+
+hitspec maintains two layers of history: a lightweight in-memory history for the current session and a persistent SQLite-backed history stored at `~/.hitspec/history.db`.
+
+### Get In-Memory History
+
+Returns the in-memory execution history for the current server session.
+
+<CodeGroup>
+```bash curl
+curl http://localhost:8080/api/v1/history
+```
+</CodeGroup>
+
+**Response** `200 OK`
+
+```json
+[
+  {
+    "id": "a1b2c3d4",
+    "file": "tests/api.http",
+    "requestName": "Get Users",
+    "method": "GET",
+    "url": "http://localhost:3000/users",
+    "statusCode": 200,
+    "duration": 245,
+    "passed": true,
+    "timestamp": "2026-02-10T12:00:00Z"
+  }
+]
+```
+
+---
+
+### Clear In-Memory History
+
+Clear all in-memory history entries.
+
+<CodeGroup>
+```bash curl
+curl -X DELETE http://localhost:8080/api/v1/history
+```
+</CodeGroup>
+
+**Response** `204 No Content`
+
+---
+
+### List Persistent Runs
+
+Returns paginated persistent run history from the SQLite database.
+
+<CodeGroup>
+```bash curl
+curl "http://localhost:8080/api/v1/history/runs?limit=20&offset=0"
+```
+</CodeGroup>
+
+<ParamField query="limit" type="number" default="20">
+  Number of runs to return. Maximum 100.
+</ParamField>
+
+<ParamField query="offset" type="number" default="0">
+  Number of runs to skip for pagination.
+</ParamField>
+
+**Response** `200 OK`
+
+```json
+{
+  "runs": [
+    {
+      "id": 42,
+      "filePath": "tests/api.http",
+      "environment": "dev",
+      "startedAt": "2026-02-10T12:00:00Z",
+      "finishedAt": "2026-02-10T12:00:01Z",
+      "durationMs": 1200,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 1,
+      "total": 6
+    }
+  ],
+  "total": 150,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+---
+
+### Get Run Details
+
+Returns a single run with its full results and assertion details.
+
+<CodeGroup>
+```bash curl
+curl http://localhost:8080/api/v1/history/runs/42
+```
+</CodeGroup>
+
+<ParamField path="id" type="number" required>
+  Numeric run ID.
+</ParamField>
+
+**Response** `200 OK`
+
+```json
+{
+  "id": 42,
+  "filePath": "tests/api.http",
+  "environment": "dev",
+  "startedAt": "2026-02-10T12:00:00Z",
+  "finishedAt": "2026-02-10T12:00:01Z",
+  "durationMs": 1200,
+  "passed": 5,
+  "failed": 0,
+  "skipped": 1,
+  "total": 6,
+  "results": [
+    {
+      "id": 101,
+      "requestName": "Get Users",
+      "method": "GET",
+      "url": "http://localhost:3000/users",
+      "statusCode": 200,
+      "durationMs": 243,
+      "passed": true,
+      "description": "Fetch all users",
+      "bodyPreview": "{\"data\":[{\"id\":1,\"name\":\"Alice\"}]}",
+      "assertions": [
+        {
+          "id": 201,
+          "operator": "equals",
+          "subject": "status",
+          "expected": "200",
+          "actual": "200",
+          "passed": true
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+### Delete a Run
+
+Delete a specific run and all its associated results and assertions (cascade delete).
+
+<CodeGroup>
+```bash curl
+curl -X DELETE http://localhost:8080/api/v1/history/runs/42
+```
+</CodeGroup>
+
+<ParamField path="id" type="number" required>
+  Numeric run ID.
+</ParamField>
+
+**Response** `204 No Content`
+
+---
+
+### Delete All Runs
+
+Delete all persistent run history.
+
+<CodeGroup>
+```bash curl
+curl -X DELETE http://localhost:8080/api/v1/history/runs
+```
+</CodeGroup>
+
+**Response** `204 No Content`
+
+---
+
+## Stress Testing
+
+### Start Stress Test
+
+Start a load test against the requests defined in one or more files. Metrics are broadcast in real time over the [WebSocket](#websocket) connection via `stress_update` messages.
+
+<CodeGroup>
+```bash curl
+curl -X POST http://localhost:8080/api/v1/stress/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "files": ["tests/api.http"],
+    "duration": "30s",
+    "rate": 50,
+    "vus": 10,
+    "maxVUs": 20
+  }'
+```
+</CodeGroup>
+
+**Request Body**
+
+```typescript
+{
+  files: string[];       // Required. List of .http/.hitspec files (relative paths)
+  duration: string;      // Required. Go duration string (e.g., "30s", "5m", "1h")
+  rate?: number;         // Optional. Target requests per second
+  vus?: number;          // Optional. Number of virtual users (switches to VU mode)
+  maxVUs?: number;       // Optional. Maximum concurrent virtual users
+}
+```
+
+<ParamField body="files" type="string[]" required>
+  List of `.http` or `.hitspec` file paths relative to the workspace.
+</ParamField>
+
+<ParamField body="duration" type="string" required>
+  Duration of the stress test as a Go duration string (e.g., `"30s"`, `"5m"`, `"1h"`).
+</ParamField>
+
+<ParamField body="rate" type="number">
+  Target requests per second in rate mode.
+</ParamField>
+
+<ParamField body="vus" type="number">
+  Number of virtual users. Setting this switches from rate mode to VU mode.
+</ParamField>
+
+<ParamField body="maxVUs" type="number">
+  Maximum number of concurrent virtual users.
+</ParamField>
+
+**Response** `200 OK`
+
+```json
+{ "status": "started" }
+```
+
+**Error** `409 Conflict` if a stress test is already running.
+
+---
+
+### Stop Stress Test
+
+Stop a running stress test.
+
+<CodeGroup>
+```bash curl
+curl -X POST http://localhost:8080/api/v1/stress/stop
+```
+</CodeGroup>
+
+**Response** `200 OK`
+
+```json
+{ "status": "stopping" }
+```
+
+---
+
+### Get Stress Test Status
+
+Returns whether a stress test is running and, if so, the current metrics.
+
+<CodeGroup>
+```bash curl
+curl http://localhost:8080/api/v1/stress/status
+```
+</CodeGroup>
+
+**Response** `200 OK`
+
+```json
+{
+  "running": true,
+  "elapsed": 15.3,
+  "stats": {
+    "total": 750,
+    "success": 745,
+    "errors": 5,
+    "rps": 49.8,
+    "p50Ms": 12.5,
+    "p95Ms": 45.2,
+    "p99Ms": 120.0,
+    "maxMs": 350.0,
+    "errorRate": 0.0067,
+    "activeVUs": 10
+  }
+}
+```
+
+When no stress test is running:
+
+```json
+{ "running": false, "elapsed": 0, "stats": null }
+```
+
+---
+
+### List Stress Profiles
+
+Returns the stress test profiles defined in `hitspec.yaml`.
+
+<CodeGroup>
+```bash curl
+curl http://localhost:8080/api/v1/stress/profiles
+```
+</CodeGroup>
+
+**Response** `200 OK`
+
+```json
+[
+  {
+    "name": "smoke",
+    "duration": "10s",
+    "rate": 5
+  },
+  {
+    "name": "load",
+    "duration": "5m",
+    "rate": 100,
+    "thresholds": {
+      "p95": "200ms",
+      "errors": "1%"
+    }
+  },
+  {
+    "name": "spike",
+    "duration": "2m",
+    "vus": 200,
+    "maxVUs": 500,
+    "rampUp": "30s",
+    "thinkTime": "500ms"
+  }
+]
+```
+
+---
+
+## Mock Server
+
+### Start Mock Server
+
+Start a mock server that serves responses based on the request/response pairs defined in your `.http` files. Incoming requests to the mock server are broadcast over WebSocket as `mock_request` events.
+
+<CodeGroup>
+```bash curl
+curl -X POST http://localhost:8080/api/v1/mock/start \
+  -H "Content-Type: application/json" \
+  -d '{"files": ["mocks/users.http"], "port": 3000, "delay": "100ms"}'
+```
+</CodeGroup>
+
+**Request Body**
+
+```typescript
+{
+  files: string[];    // Required. List of .http/.hitspec files with mock definitions
+  port?: number;      // Optional. Port for the mock server (default: 3000)
+  delay?: string;     // Optional. Artificial response delay (Go duration, e.g., "100ms")
+}
+```
+
+<ParamField body="files" type="string[]" required>
+  List of `.http` or `.hitspec` file paths containing request/response pairs.
+</ParamField>
+
+<ParamField body="port" type="number" default="3000">
+  Port on which the mock server will listen.
+</ParamField>
+
+<ParamField body="delay" type="string">
+  Artificial delay before each response, as a Go duration string (e.g., `"100ms"`, `"1s"`).
+</ParamField>
+
+**Response** `200 OK`
+
+```json
+{
+  "running": true,
+  "port": 3000,
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/users",
+      "name": "Get Users",
+      "statusCode": 200,
+      "contentType": "application/json"
+    },
+    {
+      "method": "POST",
+      "path": "/users",
+      "name": "Create User",
+      "statusCode": 201,
+      "contentType": "application/json"
+    }
+  ]
+}
+```
+
+**Error** `409 Conflict` if a mock server is already running.
+
+---
+
+### Stop Mock Server
+
+Stop the running mock server.
+
+<CodeGroup>
+```bash curl
+curl -X POST http://localhost:8080/api/v1/mock/stop
+```
+</CodeGroup>
+
+**Response** `200 OK`
+
+```json
+{ "status": "stopping" }
+```
+
+---
+
+### Get Mock Routes
+
+Returns the current status and registered routes of the mock server.
+
+<CodeGroup>
+```bash curl
+curl http://localhost:8080/api/v1/mock/routes
+```
+</CodeGroup>
+
+**Response** `200 OK` (when running)
+
+```json
+{
+  "running": true,
+  "port": 3000,
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/users",
+      "name": "Get Users",
+      "statusCode": 200,
+      "contentType": "application/json"
+    }
+  ]
+}
+```
+
+**Response** `200 OK` (when not running)
+
+```json
+{ "running": false }
+```
+
+---
+
+## Contract Testing
+
+### Verify Contracts
+
+Run contract verification against a live provider. Sends each request defined in the contract files to the provider URL and validates the responses match expectations.
+
+<CodeGroup>
+```bash curl
+curl -X POST http://localhost:8080/api/v1/contract/verify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "providerUrl": "http://localhost:3000",
+    "stateHandler": "http://localhost:3000/_state",
+    "files": ["contracts/users.http"]
+  }'
+```
+</CodeGroup>
+
+**Request Body**
+
+```typescript
+{
+  providerUrl: string;      // Required. Base URL of the provider to verify against
+  stateHandler?: string;    // Optional. URL for provider state setup endpoint
+  files?: string[];         // Optional. Specific contract files (defaults to all workspace files)
+}
+```
+
+<ParamField body="providerUrl" type="string" required>
+  The base URL of the provider service to verify contracts against.
+</ParamField>
+
+<ParamField body="stateHandler" type="string">
+  URL of an endpoint that accepts state setup requests before each interaction.
+</ParamField>
+
+<ParamField body="files" type="string[]">
+  List of contract file paths. When omitted, all `.http`/`.hitspec` files in the workspace are used.
+</ParamField>
+
+**Response** `200 OK`
+
+```json
+[
+  {
+    "file": "contracts/users.http",
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "duration": 450,
+    "results": [
+      {
+        "name": "Get Users",
+        "provider": "UserService",
+        "state": "users exist",
+        "passed": true,
+        "duration": 150
+      },
+      {
+        "name": "Create User",
+        "provider": "UserService",
+        "state": "no users",
+        "passed": true,
+        "duration": 200
+      }
+    ]
+  }
+]
+```
+
+---
+
+### List Contract Files
+
+Returns all `.http`/`.hitspec` files in the workspace that can be used as contract files.
+
+<CodeGroup>
+```bash curl
+curl http://localhost:8080/api/v1/contract/files
+```
+</CodeGroup>
+
+**Response** `200 OK`
+
+```json
+{
+  "files": [
+    "contracts/users.http",
+    "contracts/orders.http",
+    "tests/api.http"
+  ]
+}
+```
+
+---
+
+## Recording Proxy
+
+### Start Recording
+
+Start a recording proxy that captures HTTP traffic passing through it. The proxy forwards requests to the target URL and records both request and response.
+
+<CodeGroup>
+```bash curl
+curl -X POST http://localhost:8080/api/v1/record/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "targetUrl": "http://localhost:3000",
+    "port": 8081,
+    "deduplicate": true
+  }'
+```
+</CodeGroup>
+
+**Request Body**
+
+```typescript
+{
+  targetUrl: string;       // Required. URL to proxy requests to
+  port?: number;           // Optional. Proxy listen port (default: 8081)
+  deduplicate?: boolean;   // Optional. Remove duplicate request recordings
+  exclude?: string[];      // Optional. URL patterns to exclude from recording
+  sanitize?: string[];     // Optional. Header names to sanitize in recordings
+}
+```
+
+<ParamField body="targetUrl" type="string" required>
+  The upstream URL that the proxy forwards requests to.
+</ParamField>
+
+<ParamField body="port" type="number" default="8081">
+  Port on which the recording proxy will listen.
+</ParamField>
+
+<ParamField body="deduplicate" type="boolean" default="false">
+  When true, duplicate requests with the same method and path are only recorded once.
+</ParamField>
+
+<ParamField body="exclude" type="string[]">
+  List of URL path patterns to exclude from recording.
+</ParamField>
+
+<ParamField body="sanitize" type="string[]">
+  List of header names whose values should be sanitized (replaced with placeholders) in the recorded output.
+</ParamField>
+
+**Response** `200 OK`
+
+```json
+{
+  "status": "started",
+  "port": 8081
+}
+```
+
+**Error** `409 Conflict` if a recording proxy is already running.
+
+---
+
+### Stop Recording
+
+Stop the recording proxy.
+
+<CodeGroup>
+```bash curl
+curl -X POST http://localhost:8080/api/v1/record/stop
+```
+</CodeGroup>
+
+**Response** `200 OK`
+
+```json
+{ "status": "stopping" }
+```
+
+---
+
+### Get Recording Status
+
+Returns whether the recording proxy is running, how many requests have been captured, and the captured request details.
+
+<CodeGroup>
+```bash curl
+curl http://localhost:8080/api/v1/record/status
+```
+</CodeGroup>
+
+**Response** `200 OK` (when running)
+
+```json
+{
+  "running": true,
+  "targetUrl": "http://localhost:3000",
+  "port": 8081,
+  "count": 12,
+  "recordings": [
+    {
+      "method": "GET",
+      "path": "/users",
+      "url": "http://localhost:3000/users",
+      "contentType": "application/json",
+      "statusCode": 200,
+      "duration": 45
+    },
+    {
+      "method": "POST",
+      "path": "/users",
+      "url": "http://localhost:3000/users",
+      "contentType": "application/json",
+      "statusCode": 201,
+      "duration": 67
+    }
+  ]
+}
+```
+
+**Response** `200 OK` (when not running)
+
+```json
+{ "running": false, "count": 0 }
+```
+
+---
+
+### Export Recordings
+
+Export all captured recordings as `.http` file content. The proxy must be running.
+
+<CodeGroup>
+```bash curl
+curl -X POST http://localhost:8080/api/v1/record/export
+```
+</CodeGroup>
+
+**Response** `200 OK`
+
+```json
+{
+  "content": "### Get Users\nGET http://localhost:3000/users\nAccept: application/json\n\n### Create User\nPOST http://localhost:3000/users\nContent-Type: application/json\n\n{\"name\": \"Alice\"}\n"
+}
+```
+
+---
+
+### Clear Recordings
+
+Clear all captured recordings without stopping the proxy.
+
+<CodeGroup>
+```bash curl
+curl -X DELETE http://localhost:8080/api/v1/record/clear
+```
+</CodeGroup>
+
+**Response** `200 OK`
+
+```json
+{ "status": "cleared" }
+```
+
+---
+
+## Import
+
+### Import curl
+
+Convert a curl command or a file containing curl commands into `.http` format.
+
+<CodeGroup>
+```bash curl
+# From a command string
+curl -X POST http://localhost:8080/api/v1/import/curl \
+  -H "Content-Type: application/json" \
+  -d '{"command": "curl -X GET https://api.example.com/users -H \"Authorization: Bearer token\""}'
+
+# From a file
+curl -X POST http://localhost:8080/api/v1/import/curl \
+  -H "Content-Type: application/json" \
+  -d '{"filePath": "exports/commands.sh"}'
+```
+</CodeGroup>
+
+**Request Body**
+
+```typescript
+{
+  command?: string;    // A curl command string to convert
+  filePath?: string;   // Path to a file containing curl commands (relative to workspace)
+}
+```
+
+One of `command` or `filePath` is required.
+
+<ParamField body="command" type="string">
+  A curl command string to convert to `.http` format.
+</ParamField>
+
+<ParamField body="filePath" type="string">
+  Path to a file containing curl commands, relative to the workspace.
+</ParamField>
+
+**Response** `200 OK`
+
+```json
+{
+  "content": "### Imported Request\nGET https://api.example.com/users\nAuthorization: Bearer token\n",
+  "requestCount": 1
+}
+```
+
+---
+
+### Import Insomnia
+
+Convert an Insomnia export (JSON) into `.http` format.
+
+<CodeGroup>
+```bash curl
+# From inline JSON data
+curl -X POST http://localhost:8080/api/v1/import/insomnia \
+  -H "Content-Type: application/json" \
+  -d '{"data": "{\"_type\":\"export\",\"resources\":[...]}"}'
+
+# From a file
+curl -X POST http://localhost:8080/api/v1/import/insomnia \
+  -H "Content-Type: application/json" \
+  -d '{"filePath": "insomnia-export.json"}'
+```
+</CodeGroup>
+
+**Request Body**
+
+```typescript
+{
+  data?: string;       // Insomnia export JSON as a string
+  filePath?: string;   // Path to an Insomnia export file (relative to workspace)
+}
+```
+
+One of `data` or `filePath` is required.
+
+<ParamField body="data" type="string">
+  Insomnia export JSON content as a string.
+</ParamField>
+
+<ParamField body="filePath" type="string">
+  Path to an Insomnia JSON export file, relative to the workspace.
+</ParamField>
+
+**Response** `200 OK`
+
+```json
+{
+  "content": "### Get Users\nGET https://api.example.com/users\n\n### Create User\nPOST https://api.example.com/users\nContent-Type: application/json\n\n{\"name\":\"Alice\"}\n",
+  "requestCount": 2
+}
+```
+
+---
+
+### Import OpenAPI
+
+Convert an OpenAPI specification (YAML or JSON, v2 or v3) into `.http` format. The spec can be a local file path or a URL.
+
+<CodeGroup>
+```bash curl
+# From a local file
+curl -X POST http://localhost:8080/api/v1/import/openapi \
+  -H "Content-Type: application/json" \
+  -d '{"specPath": "openapi.yaml", "baseUrl": "http://localhost:3000"}'
+
+# From a URL
+curl -X POST http://localhost:8080/api/v1/import/openapi \
+  -H "Content-Type: application/json" \
+  -d '{"specPath": "https://petstore.swagger.io/v2/swagger.json"}'
+```
+</CodeGroup>
+
+**Request Body**
+
+```typescript
+{
+  specPath: string;    // Required. Path or URL to the OpenAPI spec
+  baseUrl?: string;    // Optional. Override the base URL in the spec
+}
+```
+
+<ParamField body="specPath" type="string" required>
+  Path to the OpenAPI specification file (relative to workspace) or a URL. Supports YAML and JSON, OpenAPI v2 and v3.
+</ParamField>
+
+<ParamField body="baseUrl" type="string">
+  Override the base URL from the spec. Useful when the spec references a production URL but you want to target localhost.
+</ParamField>
+
+**Response** `200 OK`
+
+```json
+{
+  "content": "### List Pets\nGET http://localhost:3000/pets\n\n### Create Pet\nPOST http://localhost:3000/pets\nContent-Type: application/json\n\n{\"name\":\"Fido\",\"tag\":\"dog\"}\n",
+  "requestCount": 2
+}
+```
+
+---
+
+## Export
+
+### Export as curl
+
+Convert requests from a `.http`/`.hitspec` file into curl commands.
+
+<CodeGroup>
+```bash curl
+# Export all requests in a file
+curl -X POST http://localhost:8080/api/v1/export/curl \
+  -H "Content-Type: application/json" \
+  -d '{"file": "tests/api.http"}'
+
+# Export a specific request
+curl -X POST http://localhost:8080/api/v1/export/curl \
+  -H "Content-Type: application/json" \
+  -d '{"file": "tests/api.http", "requestName": "Create User"}'
+```
+</CodeGroup>
+
+**Request Body**
+
+```typescript
+{
+  file: string;            // Required. Relative path to the file
+  requestName?: string;    // Optional. Export only this named request
+}
+```
+
+<ParamField body="file" type="string" required>
+  Relative path to the `.http` or `.hitspec` file in the workspace.
+</ParamField>
+
+<ParamField body="requestName" type="string">
+  Name of a specific request to export. When omitted, all requests are exported.
+</ParamField>
+
+**Response** `200 OK`
+
+```json
+{
+  "commands": [
+    "curl -X GET 'http://localhost:3000/users' -H 'Accept: application/json'",
+    "curl -X POST 'http://localhost:3000/users' -H 'Content-Type: application/json' -d '{\"name\":\"Alice\"}'"
+  ]
+}
+```
+
+---
+
+## System
+
+### Get System Info
+
+Returns version, build time, Go version, and platform information.
+
+<CodeGroup>
+```bash curl
+curl http://localhost:8080/api/v1/system/info
+```
+</CodeGroup>
+
+**Response** `200 OK`
+
+```json
+{
+  "version": "2.6.0",
+  "buildTime": "2026-02-10T12:00:00Z",
+  "goVersion": "go1.25.0",
+  "os": "darwin",
+  "arch": "arm64"
+}
+```
+
+---
+
+## WebSocket
+
+### Connect
+
+Establish a WebSocket connection for real-time event streaming. The server pushes events as they occur -- no polling required.
+
+```
+ws://localhost:8080/api/v1/ws
+```
+
+<Note>
+  The WebSocket endpoint accepts connections from `localhost`, `127.0.0.1`, and `[::1]` origins only.
+</Note>
+
+**Connection Example**
+
+```javascript
+const ws = new WebSocket('ws://localhost:8080/api/v1/ws');
+
+ws.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+  console.log(msg.type, msg.payload);
+};
+
+// Keep alive with ping/pong
+setInterval(() => {
+  ws.send(JSON.stringify({ type: 'ping' }));
+}, 30000);
+```
+
+### Message Envelope
+
+All WebSocket messages use this envelope format:
+
+```typescript
+{
+  type: string;        // Message type identifier
+  payload: any;        // Type-specific payload
+  timestamp: string;   // ISO 8601 timestamp (UTC)
+}
+```
+
+### Message Types
+
+#### `execution_start`
+
+Sent when a request execution begins.
+
+```json
+{
+  "type": "execution_start",
+  "payload": {
+    "id": "a1b2c3d4",
+    "file": "tests/api.http",
+    "status": "started",
+    "timestamp": "2026-02-10T12:00:00Z"
+  },
+  "timestamp": "2026-02-10T12:00:00Z"
+}
+```
+
+#### `request_progress`
+
+Sent for each individual request as it starts and completes during an execution.
+
+```json
+{
+  "type": "request_progress",
+  "payload": {
+    "execId": "a1b2c3d4",
+    "file": "tests/api.http",
+    "requestName": "Get Users",
+    "status": "completed",
+    "index": 0,
+    "total": 3,
+    "passed": true,
+    "duration": 245,
+    "timestamp": "2026-02-10T12:00:00Z"
+  },
+  "timestamp": "2026-02-10T12:00:00Z"
+}
+```
+
+The `status` field is either `"started"` or `"completed"`. The `passed` and `duration` fields are only present when status is `"completed"`.
+
+#### `execution_complete`
+
+Sent when an entire execution finishes. The `result` payload contains the full `RunResultDTO`.
+
+```json
+{
+  "type": "execution_complete",
+  "payload": {
+    "id": "a1b2c3d4",
+    "file": "tests/api.http",
+    "status": "completed",
+    "result": { "file": "tests/api.http", "duration": 500, "passed": 3, "failed": 0, "skipped": 0, "results": [] },
+    "timestamp": "2026-02-10T12:00:00Z"
+  },
+  "timestamp": "2026-02-10T12:00:00Z"
+}
+```
+
+#### `error`
+
+Sent when an execution fails with an error.
+
+```json
+{
+  "type": "error",
+  "payload": {
+    "id": "a1b2c3d4",
+    "file": "tests/api.http",
+    "status": "error",
+    "error": "parse error: unexpected token at line 5",
+    "timestamp": "2026-02-10T12:00:00Z"
+  },
+  "timestamp": "2026-02-10T12:00:00Z"
+}
+```
+
+#### `environment_changed`
+
+Sent when the active environment is switched via `PUT /api/v1/environments/active`.
+
+```json
+{
+  "type": "environment_changed",
+  "payload": {
+    "name": "staging",
+    "timestamp": "2026-02-10T12:00:00Z"
+  },
+  "timestamp": "2026-02-10T12:00:00Z"
+}
+```
+
+#### `file_changed`
+
+Sent when a `.http` or `.hitspec` file is created, modified, or deleted in the workspace (via filesystem watcher).
+
+```json
+{
+  "type": "file_changed",
+  "payload": {
+    "path": "tests/api.http",
+    "operation": "write",
+    "timestamp": "2026-02-10T12:00:00Z"
+  },
+  "timestamp": "2026-02-10T12:00:00Z"
+}
+```
+
+#### `stress_update`
+
+Sent every 500ms during an active stress test with current metrics.
+
+```json
+{
+  "type": "stress_update",
+  "payload": {
+    "stats": {
+      "total": 750,
+      "success": 745,
+      "errors": 5,
+      "rps": 49.8,
+      "p50Ms": 12.5,
+      "p95Ms": 45.2,
+      "p99Ms": 120.0,
+      "maxMs": 350.0,
+      "errorRate": 0.0067,
+      "activeVUs": 10
+    },
+    "elapsed": 15.3,
+    "timestamp": "2026-02-10T12:00:00Z"
+  },
+  "timestamp": "2026-02-10T12:00:00Z"
+}
+```
+
+#### `mock_request`
+
+Sent when the mock server receives a request, or when it starts/stops.
+
+```json
+{
+  "type": "mock_request",
+  "payload": {
+    "event": "request",
+    "method": "GET",
+    "path": "/users",
+    "status": 200,
+    "duration": 1.2,
+    "timestamp": "2026-02-10T12:00:00Z"
+  },
+  "timestamp": "2026-02-10T12:00:00Z"
+}
+```
+
+The `event` field can be `"started"`, `"stopped"`, or `"request"`.
+
+#### `ping` / `pong`
+
+Clients can send `{"type": "ping"}` messages and the server will respond with a `pong`:
+
+```json
+{
+  "type": "pong",
+  "payload": null,
+  "timestamp": "2026-02-10T12:00:00Z"
+}
+```

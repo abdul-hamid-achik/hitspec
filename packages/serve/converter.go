@@ -69,6 +69,13 @@ func convertRequest(r *parser.Request) RequestDTO {
 			Raw:         r.Body.Raw,
 			Line:        r.Body.Line,
 		}
+		if r.Body.GraphQL != nil {
+			dto.Body.GraphQL = r.Body.GraphQL.Query
+			dto.Body.Variables = r.Body.GraphQL.Variables
+			if dto.Body.Raw == "" {
+				dto.Body.Raw = r.Body.GraphQL.Query
+			}
+		}
 	}
 	for _, a := range r.Assertions {
 		dto.Assertions = append(dto.Assertions, AssertionDTO{

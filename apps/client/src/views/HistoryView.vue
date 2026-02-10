@@ -2,6 +2,8 @@
 import EmptyState from '@/components/common/EmptyState.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MethodBadge from '@/components/common/MethodBadge.vue'
+import ResponseDiffDialog from '@/components/response/ResponseDiffDialog.vue'
+import type { DiffSource } from '@/components/response/ResponseDiffDialog.vue'
 import {
   History,
   Trash2,
@@ -14,9 +16,11 @@ import {
   ChevronLeft,
   SkipForward,
   Minus,
+  Search,
+  GitCompareArrows,
 } from 'lucide-vue-next'
 import { useHistoryStore } from '@/stores/history'
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, computed } from 'vue'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import type { HistoryResult } from '@/types/api'
@@ -24,6 +28,34 @@ import type { HistoryResult } from '@/types/api'
 dayjs.extend(relativeTime)
 
 const historyStore = useHistoryStore()
+
+// Search and filter state
+const searchQuery = ref('')
+const statusFilter = ref<'all' | 'passed' | 'failed'>('all')
+const sortOrder = ref<'newest' | 'oldest' | 'slowest'>('newest')
+
+const filteredRuns = computed(() => {
+  let result = [...historyStore.runs]
+
+  if (searchQuery.value) {
+    const q = searchQuery.value.toLowerCase()
+    result = result.filter(r => r.filePath.toLowerCase().includes(q))
+  }
+
+  if (statusFilter.value === 'passed') {
+    result = result.filter(r => r.failed === 0)
+  } else if (statusFilter.value === 'failed') {
+    result = result.filter(r => r.failed > 0)
+  }
+
+  if (sortOrder.value === 'oldest') {
+    result.sort((a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime())
+  } else if (sortOrder.value === 'slowest') {
+    result.sort((a, b) => b.durationMs - a.durationMs)
+  }
+
+  return result
+})
 
 // Track which result is expanded to show assertions
 const expandedResultId = ref<number | null>(null)
@@ -34,6 +66,48 @@ function toggleResult(result: HistoryResult) {
   } else {
     expandedResultId.value = result.id
   }
+}
+
+// Diff comparison state
+const compareSelection = ref<HistoryResult[]>([])
+const showDiffDialog = ref(false)
+const diffLeft = ref<DiffSource>({ body: '', label: '' })
+const diffRight = ref<DiffSource>({ body: '', label: '' })
+
+function isSelectedForCompare(result: HistoryResult): boolean {
+  return compareSelection.value.some(r => r.id === result.id)
+}
+
+function toggleCompare(result: HistoryResult, event: Event) {
+  event.stopPropagation()
+  if (isSelectedForCompare(result)) {
+    compareSelection.value = compareSelection.value.filter(r => r.id !== result.id)
+    return
+  }
+  if (compareSelection.value.length < 2) {
+    compareSelection.value = [...compareSelection.value, result]
+  } else {
+    // Replace the second selection
+    compareSelection.value = [compareSelection.value[0], result]
+  }
+
+  // Auto-open diff when two are selected
+  if (compareSelection.value.length === 2) {
+    const [a, b] = compareSelection.value
+    diffLeft.value = {
+      body: a.bodyPreview ?? '',
+      label: `${a.method} ${a.requestName} (${a.statusCode ?? 'no status'})`,
+    }
+    diffRight.value = {
+      body: b.bodyPreview ?? '',
+      label: `${b.method} ${b.requestName} (${b.statusCode ?? 'no status'})`,
+    }
+    showDiffDialog.value = true
+  }
+}
+
+function clearCompare() {
+  compareSelection.value = []
 }
 
 onMounted(() => historyStore.loadRuns())
@@ -68,12 +142,45 @@ function fileName(filePath: string): string {
       <h1 class="text-lg font-semibold text-foreground">History</h1>
       <button
         v-if="historyStore.runs.length > 0"
+        aria-label="Clear all history"
         class="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive"
         @click="confirmClear"
       >
         <Trash2 class="h-3 w-3" />
         Clear All
       </button>
+    </div>
+
+    <!-- Search and filter controls -->
+    <div v-if="historyStore.runs.length > 0" class="mb-3 flex flex-wrap items-center gap-2">
+      <div class="relative flex-1">
+        <Search class="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/40" />
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Search by file name..."
+          aria-label="Search history"
+          class="w-full rounded-md border border-border bg-background py-1.5 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+        />
+      </div>
+      <select
+        v-model="statusFilter"
+        aria-label="Filter by status"
+        class="rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+      >
+        <option value="all">All runs</option>
+        <option value="passed">Passed only</option>
+        <option value="failed">Failed only</option>
+      </select>
+      <select
+        v-model="sortOrder"
+        aria-label="Sort order"
+        class="rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+      >
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="slowest">Slowest first</option>
+      </select>
     </div>
 
     <LoadingSpinner v-if="historyStore.loading" label="Loading history..." />
@@ -92,8 +199,12 @@ function fileName(filePath: string): string {
     </div>
 
     <div v-else-if="historyStore.runs.length > 0" class="space-y-2">
+      <!-- No results message -->
+      <div v-if="filteredRuns.length === 0 && (searchQuery || statusFilter !== 'all')" class="p-8 text-center text-sm text-muted-foreground">
+        No runs match your filters.
+      </div>
       <!-- Run list -->
-      <div v-for="run in historyStore.runs" :key="run.id" class="rounded-lg border border-border bg-surface">
+      <div v-for="run in filteredRuns" :key="run.id" class="rounded-lg border border-border bg-surface">
         <!-- Run header (clickable) -->
         <button
           class="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-surface-hover"
@@ -136,6 +247,7 @@ function fileName(filePath: string): string {
           </span>
 
           <button
+            aria-label="Delete run"
             class="rounded p-1 text-muted-foreground/30 transition-colors hover:bg-destructive/10 hover:text-destructive"
             title="Delete run"
             @click="confirmDeleteRun(run.id, $event)"
@@ -150,7 +262,20 @@ function fileName(filePath: string): string {
           <div v-else-if="historyStore.expandedResults.length === 0" class="p-4 text-center text-xs text-muted-foreground">
             No results recorded
           </div>
-          <div v-else class="divide-y divide-border/50">
+          <!-- Compare selection banner -->
+          <div v-if="compareSelection.length > 0" class="flex items-center gap-2 border-b border-border bg-accent/5 px-4 py-1.5">
+            <GitCompareArrows class="h-3.5 w-3.5 text-accent" />
+            <span class="text-[11px] text-accent">
+              {{ compareSelection.length === 1 ? 'Select another result to compare' : 'Comparing 2 results' }}
+            </span>
+            <button
+              class="ml-auto text-[11px] text-muted-foreground hover:text-foreground"
+              @click="clearCompare"
+            >
+              Cancel
+            </button>
+          </div>
+          <div class="divide-y divide-border/50">
             <div v-for="result in historyStore.expandedResults" :key="result.id">
               <!-- Result row -->
               <button
@@ -184,6 +309,19 @@ function fileName(filePath: string): string {
                 <span class="text-[11px] tabular-nums text-muted-foreground/40">
                   {{ formatDuration(result.durationMs) }}
                 </span>
+                <!-- Compare button -->
+                <button
+                  v-if="result.bodyPreview"
+                  aria-label="Select for comparison"
+                  class="rounded p-1 transition-colors"
+                  :class="isSelectedForCompare(result)
+                    ? 'bg-accent/15 text-accent'
+                    : 'text-muted-foreground/30 hover:bg-accent/10 hover:text-accent'"
+                  title="Select for diff comparison"
+                  @click="toggleCompare(result, $event)"
+                >
+                  <GitCompareArrows class="h-3 w-3" />
+                </button>
                 <component
                   :is="expandedResultId === result.id ? ChevronDown : ChevronRight"
                   v-if="result.assertions && result.assertions.length > 0"
@@ -250,5 +388,12 @@ function fileName(filePath: string): string {
     </div>
 
     <EmptyState v-else :icon="History" title="No history yet" description="Execute requests to see them here" />
+
+    <!-- Diff dialog -->
+    <ResponseDiffDialog
+      v-model="showDiffDialog"
+      :left="diffLeft"
+      :right="diffRight"
+    />
   </div>
 </template>

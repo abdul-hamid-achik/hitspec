@@ -591,6 +591,9 @@ func (l *Lexer) ReadRawUntilBlockEnd() string {
 		if l.ch == '<' && l.peekChars(3) == "<<<" {
 			break
 		}
+		if l.ch == '>' && l.peekChars(3) == ">>>" {
+			break
+		}
 		builder.WriteRune(l.ch)
 		l.readChar()
 	}

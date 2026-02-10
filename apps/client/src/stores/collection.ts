@@ -12,6 +12,9 @@ export const useCollectionStore = defineStore('collection', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
+  // Prevent concurrent openFile() calls from clobbering each other
+  const pendingOpens = new Set<string>()
+
   const activeFile = computed(() => {
     if (!activeFilePath.value) return null
     return openFiles.value.get(activeFilePath.value) ?? null
@@ -50,6 +53,8 @@ export const useCollectionStore = defineStore('collection', () => {
 
   async function openFile(path: string) {
     if (!openFiles.value.has(path)) {
+      if (pendingOpens.has(path)) return // already loading this file
+      pendingOpens.add(path)
       try {
         const parsed = await getFile(path)
         openFiles.value.set(path, parsed)
@@ -57,6 +62,8 @@ export const useCollectionStore = defineStore('collection', () => {
       } catch (e) {
         error.value = e instanceof Error ? e.message : `Failed to open ${path}`
         return
+      } finally {
+        pendingOpens.delete(path)
       }
     }
     activeFilePath.value = path

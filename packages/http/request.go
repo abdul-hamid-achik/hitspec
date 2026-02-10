@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"net/url"
 	"strings"
 	"time"
@@ -195,6 +196,25 @@ func BuildRequestFromASTWithBaseDir(req *parser.Request, resolver func(string) s
 			}
 			r.Multipart = resolvedFields
 			// Content-Type will be set by the client when building the multipart body
+		} else if req.Body.ContentType == parser.BodyGraphQL && req.Body.GraphQL != nil {
+			// Build JSON body from GraphQL query and optional variables
+			gqlPayload := map[string]interface{}{
+				"query": resolver(req.Body.GraphQL.Query),
+			}
+			if vars := strings.TrimSpace(req.Body.GraphQL.Variables); vars != "" {
+				var parsed interface{}
+				if err := json.Unmarshal([]byte(resolver(vars)), &parsed); err == nil {
+					gqlPayload["variables"] = parsed
+				} else {
+					gqlPayload["variables"] = resolver(vars)
+				}
+			}
+			if encoded, err := json.Marshal(gqlPayload); err == nil {
+				r.SetBody(string(encoded))
+			}
+			if r.Headers["Content-Type"] == "" {
+				r.SetHeader("Content-Type", "application/json")
+			}
 		} else {
 			body := resolver(req.Body.Raw)
 			r.SetBody(body)

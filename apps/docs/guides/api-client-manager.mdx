@@ -1,0 +1,420 @@
+---
+title: 'API Client Manager'
+description: 'Use the hitspec web UI to build, run, and debug HTTP requests'
+icon: 'globe'
+---
+
+The API Client Manager is a browser-based interface for working with hitspec files. It provides a visual environment for editing requests, running tests, viewing responses, stress testing, mock servers, contract verification, and more -- all powered by the same engine that runs in your terminal.
+
+## Why use the web UI?
+
+The CLI is great for automation and CI/CD. The web UI is better when you need to:
+
+- **Explore** an API visually with instant feedback
+- **Debug** assertion failures by inspecting response bodies, headers, and status codes side by side
+- **Export** requests to cURL, Fetch, wget, Python, or HTTPie with one click
+- **Monitor** stress tests with live latency percentile charts
+- **Record** real API traffic through a reverse proxy and export it as `.http` files
+- **Review** persistent run history with drill-down to individual assertions
+
+<Tip>
+  Everything you do in the web UI uses the same `.http` / `.hitspec` files on disk. There is no separate project format -- your files stay version-controlled and CLI-compatible.
+</Tip>
+
+## Starting the server
+
+```bash
+hitspec serve
+```
+
+By default, this starts the server on port 4000, opens your browser, and watches for file changes. Pass a directory argument to set the workspace root:
+
+```bash
+hitspec serve ./tests/api/
+```
+
+### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--port`, `-p` | `4000` | Port to run the server on |
+| `--host` | `localhost` | Bind address |
+| `--open` | `true` | Auto-open browser on start |
+| `--watch`, `-w` | `true` | Watch for file changes and push updates via WebSocket |
+| `--cors` | `false` | Enable CORS headers (useful when accessing the API from another origin) |
+| `--api-only` | `false` | Serve the REST API only, no SPA frontend |
+| `--read-only` | `false` | Disallow file mutations through the API |
+| `--env`, `-e` | `dev` | Default environment to activate |
+| `--config` | `""` | Path to `hitspec.yaml` config file |
+| `--verbose`, `-v` | `false` | Enable verbose logging |
+| `--allow-shell` | `false` | Allow shell command execution in request hooks |
+| `--allow-db` | `false` | Allow database assertions |
+| `--log-format` | `text` | Log format: `text` or `json` |
+| `--log-level` | `info` | Minimum log level: `debug`, `info`, `warn`, `error` |
+
+<Note>
+  The `--history-db` and `--no-history` flags are available on the `hitspec run` command. The server always records history to `~/.hitspec/history.db` by default.
+</Note>
+
+### Examples
+
+```bash
+# Serve on a custom port without opening the browser
+hitspec serve --port 8080 --open=false
+
+# API-only mode for a custom frontend or scripted access
+hitspec serve --api-only --cors --port 3001
+
+# Read-only mode for shared staging environments
+hitspec serve --read-only --env staging
+
+# Verbose JSON logs for production debugging
+hitspec serve --log-format json --log-level debug
+
+# Allow shell hooks and database assertions
+hitspec serve --allow-shell --allow-db
+```
+
+## Workspace layout
+
+The UI is organized into three main areas: a left sidebar, a center request panel, and a right response panel.
+
+### Top bar
+
+The top bar contains:
+- **Sidebar toggle** -- show or hide the left panel
+- **Breadcrumb** -- shows the active request method and URL
+- **Command palette trigger** -- click or press `Cmd+K` to open
+- **Theme toggle** -- switch between light, dark, and system themes
+- **Environment selector** -- dropdown to switch the active environment
+- **Run All** button -- executes every request in the active file
+
+### Left sidebar
+
+The sidebar has two sections:
+
+**File tree** (top) -- Displays all `.http` and `.hitspec` files in the workspace as a collapsible tree. Click a file to open it. Use the search icon to filter files by name.
+
+**Navigation** (bottom) -- Links to each view in the application:
+
+| Shortcut | View |
+|----------|------|
+| `Cmd+1` | Workspace |
+| `Cmd+2` | Stress Test |
+| `Cmd+3` | Mock Server |
+| `Cmd+4` | Contracts |
+| `Cmd+5` | Record |
+| `Cmd+6` | History |
+| `Cmd+7` | Import |
+| `Cmd+8` | Settings |
+
+Toggle the sidebar with `Cmd+B`.
+
+### Center: Request panel
+
+When a request is selected, the center panel shows:
+
+1. **URL bar** -- Displays the HTTP method badge and full URL. Contains a **Share** button to export the request and a **Send** button to execute just this request.
+2. **Description** -- If the request has an `@description` annotation, it appears below the URL bar.
+3. **Tabs**:
+   - **Headers** -- Read-only view of request headers, with a count badge
+   - **Body** -- Request body content (JSON, form data, multipart, etc.)
+   - **Assertions** -- All assertion rules defined for the request, with a count badge
+   - **Captures** -- Variable captures (name, source, path)
+
+### Right: Response panel
+
+After execution, the response panel shows:
+
+1. **Status bar** -- HTTP status badge (color-coded), response duration, response size, and a pass/fail indicator
+2. **Tabs**:
+   - **Results** -- Appears after "Run All"; lists every request result with pass/fail status. Click a result to inspect it.
+   - **Body** -- Auto-formatted response body (JSON is pretty-printed)
+   - **Headers** -- Response headers as key-value pairs
+   - **Assertions** -- Each assertion with pass/fail status, expected vs. actual values
+
+### Status bar
+
+At the bottom of the screen, the status bar shows:
+- WebSocket connection status (green dot = connected)
+- Active environment name
+- Current file name
+- Watch mode indicator (appears when a file change is detected)
+- Execution progress or last response time
+
+## Running requests
+
+There are two ways to execute requests:
+
+<Steps>
+  <Step title="Run a single request">
+    Click the **Send** button in the URL bar, or select a request and it will execute individually. The response appears immediately in the right panel.
+  </Step>
+  <Step title="Run all requests in a file">
+    Click the **Run All** button in the top bar, or press `Cmd+Enter`. This executes every request in the active file sequentially. A progress bar shows completion status with per-request pass/fail indicators streaming in real time via WebSocket.
+  </Step>
+</Steps>
+
+During execution, the response panel shows a live progress indicator with:
+- A progress bar showing completed/total requests
+- The name of the currently executing request
+- A streaming list of completed results with pass/fail status and duration
+
+After completion, the **Results** tab appears with a full summary. Click any result to drill into its response body, headers, and assertions.
+
+<Tip>
+  Press `Escape` to dismiss error states in the response panel.
+</Tip>
+
+## Environments
+
+Environments let you swap variables (base URLs, API keys, tokens) without editing your `.http` files.
+
+The environment selector is in the top bar. Select an environment from the dropdown, and all `{{variable}}` interpolations in your requests will resolve using that environment's values.
+
+File-level variables (defined with `@variableName = value` in your `.http` file) have lower priority than environment variables. This means you can set defaults in your file and override them per-environment.
+
+The active environment is also visible in the status bar and is sent to the server with every execution request.
+
+## Export
+
+Click the **Share** button (arrow icon) in the URL bar to open the export dialog. The dialog generates code for the selected request in five formats:
+
+- **cURL** -- Shell command
+- **Fetch** -- JavaScript `fetch()` call
+- **wget** -- Shell command
+- **Python** -- `requests` library
+- **HTTPie** -- Shell command
+
+All environment variables and file-level variables are interpolated into the exported code. You can copy to clipboard or download as a file.
+
+## Import
+
+Navigate to the **Import** view (`Cmd+7`) to convert existing API definitions into `.http` files.
+
+<CardGroup cols={3}>
+  <Card title="cURL" icon="terminal">
+    Paste a cURL command and convert it to hitspec format.
+  </Card>
+  <Card title="Insomnia" icon="file-import">
+    Paste an Insomnia export JSON to generate `.http` files.
+  </Card>
+  <Card title="OpenAPI" icon="file-code">
+    Provide a path to an OpenAPI/Swagger spec (YAML or JSON) and an optional base URL.
+  </Card>
+</CardGroup>
+
+The generated `.http` content appears in a preview pane. Copy it to your clipboard or paste it into a new file in your workspace.
+
+## Command palette
+
+Press `Cmd+K` to open the command palette. It provides fuzzy search across:
+
+- **Actions** -- Run current file, view keyboard shortcuts
+- **Navigation** -- Jump to any view (Workspace, Stress Test, Mock, etc.)
+- **Files** -- Open any `.http` or `.hitspec` file in the workspace
+- **Requests** -- Jump directly to a specific request by name, method, or URL
+
+Use arrow keys to navigate, `Enter` to select, and `Escape` to close.
+
+## Keyboard shortcuts
+
+### General
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd+K` | Open command palette |
+| `Cmd+Enter` | Run all requests in the active file |
+| `Cmd+?` | Show keyboard shortcuts dialog |
+| `Escape` | Dismiss errors / close dialogs |
+
+### Navigation
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd+1` | Go to Workspace |
+| `Cmd+2` | Go to Stress Testing |
+| `Cmd+3` | Go to Mock Server |
+| `Cmd+4` | Go to Contracts |
+| `Cmd+5` | Go to Record |
+| `Cmd+6` | Go to History |
+| `Cmd+7` | Go to Import |
+| `Cmd+8` | Go to Settings |
+
+### Sidebar
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd+B` | Toggle sidebar visibility |
+
+<Note>
+  On Windows and Linux, replace `Cmd` with `Ctrl` for all shortcuts.
+</Note>
+
+## History
+
+Navigate to the **History** view (`Cmd+6`) to browse persistent run history. Every file execution is recorded automatically to a local SQLite database at `~/.hitspec/history.db`.
+
+The history view shows a paginated list of runs (20 per page). Each run entry displays:
+
+- File name
+- Environment used
+- Pass/fail/skip counts with color-coded icons
+- Total duration
+- Relative timestamp (e.g., "2 minutes ago")
+
+Click a run to expand it and see individual request results. Each result shows:
+- HTTP method and request name
+- Status code (color-coded: green for 2xx, yellow for 3xx, red for 4xx/5xx)
+- Duration
+- Pass/fail indicator
+
+Click a result to expand its assertion details, showing:
+- Subject, operator, and expected value for each assertion
+- Actual value for failed assertions
+- Custom assertion messages
+
+Use the **Clear All** button to delete all history, or the trash icon on individual runs to remove them.
+
+<Warning>
+  Clearing history is permanent and cannot be undone.
+</Warning>
+
+## Stress testing
+
+Navigate to the **Stress Test** view (`Cmd+2`) to configure and run load tests.
+
+<Steps>
+  <Step title="Select a target file">
+    Open a `.http` file in the Workspace first. The stress test will target the currently active file.
+  </Step>
+  <Step title="Configure parameters">
+    Set three parameters:
+    - **Concurrency** -- Number of virtual users (default: 10)
+    - **Duration** -- How long to run (e.g., `30s`, `5m`)
+    - **Target RPS** -- Requests per second (default: 100)
+  </Step>
+  <Step title="Start the test">
+    Click **Start**. Live metrics stream in via WebSocket with a polling fallback every 3 seconds.
+  </Step>
+</Steps>
+
+While running, the dashboard shows:
+- **Total Requests** -- Cumulative count
+- **RPS** -- Current requests per second
+- **P95 Latency** -- 95th percentile response time
+- **Errors** -- Error count
+- **Latency Percentiles** -- P50, P95, P99 breakdown
+
+Click **Stop Test** to end the test early.
+
+You can also select from saved **Stress Profiles** defined in your `hitspec.yaml` to quickly load predefined configurations.
+
+## Mock server
+
+Navigate to the **Mock Server** view (`Cmd+3`) to start a mock server from your `.http` files.
+
+<Steps>
+  <Step title="Set the port">
+    Enter the port number for the mock server (default: 8080).
+  </Step>
+  <Step title="Start the server">
+    Click **Start**. The server reads your `.http` files and registers routes based on the defined requests and their response bodies.
+  </Step>
+  <Step title="View routes">
+    While running, the view shows all registered routes with their HTTP method, path, status code, and content type.
+  </Step>
+</Steps>
+
+Click **Stop Server** to shut it down.
+
+## Recording proxy
+
+Navigate to the **Record** view (`Cmd+5`) to capture real API traffic and export it as `.http` files.
+
+<Steps>
+  <Step title="Configure the proxy">
+    Set the **Target URL** (the real API to proxy to, e.g., `http://localhost:3000`) and the **Proxy Port** (default: 8081). Optionally enable **Deduplicate requests** to skip duplicate captures.
+  </Step>
+  <Step title="Start recording">
+    Click **Start Recording**. The proxy starts listening on the specified port.
+  </Step>
+  <Step title="Send traffic through the proxy">
+    Point your application or HTTP client at `http://localhost:8081` instead of the real API. Every request is captured and displayed in the recordings list with method, path, status code, and duration.
+  </Step>
+  <Step title="Export">
+    Click **Export** to generate `.http` file content from the captured traffic. Copy it to your clipboard or save it to a file.
+  </Step>
+</Steps>
+
+Use **Clear** to remove all captured recordings, or **Stop** to shut down the proxy.
+
+<Tip>
+  The exported content persists in the UI even after stopping the proxy, so you will not lose your export if you stop recording.
+</Tip>
+
+## Contract testing
+
+Navigate to the **Contracts** view (`Cmd+4`) to verify API contracts against a live provider.
+
+<Steps>
+  <Step title="Set the provider URL">
+    Enter the URL of the API you want to verify (e.g., `http://localhost:3000`). Optionally provide a state handler script path.
+  </Step>
+  <Step title="Select contract files">
+    The view lists all `.http` and `.hitspec` files in your workspace. Check the files you want to verify, or click **Select All**.
+  </Step>
+  <Step title="Run verification">
+    Click **Verify Contracts**. Each contract file is verified against the provider. Results show pass/fail/skip counts and per-interaction details including duration and error messages.
+  </Step>
+</Steps>
+
+## Settings
+
+Navigate to the **Settings** view (`Cmd+8`) to configure the application.
+
+### Appearance
+
+Switch between **Light**, **Dark**, and **System** themes. The system option follows your OS preference.
+
+### Request defaults
+
+| Setting | Description |
+|---------|-------------|
+| **Timeout** | Default request timeout in milliseconds |
+| **Follow Redirects** | Whether to follow HTTP redirects automatically |
+| **Validate SSL** | Whether to verify SSL certificates |
+| **Parallel Execution** | Execute requests within a file in parallel |
+
+### Notifications
+
+Configure webhook URLs for Slack and Microsoft Teams to receive notifications on test failures or successes.
+
+<Warning>
+  Notification settings are not yet persisted and will be lost on page refresh. Configure them in `hitspec.yaml` for CI/CD use.
+</Warning>
+
+### Database assertions
+
+Enable database assertion support and configure the connection:
+- **Database Type** -- PostgreSQL, MySQL, or SQLite
+- **Connection String** -- Database connection URL
+
+<Note>
+  Database assertions require the `--allow-db` flag when starting the server.
+</Note>
+
+### System info
+
+Displays the hitspec version, Go version, platform (OS/architecture), and build time.
+
+## Real-time updates
+
+The web UI maintains a persistent WebSocket connection to the server at `/api/v1/ws`. This connection provides:
+
+- **File changes** -- When a `.http` or `.hitspec` file is modified on disk (with `--watch` enabled), the UI automatically reloads the file tree and re-parses the active file. A "Watch" indicator appears in the status bar.
+- **Execution progress** -- During a "Run All" operation, per-request progress updates stream to the UI in real time, powering the progress bar and result list.
+- **Stress metrics** -- During a stress test, live metrics (RPS, latency percentiles, error count) are pushed to the dashboard via the `stress_update` event.
+- **Heartbeat** -- The client sends a `ping` every 30 seconds to keep the connection alive. If the connection drops, it automatically reconnects with exponential backoff (up to 30 seconds).
+
+The connection status is always visible in the bottom-left corner of the status bar: a green dot means connected, a pulsing red dot means disconnected and reconnecting.

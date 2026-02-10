@@ -1,0 +1,268 @@
+---
+title: 'Troubleshooting'
+description: 'Common issues and how to resolve them'
+icon: 'wrench'
+---
+
+## Variable Interpolation
+
+### Variables not being replaced
+
+If `{{variableName}}` appears literally in your request instead of being substituted:
+
+1. **Check your environment file** — Variables must be defined in a `.env` or `hitspec.yaml` file.
+2. **Verify the environment is active** — Use `hitspec run --env production` or select it in the UI.
+3. **Check for typos** — Variable names are case-sensitive. `{{baseUrl}}` and `{{baseURL}}` are different.
+
+```http
+# Correct — variable defined in environment
+GET {{baseUrl}}/users
+
+# Wrong — double-check the variable name matches your env file
+GET {{base_url}}/users
+```
+
+<Tip>
+Use `hitspec run --verbose` to see which variables are resolved and which are missing.
+</Tip>
+
+### Circular variable references
+
+If you get a "circular reference" error, check that your variables don't reference each other:
+
+```yaml
+# hitspec.yaml — this will cause a circular reference error
+environments:
+  default:
+    a: "{{b}}"
+    b: "{{a}}"
+```
+
+---
+
+## Captures & Dependencies
+
+### Capture value is empty
+
+If a `@capture` directive isn't extracting the expected value:
+
+1. **Verify the JSONPath** — Use `jsonpath $.data.id` and ensure the response actually contains that path.
+2. **Check response content type** — Captures only work on JSON responses for JSONPath expressions.
+3. **Ensure the request succeeds** — If the request returns an error status, the response body may not contain the expected structure.
+
+```http
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{"email": "test@example.com", "password": "secret"}
+
+@capture token <- jsonpath $.accessToken
+```
+
+<Warning>
+Captures are evaluated after assertions. If an assertion fails and you're using `--fail-fast`, subsequent requests that depend on the capture won't run.
+</Warning>
+
+### Dependency order issues
+
+Requests run top-to-bottom within a file. If request B depends on a capture from request A, make sure A comes first:
+
+```http
+### Login (must come first)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{"email": "admin@test.com", "password": "pass"}
+
+@capture token <- jsonpath $.token
+
+###
+
+### Use the token (depends on Login)
+GET {{baseUrl}}/profile
+Authorization: Bearer {{token}}
+```
+
+---
+
+## SSL / TLS Errors
+
+### Certificate verification failed
+
+If you see `x509: certificate signed by unknown authority`:
+
+```bash
+# Option 1: Disable SSL verification for testing
+hitspec run --no-verify-ssl tests.http
+
+# Option 2: Set in hitspec.yaml
+# validateSSL: false
+```
+
+<Warning>
+Only disable SSL verification for local development or testing. Never disable it for production API tests.
+</Warning>
+
+### Self-signed certificates
+
+For APIs using self-signed certificates, you can either disable verification or add the CA to your system trust store.
+
+---
+
+## Timeout Issues
+
+### Request timeout
+
+If requests are timing out:
+
+```bash
+# Increase timeout (default is 30s)
+hitspec run --timeout 60000 tests.http
+```
+
+Or set it in `hitspec.yaml`:
+
+```yaml
+timeout: 60000  # milliseconds
+```
+
+### Stress test timeout
+
+During stress testing, individual request timeouts may need to be higher. Configure in your stress profile:
+
+```yaml
+stress:
+  profiles:
+    heavy:
+      duration: 60s
+      rate: 100
+      timeout: 10000
+```
+
+---
+
+## hitspec serve Issues
+
+### Port already in use
+
+If you see `listen tcp :4000: bind: address already in use`:
+
+```bash
+# Use a different port
+hitspec serve --port 8080
+
+# Or find and kill the process using port 4000
+lsof -ti:4000 | xargs kill
+```
+
+### WebSocket disconnects
+
+The status bar shows "Disconnected" in red:
+
+1. **Check if the server is still running** in your terminal.
+2. **Check for proxy/firewall** — Some corporate proxies block WebSocket connections.
+3. **The client auto-reconnects** with exponential backoff (1s to 30s). Wait a moment.
+
+<Tip>
+If you're behind a reverse proxy (nginx, Caddy), ensure WebSocket upgrade headers are forwarded.
+</Tip>
+
+### Files not appearing in sidebar
+
+If your `.http` or `.hitspec` files don't appear:
+
+1. **Check the working directory** — `hitspec serve` uses the current directory by default.
+2. **Check file extensions** — Only `.http` and `.hitspec` files are shown.
+3. **Nested directories** — Files in subdirectories are shown in a tree structure. Expand the folder.
+
+---
+
+## Assertion Failures
+
+### Unexpected assertion results
+
+Common issues with assertions:
+
+```http
+GET {{baseUrl}}/users/1
+
+# Wrong — comparing string to number
+@assert status == "200"
+
+# Correct — status is a number
+@assert status == 200
+
+# Wrong — body is the raw string, use jsonpath for JSON
+@assert body == {"name": "John"}
+
+# Correct — use jsonpath to extract values
+@assert jsonpath $.name == "John"
+```
+
+### Schema validation failures
+
+If `@assert body matchesSchema` fails:
+
+1. **Check the schema path** — Relative paths are resolved from the file's directory.
+2. **Validate your schema** — Ensure it's valid JSON Schema (draft-07).
+3. **Check for required fields** — The response must include all `required` fields.
+
+---
+
+## CI/CD Issues
+
+### Exit codes
+
+hitspec uses these exit codes:
+
+| Code | Meaning |
+|------|---------|
+| 0 | All tests passed |
+| 1 | One or more assertions failed |
+| 2 | Parse error (invalid .http file syntax) |
+| 3 | Runtime error (network, timeout, etc.) |
+
+### GitHub Actions fails but works locally
+
+1. **Environment variables** — Make sure all required variables are set in your CI environment.
+2. **Network access** — Ensure the CI runner can reach your API endpoints.
+3. **Timeouts** — CI runners may be slower; increase timeouts.
+
+```yaml
+- name: Run API tests
+  run: hitspec run --timeout 60000 --env ci tests/
+  env:
+    BASE_URL: ${{ vars.API_URL }}
+```
+
+---
+
+## Performance
+
+### Slow test execution
+
+1. **Enable parallel execution** — `hitspec run --parallel tests/`
+2. **Reduce timeout** for fast-failing — `hitspec run --timeout 5000`
+3. **Use `@if`/`@unless`** to skip irrelevant tests conditionally.
+
+### Large response bodies
+
+For endpoints returning large responses, assertions on the full body may be slow. Use specific JSONPath queries instead:
+
+```http
+# Slow — validates entire body
+@assert body != ""
+
+# Fast — only checks the field you care about
+@assert jsonpath $.data[0].id exists
+```
+
+---
+
+## Getting Help
+
+If your issue isn't listed here:
+
+1. Run with `--verbose` for detailed output.
+2. Check the [GitHub Issues](https://github.com/abdul-hamid-achik/hitspec/issues) for known bugs.
+3. Open a new issue with your `.http` file content, error message, and hitspec version (`hitspec --version`).

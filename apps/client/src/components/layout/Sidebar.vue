@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import {
-  FolderTree, Zap, Server, History, Settings, Import,
+  FolderTree, Zap, Server, History, Settings, Import, Cookie,
   ChevronDown, Search, PanelLeftClose, FileCheck, Video, AlertCircle,
 } from 'lucide-vue-next'
 import FileTree from '@/components/sidebar/FileTree.vue'
@@ -43,6 +43,7 @@ const navItems = [
   { to: '/record', icon: Video, label: 'Record' },
   { to: '/history', icon: History, label: 'History' },
   { to: '/import', icon: Import, label: 'Import' },
+  { to: '/cookies', icon: Cookie, label: 'Cookies' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 

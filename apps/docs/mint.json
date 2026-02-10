@@ -97,12 +97,14 @@
     {
       "group": "Guides",
       "pages": [
+        "guides/api-client-manager",
         "guides/ci-cd-pipeline",
         "guides/load-testing",
         "guides/database-testing",
         "guides/contract-testing",
         "guides/regression-testing",
-        "guides/migrating-from-postman"
+        "guides/migrating-from-postman",
+        "guides/troubleshooting"
       ]
     },
     {
@@ -133,6 +135,7 @@
     {
       "group": "Reference",
       "pages": [
+        "reference/rest-api",
         "reference/assertion-operators",
         "reference/assertion-subjects",
         "reference/builtin-functions",

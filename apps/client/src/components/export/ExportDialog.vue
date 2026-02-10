@@ -19,7 +19,7 @@ const emit = defineEmits<{
 const activeFormat = ref<ExportFormat>('curl')
 const copied = ref(false)
 
-const formats: ExportFormat[] = ['curl', 'fetch', 'wget', 'python', 'httpie']
+const formats: ExportFormat[] = ['curl', 'fetch', 'wget', 'python', 'httpie', 'go', 'ruby']
 
 const stringVars = computed(() => {
   const result: Record<string, string> = {}
@@ -57,6 +57,8 @@ const formatExtensions: Record<ExportFormat, string> = {
   wget: '.sh',
   python: '.py',
   httpie: '.sh',
+  go: '.go',
+  ruby: '.rb',
 }
 
 function download() {

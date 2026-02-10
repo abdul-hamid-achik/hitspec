@@ -71,6 +71,12 @@ useKeyboard({
 
 <template>
   <div class="flex h-screen flex-col overflow-hidden bg-background text-foreground">
+    <a
+      href="#main-content"
+      class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-accent focus:px-4 focus:py-2 focus:text-accent-foreground focus:text-sm focus:font-medium focus:shadow-lg"
+    >
+      Skip to content
+    </a>
     <TopBar
       @open-command-palette="commandPaletteOpen = true"
       @toggle-sidebar="toggleSidebar"
@@ -81,7 +87,7 @@ useKeyboard({
         :collapsed="sidebarCollapsed"
         @collapse="toggleSidebar"
       />
-      <main aria-label="Main content" class="flex-1 overflow-hidden">
+      <main id="main-content" aria-label="Main content" class="flex-1 overflow-hidden">
         <RouterView />
       </main>
     </div>

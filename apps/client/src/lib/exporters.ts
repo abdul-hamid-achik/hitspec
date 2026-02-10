@@ -167,7 +167,97 @@ export function toHTTPie(req: RequestDTO, vars: Record<string, string>): string 
   return parts.join(' \\\n  ')
 }
 
-export type ExportFormat = 'curl' | 'fetch' | 'wget' | 'python' | 'httpie'
+export function toGoNetHttp(req: RequestDTO, vars: Record<string, string>): string {
+  const url = substituteVars(req.url, vars)
+  const headers = enabledHeaders(req)
+  const hasBody = !!req.body?.raw
+  const lines: string[] = []
+
+  lines.push('package main')
+  lines.push('')
+  lines.push('import (')
+  lines.push('\t"fmt"')
+  lines.push('\t"io"')
+  lines.push('\t"net/http"')
+  if (hasBody) lines.push('\t"strings"')
+  lines.push(')')
+  lines.push('')
+  lines.push('func main() {')
+
+  if (hasBody) {
+    const body = substituteVars(req.body!.raw!, vars)
+    lines.push(`\tbody := strings.NewReader(\`${body}\`)`)
+    lines.push(`\treq, err := http.NewRequest("${req.method}", "${url}", body)`)
+  } else {
+    lines.push(`\treq, err := http.NewRequest("${req.method}", "${url}", nil)`)
+  }
+
+  lines.push('\tif err != nil {')
+  lines.push('\t\tpanic(err)')
+  lines.push('\t}')
+
+  for (const h of headers) {
+    const val = substituteVars(h.value, vars)
+    lines.push(`\treq.Header.Set("${h.key}", "${val}")`)
+  }
+
+  lines.push('')
+  lines.push('\tresp, err := http.DefaultClient.Do(req)')
+  lines.push('\tif err != nil {')
+  lines.push('\t\tpanic(err)')
+  lines.push('\t}')
+  lines.push('\tdefer resp.Body.Close()')
+  lines.push('')
+  lines.push('\tdata, _ := io.ReadAll(resp.Body)')
+  lines.push('\tfmt.Println(resp.StatusCode)')
+  lines.push('\tfmt.Println(string(data))')
+  lines.push('}')
+
+  return lines.join('\n')
+}
+
+export function toRubyNetHttp(req: RequestDTO, vars: Record<string, string>): string {
+  const url = substituteVars(req.url, vars)
+  const headers = enabledHeaders(req)
+  const hasBody = !!req.body?.raw
+  const lines: string[] = []
+
+  lines.push("require 'net/http'")
+  lines.push("require 'uri'")
+  lines.push("require 'json'")
+  lines.push('')
+  lines.push(`uri = URI.parse('${url}')`)
+
+  const methodMap: Record<string, string> = {
+    GET: 'Get', POST: 'Post', PUT: 'Put', DELETE: 'Delete',
+    PATCH: 'Patch', HEAD: 'Head', OPTIONS: 'Options',
+  }
+  const rubyMethod = methodMap[req.method] || 'Get'
+
+  lines.push(`request = Net::HTTP::${rubyMethod}.new(uri)`)
+
+  for (const h of headers) {
+    const val = substituteVars(h.value, vars)
+    lines.push(`request['${h.key}'] = '${val}'`)
+  }
+
+  if (hasBody) {
+    const body = substituteVars(req.body!.raw!, vars)
+    lines.push(`request.body = '${body.replace(/'/g, "\\'")}'`)
+  }
+
+  lines.push('')
+  lines.push('response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == "https") do |http|')
+  lines.push('  http.request(request)')
+  lines.push('end')
+  lines.push('')
+  lines.push('puts response.code')
+  lines.push('puts response.body')
+
+  return lines.join('\n')
+}
+
+export type ExportFormat = 'curl' | 'fetch' | 'wget' | 'python' | 'httpie' | 'go' | 'ruby'
 
 export const exporters: Record<
   ExportFormat,
@@ -178,6 +268,8 @@ export const exporters: Record<
   wget: toWget,
   python: toPythonRequests,
   httpie: toHTTPie,
+  go: toGoNetHttp,
+  ruby: toRubyNetHttp,
 }
 
 export const formatLabels: Record<ExportFormat, string> = {
@@ -186,4 +278,6 @@ export const formatLabels: Record<ExportFormat, string> = {
   wget: 'wget',
   python: 'Python',
   httpie: 'HTTPie',
+  go: 'Go',
+  ruby: 'Ruby',
 }

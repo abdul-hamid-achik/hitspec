@@ -2,9 +2,15 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import { router } from './router'
+import { useThemeStore } from './stores/theme'
 import './assets/tailwind.css'
 
+const pinia = createPinia()
 const app = createApp(App)
-app.use(createPinia())
+app.use(pinia)
 app.use(router)
+
+// Initialize theme early to prevent flash of wrong theme
+useThemeStore()
+
 app.mount('#app')

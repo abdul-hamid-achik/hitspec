@@ -94,7 +94,7 @@ function selectResult(result: RunResult) {
     <!-- Response content -->
     <template v-else-if="requestStore.lastResult || hasRunResults">
       <!-- Status bar -->
-      <div class="flex items-center gap-2 border-b border-border px-4 py-2">
+      <div class="flex items-center gap-2 border-b border-border px-4 py-2" aria-live="polite">
         <StatusBadge v-if="requestStore.lastResult?.response?.statusCode" :code="requestStore.lastResult.response.statusCode" />
         <span v-else-if="requestStore.lastResult?.error" class="rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">ERROR</span>
         <span v-else-if="requestStore.lastResult?.skipped" class="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">SKIPPED</span>

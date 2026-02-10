@@ -168,8 +168,10 @@ func (p *Parser) parseMultipartBody() (*Body, error) {
 // parseGraphQLBody parses a >>>graphql ... <<< block with optional >>>variables block.
 func (p *Parser) parseGraphQLBody() (*Body, error) {
 	line := p.curToken.Line
+	// Advance past the >>>graphql token; lexer is now at \n after block type.
+	// nextToken() consumes the \n, positioning the lexer at the content start.
+	// Do NOT call skipNewlines() — it would consume the first content token.
 	p.nextToken()
-	p.skipNewlines()
 
 	body := &Body{
 		ContentType: BodyGraphQL,
@@ -180,16 +182,21 @@ func (p *Parser) parseGraphQLBody() (*Body, error) {
 	query := p.lexer.ReadRawUntilBlockEnd()
 	body.GraphQL.Query = query
 
+	// Re-sync token stream after raw read (lexer is at >>> or <<<)
+	p.curToken = p.lexer.NextToken()
+
 	if p.curToken.Type == TokenAssertionEnd {
 		p.nextToken()
 	}
 	p.skipNewlines()
 
 	if p.curToken.Type == TokenVariablesStart {
+		// Advance past >>>variables; do NOT skipNewlines to preserve content.
 		p.nextToken()
-		p.skipNewlines()
 		vars := p.lexer.ReadRawUntilBlockEnd()
 		body.GraphQL.Variables = vars
+		// Re-sync token stream after raw read
+		p.curToken = p.lexer.NextToken()
 		if p.curToken.Type == TokenAssertionEnd {
 			p.nextToken()
 		}

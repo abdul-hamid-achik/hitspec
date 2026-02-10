@@ -53,9 +53,9 @@ export const useEnvironmentStore = defineStore('environment', () => {
     if (initialized) return
     initialized = true
     ws.on('environment_changed', (msg) => {
-      const payload = msg.payload as { name: string }
-      if (payload?.name) {
-        activeEnvName.value = payload.name
+      const payload = msg.payload
+      if (payload && typeof payload === 'object' && 'name' in payload && typeof (payload as Record<string, unknown>).name === 'string') {
+        activeEnvName.value = (payload as Record<string, unknown>).name as string
       }
     })
   }

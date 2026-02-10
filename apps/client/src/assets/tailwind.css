@@ -66,8 +66,45 @@
   --animate-out: exit 150ms ease-in;
 }
 
-/* shadcn-vue CSS variable bridge (dark mode only for MVP) */
+/* Nord Light theme (Arctic Studio) — Snow Storm backgrounds, Polar Night text */
+:root.light {
+  --color-background: #ECEFF4; /* nord6 */
+  --color-foreground: #2E3440; /* nord0 */
+  --color-muted: #E5E9F0;     /* nord5 */
+  --color-muted-foreground: #4C566A; /* nord3 */
+  --color-accent: #5E81AC;    /* nord10 */
+  --color-accent-foreground: #ECEFF4; /* nord6 */
+  --color-border: #D8DEE9;    /* nord4 */
+  --color-input: #E5E9F0;     /* nord5 */
+  --color-ring: #5E81AC;      /* nord10 */
+  --color-surface: #E5E9F0;   /* nord5 */
+  --color-surface-hover: #D8DEE9; /* nord4 */
+  --color-destructive: #BF616A; /* nord11 */
+  --color-success: #A3BE8C;   /* nord14 */
+  --color-warning: #D08770;   /* nord12 */
+  --color-info: #81A1C1;      /* nord9 */
+
+  /* Frost + Aurora stay the same per Nord spec */
+  --color-http-get: #A3BE8C;    /* nord14 */
+  --color-http-post: #EBCB8B;   /* nord13 */
+  --color-http-put: #D08770;    /* nord12 */
+  --color-http-delete: #BF616A; /* nord11 */
+  --color-http-patch: #B48EAD;  /* nord15 */
+  --color-http-head: #8FBCBB;   /* nord7 */
+  --color-http-options: #81A1C1; /* nord9 */
+
+  --color-status-2xx: #A3BE8C;  /* nord14 */
+  --color-status-3xx: #88C0D0;  /* nord8 */
+  --color-status-4xx: #D08770;  /* nord12 */
+  --color-status-5xx: #BF616A;  /* nord11 */
+}
+
+/* shadcn-vue CSS variable bridge */
 :root {
+  --radius: 0.5rem;
+}
+
+:root.dark {
   --background: 220 16% 22%;
   --foreground: 219 28% 88%;
   --card: 222 16% 28%;
@@ -87,7 +124,28 @@
   --border: 220 16% 36%;
   --input: 222 16% 28%;
   --ring: 193 43% 67%;
-  --radius: 0.5rem;
+}
+
+:root.light {
+  --background: 219 28% 94%;
+  --foreground: 220 16% 22%;
+  --card: 218 27% 92%;
+  --card-foreground: 220 16% 22%;
+  --popover: 218 27% 92%;
+  --popover-foreground: 220 16% 22%;
+  --primary: 213 32% 52%;
+  --primary-foreground: 219 28% 94%;
+  --secondary: 218 27% 92%;
+  --secondary-foreground: 220 16% 22%;
+  --muted: 218 27% 92%;
+  --muted-foreground: 220 16% 36%;
+  --accent: 218 27% 88%;
+  --accent-foreground: 220 16% 22%;
+  --destructive: 354 42% 56%;
+  --destructive-foreground: 219 28% 94%;
+  --border: 219 28% 88%;
+  --input: 218 27% 92%;
+  --ring: 213 32% 52%;
 }
 
 * {
@@ -107,16 +165,16 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-nord-0);
+  background: var(--color-background);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-nord-3);
+  background: var(--color-border);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-nord-9);
+  background: var(--color-accent);
 }
 
 /* Reka UI dialog animations */
@@ -162,4 +220,15 @@ body {
 ::selection {
   background-color: var(--color-accent);
   color: var(--color-accent-foreground);
+}
+
+/* Respect reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

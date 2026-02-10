@@ -83,6 +83,8 @@ type QueryDTO struct {
 type BodyDTO struct {
 	ContentType string `json:"contentType"`
 	Raw         string `json:"raw,omitempty"`
+	GraphQL     string `json:"graphql,omitempty"`
+	Variables   string `json:"variables,omitempty"`
 	Line        int    `json:"line"`
 }
 

@@ -39,6 +39,10 @@ const router = createRouter({
           path: 'import',
           component: () => import('@/views/ImportView.vue'),
         },
+        {
+          path: 'cookies',
+          component: () => import('@/views/CookiesView.vue'),
+        },
       ],
     },
     {
