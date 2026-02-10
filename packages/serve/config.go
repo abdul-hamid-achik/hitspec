@@ -2,17 +2,17 @@ package serve
 
 // ServeConfig holds configuration for the serve command.
 type ServeConfig struct {
-	Port       int
-	Host       string
-	WorkDir    string
-	Open       bool
-	Watch      bool
-	CORS       bool
-	APIOnly    bool
-	ReadOnly   bool
-	Env        string
-	ConfigPath string
-	Verbose    bool
+	Port          int
+	Host          string
+	WorkDir       string
+	Open          bool
+	Watch         bool
+	CORS          bool
+	APIOnly       bool
+	ReadOnly      bool
+	Env           string
+	ConfigPath    string
+	Verbose       bool
 	AllowShell    bool
 	AllowDB       bool
 	HistoryDBPath string // Path to persistent history SQLite database

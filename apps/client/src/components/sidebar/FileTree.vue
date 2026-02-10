@@ -8,7 +8,7 @@ import { useEnvironmentStore } from '@/stores/environment'
 import MethodBadge from '@/components/common/MethodBadge.vue'
 import ExportDialog from '@/components/export/ExportDialog.vue'
 
-defineProps<{ items: FileInfo[]; depth?: number }>()
+const { items, depth } = defineProps<{ items: FileInfo[]; depth?: number }>()
 
 const collection = useCollectionStore()
 const requestStore = useRequestStore()

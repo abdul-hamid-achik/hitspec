@@ -262,4 +262,3 @@ func matchGlob(s, pattern string) bool {
 
 	return j == len(pattern)
 }
-

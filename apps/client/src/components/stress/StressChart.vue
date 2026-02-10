@@ -4,12 +4,12 @@ import type { StressStatsDTO } from '@/types/api'
 import VChart from 'vue-echarts'
 import { useStressChart } from '@/composables/useStressChart'
 
-const props = defineProps<{ metrics: StressStatsDTO }>()
+const { metrics } = defineProps<{ metrics: StressStatsDTO }>()
 
 const { addMetrics, chartOption } = useStressChart()
 
 watch(
-  () => props.metrics,
+  () => metrics,
   (m) => addMetrics(m),
   { immediate: true },
 )

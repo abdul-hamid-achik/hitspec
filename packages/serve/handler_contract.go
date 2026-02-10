@@ -17,11 +17,11 @@ type ContractVerifyReq struct {
 
 // ContractResultDTO is the result of contract verification.
 type ContractResultDTO struct {
-	File     string                  `json:"file"`
-	Passed   int                     `json:"passed"`
-	Failed   int                     `json:"failed"`
-	Skipped  int                     `json:"skipped"`
-	Duration float64                 `json:"duration"`
+	File     string                   `json:"file"`
+	Passed   int                      `json:"passed"`
+	Failed   int                      `json:"failed"`
+	Skipped  int                      `json:"skipped"`
+	Duration float64                  `json:"duration"`
 	Results  []ContractInteractionDTO `json:"results"`
 }
 

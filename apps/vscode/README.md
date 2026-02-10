@@ -7,6 +7,9 @@ Syntax highlighting and snippets for hitspec HTTP API testing files.
 - **Syntax Highlighting** for `.http` and `.hitspec` files
 - **Code Snippets** for common patterns
 - **Language Configuration** for comments, brackets, and folding
+- Support for all HTTP methods including **WebSocket** (`WS`)
+- Typed block highlighting: `>>>capture`, `>>>graphql`, `>>>db`, `>>>shell`, `>>>multipart`, `>>>variables`
+- Comment support for both `#` and `//` styles
 
 ## Supported File Extensions
 
@@ -17,15 +20,15 @@ Syntax highlighting and snippets for hitspec HTTP API testing files.
 
 The extension provides highlighting for:
 
-- HTTP methods (GET, POST, PUT, PATCH, DELETE, etc.)
+- HTTP methods (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, WS, etc.)
 - Request separators (`###`)
-- Annotations (`@name`, `@tags`, `@auth`, etc.)
+- Annotations (`@name`, `@tags`, `@auth`, `@if`, `@unless`, `@retryOn`, `@description`, `@import`, etc.)
 - Headers
 - Assertion blocks (`>>>` ... `<<<`)
-- Capture blocks (`[[[` ... `]]]`)
+- Typed blocks (`>>>capture`, `>>>graphql`, `>>>db`, `>>>shell`, `>>>multipart`)
 - Variable interpolation (`{{variable}}`)
 - Built-in functions (`$uuid()`, `$timestamp()`, etc.)
-- Comments (`#`)
+- Comments (`#` and `//`)
 
 ## Snippets
 
@@ -38,13 +41,26 @@ The extension provides highlighting for:
 | `put` | PUT request template |
 | `patch` | PATCH request template |
 | `delete` | DELETE request template |
+| `head` | HEAD request template |
+| `options` | OPTIONS request template |
+| `ws` | WebSocket request template |
 | `jsonrequest` | Complete request with assertions and captures |
+
+### Block Snippets
+
+| Prefix | Description |
+|--------|-------------|
+| `assert` | Assertion block |
+| `capture` | Capture block (`>>>capture`) |
+| `graphql` | GraphQL body with variables |
+| `multipart` | Multipart form body |
+| `shell` | Shell command block |
+| `db` | Database assertion block |
 
 ### Assertion Snippets
 
 | Prefix | Description |
 |--------|-------------|
-| `assert` | Assertion block |
 | `expectstatus` | Status code assertion |
 | `expectbody` | Body field assertion |
 | `expectheader` | Header assertion |
@@ -66,12 +82,15 @@ The extension provides highlighting for:
 | `skip` | Skip annotation |
 | `timeout` | Timeout annotation |
 | `retry` | Retry annotation |
+| `retryon` | Retry on specific status codes |
 | `depends` | Dependency annotation |
 | `tags` | Tags annotation |
+| `if` | Conditional execution |
+| `unless` | Skip if truthy |
+| `description` | Request description |
 | `stress` | Stress test annotations |
 | `contract` | Contract test annotations |
 | `waitfor` | Wait for service |
-| `db` | Database assertion block |
 
 ### Function Snippets
 
@@ -100,13 +119,7 @@ Search for "hitspec" in the VSCode Extensions marketplace.
 ## Development
 
 ```bash
-# Install dependencies
-npm install
-
-# Compile
-npm run compile
-
-# Package
+# Package the extension
 npm run package
 ```
 

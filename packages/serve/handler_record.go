@@ -18,21 +18,21 @@ type RecordStartReq struct {
 
 // RecordStatusDTO is the response for GET /record/status.
 type RecordStatusDTO struct {
-	Running     bool              `json:"running"`
-	TargetURL   string            `json:"targetUrl,omitempty"`
-	Port        int               `json:"port,omitempty"`
-	Count       int               `json:"count"`
-	Recordings  []RecordingDTO    `json:"recordings,omitempty"`
+	Running    bool           `json:"running"`
+	TargetURL  string         `json:"targetUrl,omitempty"`
+	Port       int            `json:"port,omitempty"`
+	Count      int            `json:"count"`
+	Recordings []RecordingDTO `json:"recordings,omitempty"`
 }
 
 // RecordingDTO is a single recorded request/response.
 type RecordingDTO struct {
-	Method      string            `json:"method"`
-	Path        string            `json:"path"`
-	URL         string            `json:"url"`
-	ContentType string            `json:"contentType,omitempty"`
-	StatusCode  int               `json:"statusCode,omitempty"`
-	Duration    float64           `json:"duration,omitempty"`
+	Method      string  `json:"method"`
+	Path        string  `json:"path"`
+	URL         string  `json:"url"`
+	ContentType string  `json:"contentType,omitempty"`
+	StatusCode  int     `json:"statusCode,omitempty"`
+	Duration    float64 `json:"duration,omitempty"`
 }
 
 func (s *Server) handleRecordStart(w http.ResponseWriter, r *http.Request) {

@@ -8,7 +8,7 @@ import FileTree from '@/components/sidebar/FileTree.vue'
 import SearchInput from '@/components/sidebar/SearchInput.vue'
 import { useCollectionStore } from '@/stores/collection'
 
-const props = defineProps<{ width: number; collapsed?: boolean }>()
+const { width, collapsed } = defineProps<{ width: number; collapsed?: boolean }>()
 const emit = defineEmits<{ collapse: [] }>()
 
 const collection = useCollectionStore()

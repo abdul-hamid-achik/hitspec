@@ -90,8 +90,8 @@ func WithConfigEnvironments(envs map[string]map[string]any) RunnerOption {
 // NewRunner creates a new stress test runner
 func NewRunner(config *Config, opts ...RunnerOption) *Runner {
 	r := &Runner{
-		config:   config,
-		metrics:  NewMetrics(),
+		config:    config,
+		metrics:   NewMetrics(),
 		scheduler: NewScheduler(config),
 	}
 

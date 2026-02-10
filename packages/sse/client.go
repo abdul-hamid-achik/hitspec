@@ -22,10 +22,10 @@ type Event struct {
 
 // Client is an SSE client that connects to an SSE endpoint and receives events.
 type Client struct {
-	httpClient *http.Client
-	url        string
-	headers    map[string]string
-	timeout    time.Duration
+	httpClient  *http.Client
+	url         string
+	headers     map[string]string
+	timeout     time.Duration
 	lastEventID string
 }
 

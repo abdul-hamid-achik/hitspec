@@ -37,14 +37,14 @@ func NewConverter(opts ...Option) *Converter {
 
 // ParsedCurl represents a parsed curl command.
 type ParsedCurl struct {
-	Method      string
-	URL         string
-	Headers     map[string]string
-	Body        string
-	BasicAuth   string
-	Insecure    bool
+	Method          string
+	URL             string
+	Headers         map[string]string
+	Body            string
+	BasicAuth       string
+	Insecure        bool
 	FollowRedirects bool
-	Name        string
+	Name            string
 }
 
 // ConvertCommand converts a single curl command to hitspec format.

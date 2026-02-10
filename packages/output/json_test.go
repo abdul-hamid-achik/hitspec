@@ -311,14 +311,14 @@ func TestRedactHeaders(t *testing.T) {
 		{
 			name: "mixed sensitive and normal",
 			headers: map[string]string{
-				"Content-Type":  "text/html",
-				"Cookie":        "session=abc",
-				"X-Request-ID":  "123",
+				"Content-Type": "text/html",
+				"Cookie":       "session=abc",
+				"X-Request-ID": "123",
 			},
 			want: map[string]string{
-				"Content-Type":  "text/html",
-				"Cookie":        "[REDACTED]",
-				"X-Request-ID":  "123",
+				"Content-Type": "text/html",
+				"Cookie":       "[REDACTED]",
+				"X-Request-ID": "123",
 			},
 		},
 	}

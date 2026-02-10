@@ -4,7 +4,7 @@ import StatusBadge from '@/components/common/StatusBadge.vue'
 import MethodBadge from '@/components/common/MethodBadge.vue'
 import { CheckCircle, XCircle, MinusCircle, Clock, Zap } from 'lucide-vue-next'
 
-const props = defineProps<{ results: ExecuteResult }>()
+const { results } = defineProps<{ results: ExecuteResult }>()
 const emit = defineEmits<{ select: [result: RunResult] }>()
 
 function resultIcon(result: RunResult) {

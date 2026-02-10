@@ -2,7 +2,7 @@
 import { CheckCircle, XCircle, ShieldCheck } from 'lucide-vue-next'
 import type { AssertionResult } from '@/types/api'
 
-defineProps<{ assertions: AssertionResult[] }>()
+const { assertions } = defineProps<{ assertions: AssertionResult[] }>()
 </script>
 
 <template>

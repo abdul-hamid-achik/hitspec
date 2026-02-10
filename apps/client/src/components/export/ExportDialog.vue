@@ -6,7 +6,7 @@ import type { RequestDTO } from '@/types/api'
 import { exporters, formatLabels, type ExportFormat } from '@/lib/exporters'
 import { toast } from 'vue-sonner'
 
-const props = defineProps<{
+const { modelValue, request, variables } = defineProps<{
   modelValue: boolean
   request: RequestDTO
   variables: Record<string, unknown>
@@ -23,7 +23,7 @@ const formats: ExportFormat[] = ['curl', 'fetch', 'wget', 'python', 'httpie', 'g
 
 const stringVars = computed(() => {
   const result: Record<string, string> = {}
-  for (const [k, v] of Object.entries(props.variables)) {
+  for (const [k, v] of Object.entries(variables)) {
     result[k] = String(v ?? '')
   }
   return result
@@ -31,11 +31,11 @@ const stringVars = computed(() => {
 
 const code = computed(() => {
   const fn = exporters[activeFormat.value]
-  return fn(props.request, stringVars.value)
+  return fn(request, stringVars.value)
 })
 
 watch(
-  () => props.modelValue,
+  () => modelValue,
   (open) => {
     if (open) copied.value = false
   },
@@ -66,7 +66,7 @@ function download() {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  const name = props.request.name || 'request'
+  const name = request.name || 'request'
   a.download = `${name}${formatExtensions[activeFormat.value]}`
   a.click()
   URL.revokeObjectURL(url)

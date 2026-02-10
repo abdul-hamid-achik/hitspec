@@ -332,11 +332,11 @@ type PostmanItem struct {
 }
 
 type PostmanRequest struct {
-	Method string            `json:"method"`
-	Header []PostmanHeader   `json:"header,omitempty"`
-	Body   *PostmanBody      `json:"body,omitempty"`
-	URL    PostmanURL        `json:"url"`
-	Auth   *PostmanAuth      `json:"auth,omitempty"`
+	Method string          `json:"method"`
+	Header []PostmanHeader `json:"header,omitempty"`
+	Body   *PostmanBody    `json:"body,omitempty"`
+	URL    PostmanURL      `json:"url"`
+	Auth   *PostmanAuth    `json:"auth,omitempty"`
 }
 
 type PostmanHeader struct {
@@ -365,17 +365,17 @@ type PostmanFormData struct {
 }
 
 type PostmanURL struct {
-	Raw   string   `json:"raw"`
-	Host  []string `json:"host,omitempty"`
-	Path  []string `json:"path,omitempty"`
+	Raw   string      `json:"raw"`
+	Host  []string    `json:"host,omitempty"`
+	Path  []string    `json:"path,omitempty"`
 	Query []PostmanKV `json:"query,omitempty"`
 }
 
 type PostmanAuth struct {
-	Type   string        `json:"type"`
-	Bearer []PostmanKV   `json:"bearer,omitempty"`
-	Basic  []PostmanKV   `json:"basic,omitempty"`
-	APIKey []PostmanKV   `json:"apikey,omitempty"`
+	Type   string      `json:"type"`
+	Bearer []PostmanKV `json:"bearer,omitempty"`
+	Basic  []PostmanKV `json:"basic,omitempty"`
+	APIKey []PostmanKV `json:"apikey,omitempty"`
 }
 
 type PostmanResponse struct {

@@ -45,10 +45,10 @@ type Config struct {
 	Proxy              string
 	DefaultHeaders     map[string]string
 	ConfigEnvironments map[string]map[string]any
-	UpdateSnapshots    bool // Update snapshots instead of comparing
-	AllowShell         bool // Allow shell command execution (>>>shell blocks and hooks)
-	AllowDB            bool // Allow database assertions (>>>db blocks)
-	HistoryStore       *history.Store // Optional persistent history store
+	UpdateSnapshots    bool                      // Update snapshots instead of comparing
+	AllowShell         bool                      // Allow shell command execution (>>>shell blocks and hooks)
+	AllowDB            bool                      // Allow database assertions (>>>db blocks)
+	HistoryStore       *history.Store            // Optional persistent history store
 	OnProgress         func(event ProgressEvent) // Optional callback for per-request progress
 }
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { StressStatsDTO } from '@/types/api'
 
-defineProps<{ metrics: StressStatsDTO }>()
+const { metrics } = defineProps<{ metrics: StressStatsDTO }>()
 
 function formatMs(ms: number): string {
   return ms < 1000 ? `${ms.toFixed(1)}ms` : `${(ms / 1000).toFixed(2)}s`

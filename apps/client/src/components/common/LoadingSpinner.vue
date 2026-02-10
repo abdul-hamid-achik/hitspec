@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{
+const { size, label } = defineProps<{
   size?: 'sm' | 'md' | 'lg'
   label?: string
 }>()

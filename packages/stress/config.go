@@ -45,12 +45,12 @@ type Phase struct {
 
 // Thresholds defines pass/fail criteria for the stress test
 type Thresholds struct {
-	P50         time.Duration // 50th percentile latency
-	P95         time.Duration // 95th percentile latency
-	P99         time.Duration // 99th percentile latency
-	MaxLatency  time.Duration // maximum allowed latency
-	ErrorRate   float64       // maximum error rate (0.0 - 1.0)
-	MinRPS      float64       // minimum requests per second
+	P50        time.Duration // 50th percentile latency
+	P95        time.Duration // 95th percentile latency
+	P99        time.Duration // 99th percentile latency
+	MaxLatency time.Duration // maximum allowed latency
+	ErrorRate  float64       // maximum error rate (0.0 - 1.0)
+	MinRPS     float64       // minimum requests per second
 }
 
 // DefaultConfig returns a Config with sensible defaults

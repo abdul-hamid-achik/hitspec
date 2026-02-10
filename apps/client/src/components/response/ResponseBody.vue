@@ -3,23 +3,23 @@ import { computed, ref } from 'vue'
 import { Copy, Check, AlignLeft } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
-const props = defineProps<{ body?: string; error?: string }>()
+const { body, error } = defineProps<{ body?: string; error?: string }>()
 
 const copied = ref(false)
 
 const formatted = computed(() => {
-  if (!props.body) return ''
+  if (!body) return ''
   try {
-    return JSON.stringify(JSON.parse(props.body), null, 2)
+    return JSON.stringify(JSON.parse(body), null, 2)
   } catch {
-    return props.body
+    return body
   }
 })
 
 const isJson = computed(() => {
-  if (!props.body) return false
+  if (!body) return false
   try {
-    JSON.parse(props.body)
+    JSON.parse(body)
     return true
   } catch {
     return false

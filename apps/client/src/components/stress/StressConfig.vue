@@ -5,7 +5,7 @@ import { startStress, stopStress } from '@/api/endpoints/stress'
 import { useCollectionStore } from '@/stores/collection'
 import { toast } from 'vue-sonner'
 
-defineProps<{ running: boolean }>()
+const { running } = defineProps<{ running: boolean }>()
 
 const collection = useCollectionStore()
 const concurrency = ref(10)

@@ -12,12 +12,12 @@ import (
 
 // sensitiveHeaders lists header names whose values should be redacted in output.
 var sensitiveHeaders = map[string]bool{
-	"authorization":   true,
+	"authorization":       true,
 	"proxy-authorization": true,
-	"cookie":          true,
-	"set-cookie":      true,
-	"x-api-key":       true,
-	"x-auth-token":    true,
+	"cookie":              true,
+	"set-cookie":          true,
+	"x-api-key":           true,
+	"x-auth-token":        true,
 }
 
 // redactHeaders returns a copy of headers with sensitive values replaced.
@@ -38,10 +38,10 @@ func redactHeaders(headers map[string]string) map[string]string {
 
 // JSONOutput represents the complete JSON output structure
 type JSONOutput struct {
-	Summary  JSONSummary  `json:"summary"`
-	Tests    []JSONTest   `json:"tests"`
-	Duration float64      `json:"duration"`
-	Time     string       `json:"time"`
+	Summary  JSONSummary `json:"summary"`
+	Tests    []JSONTest  `json:"tests"`
+	Duration float64     `json:"duration"`
+	Time     string      `json:"time"`
 }
 
 // JSONSummary represents the test summary

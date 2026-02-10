@@ -2,7 +2,7 @@
 import { DialogRoot, DialogPortal, DialogOverlay, DialogContent, DialogTitle } from 'reka-ui'
 import { X } from 'lucide-vue-next'
 
-defineProps<{ open: boolean }>()
+const { open } = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ 'update:open': [value: boolean] }>()
 
 const isMac = navigator.platform.toLowerCase().includes('mac')

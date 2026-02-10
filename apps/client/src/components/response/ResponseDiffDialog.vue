@@ -10,7 +10,7 @@ export interface DiffSource {
   label: string
 }
 
-const props = defineProps<{
+const { modelValue, left, right } = defineProps<{
   modelValue: boolean
   left: DiffSource
   right: DiffSource
@@ -23,7 +23,7 @@ const emit = defineEmits<{
 const viewMode = ref<'unified' | 'split'>('unified')
 const copied = ref(false)
 
-const diffLines = computed(() => computeDiff(props.left.body, props.right.body))
+const diffLines = computed(() => computeDiff(left.body, right.body))
 
 const stats = computed(() => {
   let added = 0
@@ -75,7 +75,7 @@ const splitPairs = computed(() => {
 })
 
 watch(
-  () => props.modelValue,
+  () => modelValue,
   (open) => {
     if (open) copied.value = false
   },
@@ -83,7 +83,7 @@ watch(
 
 async function copyDiff() {
   try {
-    const text = formatUnifiedDiff(diffLines.value, props.left.label, props.right.label)
+    const text = formatUnifiedDiff(diffLines.value, left.label, right.label)
     await navigator.clipboard.writeText(text)
     copied.value = true
     setTimeout(() => (copied.value = false), 2000)

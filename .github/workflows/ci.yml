@@ -6,50 +6,70 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  GO_VERSION: '1.25.7'
+  BUN_VERSION: 'latest'
+
 jobs:
-  frontend:
-    name: Frontend
+  build:
+    name: Build
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Install dependencies
-        run: bun install
-        working-directory: apps/client
-
-      - name: Type check
-        run: bun run type-check
-        working-directory: apps/client
-
-      - name: Run tests
-        run: bun run test
-        working-directory: apps/client
-
-      - name: Build
-        run: bun run build
-        working-directory: apps/client
-
-      - name: Upload client dist
-        uses: actions/upload-artifact@v4
-        with:
-          name: client-dist
-          path: apps/client/dist/
-
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    needs: frontend
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.7'
+          go-version: ${{ env.GO_VERSION }}
           cache: true
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: '3.x'
+
+      - name: Install client dependencies
+        run: task client:install
+
+      - name: Build client
+        run: task client:build
+
+      - name: Generate code
+        run: task generate
+
+      - name: Build Go binary
+        run: task build
+
+      - name: Upload client dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-dist
+          path: packages/serve/dist/
+          retention-days: 1
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: '3.x'
 
       - name: Download client dist
         uses: actions/download-artifact@v4
@@ -58,10 +78,73 @@ jobs:
           path: packages/serve/dist/
 
       - name: Generate code
-        run: go generate ./...
+        run: task generate
 
-      - name: Run tests
+      # Use golangci-lint action for its caching benefits
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.7.2
+
+      - name: Run go vet
+        run: task vet
+
+      - name: Check go fmt
+        run: |
+          test -z "$(gofmt -l .)" || {
+            echo "Files not formatted:"
+            gofmt -l .
+            exit 1
+          }
+
+      - name: Install client dependencies
+        run: task client:install
+
+      - name: Client type check
+        run: bun run type-check
+        working-directory: apps/client
+
+      - name: Client lint (oxlint)
+        run: task client:lint
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: '3.x'
+
+      - name: Download client dist
+        uses: actions/download-artifact@v4
+        with:
+          name: client-dist
+          path: packages/serve/dist/
+
+      - name: Generate code
+        run: task generate
+
+      - name: Run Go tests
         run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Install client dependencies
+        run: task client:install
+
+      - name: Run client tests
+        run: task client:test
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -69,45 +152,26 @@ jobs:
           files: coverage.out
           fail_ci_if_error: false
 
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    needs: frontend
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.25.7'
-          cache: true
-
-      - name: Download client dist
-        uses: actions/download-artifact@v4
-        with:
-          name: client-dist
-          path: packages/serve/dist/
-
-      - name: Generate code
-        run: go generate ./...
-
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v8
-        with:
-          version: v2.7.2
-
   security:
     name: Security Scan
     runs-on: ubuntu-latest
-    needs: frontend
+    needs: build
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.7'
+          go-version: ${{ env.GO_VERSION }}
           cache: true
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: '3.x'
 
       - name: Download client dist
         uses: actions/download-artifact@v4
@@ -116,7 +180,7 @@ jobs:
           path: packages/serve/dist/
 
       - name: Generate code
-        run: go generate ./...
+        run: task generate
 
       - name: Install gosec
         run: go install github.com/securego/gosec/v2/cmd/gosec@latest
@@ -135,3 +199,10 @@ jobs:
 
       - name: Run govulncheck
         run: govulncheck ./...
+
+      - name: Install client dependencies
+        run: task client:install
+
+      - name: Audit client dependencies
+        run: bun pm untrusted
+        working-directory: apps/client

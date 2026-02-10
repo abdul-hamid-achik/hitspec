@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Globe } from 'lucide-vue-next'
 
-defineProps<{ headers: Record<string, string | string[]> }>()
+const { headers } = defineProps<{ headers: Record<string, string | string[]> }>()
 </script>
 
 <template>

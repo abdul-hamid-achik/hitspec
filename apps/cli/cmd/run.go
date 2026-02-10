@@ -87,19 +87,19 @@ var (
 	stressJSONFlag       bool
 
 	// Metrics flags
-	metricsFlag        string
-	metricsPortFlag    int
-	metricsFileFlag    string
-	datadogAPIKeyFlag  string
-	datadogSiteFlag    string
-	datadogTagsFlag    string
+	metricsFlag       string
+	metricsPortFlag   int
+	metricsFileFlag   string
+	datadogAPIKeyFlag string
+	datadogSiteFlag   string
+	datadogTagsFlag   string
 
 	// Notification flags
-	notifyFlag         string
-	notifyOnFlag       string
-	slackWebhookFlag   string
-	slackChannelFlag   string
-	teamsWebhookFlag   string
+	notifyFlag       string
+	notifyOnFlag     string
+	slackWebhookFlag string
+	slackChannelFlag string
+	teamsWebhookFlag string
 
 	// Snapshot testing flags
 	updateSnapshotsFlag bool

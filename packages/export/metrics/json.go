@@ -58,8 +58,8 @@ func NewJSONExporter(opts ...JSONOption) *JSONExporter {
 
 // JSONMetricsOutput is the complete JSON output structure
 type JSONMetricsOutput struct {
-	Metadata   JSONMetadata       `json:"metadata"`
-	Summary    *AggregateMetrics  `json:"summary"`
+	Metadata    JSONMetadata      `json:"metadata"`
+	Summary     *AggregateMetrics `json:"summary"`
 	TestResults []*TestMetrics    `json:"test_results"`
 }
 

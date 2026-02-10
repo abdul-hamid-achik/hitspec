@@ -49,14 +49,14 @@ type RequestMetrics struct {
 
 // TimePoint represents a point in time for the time series
 type TimePoint struct {
-	Timestamp   time.Time
-	Requests    int64
-	Errors      int64
-	P50         time.Duration
-	P95         time.Duration
-	P99         time.Duration
-	ActiveVUs   int32
-	RPS         float64
+	Timestamp time.Time
+	Requests  int64
+	Errors    int64
+	P50       time.Duration
+	P95       time.Duration
+	P99       time.Duration
+	ActiveVUs int32
+	RPS       float64
 }
 
 // NewMetrics creates a new Metrics collector
@@ -231,18 +231,18 @@ type Summary struct {
 	TimeoutCount  int64
 
 	// Calculated rates
-	RPS          float64
-	SuccessRate  float64
-	ErrorRate    float64
+	RPS         float64
+	SuccessRate float64
+	ErrorRate   float64
 
 	// Latency percentiles
-	P50     time.Duration
-	P95     time.Duration
-	P99     time.Duration
-	Min     time.Duration
-	Max     time.Duration
-	Mean    time.Duration
-	StdDev  time.Duration
+	P50    time.Duration
+	P95    time.Duration
+	P99    time.Duration
+	Min    time.Duration
+	Max    time.Duration
+	Mean   time.Duration
+	StdDev time.Duration
 
 	// Per-request breakdown
 	RequestBreakdown map[string]*RequestSummary
@@ -253,14 +253,14 @@ type Summary struct {
 
 // RequestSummary holds summary for a specific request
 type RequestSummary struct {
-	Name        string
-	Total       int64
-	Success     int64
-	Errors      int64
-	P50         time.Duration
-	P95         time.Duration
-	P99         time.Duration
-	Mean        time.Duration
+	Name    string
+	Total   int64
+	Success int64
+	Errors  int64
+	P50     time.Duration
+	P95     time.Duration
+	P99     time.Duration
+	Mean    time.Duration
 }
 
 // GetSummary returns the metrics summary
@@ -331,17 +331,17 @@ func (m *Metrics) GetSummary() *Summary {
 
 // CurrentStats returns current statistics for real-time display
 type CurrentStats struct {
-	Elapsed      time.Duration
-	Total        int64
-	Success      int64
-	Errors       int64
-	RPS          float64
-	P50          time.Duration
-	P95          time.Duration
-	P99          time.Duration
-	Max          time.Duration
-	ActiveVUs    int32
-	ErrorRate    float64
+	Elapsed   time.Duration
+	Total     int64
+	Success   int64
+	Errors    int64
+	RPS       float64
+	P50       time.Duration
+	P95       time.Duration
+	P99       time.Duration
+	Max       time.Duration
+	ActiveVUs int32
+	ErrorRate float64
 }
 
 // GetCurrentStats returns current statistics

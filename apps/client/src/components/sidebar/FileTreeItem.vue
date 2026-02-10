@@ -5,23 +5,23 @@ import type { FileInfo } from '@/types/api'
 import { useCollectionStore } from '@/stores/collection'
 import { cn } from '@/lib/utils'
 
-const props = defineProps<{
+const { file, depth } = defineProps<{
   file: FileInfo
   depth: number
 }>()
 
 const collection = useCollectionStore()
-const expanded = ref(props.file.isDir)
+const expanded = ref(file.isDir)
 
 function toggle() {
-  if (props.file.isDir) {
+  if (file.isDir) {
     expanded.value = !expanded.value
   } else {
-    collection.openFile(props.file.path)
+    collection.openFile(file.path)
   }
 }
 
-const isActive = () => collection.activeFilePath === props.file.path
+const isActive = () => collection.activeFilePath === file.path
 </script>
 
 <template>

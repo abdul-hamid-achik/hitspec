@@ -2,7 +2,7 @@
 import type { BodyDTO } from '@/types/api'
 import { AlignLeft } from 'lucide-vue-next'
 
-defineProps<{ body?: BodyDTO | null }>()
+const { body } = defineProps<{ body?: BodyDTO | null }>()
 </script>
 
 <template>

@@ -2,7 +2,7 @@
 import type { HeaderDTO } from '@/types/api'
 import { Globe } from 'lucide-vue-next'
 
-defineProps<{ headers: HeaderDTO[] }>()
+const { headers } = defineProps<{ headers: HeaderDTO[] }>()
 </script>
 
 <template>

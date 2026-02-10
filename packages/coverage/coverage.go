@@ -14,11 +14,11 @@ import (
 
 // Report represents an API coverage report.
 type Report struct {
-	TotalEndpoints   int               `json:"totalEndpoints"`
-	CoveredEndpoints int               `json:"coveredEndpoints"`
-	CoveragePercent  float64           `json:"coveragePercent"`
+	TotalEndpoints   int                   `json:"totalEndpoints"`
+	CoveredEndpoints int                   `json:"coveredEndpoints"`
+	CoveragePercent  float64               `json:"coveragePercent"`
 	ByTag            map[string]*TagReport `json:"byTag,omitempty"`
-	Endpoints        []EndpointStatus  `json:"endpoints"`
+	Endpoints        []EndpointStatus      `json:"endpoints"`
 }
 
 // TagReport represents coverage for a specific tag.

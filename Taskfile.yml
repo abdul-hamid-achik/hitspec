@@ -8,6 +8,8 @@ vars:
     sh: date -u '+%Y-%m-%d_%H:%M:%S'
   LDFLAGS: -ldflags "-X main.version={{.VERSION}} -X main.buildTime={{.BUILD_TIME}}"
   MAIN_PATH: ./apps/cli
+  CLIENT_DIR: apps/client
+  SERVE_DIST: packages/serve/dist
 
 tasks:
   default:
@@ -15,8 +17,87 @@ tasks:
     cmds:
       - task --list
 
+  # ---------------------------------------------------------------------------
+  # Top-level unified lifecycle tasks
+  # ---------------------------------------------------------------------------
+
+  setup:
+    desc: Install all dependencies for both Go and client
+    cmds:
+      - task: go:deps
+      - task: client:install
+      - task: generate
+
+  deps:
+    desc: Download and tidy all dependencies (Go + client)
+    cmds:
+      - task: go:deps
+      - task: client:install
+
+  generate:
+    desc: Run go generate
+    cmds:
+      - go generate ./...
+
   build:
-    desc: Build the CLI binary
+    desc: Build Go binary and client
+    cmds:
+      - task: client:build
+      - task: go:build
+
+  test:
+    desc: Run all tests (Go + client)
+    cmds:
+      - task: go:test
+      - task: client:test
+
+  lint:
+    desc: Run all linters (Go fmt/vet/golangci-lint + client oxlint + type-check)
+    cmds:
+      - task: go:lint
+      - task: client:lint
+      - task: client:type-check
+
+  security:
+    desc: Run security checks (gosec + govulncheck + bun audit)
+    cmds:
+      - task: go:security
+      - task: client:audit
+
+  check:
+    desc: Run all checks across both stacks (lint + test + security)
+    cmds:
+      - task: lint
+      - task: test
+      - task: security
+
+  clean:
+    desc: Clean all build artifacts
+    cmds:
+      - rm -rf bin/
+      - rm -f coverage.out coverage.html
+      - rm -rf {{.SERVE_DIST}}
+      - rm -rf {{.CLIENT_DIR}}/dist
+
+  # ---------------------------------------------------------------------------
+  # Go tasks
+  # ---------------------------------------------------------------------------
+
+  go:deps:
+    desc: Download and tidy Go modules
+    cmds:
+      - go mod download
+      - go mod tidy
+
+  go:deps:update:
+    desc: Update all Go dependencies
+    cmds:
+      - go get -u ./...
+      - go mod tidy
+
+  go:build:
+    desc: Build the Go CLI binary
+    deps: [generate]
     cmds:
       - go build {{.LDFLAGS}} -o bin/{{.BINARY_NAME}} {{.MAIN_PATH}}
     sources:
@@ -24,54 +105,97 @@ tasks:
     generates:
       - bin/{{.BINARY_NAME}}
 
-  install:
-    desc: Install the CLI to GOPATH/bin
-    cmds:
-      - go install {{.LDFLAGS}} {{.MAIN_PATH}}
-
-  test:
-    desc: Run all tests
+  go:test:
+    desc: Run Go tests
     cmds:
       - go test -v -race -cover ./...
 
-  test:coverage:
-    desc: Run tests with coverage report
+  go:test:coverage:
+    desc: Run Go tests with coverage report
     cmds:
       - go test -v -race -coverprofile=coverage.out ./...
       - go tool cover -html=coverage.out -o coverage.html
       - echo "Coverage report generated at coverage.html"
 
-  test:unit:
-    desc: Run unit tests only
+  go:test:unit:
+    desc: Run Go unit tests only (short mode)
     cmds:
       - go test -v -race -short ./...
 
-  test:integration:
-    desc: Run integration tests
+  go:test:integration:
+    desc: Run Go integration tests
     cmds:
       - go test -v -race -run Integration ./...
 
-  lint:
-    desc: Run linter
+  go:lint:
+    desc: Run Go linters (fmt check + vet + golangci-lint)
     cmds:
+      - test -z "$(gofmt -l .)" || { echo "Files need formatting:"; gofmt -l .; exit 1; }
+      - go vet ./...
       - golangci-lint run ./...
 
-  fmt:
-    desc: Format code
+  go:security:
+    desc: Run Go security scanners
     cmds:
-      - go fmt ./...
-      - goimports -w .
+      - gosec ./...
+      - govulncheck ./...
 
-  vet:
-    desc: Run go vet
-    cmds:
-      - go vet ./...
+  # ---------------------------------------------------------------------------
+  # Client tasks
+  # ---------------------------------------------------------------------------
 
-  clean:
-    desc: Clean build artifacts
+  client:install:
+    desc: Install client dependencies
+    dir: '{{.CLIENT_DIR}}'
     cmds:
-      - rm -rf bin/
-      - rm -f coverage.out coverage.html
+      - bun install
+
+  client:dev:
+    desc: Run client dev server
+    dir: '{{.CLIENT_DIR}}'
+    cmds:
+      - bun run dev
+
+  client:build:
+    desc: Build client and copy to server embed directory
+    dir: '{{.CLIENT_DIR}}'
+    cmds:
+      - bun run build
+      - mkdir -p ../../{{.SERVE_DIST}}
+      - cp -r dist/* ../../{{.SERVE_DIST}}/
+
+  client:test:
+    desc: Run client tests
+    dir: '{{.CLIENT_DIR}}'
+    cmds:
+      - bun run test
+
+  client:lint:
+    desc: Run oxlint on client
+    dir: '{{.CLIENT_DIR}}'
+    cmds:
+      - bun run lint
+
+  client:type-check:
+    desc: Run TypeScript type checking on client
+    dir: '{{.CLIENT_DIR}}'
+    cmds:
+      - bun run type-check
+
+  client:audit:
+    desc: Audit client dependencies for vulnerabilities
+    dir: '{{.CLIENT_DIR}}'
+    cmds:
+      - bun pm untrusted 2>/dev/null || true
+
+  # ---------------------------------------------------------------------------
+  # Development tasks
+  # ---------------------------------------------------------------------------
+
+  install:
+    desc: Install the CLI to GOPATH/bin
+    cmds:
+      - go install {{.LDFLAGS}} {{.MAIN_PATH}}
 
   run:
     desc: Run the CLI (use -- to pass args, e.g., task run -- run examples/simple.http)
@@ -93,34 +217,50 @@ tasks:
     cmds:
       - watchexec -e go,http -r -- go run {{.MAIN_PATH}} run examples/petstore/petstore.http -v
 
-  deps:
-    desc: Download and tidy dependencies
+  serve:dev:
+    desc: Run serve command in dev mode (no SPA embed)
     cmds:
-      - go mod download
-      - go mod tidy
+      - go run -tags dev {{.MAIN_PATH}} serve {{.CLI_ARGS}}
 
-  deps:update:
-    desc: Update all dependencies
+  docs:dev:
+    desc: Run Mintlify docs locally
+    dir: apps/docs
     cmds:
-      - go get -u ./...
-      - go mod tidy
+      - npx mintlify dev
 
-  check:
-    desc: Run all checks (fmt, vet, lint, test)
+  # ---------------------------------------------------------------------------
+  # Benchmarks
+  # ---------------------------------------------------------------------------
+
+  bench:
+    desc: Run all benchmarks
     cmds:
-      - task: fmt
-      - task: vet
-      - task: lint
-      - task: test
+      - go test -bench=. -benchmem ./...
+
+  bench:parser:
+    desc: Run parser benchmarks
+    cmds:
+      - go test -bench=. -benchmem ./packages/core/parser/...
+
+  # ---------------------------------------------------------------------------
+  # Release tasks
+  # ---------------------------------------------------------------------------
 
   build:all:
     desc: Build for all platforms
+    deps: [generate]
     cmds:
       - GOOS=linux GOARCH=amd64 go build {{.LDFLAGS}} -o bin/{{.BINARY_NAME}}-linux-amd64 {{.MAIN_PATH}}
       - GOOS=linux GOARCH=arm64 go build {{.LDFLAGS}} -o bin/{{.BINARY_NAME}}-linux-arm64 {{.MAIN_PATH}}
       - GOOS=darwin GOARCH=amd64 go build {{.LDFLAGS}} -o bin/{{.BINARY_NAME}}-darwin-amd64 {{.MAIN_PATH}}
       - GOOS=darwin GOARCH=arm64 go build {{.LDFLAGS}} -o bin/{{.BINARY_NAME}}-darwin-arm64 {{.MAIN_PATH}}
       - GOOS=windows GOARCH=amd64 go build {{.LDFLAGS}} -o bin/{{.BINARY_NAME}}-windows-amd64.exe {{.MAIN_PATH}}
+
+  build:full:
+    desc: Rebuild client + Go binary with embedded web UI
+    cmds:
+      - task: client:build
+      - task: go:build
 
   release:snapshot:
     desc: Create a snapshot release (no publishing)
@@ -131,75 +271,3 @@ tasks:
     desc: Create and publish a release
     cmds:
       - goreleaser release --clean
-
-  docs:serve:
-    desc: Serve documentation locally
-    cmds:
-      - echo "Starting docs server at http://localhost:8000"
-      - python3 -m http.server 8000 --directory docs
-
-  generate:
-    desc: Run go generate
-    cmds:
-      - go generate ./...
-
-  bench:
-    desc: Run benchmarks
-    cmds:
-      - go test -bench=. -benchmem ./...
-
-  bench:parser:
-    desc: Run parser benchmarks
-    cmds:
-      - go test -bench=. -benchmem ./packages/core/parser/...
-
-  security:
-    desc: Run security checks
-    cmds:
-      - gosec ./...
-      - govulncheck ./...
-
-  client:install:
-    desc: Install API client frontend dependencies
-    dir: apps/client
-    cmds:
-      - bun install
-
-  client:dev:
-    desc: Run API client frontend dev server
-    dir: apps/client
-    cmds:
-      - bun run dev
-
-  client:test:
-    desc: Run API client frontend tests
-    dir: apps/client
-    cmds:
-      - bun run test
-
-  client:build:
-    desc: Build API client frontend and copy to embed directory
-    dir: apps/client
-    cmds:
-      - bun run build
-      - mkdir -p ../../packages/serve/dist
-      - cp -r dist/* ../../packages/serve/dist/
-
-  docs:dev:
-    desc: Run Mintlify docs locally
-    dir: apps/docs
-    cmds:
-      - npx mintlify dev
-
-  serve:dev:
-    desc: Run serve command in dev mode (no SPA embed)
-    cmds:
-      - go run -tags dev {{.MAIN_PATH}} serve {{.CLI_ARGS}}
-
-  build:full:
-    desc: Rebuild frontend and build binary with embedded web UI
-    cmds:
-      - cd apps/client && bun run build
-      - mkdir -p packages/serve/dist
-      - cp -r apps/client/dist/* packages/serve/dist/
-      - go build {{.LDFLAGS}} -o bin/{{.BINARY_NAME}} {{.MAIN_PATH}}

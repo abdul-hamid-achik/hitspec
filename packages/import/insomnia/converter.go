@@ -37,23 +37,23 @@ func NewConverter(opts ...Option) *Converter {
 
 // Export represents an Insomnia export file.
 type Export struct {
-	Type      string     `json:"_type"`
-	ExportFormat int      `json:"__export_format"`
-	Resources []Resource `json:"resources"`
+	Type         string     `json:"_type"`
+	ExportFormat int        `json:"__export_format"`
+	Resources    []Resource `json:"resources"`
 }
 
 // Resource represents an Insomnia resource (request, folder, environment, etc).
 type Resource struct {
-	ID           string        `json:"_id"`
-	Type         string        `json:"_type"`
-	ParentID     string        `json:"parentId"`
-	Name         string        `json:"name"`
-	Description  string        `json:"description,omitempty"`
-	Method       string        `json:"method,omitempty"`
-	URL          string        `json:"url,omitempty"`
-	Headers      []Header      `json:"headers,omitempty"`
-	Body         *Body         `json:"body,omitempty"`
-	Parameters   []Parameter   `json:"parameters,omitempty"`
+	ID             string      `json:"_id"`
+	Type           string      `json:"_type"`
+	ParentID       string      `json:"parentId"`
+	Name           string      `json:"name"`
+	Description    string      `json:"description,omitempty"`
+	Method         string      `json:"method,omitempty"`
+	URL            string      `json:"url,omitempty"`
+	Headers        []Header    `json:"headers,omitempty"`
+	Body           *Body       `json:"body,omitempty"`
+	Parameters     []Parameter `json:"parameters,omitempty"`
 	Authentication *Auth       `json:"authentication,omitempty"`
 }
 

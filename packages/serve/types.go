@@ -137,28 +137,28 @@ type RunReq struct {
 
 // RunResultDTO holds results from running a file.
 type RunResultDTO struct {
-	File     string            `json:"file"`
-	Duration float64           `json:"duration"`
-	Passed   int               `json:"passed"`
-	Failed   int               `json:"failed"`
-	Skipped  int               `json:"skipped"`
+	File     string             `json:"file"`
+	Duration float64            `json:"duration"`
+	Passed   int                `json:"passed"`
+	Failed   int                `json:"failed"`
+	Skipped  int                `json:"skipped"`
 	Results  []RequestResultDTO `json:"results"`
 }
 
 // RequestResultDTO holds results from a single request execution.
 type RequestResultDTO struct {
-	Name        string              `json:"name"`
-	Description string              `json:"description,omitempty"`
-	Passed      bool                `json:"passed"`
-	Skipped     bool                `json:"skipped,omitempty"`
-	SkipReason  string              `json:"skipReason,omitempty"`
-	Duration    float64             `json:"duration"`
-	Error       string              `json:"error,omitempty"`
-	Request     *HTTPRequestDTO     `json:"request,omitempty"`
-	Response    *HTTPResponseDTO    `json:"response,omitempty"`
+	Name        string               `json:"name"`
+	Description string               `json:"description,omitempty"`
+	Passed      bool                 `json:"passed"`
+	Skipped     bool                 `json:"skipped,omitempty"`
+	SkipReason  string               `json:"skipReason,omitempty"`
+	Duration    float64              `json:"duration"`
+	Error       string               `json:"error,omitempty"`
+	Request     *HTTPRequestDTO      `json:"request,omitempty"`
+	Response    *HTTPResponseDTO     `json:"response,omitempty"`
 	Assertions  []AssertionResultDTO `json:"assertions,omitempty"`
 	SSEEvents   []SSEEventDTO        `json:"sseEvents,omitempty"`
-	Captures    map[string]any      `json:"captures,omitempty"`
+	Captures    map[string]any       `json:"captures,omitempty"`
 }
 
 // SSEEventDTO represents a parsed Server-Sent Event.
@@ -237,32 +237,32 @@ type HistoryEntryDTO struct {
 
 // HistoryRunDTO is a run stored in the persistent history database.
 type HistoryRunDTO struct {
-	ID          int64   `json:"id"`
-	FilePath    string  `json:"filePath"`
-	Environment string  `json:"environment,omitempty"`
-	StartedAt   string  `json:"startedAt"`
-	FinishedAt  string  `json:"finishedAt,omitempty"`
-	DurationMs  int64   `json:"durationMs"`
-	Passed      int64   `json:"passed"`
-	Failed      int64   `json:"failed"`
-	Skipped     int64   `json:"skipped"`
-	Total       int64   `json:"total"`
+	ID          int64              `json:"id"`
+	FilePath    string             `json:"filePath"`
+	Environment string             `json:"environment,omitempty"`
+	StartedAt   string             `json:"startedAt"`
+	FinishedAt  string             `json:"finishedAt,omitempty"`
+	DurationMs  int64              `json:"durationMs"`
+	Passed      int64              `json:"passed"`
+	Failed      int64              `json:"failed"`
+	Skipped     int64              `json:"skipped"`
+	Total       int64              `json:"total"`
 	Results     []HistoryResultDTO `json:"results,omitempty"`
 }
 
 // HistoryResultDTO is a single request result in persistent history.
 type HistoryResultDTO struct {
-	ID          int64   `json:"id"`
-	RequestName string  `json:"requestName"`
-	Method      string  `json:"method"`
-	URL         string  `json:"url"`
-	StatusCode  int     `json:"statusCode,omitempty"`
-	DurationMs  int64   `json:"durationMs"`
-	Passed      bool    `json:"passed"`
-	Skipped     bool    `json:"skipped,omitempty"`
-	Error       string  `json:"error,omitempty"`
-	Description string  `json:"description,omitempty"`
-	BodyPreview string  `json:"bodyPreview,omitempty"`
+	ID          int64                 `json:"id"`
+	RequestName string                `json:"requestName"`
+	Method      string                `json:"method"`
+	URL         string                `json:"url"`
+	StatusCode  int                   `json:"statusCode,omitempty"`
+	DurationMs  int64                 `json:"durationMs"`
+	Passed      bool                  `json:"passed"`
+	Skipped     bool                  `json:"skipped,omitempty"`
+	Error       string                `json:"error,omitempty"`
+	Description string                `json:"description,omitempty"`
+	BodyPreview string                `json:"bodyPreview,omitempty"`
 	Assertions  []HistoryAssertionDTO `json:"assertions,omitempty"`
 }
 
@@ -298,9 +298,9 @@ type StressStartReq struct {
 
 // StressStatusDTO is the current stress test status.
 type StressStatusDTO struct {
-	Running bool             `json:"running"`
-	Elapsed float64          `json:"elapsed"`
-	Stats   *StressStatsDTO  `json:"stats,omitempty"`
+	Running bool            `json:"running"`
+	Elapsed float64         `json:"elapsed"`
+	Stats   *StressStatsDTO `json:"stats,omitempty"`
 }
 
 // StressStatsDTO holds real-time stress metrics.
@@ -408,12 +408,12 @@ type WSFileEvent struct {
 
 // WSExecEvent is an execution lifecycle event.
 type WSExecEvent struct {
-	ID        string          `json:"id"`
-	File      string          `json:"file"`
-	Status    string          `json:"status"`
-	Result    *RunResultDTO   `json:"result,omitempty"`
-	Error     string          `json:"error,omitempty"`
-	Timestamp string          `json:"timestamp"`
+	ID        string        `json:"id"`
+	File      string        `json:"file"`
+	Status    string        `json:"status"`
+	Result    *RunResultDTO `json:"result,omitempty"`
+	Error     string        `json:"error,omitempty"`
+	Timestamp string        `json:"timestamp"`
 }
 
 // WSRequestProgress is a per-request progress event during execution.
@@ -438,12 +438,12 @@ type WSStressMetrics struct {
 
 // WSMockEvent is a mock server event.
 type WSMockEvent struct {
-	Event     string        `json:"event"`
-	Method    string        `json:"method,omitempty"`
-	Path      string        `json:"path,omitempty"`
-	Status    int           `json:"status,omitempty"`
-	Duration  float64       `json:"duration,omitempty"`
-	Timestamp string        `json:"timestamp"`
+	Event     string  `json:"event"`
+	Method    string  `json:"method,omitempty"`
+	Path      string  `json:"path,omitempty"`
+	Status    int     `json:"status,omitempty"`
+	Duration  float64 `json:"duration,omitempty"`
+	Timestamp string  `json:"timestamp"`
 }
 
 // Typed timestamp helper.

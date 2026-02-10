@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { Plus, Trash2, Copy, ChevronDown } from 'lucide-vue-next'
 import { ASSERTION_OPERATORS, ASSERTION_SUBJECTS, type AssertionDTO } from '@/types/api'
 
-const props = defineProps<{ assertions: AssertionDTO[] }>()
+const { assertions } = defineProps<{ assertions: AssertionDTO[] }>()
 const emit = defineEmits<{
   (e: 'add', assertion: AssertionDTO): void
   (e: 'remove', index: number): void
@@ -64,7 +64,7 @@ function handleAdd() {
 }
 
 function copyAsHitspec() {
-  const lines = props.assertions.map((a) => {
+  const lines = assertions.map((a) => {
     const parts = [a.subject, a.operator]
     if (a.expected) parts.push(String(a.expected))
     return parts.join(' ')

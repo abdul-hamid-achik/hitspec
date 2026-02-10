@@ -9,8 +9,8 @@
     { "include": "#variables" },
     { "include": "#methods" },
     { "include": "#headers" },
+    { "include": "#typed-blocks" },
     { "include": "#assertions" },
-    { "include": "#captures" },
     { "include": "#strings" },
     { "include": "#numbers" },
     { "include": "#operators" },
@@ -20,6 +20,10 @@
   "repository": {
     "comments": {
       "patterns": [
+        {
+          "name": "comment.line.double-slash.hitspec",
+          "match": "^//.*$"
+        },
         {
           "name": "comment.line.number-sign.hitspec",
           "match": "^#(?!\\s*@).*$"
@@ -38,7 +42,7 @@
       "patterns": [
         {
           "name": "entity.name.tag.hitspec",
-          "match": "^#\\s*@(name|description|tags|skip|only|timeout|retry|retryDelay|depends|auth|before|after|db|waitfor|stress\\.\\w+|contract\\.\\w+|x-\\w+)\\b",
+          "match": "^#\\s*@(name|description|tags|skip|only|timeout|retry|retryOn|retryDelay|depends|auth|before|after|db|waitfor|if|unless|import|stress\\.\\w+|contract\\.\\w+|x-\\w+)\\b",
           "captures": {
             "1": { "name": "keyword.other.annotation.hitspec" }
           }
@@ -60,7 +64,7 @@
       "patterns": [
         {
           "name": "keyword.other.method.hitspec",
-          "match": "^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE|CONNECT)\\b"
+          "match": "^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE|CONNECT|WS)\\b"
         }
       ]
     },
@@ -76,11 +80,52 @@
         }
       ]
     },
+    "typed-blocks": {
+      "patterns": [
+        {
+          "name": "meta.block.typed.hitspec",
+          "begin": "^>>>(capture|graphql|db|shell|multipart|variables)",
+          "end": "^<<<",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.block.begin.hitspec" },
+            "1": { "name": "keyword.other.block-type.hitspec" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.block.end.hitspec" }
+          },
+          "patterns": [
+            {
+              "name": "keyword.control.expect.hitspec",
+              "match": "\\bexpect\\b"
+            },
+            {
+              "name": "keyword.control.from.hitspec",
+              "match": "\\bfrom\\b"
+            },
+            {
+              "name": "keyword.control.query.hitspec",
+              "match": "\\b(query|field|file)\\b"
+            },
+            {
+              "name": "keyword.operator.comparison.hitspec",
+              "match": "\\b(==|!=|>=|<=|>|<|contains|!contains|startsWith|endsWith|matches|exists|!exists|length|includes|!includes|in|!in|type|each|schema|snapshot)\\b"
+            },
+            {
+              "name": "variable.other.subject.hitspec",
+              "match": "\\b(status|duration|body|header|p50|p95|p99)\\b"
+            },
+            { "include": "#strings" },
+            { "include": "#numbers" },
+            { "include": "#interpolation" }
+          ]
+        }
+      ]
+    },
     "assertions": {
       "patterns": [
         {
           "name": "meta.assertion.hitspec",
-          "begin": "^>>>",
+          "begin": "^>>>$",
           "end": "^<<<",
           "beginCaptures": {
             "0": { "name": "punctuation.definition.assertion.begin.hitspec" }
@@ -103,29 +148,6 @@
             },
             { "include": "#strings" },
             { "include": "#numbers" },
-            { "include": "#interpolation" }
-          ]
-        }
-      ]
-    },
-    "captures": {
-      "patterns": [
-        {
-          "name": "meta.capture.hitspec",
-          "begin": "^\\[\\[\\[",
-          "end": "^\\]\\]\\]",
-          "beginCaptures": {
-            "0": { "name": "punctuation.definition.capture.begin.hitspec" }
-          },
-          "endCaptures": {
-            "0": { "name": "punctuation.definition.capture.end.hitspec" }
-          },
-          "patterns": [
-            {
-              "name": "keyword.control.from.hitspec",
-              "match": "\\bfrom\\b"
-            },
-            { "include": "#strings" },
             { "include": "#interpolation" }
           ]
         }

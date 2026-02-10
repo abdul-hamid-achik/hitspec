@@ -7,11 +7,11 @@ import (
 )
 
 type mockExporter struct {
-	exported    []*AggregateMetrics
-	singles     []*TestMetrics
-	closed      bool
-	exportErr   error
-	singleErr   error
+	exported  []*AggregateMetrics
+	singles   []*TestMetrics
+	closed    bool
+	exportErr error
+	singleErr error
 }
 
 func (m *mockExporter) Export(metrics *AggregateMetrics) error {

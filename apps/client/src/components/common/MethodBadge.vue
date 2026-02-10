@@ -2,9 +2,9 @@
 import { computed } from 'vue'
 import { METHOD_COLORS, METHOD_BG_COLORS, type HttpMethod } from '@/lib/constants'
 
-const props = defineProps<{ method: string; size?: 'sm' | 'md' }>()
-const colorClass = computed(() => METHOD_COLORS[props.method as HttpMethod] ?? 'text-muted-foreground')
-const bgClass = computed(() => METHOD_BG_COLORS[props.method as HttpMethod] ?? 'bg-muted')
+const { method, size } = defineProps<{ method: string; size?: 'sm' | 'md' }>()
+const colorClass = computed(() => METHOD_COLORS[method as HttpMethod] ?? 'text-muted-foreground')
+const bgClass = computed(() => METHOD_BG_COLORS[method as HttpMethod] ?? 'bg-muted')
 </script>
 
 <template>

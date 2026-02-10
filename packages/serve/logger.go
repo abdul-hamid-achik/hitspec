@@ -40,4 +40,3 @@ func newLogger(cfg *ServeConfig) *slog.Logger {
 func contextWithRequestID(ctx context.Context, id string) context.Context {
 	return context.WithValue(ctx, requestIDKey, id)
 }
-

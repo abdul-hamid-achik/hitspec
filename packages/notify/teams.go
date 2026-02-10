@@ -39,8 +39,8 @@ func (t *TeamsNotifier) Name() string {
 
 // teamsMessage represents a Microsoft Teams Adaptive Card message
 type teamsMessage struct {
-	Type        string       `json:"type"`
-	Attachments []teamsCard  `json:"attachments"`
+	Type        string      `json:"type"`
+	Attachments []teamsCard `json:"attachments"`
 }
 
 // teamsCard represents an Adaptive Card
@@ -52,20 +52,20 @@ type teamsCard struct {
 
 // teamsCardContent is the content of an Adaptive Card
 type teamsCardContent struct {
-	Schema  string        `json:"$schema"`
-	Type    string        `json:"type"`
-	Version string        `json:"version"`
-	Body    []teamsBlock  `json:"body"`
+	Schema  string       `json:"$schema"`
+	Type    string       `json:"type"`
+	Version string       `json:"version"`
+	Body    []teamsBlock `json:"body"`
 }
 
 // teamsBlock represents a block in the Adaptive Card
 type teamsBlock struct {
-	Type      string       `json:"type"`
-	Size      string       `json:"size,omitempty"`
-	Weight    string       `json:"weight,omitempty"`
-	Text      string       `json:"text,omitempty"`
-	Color     string       `json:"color,omitempty"`
-	Wrap      bool         `json:"wrap,omitempty"`
+	Type      string        `json:"type"`
+	Size      string        `json:"size,omitempty"`
+	Weight    string        `json:"weight,omitempty"`
+	Text      string        `json:"text,omitempty"`
+	Color     string        `json:"color,omitempty"`
+	Wrap      bool          `json:"wrap,omitempty"`
 	Columns   []teamsColumn `json:"columns,omitempty"`
 	Items     []teamsBlock  `json:"items,omitempty"`
 	Spacing   string        `json:"spacing,omitempty"`

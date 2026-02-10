@@ -9,24 +9,24 @@ import (
 
 // Config represents the hitspec configuration
 type Config struct {
-	DefaultEnvironment string                       `json:"defaultEnvironment,omitempty" yaml:"defaultEnvironment,omitempty"`
-	Timeout            int                          `json:"timeout,omitempty" yaml:"timeout,omitempty"`           // milliseconds
-	Retries            int                          `json:"retries,omitempty" yaml:"retries,omitempty"`
-	RetryDelay         int                          `json:"retryDelay,omitempty" yaml:"retryDelay,omitempty"`     // milliseconds
-	FollowRedirects    *bool                        `json:"followRedirects,omitempty" yaml:"followRedirects,omitempty"`
-	MaxRedirects       int                          `json:"maxRedirects,omitempty" yaml:"maxRedirects,omitempty"`
-	ValidateSSL        *bool                        `json:"validateSSL,omitempty" yaml:"validateSSL,omitempty"`
-	Proxy              string                       `json:"proxy,omitempty" yaml:"proxy,omitempty"`
-	Headers            map[string]string            `json:"headers,omitempty" yaml:"headers,omitempty"`           // Default headers for all requests
-	Reporters          []string                     `json:"reporters,omitempty" yaml:"reporters,omitempty"`       // Output reporters
-	OutputDir          string                       `json:"outputDir,omitempty" yaml:"outputDir,omitempty"`       // Directory for output files
-	Parallel           *bool                        `json:"parallel,omitempty" yaml:"parallel,omitempty"`
-	Concurrency        int                          `json:"concurrency,omitempty" yaml:"concurrency,omitempty"`   // Number of parallel requests
-	Bail               *bool                        `json:"bail,omitempty" yaml:"bail,omitempty"`
-	Verbose            *bool                        `json:"verbose,omitempty" yaml:"verbose,omitempty"`
-	NoColor            *bool                        `json:"noColor,omitempty" yaml:"noColor,omitempty"`
-	Environments       map[string]map[string]any    `json:"environments,omitempty" yaml:"environments,omitempty"` // Inline environments
-	Stress             *StressConfig                `json:"stress,omitempty" yaml:"stress,omitempty"`             // Stress test configuration
+	DefaultEnvironment string                    `json:"defaultEnvironment,omitempty" yaml:"defaultEnvironment,omitempty"`
+	Timeout            int                       `json:"timeout,omitempty" yaml:"timeout,omitempty"` // milliseconds
+	Retries            int                       `json:"retries,omitempty" yaml:"retries,omitempty"`
+	RetryDelay         int                       `json:"retryDelay,omitempty" yaml:"retryDelay,omitempty"` // milliseconds
+	FollowRedirects    *bool                     `json:"followRedirects,omitempty" yaml:"followRedirects,omitempty"`
+	MaxRedirects       int                       `json:"maxRedirects,omitempty" yaml:"maxRedirects,omitempty"`
+	ValidateSSL        *bool                     `json:"validateSSL,omitempty" yaml:"validateSSL,omitempty"`
+	Proxy              string                    `json:"proxy,omitempty" yaml:"proxy,omitempty"`
+	Headers            map[string]string         `json:"headers,omitempty" yaml:"headers,omitempty"`     // Default headers for all requests
+	Reporters          []string                  `json:"reporters,omitempty" yaml:"reporters,omitempty"` // Output reporters
+	OutputDir          string                    `json:"outputDir,omitempty" yaml:"outputDir,omitempty"` // Directory for output files
+	Parallel           *bool                     `json:"parallel,omitempty" yaml:"parallel,omitempty"`
+	Concurrency        int                       `json:"concurrency,omitempty" yaml:"concurrency,omitempty"` // Number of parallel requests
+	Bail               *bool                     `json:"bail,omitempty" yaml:"bail,omitempty"`
+	Verbose            *bool                     `json:"verbose,omitempty" yaml:"verbose,omitempty"`
+	NoColor            *bool                     `json:"noColor,omitempty" yaml:"noColor,omitempty"`
+	Environments       map[string]map[string]any `json:"environments,omitempty" yaml:"environments,omitempty"` // Inline environments
+	Stress             *StressConfig             `json:"stress,omitempty" yaml:"stress,omitempty"`             // Stress test configuration
 }
 
 // StressConfig holds stress testing configuration

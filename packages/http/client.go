@@ -437,7 +437,6 @@ func (c *Client) Delete(url string, headers map[string]string) (*Response, error
 	})
 }
 
-
 // ValidateURL checks that a URL is well-formed and uses an allowed scheme
 func ValidateURL(rawURL string) error {
 	u, err := neturl.Parse(rawURL)

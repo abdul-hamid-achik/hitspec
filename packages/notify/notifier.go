@@ -21,15 +21,15 @@ const (
 
 // TestResult represents the result of a test run
 type TestResult struct {
-	Name        string
-	Passed      bool
-	Failed      bool
-	Duration    time.Duration
-	TotalTests  int
-	PassedTests int
-	FailedTests int
+	Name         string
+	Passed       bool
+	Failed       bool
+	Duration     time.Duration
+	TotalTests   int
+	PassedTests  int
+	FailedTests  int
 	SkippedTests int
-	Errors      []string
+	Errors       []string
 }
 
 // RunSummary represents the summary of a test run for notifications
@@ -47,9 +47,9 @@ type RunSummary struct {
 
 // FailedTest represents a failed test for notifications
 type FailedTest struct {
-	Name     string   `json:"name"`
-	File     string   `json:"file"`
-	Errors   []string `json:"errors,omitempty"`
+	Name   string   `json:"name"`
+	File   string   `json:"file"`
+	Errors []string `json:"errors,omitempty"`
 }
 
 // Notifier is the interface for notification services

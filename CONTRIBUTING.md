@@ -2,14 +2,13 @@
 
 Thank you for your interest in contributing to hitspec! This document provides guidelines and instructions for contributing.
 
-## Development Setup
+## Prerequisites
 
-### Prerequisites
+- **Go 1.25+** — [golang.org/dl](https://go.dev/dl/)
+- **Bun** (latest) — [bun.sh](https://bun.sh/) — used for the web client
+- **Task** — [taskfile.dev](https://taskfile.dev/) — task runner for all dev commands
 
-- Go 1.22 or later
-- [Task](https://taskfile.dev/) (optional, for running common commands)
-
-### Getting Started
+## Getting Started
 
 1. Fork the repository
 2. Clone your fork:
@@ -17,50 +16,40 @@ Thank you for your interest in contributing to hitspec! This document provides g
    git clone https://github.com/YOUR_USERNAME/hitspec.git
    cd hitspec
    ```
-3. Install dependencies:
+3. Bootstrap everything:
    ```bash
-   go mod download
+   task setup
    ```
-4. Build the project:
+   This installs Go and frontend dependencies, builds the client, and runs code generation.
+
+4. Verify the build:
    ```bash
-   go build -o bin/hitspec ./apps/cli
-   # or with Task:
    task build
    ```
+
 5. Run tests:
    ```bash
-   go test ./...
-   # or with Task:
    task test
    ```
 
 ## Code Style
 
-### Formatting
-
-- Use `go fmt` to format your code
-- Use `goimports` to organize imports
-- Run `golangci-lint` before submitting (CI will check this)
-
-```bash
-go fmt ./...
-goimports -w .
-golangci-lint run
-```
-
-### Guidelines
-
+- Run `task lint` before submitting (CI will check this)
+- Run `task check` to run all checks (lint, vet, tests)
+- Follow existing patterns in the codebase
 - Keep functions focused and small
 - Write descriptive variable and function names
-- Add comments for complex logic
-- Follow existing patterns in the codebase
+- Add comments only for complex logic
 
 ## Testing
 
 ### Running Tests
 
 ```bash
-# Run all tests
+# Run all tests (Go + client)
+task test
+
+# Run only Go tests
 go test ./...
 
 # Run with verbose output
@@ -80,34 +69,65 @@ go test ./packages/core/parser/...
 - Test edge cases and error conditions
 - Use the `testdata/` directory for test fixtures
 
+## Frontend Development
+
+The web client lives in `apps/client/` and is built with Vue 3, Pinia, and Reka UI.
+
+```bash
+# Start the dev server (with hot reload)
+task client:dev
+
+# Build for production (output goes to packages/serve/dist/)
+task client:build
+
+# Type-check
+cd apps/client && bun run type-check
+```
+
+The built client is embedded into the Go server binary via `go:embed`.
+
+## Code Generation
+
+Some packages use generated code (e.g. `sqlc` for the history package). After modifying SQL queries or schemas:
+
+```bash
+go generate ./...
+# or
+task generate
+```
+
+## Editor Extensions
+
+- **VSCode** — `apps/vscode/` — syntax highlighting and snippets for `.http`/`.hitspec` files
+- **Neovim** — `apps/nvim/` — Tree-sitter grammar and ftdetect for Neovim
+
 ## Pull Request Process
 
-1. **Create a branch** for your changes:
+1. Create a branch for your changes:
    ```bash
    git checkout -b feature/my-feature
    ```
 
-2. **Make your changes** following the code style guidelines
+2. Make your changes following the code style guidelines
 
-3. **Write/update tests** to cover your changes
+3. Write or update tests to cover your changes
 
-4. **Run tests** to ensure everything passes:
+4. Run all checks:
    ```bash
-   go test ./...
-   golangci-lint run
+   task check
    ```
 
-5. **Commit your changes** with a clear message:
+5. Commit your changes with a clear message:
    ```bash
-   git commit -m "Add feature: description of the feature"
+   git commit -m "feat: description of the feature"
    ```
 
-6. **Push to your fork**:
+6. Push to your fork:
    ```bash
    git push origin feature/my-feature
    ```
 
-7. **Open a Pull Request** against the `main` branch
+7. Open a Pull Request against the `main` branch
 
 ### PR Guidelines
 
@@ -121,21 +141,38 @@ go test ./packages/core/parser/...
 
 ```
 hitspec/
-├── apps/cli/           # CLI application
-│   └── cmd/            # Cobra commands
+├── apps/
+│   ├── cli/           # CLI application (Cobra commands)
+│   ├── client/        # Vue 3 + Pinia web client (Bun/Vite)
+│   ├── docs/          # Mintlify documentation
+│   ├── vscode/        # VSCode extension
+│   └── nvim/          # Neovim plugin
 ├── packages/
-│   ├── core/           # Core functionality
-│   │   ├── config/     # Configuration handling
-│   │   ├── env/        # Environment variables
-│   │   ├── parser/     # File parser
-│   │   └── runner/     # Test runner
-│   ├── http/           # HTTP client
-│   ├── output/         # Output formatters
-│   ├── assertions/     # Test assertions
-│   ├── capture/        # Response capture
-│   └── builtin/        # Built-in functions
-├── examples/           # Example test files
-└── testdata/           # Test fixtures
+│   ├── core/          # Parser, runner, config, env
+│   ├── http/          # HTTP client
+│   ├── output/        # Formatters (console, json, junit, tap, html)
+│   ├── assertions/    # Test assertions
+│   ├── capture/       # Response capture
+│   ├── builtin/       # Built-in functions
+│   ├── serve/         # HTTP server (embeds web client)
+│   ├── stress/        # Stress/load testing
+│   ├── mock/          # Mock server
+│   ├── proxy/         # Recording proxy
+│   ├── import/        # Importers (curl, insomnia, openapi)
+│   ├── export/        # Exporters (curl, wget, httpie)
+│   ├── snapshot/      # Snapshot testing
+│   ├── sse/           # Server-Sent Events
+│   ├── contract/      # Contract testing
+│   ├── coverage/      # API coverage
+│   ├── history/       # Run history (SQLite)
+│   ├── db/            # Database assertions
+│   ├── notify/        # Notifications
+│   └── auth/          # Authentication (OAuth2)
+├── internal/
+│   ├── pathutil/      # Path validation
+│   └── conv/          # Numeric conversion
+├── examples/          # Example test files
+└── testdata/          # Test fixtures
 ```
 
 ## Reporting Issues

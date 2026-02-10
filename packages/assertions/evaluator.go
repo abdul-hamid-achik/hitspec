@@ -32,10 +32,10 @@ type Result struct {
 type Evaluator struct {
 	response    *http.Response
 	bodyJSON    gjson.Result
-	baseDir     string                 // Base directory for resolving schema file paths
-	testFile    string                 // Path to the test file (for snapshots)
-	requestName string                 // Name of the current request (for snapshots)
-	resolver    func(string) string    // Optional resolver for variable interpolation
+	baseDir     string              // Base directory for resolving schema file paths
+	testFile    string              // Path to the test file (for snapshots)
+	requestName string              // Name of the current request (for snapshots)
+	resolver    func(string) string // Optional resolver for variable interpolation
 }
 
 // EvaluatorOption is a functional option for configuring an Evaluator.
@@ -509,7 +509,6 @@ func (e *Evaluator) typeCheck(actual, expected any) (bool, string) {
 	return false, fmt.Sprintf("expected type %s, got %s", expectedType, actualType)
 }
 
-
 func toInt(v any) (int, bool) {
 	switch n := v.(type) {
 	case int:
@@ -542,7 +541,6 @@ func EvaluateAllWithBaseDir(resp *http.Response, assertions []*parser.Assertion,
 	}
 	return results
 }
-
 
 func (e *Evaluator) schema(actual, expected any) (bool, string) {
 	schemaPath := fmt.Sprintf("%v", expected)

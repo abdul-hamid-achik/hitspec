@@ -13,13 +13,13 @@ import (
 )
 
 var (
-	recordPortFlag      int
-	recordTargetFlag    string
-	recordOutputFlag    string
-	recordExcludeFlag   string
-	recordVerboseFlag   bool
-	recordDedupeFlag    bool
-	recordJSONFlag      bool
+	recordPortFlag    int
+	recordTargetFlag  string
+	recordOutputFlag  string
+	recordExcludeFlag string
+	recordVerboseFlag bool
+	recordDedupeFlag  bool
+	recordJSONFlag    bool
 )
 
 var recordCmd = &cobra.Command{

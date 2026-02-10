@@ -70,16 +70,16 @@ type DiffResult struct {
 
 // TestComparison represents a comparison between two test results
 type TestComparison struct {
-	TestName        string
-	File            string
-	StatusChange    string  // "improved", "regressed", "unchanged", "new", "removed"
-	Duration1       float64 // ms
-	Duration2       float64 // ms
-	DurationChange  float64 // percentage change
-	Passed1         bool
-	Passed2         bool
-	InFile1         bool
-	InFile2         bool
+	TestName       string
+	File           string
+	StatusChange   string  // "improved", "regressed", "unchanged", "new", "removed"
+	Duration1      float64 // ms
+	Duration2      float64 // ms
+	DurationChange float64 // percentage change
+	Passed1        bool
+	Passed2        bool
+	InFile1        bool
+	InFile2        bool
 }
 
 // DiffSummary provides overall statistics

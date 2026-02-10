@@ -103,12 +103,14 @@
       {
         "group": "Guides",
         "pages": [
+          "guides/api-client-manager",
           "guides/ci-cd-pipeline",
           "guides/regression-testing",
           "guides/database-testing",
           "guides/load-testing",
           "guides/contract-testing",
-          "guides/migrating-from-postman"
+          "guides/migrating-from-postman",
+          "guides/troubleshooting"
         ]
       },
       {

@@ -11,7 +11,7 @@ import { useRequestStore } from '@/stores/request'
 import MethodBadge from '@/components/common/MethodBadge.vue'
 import type { FileInfo, RequestDTO } from '@/types/api'
 
-const props = defineProps<{ open: boolean }>()
+const { open } = defineProps<{ open: boolean }>()
 const emit = defineEmits<{
   'update:open': [value: boolean]
   'show-shortcuts': []
@@ -137,7 +137,7 @@ watch(() => query.value, () => {
   selectedIndex.value = 0
 })
 
-watch(() => props.open, (isOpen) => {
+watch(() => open, (isOpen) => {
   if (isOpen) {
     query.value = ''
     selectedIndex.value = 0

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { AssertionDTO } from '@/types/api'
 
-defineProps<{ assertions: AssertionDTO[] }>()
+const { assertions } = defineProps<{ assertions: AssertionDTO[] }>()
 </script>
 
 <template>

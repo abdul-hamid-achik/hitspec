@@ -23,7 +23,6 @@ interface HitspecState {
 
 const HTTP_METHODS = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE|CONNECT|WS)\b/
 
-const BLOCK_START = /^>>>(assertions?|capture|shell|db|multipart|graphql|variables)?\s*$/
 const BLOCK_END = /^<<<\s*$/
 
 const ASSERTION_OPERATORS =
@@ -213,7 +212,6 @@ function tokenize(stream: StringStream, state: HitspecState): string | null {
     const saved = stream.pos
     stream.next() // skip @
     if (stream.match(/^\w[\w.-]*/)) {
-      const afterIdent = stream.pos
       stream.eatSpace()
       if (stream.peek() === '=') {
         // Variable assignment: @varName = value

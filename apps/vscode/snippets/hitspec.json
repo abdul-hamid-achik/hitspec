@@ -84,6 +84,52 @@
     ],
     "description": "Create a DELETE request"
   },
+  "HEAD Request": {
+    "prefix": "head",
+    "body": [
+      "### ${1:Request Name}",
+      "# @name ${2:requestName}",
+      "HEAD ${3:{{baseUrl}}/endpoint}",
+      "",
+      ">>>",
+      "expect status == 200",
+      "<<<",
+      ""
+    ],
+    "description": "Create a HEAD request"
+  },
+  "OPTIONS Request": {
+    "prefix": "options",
+    "body": [
+      "### ${1:Request Name}",
+      "# @name ${2:requestName}",
+      "OPTIONS ${3:{{baseUrl}}/endpoint}",
+      "",
+      ">>>",
+      "expect status == 200",
+      "<<<",
+      ""
+    ],
+    "description": "Create an OPTIONS request"
+  },
+  "WebSocket Request": {
+    "prefix": "ws",
+    "body": [
+      "### ${1:WebSocket Test}",
+      "# @name ${2:wsTest}",
+      "WS ${3:{{baseUrl}}/ws}",
+      "",
+      "{",
+      "  \"${4:type}\": \"${5:message}\"",
+      "}",
+      "",
+      ">>>",
+      "expect status == 101",
+      "<<<",
+      ""
+    ],
+    "description": "Create a WebSocket request"
+  },
   "Assertion Block": {
     "prefix": "assert",
     "body": [
@@ -96,11 +142,59 @@
   "Capture Block": {
     "prefix": "capture",
     "body": [
-      "[[[",
+      ">>>capture",
       "${1:variableName} from ${2|body,body.,header,status,duration|}${3:path}",
-      "]]]"
+      "<<<"
     ],
     "description": "Create a capture block"
+  },
+  "GraphQL Block": {
+    "prefix": "graphql",
+    "body": [
+      ">>>graphql",
+      "${1:query} {",
+      "  ${2:field} {",
+      "    ${3:subfield}",
+      "  }",
+      "}",
+      ">>>variables",
+      "{",
+      "  \"${4:key}\": \"${5:value}\"",
+      "}",
+      "<<<"
+    ],
+    "description": "Create a GraphQL request body"
+  },
+  "Multipart Block": {
+    "prefix": "multipart",
+    "body": [
+      ">>>multipart",
+      "field ${1:name} = ${2:value}",
+      "file @${3:./path/to/file}",
+      "<<<"
+    ],
+    "description": "Create a multipart form body"
+  },
+  "Shell Block": {
+    "prefix": "shell",
+    "body": [
+      ">>>shell",
+      "${1:echo \"hello\"}",
+      "<<<"
+    ],
+    "description": "Create a shell command block"
+  },
+  "Database Block": {
+    "prefix": "db",
+    "body": [
+      "# @db ${1:postgres://user:pass@localhost/db}",
+      "",
+      ">>>db",
+      "query SELECT * FROM ${2:users} WHERE id = ${3:1}",
+      "expect ${4:count} > 0",
+      "<<<"
+    ],
+    "description": "Create a database assertion block"
   },
   "Variable Definition": {
     "prefix": "var",
@@ -129,6 +223,34 @@
       "# @auth oauth2 client_credentials ${1:tokenUrl} ${2:clientId} ${3:clientSecret}"
     ],
     "description": "Add OAuth2 client credentials authentication"
+  },
+  "If Annotation": {
+    "prefix": "if",
+    "body": [
+      "# @if {{${1:variable}}}"
+    ],
+    "description": "Conditionally run request if variable is truthy"
+  },
+  "Unless Annotation": {
+    "prefix": "unless",
+    "body": [
+      "# @unless {{${1:variable}}}"
+    ],
+    "description": "Skip request if variable is truthy"
+  },
+  "RetryOn Annotation": {
+    "prefix": "retryon",
+    "body": [
+      "# @retryOn ${1:500,502,503}"
+    ],
+    "description": "Retry on specific HTTP status codes"
+  },
+  "Description Annotation": {
+    "prefix": "description",
+    "body": [
+      "# @description ${1:Describe this request}"
+    ],
+    "description": "Add a description to the request"
   },
   "Skip Annotation": {
     "prefix": "skip",
@@ -289,9 +411,9 @@
       "expect body.${9:id} exists",
       "<<<",
       "",
-      "[[[",
+      ">>>capture",
       "${10:responseId} from body.id",
-      "]]]",
+      "<<<",
       ""
     ],
     "description": "Complete JSON request template with assertions and captures"
@@ -318,17 +440,5 @@
       "# @waitfor ${1:http://localhost:8080/health} ${2:200} ${3:30000} ${4:1000}"
     ],
     "description": "Wait for service to be ready"
-  },
-  "Database Assertion Block": {
-    "prefix": "db",
-    "body": [
-      "# @db ${1:postgres://user:pass@localhost/db}",
-      "",
-      "~~~",
-      "query SELECT * FROM ${2:users} WHERE id = ${3:1}",
-      "expect ${4:count} > 0",
-      "~~~"
-    ],
-    "description": "Add database assertion block"
   }
 }

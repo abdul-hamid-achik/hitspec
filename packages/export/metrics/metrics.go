@@ -38,17 +38,17 @@ type TestMetrics struct {
 
 // AggregateMetrics represents aggregated metrics from multiple test runs
 type AggregateMetrics struct {
-	TotalRequests   int64           `json:"total_requests"`
-	SuccessCount    int64           `json:"success_count"`
-	FailureCount    int64           `json:"failure_count"`
-	TotalDurationMs float64         `json:"total_duration_ms"`
-	MinDurationMs   float64         `json:"min_duration_ms"`
-	MaxDurationMs   float64         `json:"max_duration_ms"`
-	AvgDurationMs   float64         `json:"avg_duration_ms"`
-	P50DurationMs   float64         `json:"p50_duration_ms"`
-	P95DurationMs   float64         `json:"p95_duration_ms"`
-	P99DurationMs   float64         `json:"p99_duration_ms"`
-	StatusCodes     map[int]int64   `json:"status_codes"`
+	TotalRequests   int64                     `json:"total_requests"`
+	SuccessCount    int64                     `json:"success_count"`
+	FailureCount    int64                     `json:"failure_count"`
+	TotalDurationMs float64                   `json:"total_duration_ms"`
+	MinDurationMs   float64                   `json:"min_duration_ms"`
+	MaxDurationMs   float64                   `json:"max_duration_ms"`
+	AvgDurationMs   float64                   `json:"avg_duration_ms"`
+	P50DurationMs   float64                   `json:"p50_duration_ms"`
+	P95DurationMs   float64                   `json:"p95_duration_ms"`
+	P99DurationMs   float64                   `json:"p99_duration_ms"`
+	StatusCodes     map[int]int64             `json:"status_codes"`
 	ByTest          map[string]*TestAggregate `json:"by_test"`
 }
 
@@ -77,9 +77,9 @@ type Exporter interface {
 
 // Collector collects metrics from test runs
 type Collector struct {
-	metrics    []*TestMetrics
-	aggregate  *AggregateMetrics
-	exporters  []Exporter
+	metrics   []*TestMetrics
+	aggregate *AggregateMetrics
+	exporters []Exporter
 }
 
 // NewCollector creates a new metrics collector

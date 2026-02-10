@@ -596,9 +596,9 @@ func TestParser_WaitForDefaults(t *testing.T) {
 	wf := file.Requests[0].Metadata.WaitFor
 	require.NotNil(t, wf)
 	assert.Equal(t, "http://localhost:8080/health", wf.URL)
-	assert.Equal(t, 200, wf.Status)     // default
-	assert.Equal(t, 30000, wf.Timeout)  // default 30s
-	assert.Equal(t, 1000, wf.Interval)  // default 1s
+	assert.Equal(t, 200, wf.Status)    // default
+	assert.Equal(t, 30000, wf.Timeout) // default 30s
+	assert.Equal(t, 1000, wf.Interval) // default 1s
 }
 
 func TestParser_WaitForAllParams(t *testing.T) {

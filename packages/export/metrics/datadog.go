@@ -12,11 +12,11 @@ import (
 
 // DataDogExporter exports metrics to DataDog
 type DataDogExporter struct {
-	apiKey   string
-	site     string // e.g., "datadoghq.com", "datadoghq.eu"
-	tags     []string
-	prefix   string
-	client   *http.Client
+	apiKey string
+	site   string // e.g., "datadoghq.com", "datadoghq.eu"
+	tags   []string
+	prefix string
+	client *http.Client
 }
 
 // DataDogOption is a functional option for DataDogExporter
@@ -73,9 +73,9 @@ func NewDataDogExporter(opts ...DataDogOption) *DataDogExporter {
 
 // datadogMetric represents a metric in DataDog format
 type datadogMetric struct {
-	Metric string  `json:"metric"`
-	Type   string  `json:"type"`
-	Points [][]any `json:"points"`
+	Metric string   `json:"metric"`
+	Type   string   `json:"type"`
+	Points [][]any  `json:"points"`
 	Tags   []string `json:"tags,omitempty"`
 }
 
