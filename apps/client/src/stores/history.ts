@@ -21,13 +21,6 @@ export const useHistoryStore = defineStore('history', () => {
     }
   }
 
-  function addEntry(entry: HistoryEntry) {
-    entries.value.unshift(entry)
-    if (entries.value.length > 100) {
-      entries.value = entries.value.slice(0, 100)
-    }
-  }
-
   async function clearAll() {
     try {
       await apiClearHistory()
@@ -40,5 +33,5 @@ export const useHistoryStore = defineStore('history', () => {
     }
   }
 
-  return { entries, loading, error, loadHistory, addEntry, clearAll }
+  return { entries, loading, error, loadHistory, clearAll }
 })

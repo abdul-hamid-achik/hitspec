@@ -1,6 +1,9 @@
 package parser
 
-import "strconv"
+import (
+	"strconv"
+	"strings"
+)
 
 type File struct {
 	Path      string
@@ -326,6 +329,10 @@ func (e *ParseError) Error() string {
 	}
 	if e.Snippet != "" {
 		msg += "\n  " + e.Snippet
+		// Add column pointer (caret) if column is valid
+		if e.Column > 0 && e.Column <= len(e.Snippet) {
+			msg += "\n  " + strings.Repeat(" ", e.Column-1) + "^"
+		}
 	}
 	return msg
 }

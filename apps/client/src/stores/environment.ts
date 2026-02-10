@@ -1,7 +1,8 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import type { EnvironmentDTO } from '@/types/api'
-import { getEnvironments, selectEnvironment, updateEnvironment } from '@/api/endpoints/environments'
+import { getEnvironments, selectEnvironment } from '@/api/endpoints/environments'
+import { ws } from '@/api/websocket'
 
 export const useEnvironmentStore = defineStore('environment', () => {
   const environments = ref<EnvironmentDTO[]>([])
@@ -46,18 +47,18 @@ export const useEnvironmentStore = defineStore('environment', () => {
     }
   }
 
-  async function updateEnv(env: EnvironmentDTO) {
-    const idx = environments.value.findIndex((e) => e.name === env.name)
-    const prev = idx >= 0 ? environments.value[idx] : null
-    if (idx >= 0) environments.value[idx] = env
-    try {
-      await updateEnvironment(env)
-    } catch (e) {
-      // Rollback optimistic update on failure
-      if (prev && idx >= 0) environments.value[idx] = prev
-      error.value = e instanceof Error ? e.message : 'Failed to update environment'
-    }
+  let initialized = false
+
+  function init() {
+    if (initialized) return
+    initialized = true
+    ws.on('environment_changed', (msg) => {
+      const payload = msg.payload as { name: string }
+      if (payload?.name) {
+        activeEnvName.value = payload.name
+      }
+    })
   }
 
-  return { environments, activeEnvName, activeEnv, envNames, loading, error, loadEnvironments, selectEnv, updateEnv }
+  return { environments, activeEnvName, activeEnv, envNames, loading, error, loadEnvironments, selectEnv, init }
 })

@@ -6,8 +6,7 @@ export function getEnvironments(): Promise<EnvironmentDTO[]> {
 }
 
 export function selectEnvironment(name: string): Promise<void> {
-  // Set the active environment via the config endpoint's defaultEnvironment field
-  return put('/api/v1/config', { defaultEnvironment: name })
+  return put('/api/v1/environments/active', { name })
 }
 
 export function updateEnvironment(env: EnvironmentDTO): Promise<void> {

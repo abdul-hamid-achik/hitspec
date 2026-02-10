@@ -104,7 +104,7 @@ func evaluateDBAssertion(assertion *parser.DBAssertion, result *db.QueryResult, 
 	if !exists {
 		// Try case-insensitive match
 		for col, val := range row {
-			if equalFold(col, assertion.Column) {
+			if strings.EqualFold(col, assertion.Column) {
 				actual = val
 				exists = true
 				break
@@ -229,25 +229,4 @@ func dbAssertContains(actual, expected interface{}) (bool, string) {
 		return true, ""
 	}
 	return false, fmt.Sprintf("expected '%v' to contain '%v'", actual, expected)
-}
-
-
-// equalFold is a simple case-insensitive string comparison
-func equalFold(a, b string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		ca, cb := a[i], b[i]
-		if ca >= 'A' && ca <= 'Z' {
-			ca += 'a' - 'A'
-		}
-		if cb >= 'A' && cb <= 'Z' {
-			cb += 'a' - 'A'
-		}
-		if ca != cb {
-			return false
-		}
-	}
-	return true
 }

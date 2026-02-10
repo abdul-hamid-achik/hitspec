@@ -103,6 +103,12 @@ export interface AssertionResult {
   message?: string
 }
 
+export interface SSEEventDTO {
+  id?: string
+  type?: string
+  data: string
+}
+
 export interface RunResult {
   name: string
   description?: string
@@ -121,6 +127,7 @@ export interface RunResult {
     size: number
   }
   assertions?: AssertionResult[]
+  sseEvents?: SSEEventDTO[]
   captures?: Record<string, unknown>
 }
 
@@ -357,6 +364,7 @@ export type WSMessageType =
   | 'execution_complete'
   | 'stress_update'
   | 'mock_request'
+  | 'environment_changed'
   | 'error'
   | 'pong'
 

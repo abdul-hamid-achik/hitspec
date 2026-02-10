@@ -453,3 +453,240 @@ GET http://example.com`
 	assert.Equal(t, "user exists", req.Metadata.Custom["contract.state"])
 	assert.Equal(t, "foo", req.Metadata.Custom["x-custom"])
 }
+
+// --- UTF-8 multi-byte character tests ---
+
+func TestParser_UTF8InURL(t *testing.T) {
+	input := "### UTF8 URL\nGET https://api.example.com/search?q=\u00e9l\u00e8ve"
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+	assert.Contains(t, file.Requests[0].URL, "\u00e9l\u00e8ve")
+}
+
+func TestParser_UTF8InHeader(t *testing.T) {
+	input := "### UTF8 Header\nGET https://api.example.com/test\nX-Custom: caf\u00e9 cr\u00e8me"
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+	require.Len(t, file.Requests[0].Headers, 1)
+	assert.Equal(t, "caf\u00e9 cr\u00e8me", file.Requests[0].Headers[0].Value)
+}
+
+func TestParser_UTF8InBody(t *testing.T) {
+	input := "### UTF8 Body\nPOST https://api.example.com/test\nContent-Type: application/json\n\n{\"name\": \"\u00fc\u00f6\u00e4\", \"city\": \"\u6771\u4eac\"}"
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+	require.NotNil(t, file.Requests[0].Body)
+	assert.Contains(t, file.Requests[0].Body.Raw, "\u00fc\u00f6\u00e4")
+	assert.Contains(t, file.Requests[0].Body.Raw, "\u6771\u4eac")
+}
+
+func TestParser_UTF8InStringLiteral(t *testing.T) {
+	input := "### UTF8 Assert\nGET http://test.com\n\n>>>\nexpect body.name == \"\u00e9l\u00e8ve\"\n<<<"
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+	require.Len(t, file.Requests[0].Assertions, 1)
+	assert.Equal(t, "\u00e9l\u00e8ve", file.Requests[0].Assertions[0].Expected)
+}
+
+func TestParser_UTF8InVariableValue(t *testing.T) {
+	input := "@greeting = \u3053\u3093\u306b\u3061\u306f\n\n### UTF8 Var\nGET http://test.com"
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Variables, 1)
+	assert.Equal(t, "\u3053\u3093\u306b\u3061\u306f", file.Variables[0].Value)
+}
+
+func TestParser_UTF8InRequestSeparatorName(t *testing.T) {
+	// Request separator names aren't identifiers, they're free-form text
+	input := "### R\u00e9sum\u00e9 Upload\nGET http://test.com"
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+	assert.Equal(t, "R\u00e9sum\u00e9 Upload", file.Requests[0].Name)
+}
+
+func TestParser_UTF8Emoji(t *testing.T) {
+	// Emoji are 4-byte UTF-8 sequences
+	input := "### Emoji\nPOST http://test.com\nContent-Type: application/json\n\n{\"reaction\": \"\U0001f600\"}"
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+	require.NotNil(t, file.Requests[0].Body)
+	assert.Contains(t, file.Requests[0].Body.Raw, "\U0001f600")
+}
+
+// --- Shell/DB block edge cases ---
+
+func TestParser_EmptyShellBlock(t *testing.T) {
+	input := "### Test\nGET http://test.com\n\n>>>shell\n<<<\n"
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+	assert.Empty(t, file.Requests[0].ShellCommands)
+}
+
+func TestParser_EmptyDBBlock(t *testing.T) {
+	input := "### Test\n# @db sqlite3://test.db\nGET http://test.com\n\n>>>db\n<<<\n"
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+	assert.Empty(t, file.Requests[0].DBAssertions)
+}
+
+func TestParser_EmptyAssertionBlock(t *testing.T) {
+	input := "### Test\nGET http://test.com\n\n>>>\n<<<\n"
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+	assert.Empty(t, file.Requests[0].Assertions)
+}
+
+func TestParser_ShellBlockMissingClose(t *testing.T) {
+	// Missing <<< should parse until EOF without panic
+	input := "### Test\nGET http://test.com\n\n>>>shell\necho hello"
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+	require.Len(t, file.Requests[0].ShellCommands, 1)
+	assert.Equal(t, "echo hello", file.Requests[0].ShellCommands[0].Command)
+}
+
+func TestParser_DBBlockMissingClose(t *testing.T) {
+	input := "### Test\n# @db sqlite3://test.db\nGET http://test.com\n\n>>>db\nquery SELECT count(*) as cnt FROM users\nexpect cnt > 0"
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+	require.Len(t, file.Requests[0].DBAssertions, 1)
+}
+
+func TestParser_AssertionBlockMissingClose(t *testing.T) {
+	input := "### Test\nGET http://test.com\n\n>>>\nexpect status 200"
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+	require.Len(t, file.Requests[0].Assertions, 1)
+}
+
+// --- Parse error quality tests ---
+
+func TestParser_ParseErrorIncludesColumnPointer(t *testing.T) {
+	input := "### Bad Request\nnot-a-method https://example.com"
+	_, err := Parse(input, "err.http")
+	require.Error(t, err)
+	pe, ok := err.(*ParseError)
+	require.True(t, ok)
+	errStr := pe.Error()
+	// Should contain file:line:col, the snippet, and a caret
+	assert.Contains(t, errStr, "err.http:")
+	assert.Contains(t, errStr, "expected HTTP method")
+	assert.Contains(t, errStr, "^")
+}
+
+// --- @waitFor parsing edge cases ---
+
+func TestParser_WaitForDefaults(t *testing.T) {
+	input := "### Wait\n# @waitFor http://localhost:8080/health\n\nGET http://test.com"
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+	wf := file.Requests[0].Metadata.WaitFor
+	require.NotNil(t, wf)
+	assert.Equal(t, "http://localhost:8080/health", wf.URL)
+	assert.Equal(t, 200, wf.Status)     // default
+	assert.Equal(t, 30000, wf.Timeout)  // default 30s
+	assert.Equal(t, 1000, wf.Interval)  // default 1s
+}
+
+func TestParser_WaitForAllParams(t *testing.T) {
+	input := "### Wait\n# @waitFor http://localhost:8080/ready 204 10000 500\n\nGET http://test.com"
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	wf := file.Requests[0].Metadata.WaitFor
+	require.NotNil(t, wf)
+	assert.Equal(t, "http://localhost:8080/ready", wf.URL)
+	assert.Equal(t, 204, wf.Status)
+	assert.Equal(t, 10000, wf.Timeout)
+	assert.Equal(t, 500, wf.Interval)
+}
+
+// --- Multipart parsing ---
+
+func TestParser_MultipartBody(t *testing.T) {
+	input := "### Upload\nPOST http://test.com/upload\n\n>>>multipart\nfield name = John Doe\nfile @./photo.jpg\n<<<\n"
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+	req := file.Requests[0]
+	require.NotNil(t, req.Body)
+	assert.Equal(t, BodyMultipart, req.Body.ContentType)
+	require.Len(t, req.Body.Multipart, 2)
+	assert.Equal(t, MultipartFieldValue, req.Body.Multipart[0].Type)
+	assert.Equal(t, "name", req.Body.Multipart[0].Name)
+	assert.Equal(t, "John Doe", req.Body.Multipart[0].Value)
+	assert.Equal(t, MultipartFieldFile, req.Body.Multipart[1].Type)
+	assert.Equal(t, "./photo.jpg", req.Body.Multipart[1].Path)
+}
+
+// --- Stress metadata parsing ---
+
+func TestParser_StressAnnotations(t *testing.T) {
+	input := "### Stress\n# @stress.weight 5\n# @stress.think 200\n# @stress.setup\n\nGET http://test.com"
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+	s := file.Requests[0].Metadata.Stress
+	require.NotNil(t, s)
+	assert.Equal(t, 5, s.Weight)
+	assert.Equal(t, 200, s.Think)
+	assert.True(t, s.Setup)
+}
+
+// --- @depends parsing ---
+
+func TestParser_DependsAnnotation(t *testing.T) {
+	input := "### Child\n# @depends parentA, parentB\n\nGET http://test.com"
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+	deps := file.Requests[0].Metadata.Depends
+	require.Len(t, deps, 2)
+	assert.Equal(t, "parentA", deps[0])
+	assert.Equal(t, "parentB", deps[1])
+}
+
+// --- Capture edge cases ---
+
+func TestParser_CaptureStatus(t *testing.T) {
+	input := "### Test\nGET http://test.com\n\n>>>capture\ncode from status\n<<<"
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests[0].Captures, 1)
+	c := file.Requests[0].Captures[0]
+	assert.Equal(t, "code", c.Name)
+	assert.Equal(t, CaptureStatus, c.Source)
+}
+
+func TestParser_CaptureDuration(t *testing.T) {
+	input := "### Test\nGET http://test.com\n\n>>>capture\nms from duration\n<<<"
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests[0].Captures, 1)
+	c := file.Requests[0].Captures[0]
+	assert.Equal(t, "ms", c.Name)
+	assert.Equal(t, CaptureDuration, c.Source)
+}
+
+func TestParser_CaptureHeader(t *testing.T) {
+	input := "### Test\nGET http://test.com\n\n>>>capture\nloc from header Location\n<<<"
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests[0].Captures, 1)
+	c := file.Requests[0].Captures[0]
+	assert.Equal(t, "loc", c.Name)
+	assert.Equal(t, CaptureHeader, c.Source)
+	assert.Equal(t, "Location", c.Path)
+}

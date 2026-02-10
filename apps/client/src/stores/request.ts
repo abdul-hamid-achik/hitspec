@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { RequestDTO, RunResult, ExecuteResult } from '@/types/api'
 import { executeRequest as apiExecute, executeFile as executeFileApi } from '@/api/endpoints/execute'
@@ -13,8 +13,6 @@ export const useRequestStore = defineStore('request', () => {
 
   // Monotonic counter to detect stale responses from concurrent executions
   let executionId = 0
-
-  const hasPassed = computed(() => lastResult.value?.passed ?? null)
 
   async function execute(filePath: string, requestName?: string, environment?: string) {
     if (isExecuting.value) return
@@ -89,12 +87,5 @@ export const useRequestStore = defineStore('request', () => {
     error.value = null
   }
 
-  function clear() {
-    activeRequest.value = null
-    lastResult.value = null
-    lastRunResult.value = null
-    error.value = null
-  }
-
-  return { activeRequest, activeRequestIndex, lastResult, lastRunResult, isExecuting, error, hasPassed, execute, runFile, setActiveRequest, clear }
+  return { activeRequest, activeRequestIndex, lastResult, lastRunResult, isExecuting, error, execute, runFile, setActiveRequest }
 })

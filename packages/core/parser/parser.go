@@ -630,33 +630,32 @@ func (p *Parser) parseMultipartBody() (*Body, error) {
 	for p.curToken.Type != TokenAssertionEnd && p.curToken.Type != TokenEOF {
 		if p.curToken.Type == TokenIdentifier {
 			fieldType := strings.ToLower(p.curToken.Value)
-			p.nextToken()
-			if p.curToken.Type == TokenWhitespace {
-				p.nextToken()
-			}
-
 			field := &MultipartField{}
+
+			// Use raw lexer reading so spaces in values are preserved
+			l := p.lexer
+			l.skipWhitespaceInLine()
 
 			if fieldType == "file" {
 				field.Type = MultipartFieldFile
-				if p.curToken.Value == "@" {
-					p.nextToken()
+				if l.ch == '@' {
+					l.readChar()
 				}
-				field.Path = p.lexer.ReadRestOfLine()
+				field.Path = l.ReadRestOfLine()
 			} else if fieldType == "field" {
 				field.Type = MultipartFieldValue
-				field.Name = p.curToken.Value
-				p.nextToken()
-				if p.curToken.Type == TokenWhitespace {
-					p.nextToken()
+				// Read the field name
+				var nameBuilder strings.Builder
+				for isLetter(l.ch) || isDigit(l.ch) || l.ch == '_' || l.ch == '-' || l.ch == '.' {
+					nameBuilder.WriteRune(l.ch)
+					l.readChar()
 				}
-				if p.curToken.Type == TokenEquals {
-					p.nextToken()
+				field.Name = nameBuilder.String()
+				l.skipWhitespaceInLine()
+				if l.ch == '=' {
+					l.readChar()
 				}
-				if p.curToken.Type == TokenWhitespace {
-					p.nextToken()
-				}
-				field.Value = p.lexer.ReadRestOfLine()
+				field.Value = l.ReadRestOfLine()
 			}
 
 			body.Multipart = append(body.Multipart, field)
@@ -963,15 +962,16 @@ func (p *Parser) parseCapture() (*Capture, error) {
 	var pathBuilder strings.Builder
 	for p.curToken.Type != TokenNewline && p.curToken.Type != TokenEOF {
 		if p.curToken.Type == TokenWhitespace {
-			break
+			pathBuilder.WriteString(" ")
+		} else {
+			pathBuilder.WriteString(p.curToken.Value)
 		}
-		pathBuilder.WriteString(p.curToken.Value)
 		p.nextTokenRaw()
 	}
 	path := strings.TrimSpace(pathBuilder.String())
 
 	source := CaptureBody
-	if strings.HasPrefix(path, "header") {
+	if strings.HasPrefix(path, "header ") || path == "header" {
 		source = CaptureHeader
 		path = strings.TrimPrefix(path, "header")
 		path = strings.TrimSpace(path)

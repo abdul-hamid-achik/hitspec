@@ -3,6 +3,7 @@ package parser
 import (
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 type TokenType int
@@ -64,7 +65,8 @@ type Lexer struct {
 	input   string
 	pos     int
 	readPos int
-	ch      byte
+	ch      rune
+	chWidth int // byte width of current rune (1 for ASCII, up to 4 for multi-byte)
 	line    int
 	column  int
 }
@@ -82,11 +84,15 @@ func NewLexer(input string) *Lexer {
 func (l *Lexer) readChar() {
 	if l.readPos >= len(l.input) {
 		l.ch = 0
-	} else {
-		l.ch = l.input[l.readPos]
+		l.chWidth = 0
+		l.pos = l.readPos
+		return
 	}
+	r, w := utf8.DecodeRuneInString(l.input[l.readPos:])
+	l.ch = r
+	l.chWidth = w
 	l.pos = l.readPos
-	l.readPos++
+	l.readPos += w
 	l.column++
 	if l.ch == '\n' {
 		l.line++
@@ -94,11 +100,12 @@ func (l *Lexer) readChar() {
 	}
 }
 
-func (l *Lexer) peekChar() byte {
+func (l *Lexer) peekChar() rune {
 	if l.readPos >= len(l.input) {
 		return 0
 	}
-	return l.input[l.readPos]
+	r, _ := utf8.DecodeRuneInString(l.input[l.readPos:])
+	return r
 }
 
 func (l *Lexer) peekChars(n int) string {
@@ -406,7 +413,7 @@ func (l *Lexer) readVariableRef() Token {
 	l.readChar()
 	var builder strings.Builder
 	for l.ch != 0 && !(l.ch == '}' && l.peekChar() == '}') {
-		builder.WriteByte(l.ch)
+		builder.WriteRune(l.ch)
 		l.readChar()
 	}
 	if l.ch == '}' {
@@ -421,7 +428,7 @@ func (l *Lexer) readVariableRef() Token {
 	}
 }
 
-func (l *Lexer) readString(quote byte) Token {
+func (l *Lexer) readString(quote rune) Token {
 	line := l.line
 	col := l.column
 	l.readChar()
@@ -429,16 +436,16 @@ func (l *Lexer) readString(quote byte) Token {
 	for l.ch != 0 && l.ch != quote {
 		if l.ch == '\\' {
 			// Preserve escape sequences: write the backslash
-			builder.WriteByte(l.ch)
+			builder.WriteRune(l.ch)
 			l.readChar()
 			if l.ch != 0 {
 				// Write the escaped character (could be ", \, n, t, etc.)
-				builder.WriteByte(l.ch)
+				builder.WriteRune(l.ch)
 				l.readChar()
 			}
 			continue
 		}
-		builder.WriteByte(l.ch)
+		builder.WriteRune(l.ch)
 		l.readChar()
 	}
 	if l.ch == quote {
@@ -458,18 +465,18 @@ func (l *Lexer) readNumber() Token {
 	col := l.column
 	var builder strings.Builder
 	if l.ch == '-' {
-		builder.WriteByte(l.ch)
+		builder.WriteRune(l.ch)
 		l.readChar()
 	}
 	for isDigit(l.ch) {
-		builder.WriteByte(l.ch)
+		builder.WriteRune(l.ch)
 		l.readChar()
 	}
 	if l.ch == '.' && isDigit(l.peekChar()) {
-		builder.WriteByte(l.ch)
+		builder.WriteRune(l.ch)
 		l.readChar()
 		for isDigit(l.ch) {
-			builder.WriteByte(l.ch)
+			builder.WriteRune(l.ch)
 			l.readChar()
 		}
 	}
@@ -543,7 +550,7 @@ func (l *Lexer) readWhitespace() Token {
 	col := l.column
 	var builder strings.Builder
 	for l.ch == ' ' || l.ch == '\t' {
-		builder.WriteByte(l.ch)
+		builder.WriteRune(l.ch)
 		l.readChar()
 	}
 	return Token{
@@ -557,7 +564,7 @@ func (l *Lexer) readWhitespace() Token {
 func (l *Lexer) readIdentifier() string {
 	var builder strings.Builder
 	for isLetter(l.ch) || isDigit(l.ch) || l.ch == '_' || l.ch == '-' || l.ch == '.' {
-		builder.WriteByte(l.ch)
+		builder.WriteRune(l.ch)
 		l.readChar()
 	}
 	return builder.String()
@@ -566,7 +573,7 @@ func (l *Lexer) readIdentifier() string {
 func (l *Lexer) readToEndOfLine() string {
 	var builder strings.Builder
 	for l.ch != 0 && l.ch != '\n' && l.ch != '\r' {
-		builder.WriteByte(l.ch)
+		builder.WriteRune(l.ch)
 		l.readChar()
 	}
 	return builder.String()
@@ -584,7 +591,7 @@ func (l *Lexer) ReadRawUntilBlockEnd() string {
 		if l.ch == '<' && l.peekChars(3) == "<<<" {
 			break
 		}
-		builder.WriteByte(l.ch)
+		builder.WriteRune(l.ch)
 		l.readChar()
 	}
 	return strings.TrimSpace(builder.String())
@@ -592,14 +599,6 @@ func (l *Lexer) ReadRawUntilBlockEnd() string {
 
 func (l *Lexer) ReadRestOfLine() string {
 	return strings.TrimSpace(l.readToEndOfLine())
-}
-
-func (l *Lexer) CurrentLine() int {
-	return l.line
-}
-
-func (l *Lexer) CurrentColumn() int {
-	return l.column
 }
 
 // GetCurrentLine returns the text of the current line from the input.
@@ -617,11 +616,11 @@ func (l *Lexer) GetCurrentLine() string {
 	return l.input[start:end]
 }
 
-func isLetter(ch byte) bool {
-	return unicode.IsLetter(rune(ch)) || ch == '_'
+func isLetter(ch rune) bool {
+	return unicode.IsLetter(ch) || ch == '_'
 }
 
-func isDigit(ch byte) bool {
+func isDigit(ch rune) bool {
 	return ch >= '0' && ch <= '9'
 }
 

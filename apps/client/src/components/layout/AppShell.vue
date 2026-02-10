@@ -26,6 +26,7 @@ const sidebarCollapsed = ref(false)
 onMounted(async () => {
   ws.connect()
   collection.init()
+  environment.init()
   // Load workspace first so we can seed the active environment from the server
   await collection.loadFiles()
   if (collection.workspaceEnvironment) {
