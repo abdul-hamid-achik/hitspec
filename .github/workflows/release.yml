@@ -35,7 +35,7 @@ jobs:
         working-directory: apps/client
 
       - name: Copy frontend to embed directory
-        run: cp -r apps/client/dist/* packages/serve/dist/
+        run: mkdir -p packages/serve/dist && cp -r apps/client/dist/* packages/serve/dist/
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6

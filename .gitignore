@@ -36,8 +36,9 @@ Thumbs.db
 .env
 .env.local
 
-# Build artifacts
+# Build artifacts (exclude packages/serve/dist which has its own rules below)
 dist/
+!packages/serve/dist/
 
 # Generated files
 apps/cli/cmd/llms_content.go

@@ -41,7 +41,7 @@ jobs:
         run: task generate
 
       - name: Build Go binary
-        run: task build
+        run: task go:build
 
       - name: Upload client dist
         uses: actions/upload-artifact@v4
@@ -87,7 +87,7 @@ jobs:
           version: v2.7.2
 
       - name: Run go vet
-        run: task vet
+        run: go vet ./...
 
       - name: Check go fmt
         run: |
