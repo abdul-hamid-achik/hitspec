@@ -291,3 +291,165 @@ Content-Type: application/json
 	assert.Contains(t, req.Body.Raw, `\t`)
 	assert.Contains(t, req.Body.Raw, `\\`)
 }
+
+func TestParser_RetryOn(t *testing.T) {
+	input := `### Retry On Status
+# @retry 3
+# @retryOn 500, 502, 503
+
+GET https://api.example.com/test`
+
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+
+	req := file.Requests[0]
+	assert.Equal(t, 3, req.Metadata.Retry)
+	require.Len(t, req.Metadata.RetryOn, 3)
+	assert.Equal(t, 500, req.Metadata.RetryOn[0])
+	assert.Equal(t, 502, req.Metadata.RetryOn[1])
+	assert.Equal(t, 503, req.Metadata.RetryOn[2])
+}
+
+func TestParser_RetryOnSingleCode(t *testing.T) {
+	input := `### Retry On Single
+# @retryOn 429
+
+GET https://api.example.com/test`
+
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+
+	req := file.Requests[0]
+	require.Len(t, req.Metadata.RetryOn, 1)
+	assert.Equal(t, 429, req.Metadata.RetryOn[0])
+}
+
+func TestParser_ConditionIf(t *testing.T) {
+	input := `### Conditional Request
+# @if {{runTests}}
+
+GET https://api.example.com/test`
+
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+
+	req := file.Requests[0]
+	require.NotNil(t, req.Metadata.Condition)
+	assert.Equal(t, ConditionIf, req.Metadata.Condition.Type)
+	assert.Equal(t, "{{runTests}}", req.Metadata.Condition.Expression)
+}
+
+func TestParser_ConditionUnless(t *testing.T) {
+	input := `### Skip Auth Test
+# @unless {{skipAuth}}
+
+GET https://api.example.com/auth/test`
+
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+
+	req := file.Requests[0]
+	require.NotNil(t, req.Metadata.Condition)
+	assert.Equal(t, ConditionUnless, req.Metadata.Condition.Type)
+	assert.Equal(t, "{{skipAuth}}", req.Metadata.Condition.Expression)
+}
+
+func TestParser_EmptyFile(t *testing.T) {
+	file, err := Parse("", "empty.http")
+	require.NoError(t, err)
+	assert.Empty(t, file.Requests)
+	assert.Empty(t, file.Variables)
+}
+
+func TestParser_OnlyComments(t *testing.T) {
+	input := `# This is a comment
+# Another comment
+// Also a comment`
+
+	file, err := Parse(input, "comments.http")
+	require.NoError(t, err)
+	assert.Empty(t, file.Requests)
+}
+
+func TestParser_OnlyVariables(t *testing.T) {
+	input := `@baseUrl = https://api.example.com
+@token = secret`
+
+	file, err := Parse(input, "vars.http")
+	require.NoError(t, err)
+	assert.Len(t, file.Variables, 2)
+	assert.Empty(t, file.Requests)
+}
+
+func TestParser_MissingSeparator(t *testing.T) {
+	// A request without ### separator should still parse if it starts with a method
+	input := `GET https://api.example.com/test`
+
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+	assert.Equal(t, "GET", file.Requests[0].Method)
+	assert.Equal(t, "https://api.example.com/test", file.Requests[0].URL)
+}
+
+func TestParser_ParseErrorIncludesSnippet(t *testing.T) {
+	// A request separator followed by non-method text should produce a parse error with snippet
+	input := `### Bad Request
+not-a-method https://example.com`
+
+	_, err := Parse(input, "bad.http")
+	require.Error(t, err)
+	pe, ok := err.(*ParseError)
+	require.True(t, ok, "expected *ParseError, got %T", err)
+	assert.Contains(t, pe.Message, "expected HTTP method")
+	assert.NotEmpty(t, pe.Snippet, "parse error should include a source snippet")
+	assert.Equal(t, "bad.http", pe.File)
+}
+
+func TestParser_WhitespaceOnlyFile(t *testing.T) {
+	input := "   \n\n\t\n   "
+	file, err := Parse(input, "ws.http")
+	require.NoError(t, err)
+	assert.Empty(t, file.Requests)
+}
+
+func TestParser_AssertionLineNumbers(t *testing.T) {
+	input := `### Test
+GET http://example.com
+
+>>>
+expect status 200
+expect body.id exists
+<<<`
+
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+	require.Len(t, file.Requests[0].Assertions, 2)
+	// Line numbers should be > 0
+	assert.True(t, file.Requests[0].Assertions[0].Line > 0, "assertion should have line number")
+	assert.True(t, file.Requests[0].Assertions[1].Line > 0, "assertion should have line number")
+	// Second assertion should be on a later line
+	assert.True(t, file.Requests[0].Assertions[1].Line > file.Requests[0].Assertions[0].Line,
+		"second assertion should be on a later line")
+}
+
+func TestParser_CustomAnnotations(t *testing.T) {
+	input := `### Contract Test
+# @contract.state user exists
+# @x-custom foo
+
+GET http://example.com`
+
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 1)
+	req := file.Requests[0]
+	require.NotNil(t, req.Metadata.Custom)
+	assert.Equal(t, "user exists", req.Metadata.Custom["contract.state"])
+	assert.Equal(t, "foo", req.Metadata.Custom["x-custom"])
+}

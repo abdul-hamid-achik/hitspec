@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/abdul-hamid-achik/hitspec/internal/pathutil"
 	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
 )
 
@@ -436,31 +437,6 @@ func (c *Client) Delete(url string, headers map[string]string) (*Response, error
 	})
 }
 
-// validatePathWithinBase checks that the resolved path stays within the base directory
-// to prevent path traversal attacks
-func validatePathWithinBase(path, baseDir string) error {
-	if baseDir == "" {
-		return nil
-	}
-
-	// Clean and resolve both paths
-	cleanBase, err := filepath.Abs(baseDir)
-	if err != nil {
-		return fmt.Errorf("failed to resolve base directory: %v", err)
-	}
-
-	cleanPath, err := filepath.Abs(path)
-	if err != nil {
-		return fmt.Errorf("failed to resolve path: %v", err)
-	}
-
-	// Ensure the path starts with the base directory
-	if !strings.HasPrefix(cleanPath, cleanBase+string(filepath.Separator)) && cleanPath != cleanBase {
-		return fmt.Errorf("path traversal detected: %s is outside allowed directory %s", path, baseDir)
-	}
-
-	return nil
-}
 
 // ValidateURL checks that a URL is well-formed and uses an allowed scheme
 func ValidateURL(rawURL string) error {
@@ -496,7 +472,7 @@ func BuildMultipartBody(fields []*parser.MultipartField, baseDir string) (*bytes
 			}
 
 			// Validate path doesn't escape base directory (prevent path traversal)
-			if err := validatePathWithinBase(filePath, baseDir); err != nil {
+			if err := pathutil.ValidateWithinBase(filePath, baseDir); err != nil {
 				return nil, "", err
 			}
 

@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { HistoryEntry } from '@/types/api'
 import { getHistory, clearHistory as apiClearHistory } from '@/api/endpoints/history'
+import { toast } from 'vue-sonner'
 
 export const useHistoryStore = defineStore('history', () => {
   const entries = ref<HistoryEntry[]>([])
@@ -31,8 +32,11 @@ export const useHistoryStore = defineStore('history', () => {
     try {
       await apiClearHistory()
       entries.value = []
+      toast.success('History cleared')
     } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to clear history'
+      const msg = e instanceof Error ? e.message : 'Failed to clear history'
+      error.value = msg
+      toast.error(msg)
     }
   }
 

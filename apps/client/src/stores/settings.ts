@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import type { ConfigDTO, SystemInfo } from '@/types/api'
 import { getConfig, updateConfig } from '@/api/endpoints/config'
 import { getSystemInfo } from '@/api/endpoints/system'
+import { toast } from 'vue-sonner'
 
 export const useSettingsStore = defineStore('settings', () => {
   const config = ref<ConfigDTO | null>(null)
@@ -41,9 +42,9 @@ export const useSettingsStore = defineStore('settings', () => {
     }
     try {
       await updateConfig(updates)
-    } catch {
-      // Rollback optimistic update on failure
+    } catch (e) {
       config.value = prev
+      toast.error(e instanceof Error ? e.message : 'Failed to save settings')
     }
   }
 

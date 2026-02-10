@@ -4,7 +4,7 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MethodBadge from '@/components/common/MethodBadge.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
-import { History, Trash2, CheckCircle, XCircle, Clock } from 'lucide-vue-next'
+import { History, Trash2, CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-vue-next'
 import { useHistoryStore } from '@/stores/history'
 import { useCollectionStore } from '@/stores/collection'
 import { useRequestStore } from '@/stores/request'
@@ -55,6 +55,18 @@ function confirmClear() {
       </div>
 
       <LoadingSpinner v-if="historyStore.loading" label="Loading history..." />
+      <div v-else-if="historyStore.error" class="flex flex-col items-center gap-3 p-8">
+        <div class="rounded-xl bg-destructive/10 p-3">
+          <AlertCircle class="h-8 w-8 text-destructive/60" />
+        </div>
+        <p class="text-sm text-destructive">{{ historyStore.error }}</p>
+        <button
+          class="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+          @click="historyStore.loadHistory()"
+        >
+          Retry
+        </button>
+      </div>
       <div v-else-if="historyStore.entries.length > 0" class="space-y-1.5">
         <button
           v-for="entry in historyStore.entries"

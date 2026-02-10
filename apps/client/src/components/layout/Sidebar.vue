@@ -72,6 +72,7 @@ function handleSearch(value: string) {
       <div class="flex items-center gap-1">
         <span class="text-[10px] tabular-nums text-muted-foreground/60">{{ collection.fileCount }}</span>
         <button
+          aria-label="Search files"
           class="rounded p-0.5 text-muted-foreground/60 transition-colors hover:bg-surface-hover hover:text-foreground"
           title="Search files"
           @click="showSearch = !showSearch"
@@ -79,6 +80,7 @@ function handleSearch(value: string) {
           <Search class="h-3.5 w-3.5" />
         </button>
         <button
+          aria-label="Collapse sidebar"
           class="rounded p-0.5 text-muted-foreground/60 transition-colors hover:bg-surface-hover hover:text-foreground"
           title="Collapse sidebar"
           @click="emit('collapse')"
@@ -106,7 +108,7 @@ function handleSearch(value: string) {
     <div v-else class="flex-1" />
 
     <!-- Bottom nav -->
-    <nav class="shrink-0 border-t border-border p-1.5 overflow-y-auto max-h-[50%]">
+    <nav aria-label="Main navigation" class="shrink-0 border-t border-border p-1.5 overflow-y-auto max-h-[50%]">
       <router-link
         v-for="item in navItems"
         :key="item.to"

@@ -34,6 +34,7 @@ async function handleStart() {
 }
 
 async function handleStop() {
+  if (!window.confirm('Stop the mock server?')) return
   try {
     await stopMock()
     toast.success('Mock server stopped')

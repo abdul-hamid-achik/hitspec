@@ -1,9 +1,37 @@
 package serve
 
 import (
+	"strings"
+
 	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
 	"github.com/abdul-hamid-achik/hitspec/packages/core/runner"
 )
+
+// sensitiveHeaders lists header names whose values should be redacted in API responses.
+var sensitiveHeaders = map[string]bool{
+	"authorization":       true,
+	"proxy-authorization": true,
+	"cookie":              true,
+	"set-cookie":          true,
+	"x-api-key":           true,
+	"x-auth-token":        true,
+}
+
+// redactHeaders returns a copy of headers with sensitive values replaced.
+func redactHeaders(headers map[string]string) map[string]string {
+	if headers == nil {
+		return nil
+	}
+	redacted := make(map[string]string, len(headers))
+	for k, v := range headers {
+		if sensitiveHeaders[strings.ToLower(k)] {
+			redacted[k] = "[REDACTED]"
+		} else {
+			redacted[k] = v
+		}
+	}
+	return redacted
+}
 
 func convertFile(f *parser.File) *ParsedFileDTO {
 	dto := &ParsedFileDTO{
@@ -112,14 +140,14 @@ func convertRequestResult(rr *runner.RequestResult) RequestResultDTO {
 		dto.Request = &HTTPRequestDTO{
 			Method:  rr.Request.Method,
 			URL:     rr.Request.URL,
-			Headers: rr.Request.Headers,
+			Headers: redactHeaders(rr.Request.Headers),
 		}
 	}
 	if rr.Response != nil {
 		dto.Response = &HTTPResponseDTO{
 			StatusCode: rr.Response.StatusCode,
 			Status:     rr.Response.Status,
-			Headers:    rr.Response.Headers,
+			Headers:    redactHeaders(rr.Response.Headers),
 			Body:       string(rr.Response.Body),
 			Duration:   float64(rr.Response.Duration.Milliseconds()),
 			Size:       int64(len(rr.Response.Body)),

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -203,7 +204,9 @@ func (r *Runner) runRequests(file *parser.File) (*RunResult, error) {
 			result.Results = append(result.Results, reqResult)
 			if reqResult.Passed {
 				result.Passed++
-			} else if !reqResult.Skipped {
+			} else if reqResult.Skipped {
+				result.Skipped++
+			} else {
 				result.Failed++
 			}
 		}
@@ -244,7 +247,9 @@ func (r *Runner) runRequests(file *parser.File) (*RunResult, error) {
 
 			if reqResult.Passed {
 				result.Passed++
-			} else if !reqResult.Skipped {
+			} else if reqResult.Skipped {
+				result.Skipped++
+			} else {
 				result.Failed++
 				if r.config.Bail {
 					break
@@ -421,8 +426,8 @@ func (r *Runner) runRequestWithRetry(req *parser.Request, baseDir string, filePa
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		result = r.executeRequest(req, baseDir, filePath, parallel)
 
-		// If passed, no need to retry
-		if result.Passed {
+		// If passed or skipped (e.g., condition not met), no need to retry
+		if result.Passed || result.Skipped {
 			return result
 		}
 
@@ -449,10 +454,54 @@ func (r *Runner) runRequestWithRetry(req *parser.Request, baseDir string, filePa
 	return result
 }
 
+// evaluateCondition checks if a request's condition is met.
+// For @if, the request runs only if the expression resolves to a truthy value.
+// For @unless, the request runs only if the expression resolves to a falsy value.
+func (r *Runner) evaluateCondition(cond *parser.Condition) bool {
+	if cond == nil {
+		return true // no condition means always run
+	}
+
+	resolved := r.resolver.Resolve(cond.Expression)
+	truthy := isTruthy(resolved)
+
+	switch cond.Type {
+	case parser.ConditionIf:
+		return truthy
+	case parser.ConditionUnless:
+		return !truthy
+	default:
+		return true
+	}
+}
+
+// isTruthy determines if a resolved string value is considered "true".
+// Empty strings, "false", "0", "no", "null", and unresolved variables are falsy.
+func isTruthy(value string) bool {
+	v := strings.TrimSpace(strings.ToLower(value))
+	if v == "" || v == "false" || v == "0" || v == "no" || v == "null" {
+		return false
+	}
+	// Unresolved variable references (still contains {{...}}) are falsy
+	if strings.Contains(v, "{{") && strings.Contains(v, "}}") {
+		return false
+	}
+	return true
+}
+
 func (r *Runner) executeRequest(req *parser.Request, baseDir string, filePath string, parallel bool) *RequestResult {
 	result := &RequestResult{
 		Name:     req.Name,
 		Captures: make(map[string]any),
+	}
+
+	// Check @if/@unless conditions
+	if req.Metadata != nil && req.Metadata.Condition != nil {
+		if !r.evaluateCondition(req.Metadata.Condition) {
+			result.Skipped = true
+			result.SkipReason = "condition not met"
+			return result
+		}
 	}
 
 	// Wait for service readiness if configured

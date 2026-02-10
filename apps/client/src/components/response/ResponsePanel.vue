@@ -138,6 +138,12 @@ function selectResult(result: RunResult) {
         <h3 class="text-sm font-medium text-foreground">Request Failed</h3>
         <p class="max-w-sm text-xs text-muted-foreground">{{ requestStore.error }}</p>
       </div>
+      <button
+        class="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+        @click="requestStore.error = null"
+      >
+        Dismiss
+      </button>
     </div>
 
     <!-- Empty state -->

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import AppShell from '@/components/layout/AppShell.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { FileCheck, Play, CheckCircle, XCircle, AlertCircle } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue'
 import { getContractFiles, verifyContracts } from '@/api/endpoints/contract'
@@ -15,14 +16,18 @@ const results = ref<ContractResult[]>([])
 const loading = ref(false)
 const verified = ref(false)
 const loadError = ref<string | null>(null)
+const loadingFiles = ref(false)
 
 async function loadFiles() {
   loadError.value = null
+  loadingFiles.value = true
   try {
     const status = await getContractFiles()
     files.value = status.files
   } catch (e) {
     loadError.value = e instanceof Error ? e.message : 'Failed to load contract files'
+  } finally {
+    loadingFiles.value = false
   }
 }
 
@@ -150,10 +155,19 @@ onMounted(loadFiles)
           {{ loading ? 'Verifying...' : 'Verify Contracts' }}
         </button>
 
+        <!-- Loading files -->
+        <LoadingSpinner v-if="loadingFiles" label="Loading contract files..." />
+
         <!-- Load error (always visible, not gated by v-else) -->
         <div v-if="loadError" class="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
           <AlertCircle class="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-          <span class="text-xs text-destructive">{{ loadError }}</span>
+          <span class="flex-1 text-xs text-destructive">{{ loadError }}</span>
+          <button
+            class="shrink-0 rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+            @click="loadFiles"
+          >
+            Retry
+          </button>
         </div>
 
         <!-- Results -->

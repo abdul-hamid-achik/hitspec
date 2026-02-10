@@ -265,6 +265,19 @@ func (p *Parser) parseAnnotation(req *Request) error {
 		} else if value != "" {
 			fmt.Fprintf(os.Stderr, "warning: invalid retryDelay value %q (expected integer): %v\n", value, err)
 		}
+	case "retryon":
+		parts := strings.Split(value, ",")
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			if code, err := strconv.Atoi(part); err == nil {
+				req.Metadata.RetryOn = append(req.Metadata.RetryOn, code)
+			} else {
+				fmt.Fprintf(os.Stderr, "warning: invalid retryOn status code %q: %v\n", part, err)
+			}
+		}
 	case "depends":
 		deps := strings.Split(value, ",")
 		for _, d := range deps {
@@ -272,6 +285,16 @@ func (p *Parser) parseAnnotation(req *Request) error {
 			if d != "" {
 				req.Metadata.Depends = append(req.Metadata.Depends, d)
 			}
+		}
+	case "if":
+		req.Metadata.Condition = &Condition{
+			Type:       ConditionIf,
+			Expression: value,
+		}
+	case "unless":
+		req.Metadata.Condition = &Condition{
+			Type:       ConditionUnless,
+			Expression: value,
 		}
 	case "auth":
 		auth, err := parseAuthConfig(value)

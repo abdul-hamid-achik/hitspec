@@ -90,7 +90,7 @@ Control how individual requests behave during stress tests:
 ### Main API endpoint
 # @name apiCall
 # @stress.weight 10
-# @stress.think 500ms
+# @stress.think 500
 
 GET {{baseUrl}}/api/data
 
@@ -104,7 +104,7 @@ expect status 200
 | Annotation | Description |
 |------------|-------------|
 | `@stress.weight <n>` | Relative weight for request selection. Higher weight means more frequent execution. |
-| `@stress.think <duration>` | Per-request think time override (e.g., `500ms`, `2s`). |
+| `@stress.think <ms>` | Per-request think time in milliseconds (e.g., `500`, `2000`). |
 | `@stress.skip` | Exclude this request from stress testing. |
 | `@stress.setup` | Run this request once before the stress test starts. |
 | `@stress.teardown` | Run this request once after the stress test ends. |

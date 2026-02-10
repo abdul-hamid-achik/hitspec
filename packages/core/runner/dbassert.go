@@ -3,9 +3,9 @@ package runner
 import (
 	"fmt"
 	"reflect"
-	"strconv"
 	"strings"
 
+	"github.com/abdul-hamid-achik/hitspec/internal/conv"
 	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
 	"github.com/abdul-hamid-achik/hitspec/packages/db"
 )
@@ -178,8 +178,8 @@ func dbAssertEquals(actual, expected interface{}) (bool, string) {
 	}
 
 	// Try numeric comparison
-	actualNum, aOk := toFloat64DB(actual)
-	expectedNum, eOk := toFloat64DB(expected)
+	actualNum, aOk := conv.ToFloat64(actual)
+	expectedNum, eOk := conv.ToFloat64(expected)
 	if aOk && eOk && actualNum == expectedNum {
 		return true, ""
 	}
@@ -196,8 +196,8 @@ func dbAssertEquals(actual, expected interface{}) (bool, string) {
 
 // dbAssertCompareNumeric compares two values numerically
 func dbAssertCompareNumeric(actual, expected interface{}, op string) (bool, string) {
-	actualNum, aOk := toFloat64DB(actual)
-	expectedNum, eOk := toFloat64DB(expected)
+	actualNum, aOk := conv.ToFloat64(actual)
+	expectedNum, eOk := conv.ToFloat64(expected)
 
 	if !aOk || !eOk {
 		return false, fmt.Sprintf("cannot compare non-numeric values: %v %s %v", actual, op, expected)
@@ -231,26 +231,6 @@ func dbAssertContains(actual, expected interface{}) (bool, string) {
 	return false, fmt.Sprintf("expected '%v' to contain '%v'", actual, expected)
 }
 
-// toFloat64DB converts a value to float64
-func toFloat64DB(v interface{}) (float64, bool) {
-	switch n := v.(type) {
-	case float64:
-		return n, true
-	case float32:
-		return float64(n), true
-	case int:
-		return float64(n), true
-	case int64:
-		return float64(n), true
-	case int32:
-		return float64(n), true
-	case string:
-		if f, err := strconv.ParseFloat(n, 64); err == nil {
-			return f, true
-		}
-	}
-	return 0, false
-}
 
 // equalFold is a simple case-insensitive string comparison
 func equalFold(a, b string) bool {

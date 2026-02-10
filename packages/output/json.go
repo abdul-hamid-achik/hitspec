@@ -4,10 +4,37 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/abdul-hamid-achik/hitspec/packages/core/runner"
 )
+
+// sensitiveHeaders lists header names whose values should be redacted in output.
+var sensitiveHeaders = map[string]bool{
+	"authorization":   true,
+	"proxy-authorization": true,
+	"cookie":          true,
+	"set-cookie":      true,
+	"x-api-key":       true,
+	"x-auth-token":    true,
+}
+
+// redactHeaders returns a copy of headers with sensitive values replaced.
+func redactHeaders(headers map[string]string) map[string]string {
+	if headers == nil {
+		return nil
+	}
+	redacted := make(map[string]string, len(headers))
+	for k, v := range headers {
+		if sensitiveHeaders[strings.ToLower(k)] {
+			redacted[k] = "[REDACTED]"
+		} else {
+			redacted[k] = v
+		}
+	}
+	return redacted
+}
 
 // JSONOutput represents the complete JSON output structure
 type JSONOutput struct {
@@ -112,7 +139,7 @@ func (f *JSONFormatter) FormatResult(result *runner.RunResult) {
 			test.Request = &JSONRequest{
 				Method:  r.Request.Method,
 				URL:     r.Request.URL,
-				Headers: r.Request.Headers,
+				Headers: redactHeaders(r.Request.Headers),
 			}
 		}
 
@@ -120,7 +147,7 @@ func (f *JSONFormatter) FormatResult(result *runner.RunResult) {
 			test.Response = &JSONResponse{
 				StatusCode: r.Response.StatusCode,
 				Status:     r.Response.Status,
-				Headers:    r.Response.Headers,
+				Headers:    redactHeaders(r.Response.Headers),
 				Duration:   float64(r.Response.Duration.Milliseconds()),
 			}
 		}

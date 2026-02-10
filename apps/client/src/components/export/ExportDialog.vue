@@ -4,6 +4,7 @@ import { DialogRoot, DialogPortal, DialogOverlay, DialogContent, DialogTitle } f
 import { X, Copy, Check, Download } from 'lucide-vue-next'
 import type { RequestDTO } from '@/types/api'
 import { exporters, formatLabels, type ExportFormat } from '@/lib/exporters'
+import { toast } from 'vue-sonner'
 
 const props = defineProps<{
   modelValue: boolean
@@ -46,7 +47,7 @@ async function copyToClipboard() {
     copied.value = true
     setTimeout(() => (copied.value = false), 2000)
   } catch {
-    // Clipboard API may fail in non-secure contexts
+    toast.error('Failed to copy to clipboard')
   }
 }
 
@@ -64,6 +65,7 @@ function close() {
         <div class="flex items-center justify-between border-b border-border px-4 py-3">
           <DialogTitle class="text-sm font-semibold text-foreground">Export Request</DialogTitle>
           <button
+            aria-label="Close export dialog"
             class="rounded p-1 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
             @click="close"
           >

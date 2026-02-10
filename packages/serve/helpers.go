@@ -1,9 +1,10 @@
 package serve
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -34,13 +35,21 @@ const idChars = "abcdefghijklmnopqrstuvwxyz0123456789"
 
 func generateID() string {
 	b := make([]byte, 8)
+	max := big.NewInt(int64(len(idChars)))
 	for i := range b {
-		b[i] = idChars[rand.Intn(len(idChars))]
+		n, err := rand.Int(rand.Reader, max)
+		if err != nil {
+			// Fallback: use index 0 rather than panic
+			b[i] = idChars[0]
+			continue
+		}
+		b[i] = idChars[n.Int64()]
 	}
 	return string(b)
 }
 
 // isPathWithin checks that resolved stays within base directory.
+// It resolves symlinks to prevent directory escape via symlink traversal.
 func isPathWithin(base, target string) bool {
 	absBase, err := filepath.Abs(base)
 	if err != nil {
@@ -50,6 +59,15 @@ func isPathWithin(base, target string) bool {
 	if err != nil {
 		return false
 	}
+
+	// Resolve symlinks if the target exists
+	if resolved, err := filepath.EvalSymlinks(absTarget); err == nil {
+		absTarget = resolved
+	}
+	if resolved, err := filepath.EvalSymlinks(absBase); err == nil {
+		absBase = resolved
+	}
+
 	return strings.HasPrefix(absTarget, absBase+string(filepath.Separator)) || absTarget == absBase
 }
 

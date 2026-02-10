@@ -3,6 +3,7 @@ import AppShell from '@/components/layout/AppShell.vue'
 import { ref } from 'vue'
 import { importCurl, importInsomnia, importOpenAPI } from '@/api/endpoints/import'
 import { Copy, Check, AlertCircle } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
 
 const activeTab = ref<'curl' | 'insomnia' | 'openapi'>('curl')
 const curlCommand = ref('')
@@ -63,7 +64,7 @@ async function copyResult() {
     copied.value = true
     setTimeout(() => (copied.value = false), 2000)
   } catch {
-    // Clipboard API may fail in non-secure contexts
+    toast.error('Failed to copy to clipboard')
   }
 }
 </script>

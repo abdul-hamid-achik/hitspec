@@ -45,6 +45,7 @@ async function handleStart() {
 }
 
 async function handleStop() {
+  if (!window.confirm('Stop the recording proxy?')) return
   try {
     await stopRecording()
     toast.success('Recording proxy stopped')
@@ -161,7 +162,7 @@ onMounted(loadStatus)
       </div>
 
       <!-- Not running -->
-      <div v-else class="space-y-4">
+      <div v-if="!status?.running && !exported" class="space-y-4">
         <div class="rounded-lg border border-border bg-surface p-4 space-y-3">
           <h2 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/50">Proxy Configuration</h2>
           <div class="grid grid-cols-2 gap-4">

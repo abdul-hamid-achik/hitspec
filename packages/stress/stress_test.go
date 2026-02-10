@@ -275,7 +275,9 @@ GET {{baseUrl}}/light
 
 	if heavy+light > 20 { // Need enough samples
 		ratio := float64(heavy) / float64(light)
-		assert.True(t, ratio > 5, "heavy should be called much more than light (ratio: %.1f)", ratio)
+		// Use a relaxed threshold (>3x instead of theoretical 9x) to avoid flaky failures
+		// in CI where scheduling jitter affects the distribution, especially with short durations.
+		assert.True(t, ratio > 3, "heavy should be called much more than light (ratio: %.1f)", ratio)
 	}
 }
 

@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"github.com/abdul-hamid-achik/hitspec/packages/core/config"
 	"github.com/abdul-hamid-achik/hitspec/packages/core/env"
 	"github.com/abdul-hamid-achik/hitspec/packages/core/runner"
+	"github.com/abdul-hamid-achik/hitspec/packages/coverage"
 	"github.com/abdul-hamid-achik/hitspec/packages/export/metrics"
 	"github.com/abdul-hamid-achik/hitspec/packages/http"
 	"github.com/abdul-hamid-achik/hitspec/packages/notify"
@@ -104,6 +106,10 @@ var (
 	// Security flags
 	allowShellFlag bool
 	allowDBFlag    bool
+
+	// Coverage flags
+	coverageFlag bool
+	openapiFlag  string
 )
 
 func init() {
@@ -167,6 +173,10 @@ func init() {
 	// Security flags
 	runCmd.Flags().BoolVar(&allowShellFlag, "allow-shell", false, "Allow shell command execution (>>>shell blocks and hooks)")
 	runCmd.Flags().BoolVar(&allowDBFlag, "allow-db", false, "Allow database assertions (>>>db blocks)")
+
+	// Coverage flags
+	runCmd.Flags().BoolVar(&coverageFlag, "coverage", false, "Generate API coverage report against OpenAPI spec")
+	runCmd.Flags().StringVar(&openapiFlag, "openapi", "", "Path to OpenAPI spec file for coverage analysis")
 }
 
 // Environment variable helpers
@@ -358,10 +368,12 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	r := runner.NewRunner(cfg)
 
 	// Create a function to run all tests
+	var allRunResults []*runner.RunResult
 	runTests := func() (int, int, int, time.Duration) {
 		totalPassed := 0
 		totalFailed := 0
 		totalSkipped := 0
+		allRunResults = nil
 		startTime := time.Now()
 
 		for _, file := range files {
@@ -379,6 +391,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 				continue
 			}
 
+			allRunResults = append(allRunResults, result)
 			formatter.FormatResult(result)
 			totalPassed += result.Passed
 			totalFailed += result.Failed
@@ -400,6 +413,39 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		if err := flushable.Flush(totalDuration); err != nil {
 			return fmt.Errorf("error writing output: %w", err)
 		}
+	}
+
+	// Generate coverage report if --coverage flag is set
+	if coverageFlag {
+		if openapiFlag == "" {
+			return fmt.Errorf("--openapi flag is required when using --coverage")
+		}
+
+		analyzer := coverage.NewAnalyzer()
+		if err := analyzer.LoadOpenAPI(openapiFlag); err != nil {
+			return fmt.Errorf("failed to load OpenAPI spec: %w", err)
+		}
+
+		// Collect executed requests from all run results
+		var executedRequests []coverage.ExecutedRequest
+		for _, runResult := range allRunResults {
+			for _, reqResult := range runResult.Results {
+				if reqResult.Request != nil && !reqResult.Skipped {
+					// Extract path from URL for matching against OpenAPI spec
+					reqPath := reqResult.Request.URL
+					if u, parseErr := url.Parse(reqResult.Request.URL); parseErr == nil {
+						reqPath = u.Path
+					}
+					executedRequests = append(executedRequests, coverage.ExecutedRequest{
+						Method: reqResult.Request.Method,
+						Path:   reqPath,
+					})
+				}
+			}
+		}
+
+		report := analyzer.Analyze(executedRequests)
+		fmt.Fprint(cmd.OutOrStdout(), report.FormatConsole())
 	}
 
 	// Send notifications if configured

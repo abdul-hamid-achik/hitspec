@@ -130,6 +130,7 @@ async function runFile(item: FileInfo, event: Event) {
         <span class="flex-1 truncate">{{ item.name }}</span>
         <button
           v-if="item.isDir"
+          aria-label="Run all files in folder"
           class="invisible rounded p-0.5 text-muted-foreground/40 transition-colors hover:bg-accent/20 hover:text-accent group-hover:visible"
           title="Run all files in folder"
           @click="runFolder(item, $event)"
@@ -138,6 +139,7 @@ async function runFile(item: FileInfo, event: Event) {
         </button>
         <button
           v-else-if="item.requestCount && item.requestCount > 0"
+          aria-label="Run file"
           class="invisible rounded p-0.5 text-muted-foreground/40 transition-colors hover:bg-accent/20 hover:text-accent group-hover:visible"
           title="Run file"
           @click="runFile(item, $event)"

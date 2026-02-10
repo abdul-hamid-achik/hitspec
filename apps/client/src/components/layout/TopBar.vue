@@ -27,6 +27,7 @@ function handleRun() {
   <header class="flex h-11 items-center justify-between border-b border-border bg-surface px-3">
     <div class="flex items-center gap-2">
       <button
+        aria-label="Toggle sidebar"
         class="rounded p-1 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
         title="Toggle sidebar"
         @click="emit('toggle-sidebar')"
@@ -48,6 +49,7 @@ function handleRun() {
     <div class="flex items-center gap-2">
       <!-- Command palette trigger -->
       <button
+        aria-label="Open command palette"
         class="flex items-center gap-2 rounded-md border border-border bg-background/50 px-2.5 py-1 text-xs text-muted-foreground/60 transition-colors hover:border-border hover:bg-background hover:text-muted-foreground"
         @click="emit('open-command-palette')"
       >
@@ -58,6 +60,7 @@ function handleRun() {
 
       <!-- Environment selector -->
       <select
+        aria-label="Select environment"
         :value="envStore.activeEnvName"
         class="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
         @change="envStore.selectEnv(($event.target as HTMLSelectElement).value)"
@@ -67,6 +70,7 @@ function handleRun() {
 
       <!-- Run all button -->
       <button
+        aria-label="Run all requests in file"
         class="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/80 disabled:opacity-50"
         :disabled="!collection.activeFilePath || requestStore.isExecuting"
         @click="handleRun"

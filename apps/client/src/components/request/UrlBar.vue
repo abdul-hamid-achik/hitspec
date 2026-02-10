@@ -26,6 +26,7 @@ function handleSend() {
       <span class="block truncate">{{ requestStore.activeRequest.url }}</span>
     </div>
     <button
+      aria-label="Export request"
       class="rounded-md border border-border p-1.5 text-muted-foreground/60 transition-colors hover:bg-surface-hover hover:text-foreground"
       title="Export request"
       @click="showExport = true"
@@ -33,6 +34,7 @@ function handleSend() {
       <Share2 class="h-3.5 w-3.5" />
     </button>
     <button
+      aria-label="Send request"
       class="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/80 disabled:opacity-50"
       :disabled="requestStore.isExecuting"
       @click="handleSend"

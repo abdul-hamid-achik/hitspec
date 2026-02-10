@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/abdul-hamid-achik/hitspec/internal/pathutil"
 	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
 	"github.com/abdul-hamid-achik/hitspec/packages/http"
 	"github.com/stretchr/testify/assert"
@@ -544,7 +545,7 @@ func TestValidatePathWithinBase(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validatePathWithinBase(tt.path, tt.baseDir)
+			err := pathutil.ValidateWithinBase(tt.path, tt.baseDir)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {

@@ -2,6 +2,7 @@
 import AppShell from '@/components/layout/AppShell.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { useSettingsStore } from '@/stores/settings'
+import { AlertCircle } from 'lucide-vue-next'
 import { onMounted, ref } from 'vue'
 
 const settings = useSettingsStore()
@@ -31,6 +32,18 @@ onMounted(() => {
       <h1 class="mb-6 text-lg font-semibold text-foreground">Settings</h1>
 
       <LoadingSpinner v-if="settings.loading" label="Loading configuration..." />
+      <div v-else-if="settings.error && !settings.config" class="flex flex-col items-center gap-3 p-8">
+        <div class="rounded-xl bg-destructive/10 p-3">
+          <AlertCircle class="h-8 w-8 text-destructive/60" />
+        </div>
+        <p class="text-sm text-destructive">{{ settings.error }}</p>
+        <button
+          class="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+          @click="settings.loadConfig(true)"
+        >
+          Retry
+        </button>
+      </div>
       <div v-else-if="settings.config" class="space-y-6">
         <!-- Request Defaults -->
         <section>

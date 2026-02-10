@@ -78,7 +78,7 @@ useKeyboard({
         :collapsed="sidebarCollapsed"
         @collapse="toggleSidebar"
       />
-      <main class="flex-1 overflow-hidden">
+      <main aria-label="Main content" class="flex-1 overflow-hidden">
         <slot />
       </main>
     </div>

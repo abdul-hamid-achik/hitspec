@@ -1,9 +1,9 @@
 ---
 title: "Assertions"
-description: "Validate HTTP responses with 24 assertion operators covering equality, strings, types, arrays, schemas, and snapshots."
+description: "Validate HTTP responses with 26 assertion operators covering equality, strings, types, arrays, schemas, and snapshots."
 ---
 
-Assertions let you validate every aspect of an HTTP response -- status codes, headers, body content, response times, and more. hitspec provides 24 operators grouped into six categories.
+Assertions let you validate every aspect of an HTTP response -- status codes, headers, body content, response times, and more. hitspec provides 26 operators grouped into six categories.
 
 ## Assertion Block Syntax
 
@@ -178,8 +178,6 @@ expect body.users each type object
 ```http
 >>>
 expect body.users each type object
-expect body.users each body.id exists
-expect body.users each body.email matches /^.+@.+\..+$/
 <<<
 ```
 

@@ -1,9 +1,9 @@
 ---
 title: "Assertion Operators"
-description: "Complete reference for all 24 assertion operators in hitspec, with syntax and examples for each."
+description: "Complete reference for all 26 assertion operators in hitspec, with syntax and examples for each."
 ---
 
-hitspec provides 24 assertion operators organized into six categories. Every assertion follows this pattern:
+hitspec provides 26 assertion operators organized into six categories. Every assertion follows this pattern:
 
 ```
 expect <subject> <operator> <value>
@@ -227,5 +227,5 @@ hitspec run tests/ --update-snapshots
 | 22 | `in` | Array | `expect status in [200, 201]` |
 | 23 | `!in` | Array | `expect status !in [400, 500]` |
 | 24 | `each` | Array | `expect body.items each type object` |
-| -- | `schema` | Validation | `expect body schema ./schema.json` |
-| -- | `snapshot` | Validation | `expect body snapshot "name"` |
+| 25 | `schema` | Validation | `expect body schema ./schema.json` |
+| 26 | `snapshot` | Validation | `expect body snapshot "name"` |

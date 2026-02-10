@@ -11,6 +11,7 @@ Write your API tests in plain text files that look like actual HTTP requests.
 |------|-------------------|
 | **Postman** | Plain text files, version-controllable, no GUI needed |
 | **REST Client (VSCode)** | Adds assertions, captures, dependencies, stress testing |
+| **Hurl** | Built-in stress testing, DB assertions, mock server, import/export |
 | **newman** | Simpler file format, no collection export needed |
 | **curl** | Full test framework on top of HTTP requests |
 | **k6** | Simpler syntax, no JavaScript required for basic tests |
@@ -94,17 +95,16 @@ hitspec run api.http
 
 | Document | Description |
 |----------|-------------|
-| [CLI Reference](docs/cli.md) | All commands and flags |
-| [Environment Configuration](docs/environments.md) | Setting up environments |
+| [Full Documentation](https://hitspec.dev) | Mintlify-hosted docs |
 | [Examples](examples/) | Example test files |
 
 ## Features
 
 - **Plain text test files** - `.http` format, readable and version-controllable
 - **Web API Client Manager** - Browser-based UI via `hitspec serve` (like Postman, but file-backed)
-- **24 assertion operators** - `==`, `!=`, `>`, `<`, `contains`, `matches`, `exists`, `length`, `type`, `schema`, `snapshot`, and more
-- **16 metadata directives** - `@name`, `@tags`, `@depends`, `@timeout`, `@retry`, `@auth`, and more
-- **17 built-in functions** - `$uuid()`, `$timestamp()`, `$random()`, `$base64()`, `$sha256()`, and more
+- **26 assertion operators** - `==`, `!=`, `>`, `<`, `contains`, `matches`, `exists`, `length`, `type`, `schema`, `snapshot`, and more
+- **18 metadata directives** - `@name`, `@tags`, `@depends`, `@timeout`, `@retry`, `@auth`, `@waitFor`, and more
+- **17 built-in functions** - `$uuid()`, `$timestamp()`, `$random()`, `$base64()`, `$sha256()`, `$env()`, and more
 - **8 authentication types** - Bearer, Basic, API Key, Digest, AWS Signature v4, OAuth2
 - **Built-in stress testing** - Load test with `--stress` flag, real-time metrics dashboard
 - **Mock server** - Generate mock APIs from `.http` files
@@ -187,11 +187,13 @@ expect body snapshot "response"   # Snapshot comparison
 ```http
 {{$uuid()}}              # Generate UUID v4
 {{$timestamp()}}         # Unix timestamp
-{{$now()}}               # ISO datetime
+{{$now()}}               # RFC3339 datetime
+{{$date(2006-01-02)}}    # Custom date format
 {{$random(1, 100)}}      # Random integer
 {{$randomEmail()}}       # Random email
 {{$base64(value)}}       # Base64 encode
 {{$sha256(value)}}       # SHA256 hash
+{{$env(API_TOKEN)}}      # Environment variable
 ```
 
 ### Metadata Directives
@@ -275,11 +277,14 @@ hitspec run tests/ --parallel         # Run in parallel
 hitspec run tests/ --watch            # Watch mode
 hitspec run tests/ -o json            # JSON output
 hitspec run tests/ --update-snapshots # Update snapshot files
-hitspec run tests/ --coverage --openapi spec.yaml  # API coverage
 hitspec validate tests/               # Validate syntax
 hitspec list tests/                   # List all requests
 hitspec import curl "curl ..."        # Import from curl
 hitspec import insomnia export.json   # Import from Insomnia
+hitspec import openapi spec.yaml     # Import from OpenAPI spec
+hitspec export curl tests/api.http   # Export as curl commands
+hitspec diff baseline.json current.json  # Compare test results
+hitspec diff baseline.json current.json --threshold 10%
 hitspec serve                         # Launch API Client Manager
 hitspec serve ./tests/ --port 8080    # Serve specific directory
 ```
@@ -318,8 +323,7 @@ Authorization: Bearer {{token}}
 | `$timestamp()` | Unix timestamp (seconds) | `{{$timestamp()}}` → `1705612800` |
 | `$timestampMs()` | Unix timestamp (milliseconds) | `{{$timestampMs()}}` → `1705612800000` |
 | `$now()` | Current datetime (RFC3339) | `{{$now()}}` → `2024-01-18T12:00:00Z` |
-| `$isodate()` | ISO date (YYYY-MM-DD) | `{{$isodate()}}` → `2024-01-18` |
-| `$date(format)` | Custom date format | `{{$date(2006-01-02)}}` → `2024-01-18` |
+| `$date(format)` | Custom date format (default: YYYY-MM-DD) | `{{$date(2006-01-02)}}` → `2024-01-18` |
 | `$random(min, max)` | Random integer | `{{$random(1, 100)}}` → `42` |
 | `$randomString(len)` | Random alphanumeric | `{{$randomString(8)}}` → `aB3kL9mN` |
 | `$randomEmail()` | Random email | `{{$randomEmail()}}` → `user_abc123@example.com` |
@@ -331,6 +335,7 @@ Authorization: Bearer {{token}}
 | `$urlEncode(value)` | URL encode | `{{$urlEncode(hello world)}}` → `hello%20world` |
 | `$urlDecode(value)` | URL decode | `{{$urlDecode(hello%20world)}}` → `hello world` |
 | `$json(value)` | JSON passthrough | `{{$json({"key": "value"})}}` |
+| `$env(name, default)` | System environment variable | `{{$env(API_TOKEN)}}` |
 
 ### Query Parameters
 
@@ -477,6 +482,12 @@ query GetUser($id: ID!) {
 | `@depends` | Dependencies | `# @depends login, setupData` |
 | `@if` | Conditional execution | `# @if {{runTests}}` |
 | `@unless` | Conditional skip | `# @unless {{skipAuth}}` |
+| `@before` | Run script before request | `# @before ./setup.sh` |
+| `@after` | Run script after request | `# @after ./cleanup.sh` |
+| `@db` | Database connection string | `# @db sqlite://./test.db` |
+| `@waitFor` | Poll URL until ready | `# @waitFor {{baseUrl}}/health 200 30000 1000` |
+| `@stress.weight` | Relative weight for stress testing | `# @stress.weight 3` |
+| `@stress.skip` | Exclude from stress tests | `# @stress.skip` |
 
 ### Authentication Methods
 

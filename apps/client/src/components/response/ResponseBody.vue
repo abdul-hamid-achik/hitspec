@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { Copy, Check, AlignLeft } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
 
 const props = defineProps<{ body?: string; error?: string }>()
 
@@ -33,7 +34,7 @@ async function copyBody() {
     copied.value = true
     setTimeout(() => (copied.value = false), 2000)
   } catch {
-    // Clipboard API may fail in non-secure contexts
+    toast.error('Failed to copy to clipboard')
   }
 }
 </script>

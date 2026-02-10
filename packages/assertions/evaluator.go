@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/abdul-hamid-achik/hitspec/internal/conv"
+	"github.com/abdul-hamid-achik/hitspec/internal/pathutil"
 	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
 	"github.com/abdul-hamid-achik/hitspec/packages/http"
 	"github.com/abdul-hamid-achik/hitspec/packages/snapshot"
@@ -293,8 +295,8 @@ func (e *Evaluator) equals(actual, expected any) (bool, string) {
 		return true, ""
 	}
 
-	actualNum, aOk := toFloat64(actual)
-	expectedNum, eOk := toFloat64(expected)
+	actualNum, aOk := conv.ToFloat64(actual)
+	expectedNum, eOk := conv.ToFloat64(expected)
 	if aOk && eOk && actualNum == expectedNum {
 		return true, ""
 	}
@@ -309,8 +311,8 @@ func (e *Evaluator) equals(actual, expected any) (bool, string) {
 }
 
 func (e *Evaluator) compareNumeric(actual, expected any, op string) (bool, string) {
-	actualNum, aOk := toFloat64(actual)
-	expectedNum, eOk := toFloat64(expected)
+	actualNum, aOk := conv.ToFloat64(actual)
+	expectedNum, eOk := conv.ToFloat64(expected)
 
 	if !aOk || !eOk {
 		return false, fmt.Sprintf("cannot compare non-numeric values: %v %s %v", actual, op, expected)
@@ -507,25 +509,6 @@ func (e *Evaluator) typeCheck(actual, expected any) (bool, string) {
 	return false, fmt.Sprintf("expected type %s, got %s", expectedType, actualType)
 }
 
-func toFloat64(v any) (float64, bool) {
-	switch n := v.(type) {
-	case float64:
-		return n, true
-	case float32:
-		return float64(n), true
-	case int:
-		return float64(n), true
-	case int64:
-		return float64(n), true
-	case int32:
-		return float64(n), true
-	case string:
-		if f, err := strconv.ParseFloat(n, 64); err == nil {
-			return f, true
-		}
-	}
-	return 0, false
-}
 
 func toInt(v any) (int, bool) {
 	switch n := v.(type) {
@@ -560,31 +543,6 @@ func EvaluateAllWithBaseDir(resp *http.Response, assertions []*parser.Assertion,
 	return results
 }
 
-// validatePathWithinBase checks that the resolved path stays within the base directory
-// to prevent path traversal attacks
-func validatePathWithinBase(path, baseDir string) error {
-	if baseDir == "" {
-		return nil
-	}
-
-	// Clean and resolve both paths
-	cleanBase, err := filepath.Abs(baseDir)
-	if err != nil {
-		return fmt.Errorf("failed to resolve base directory: %v", err)
-	}
-
-	cleanPath, err := filepath.Abs(path)
-	if err != nil {
-		return fmt.Errorf("failed to resolve path: %v", err)
-	}
-
-	// Ensure the path starts with the base directory
-	if !strings.HasPrefix(cleanPath, cleanBase+string(filepath.Separator)) && cleanPath != cleanBase {
-		return fmt.Errorf("path traversal detected: %s is outside allowed directory %s", path, baseDir)
-	}
-
-	return nil
-}
 
 func (e *Evaluator) schema(actual, expected any) (bool, string) {
 	schemaPath := fmt.Sprintf("%v", expected)
@@ -595,7 +553,7 @@ func (e *Evaluator) schema(actual, expected any) (bool, string) {
 	}
 
 	// Validate path doesn't escape base directory (prevent path traversal)
-	if err := validatePathWithinBase(schemaPath, e.baseDir); err != nil {
+	if err := pathutil.ValidateWithinBase(schemaPath, e.baseDir); err != nil {
 		return false, err.Error()
 	}
 

@@ -74,7 +74,7 @@ func (h *Hub) ClientCount() int {
 // handleWebSocket upgrades HTTP to WebSocket and manages the connection.
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		InsecureSkipVerify: true,
+		OriginPatterns: []string{"localhost:*", "127.0.0.1:*", "[::1]:*"},
 	})
 	if err != nil {
 		log.Printf("ws accept error: %v", err)

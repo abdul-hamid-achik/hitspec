@@ -32,6 +32,7 @@ function syncPolling() {
 }
 
 async function handleStop() {
+  if (!window.confirm('Stop the running stress test?')) return
   try {
     await stopStress()
     toast.success('Stress test stopped')

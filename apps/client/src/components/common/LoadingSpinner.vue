@@ -6,7 +6,7 @@ defineProps<{
 </script>
 
 <template>
-  <div class="flex flex-col items-center justify-center gap-2 p-4">
+  <div role="status" aria-live="polite" class="flex flex-col items-center justify-center gap-2 p-4">
     <div
       :class="[
         'animate-spin rounded-full border-2 border-accent/30 border-t-accent',
@@ -14,5 +14,6 @@ defineProps<{
       ]"
     />
     <span v-if="label" class="text-xs text-muted-foreground">{{ label }}</span>
+    <span v-else class="sr-only">Loading</span>
   </div>
 </template>

@@ -239,7 +239,7 @@ expect duration < 1000
 <<<
 ```
 
-See [Assertions](/concepts/assertions) for all 24 operators.
+See [Assertions](/concepts/assertions) for all 26 operators.
 
 ## Capture Blocks
 
@@ -299,6 +299,35 @@ Content-Type: application/json
 | `@after` | Shell script to run after the request (always runs) | `# @after ./cleanup.sh` |
 | `@db` | Database connection for DB assertions | `# @db sqlite://./test.db` |
 | `@waitFor` | Poll URL until ready before executing | `# @waitFor {{baseUrl}}/health 200 30000 1000` |
+
+### @waitFor -- Service Readiness Polling
+
+The `@waitFor` directive polls a URL before executing the request. This is useful when your test depends on a service that may not be immediately available (e.g., a container that was just started).
+
+```http
+### Create order (waits for payment service)
+# @waitFor http://localhost:4000/health 200 30000 1000
+
+POST {{baseUrl}}/orders
+Content-Type: application/json
+
+{"product": "Widget", "quantity": 1}
+```
+
+**Syntax:**
+
+```
+# @waitFor <url> [status] [timeout_ms] [interval_ms]
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `url` | *(required)* | URL to poll |
+| `status` | `200` | Expected HTTP status code |
+| `timeout_ms` | `30000` | Maximum time to wait (milliseconds) |
+| `interval_ms` | `1000` | Time between poll attempts (milliseconds) |
+
+If the URL does not return the expected status within the timeout, the request fails without executing.
 
 ## Comments
 

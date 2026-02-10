@@ -3,11 +3,15 @@ title: "API Coverage"
 description: "Measure how much of your API is covered by tests using OpenAPI spec comparison and coverage reports."
 ---
 
-API coverage tracking compares your test files against an OpenAPI specification to show which endpoints have tests and which do not. This helps identify gaps in your test suite.
+<Warning>
+  API coverage is a planned feature. The coverage analysis package exists but the `--coverage`, `--openapi`, and `--coverage-output` CLI flags are not yet wired into the `hitspec run` command. This page describes the intended behavior.
+</Warning>
 
-## Basic Usage
+API coverage tracking will compare your test files against an OpenAPI specification to show which endpoints have tests and which do not. This helps identify gaps in your test suite.
 
-Enable coverage with the `--coverage` flag and point to your OpenAPI spec:
+## Planned Usage
+
+Once wired up, enable coverage with the `--coverage` flag and point to your OpenAPI spec:
 
 ```bash
 hitspec run tests/ --coverage --openapi api-spec.yaml

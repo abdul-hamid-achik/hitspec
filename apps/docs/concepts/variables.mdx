@@ -76,8 +76,7 @@ hitspec provides 17 built-in functions that generate dynamic values at runtime. 
 | `{{$timestamp()}}` | Unix timestamp in seconds | `1705612800` |
 | `{{$timestampMs()}}` | Unix timestamp in milliseconds | `1705612800000` |
 | `{{$now()}}` | Current datetime in RFC 3339 | `2024-01-18T12:00:00Z` |
-| `{{$isodate()}}` | ISO date (YYYY-MM-DD) | `2024-01-18` |
-| `{{$date(format)}}` | Custom date format (Go layout) | `2024-01-18` |
+| `{{$date(format)}}` | Custom date format (Go layout, default: `2006-01-02`) | `2024-01-18` |
 
 <Note>
 The `$date()` function uses Go's reference time layout. The reference date is `Mon Jan 2 15:04:05 MST 2006`. For example, `{{$date(2006-01-02)}}` produces `2024-01-18`.
@@ -131,7 +130,7 @@ X-Timestamp: {{$timestamp()}}
 <Tab title="URL construction">
 ```http
 @searchTerm = hello world
-@startDate = {{$isodate()}}
+@startDate = {{$date(2006-01-02)}}
 
 GET {{baseUrl}}/search
 ? q = {{$urlEncode({{searchTerm}})}}

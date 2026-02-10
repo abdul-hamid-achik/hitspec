@@ -47,6 +47,7 @@ const sections = [
         <div class="flex items-center justify-between border-b border-border px-4 py-3">
           <DialogTitle class="text-sm font-semibold text-foreground">Keyboard Shortcuts</DialogTitle>
           <button
+            aria-label="Close keyboard shortcuts"
             class="rounded p-1 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
             @click="emit('update:open', false)"
           >

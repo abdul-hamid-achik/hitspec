@@ -654,3 +654,194 @@ expect status 200
 		assert.Equal(t, "1\n2\n", string(data))
 	})
 }
+
+func TestRunner_ConditionIf_Truthy(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	content := `@runTests = true
+
+### Conditional Request
+# @if {{runTests}}
+
+GET ` + server.URL + `/test
+
+>>>
+expect status 200
+<<<`
+
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.http")
+	err := os.WriteFile(testFile, []byte(content), 0644)
+	require.NoError(t, err)
+
+	r := NewRunner(&Config{})
+	result, err := r.RunFile(testFile)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Passed)
+	assert.Equal(t, 0, result.Skipped)
+}
+
+func TestRunner_ConditionIf_Falsy(t *testing.T) {
+	content := `@runTests = false
+
+### Conditional Request
+# @if {{runTests}}
+
+GET http://example.com/test
+
+>>>
+expect status 200
+<<<`
+
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.http")
+	err := os.WriteFile(testFile, []byte(content), 0644)
+	require.NoError(t, err)
+
+	r := NewRunner(&Config{})
+	result, err := r.RunFile(testFile)
+
+	require.NoError(t, err)
+	assert.Equal(t, 0, result.Passed)
+	assert.Equal(t, 1, result.Skipped)
+	assert.Equal(t, "condition not met", result.Results[0].SkipReason)
+}
+
+func TestRunner_ConditionIf_UnresolvedVariable(t *testing.T) {
+	// Unresolved variable references are falsy
+	content := `### Conditional Request
+# @if {{undefinedVar}}
+
+GET http://example.com/test`
+
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.http")
+	err := os.WriteFile(testFile, []byte(content), 0644)
+	require.NoError(t, err)
+
+	r := NewRunner(&Config{})
+	result, err := r.RunFile(testFile)
+
+	require.NoError(t, err)
+	assert.Equal(t, 0, result.Passed)
+	assert.Equal(t, 1, result.Skipped)
+}
+
+func TestRunner_ConditionUnless_Truthy(t *testing.T) {
+	// @unless with truthy value should skip
+	content := `@skipAuth = true
+
+### Skip Auth Test
+# @unless {{skipAuth}}
+
+GET http://example.com/auth/test`
+
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.http")
+	err := os.WriteFile(testFile, []byte(content), 0644)
+	require.NoError(t, err)
+
+	r := NewRunner(&Config{})
+	result, err := r.RunFile(testFile)
+
+	require.NoError(t, err)
+	assert.Equal(t, 0, result.Passed)
+	assert.Equal(t, 1, result.Skipped)
+}
+
+func TestRunner_ConditionUnless_Falsy(t *testing.T) {
+	// @unless with falsy value should run
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	content := `@skipAuth = false
+
+### Run Auth Test
+# @unless {{skipAuth}}
+
+GET ` + server.URL + `/auth/test
+
+>>>
+expect status 200
+<<<`
+
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.http")
+	err := os.WriteFile(testFile, []byte(content), 0644)
+	require.NoError(t, err)
+
+	r := NewRunner(&Config{})
+	result, err := r.RunFile(testFile)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Passed)
+	assert.Equal(t, 0, result.Skipped)
+}
+
+func TestRunner_RetryOnStatusCode(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts <= 2 {
+			w.WriteHeader(http.StatusServiceUnavailable) // 503
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	content := `### Retry On 503
+# @retry 3
+# @retryOn 503
+# @retryDelay 10
+
+GET ` + server.URL + `/test
+
+>>>
+expect status 200
+<<<`
+
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.http")
+	err := os.WriteFile(testFile, []byte(content), 0644)
+	require.NoError(t, err)
+
+	r := NewRunner(&Config{})
+	result, err := r.RunFile(testFile)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Passed)
+	assert.Equal(t, 3, attempts) // 2 failures + 1 success
+}
+
+func TestIsTruthy(t *testing.T) {
+	tests := []struct {
+		value    string
+		expected bool
+	}{
+		{"true", true},
+		{"false", false},
+		{"1", true},
+		{"0", false},
+		{"yes", true},
+		{"no", false},
+		{"", false},
+		{"null", false},
+		{"anything", true},
+		{"production", true},
+		{"{{unresolved}}", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			result := isTruthy(tt.value)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

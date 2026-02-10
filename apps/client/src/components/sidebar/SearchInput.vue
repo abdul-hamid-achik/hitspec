@@ -16,6 +16,7 @@ function onInput(e: Event) {
     <Search :size="14" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-nord-3" />
     <input
       type="text"
+      aria-label="Search files"
       placeholder="Search files..."
       :value="query"
       class="w-full rounded-md border border-border bg-input py-1.5 pl-8 pr-3 text-sm text-foreground placeholder:text-nord-3 focus:outline-none focus:ring-1 focus:ring-ring"

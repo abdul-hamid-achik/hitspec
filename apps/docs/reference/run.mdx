@@ -66,14 +66,6 @@ You can pass multiple files and directories as arguments.
 |------|-------------|---------|
 | `--update-snapshots` | Update snapshot files instead of comparing against them | `false` |
 
-### Coverage Flags
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--coverage` | Enable API coverage tracking | `false` |
-| `--openapi` | Path to OpenAPI spec for coverage analysis | |
-| `--coverage-output` | Coverage output file (supports `.html`, `.json`) | |
-
 ### Security Flags
 
 | Flag | Description | Default |
@@ -261,16 +253,6 @@ hitspec run tests/
 
 # Update snapshots when expected changes occur
 hitspec run tests/ --update-snapshots
-```
-
-### API Coverage
-
-```bash
-# Generate coverage report against an OpenAPI spec
-hitspec run tests/ --coverage --openapi api-spec.yaml
-
-# HTML coverage report
-hitspec run tests/ --coverage --openapi api-spec.yaml --coverage-output coverage.html
 ```
 
 ### Security Flags
