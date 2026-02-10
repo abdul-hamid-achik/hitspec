@@ -1,3 +1,4 @@
+// Package conv provides shared numeric conversion utilities.
 package conv
 
 import "strconv"

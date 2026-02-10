@@ -1,3 +1,4 @@
+// Package pathutil provides shared path validation utilities.
 package pathutil
 
 import (
