@@ -2,7 +2,7 @@
 import AppShell from '@/components/layout/AppShell.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import MethodBadge from '@/components/common/MethodBadge.vue'
-import { Server, Square, Globe } from 'lucide-vue-next'
+import { Server, Square } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue'
 import { getMockStatus, startMock, stopMock } from '@/api/endpoints/mock'
 import type { MockStatusDTO } from '@/types/api'

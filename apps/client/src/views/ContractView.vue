@@ -150,6 +150,12 @@ onMounted(loadFiles)
           {{ loading ? 'Verifying...' : 'Verify Contracts' }}
         </button>
 
+        <!-- Load error (always visible, not gated by v-else) -->
+        <div v-if="loadError" class="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+          <AlertCircle class="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <span class="text-xs text-destructive">{{ loadError }}</span>
+        </div>
+
         <!-- Results -->
         <div v-if="verified" class="space-y-4">
           <div class="flex items-center gap-4">
@@ -194,12 +200,8 @@ onMounted(loadFiles)
           </div>
         </div>
 
-        <div v-else-if="loadError" class="mt-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-          <AlertCircle class="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-          <span class="text-xs text-destructive">{{ loadError }}</span>
-        </div>
         <EmptyState
-          v-else-if="files.length === 0 && !verified"
+          v-else-if="files.length === 0 && !loadError"
           :icon="FileCheck"
           title="No contract files found"
           description="Add .http or .hitspec files to your workspace to verify API contracts"

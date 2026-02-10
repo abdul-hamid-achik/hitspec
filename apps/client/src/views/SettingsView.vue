@@ -3,17 +3,18 @@ import AppShell from '@/components/layout/AppShell.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { onMounted, ref } from 'vue'
-import { Info } from 'lucide-vue-next'
 
 const settings = useSettingsStore()
 
-// Notification settings (stored locally since backend doesn't have a notifications endpoint yet)
+// TODO: Notification settings are local-only and lost on page refresh.
+// Wire these to a backend endpoint (e.g. PATCH /api/v1/config) or persist in localStorage.
 const slackWebhook = ref('')
 const teamsWebhook = ref('')
 const notifyOnFailure = ref(true)
 const notifyOnSuccess = ref(false)
 
-// Database assertion settings
+// TODO: Database assertion settings are local-only and lost on page refresh.
+// Wire these to backend config or persist in localStorage.
 const dbType = ref<'postgresql' | 'mysql' | 'sqlite'>('postgresql')
 const dbConnectionString = ref('')
 const dbEnabled = ref(false)
@@ -62,27 +63,14 @@ onMounted(() => {
               </div>
             </label>
             <div class="mx-4 border-t border-border/50" />
-            <label class="flex items-center justify-between px-4 py-3 transition-colors hover:bg-surface-hover">
-              <span class="text-sm text-foreground">Max Redirects</span>
-              <input
-                type="number"
-                :value="settings.config.maxRedirects"
-                class="w-28 rounded-md border border-border bg-background px-2.5 py-1 text-right text-sm tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                @change="settings.saveConfig({ maxRedirects: Number(($event.target as HTMLInputElement).value) })"
-              />
-            </label>
-            <div class="mx-4 border-t border-border/50" />
             <label class="flex cursor-pointer items-center justify-between px-4 py-3 transition-colors hover:bg-surface-hover">
-              <div>
-                <span class="text-sm text-foreground">Skip TLS Verification</span>
-                <span class="ml-2 text-[10px] text-warning">insecure</span>
-              </div>
+              <span class="text-sm text-foreground">Validate SSL Certificates</span>
               <div class="relative">
                 <input
                   type="checkbox"
-                  :checked="settings.config.insecure"
+                  :checked="settings.config.validateSSL"
                   class="peer sr-only"
-                  @change="settings.saveConfig({ insecure: ($event.target as HTMLInputElement).checked })"
+                  @change="settings.saveConfig({ validateSSL: ($event.target as HTMLInputElement).checked })"
                 />
                 <div class="h-5 w-9 rounded-full bg-border transition-colors peer-checked:bg-accent" />
                 <div class="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-foreground transition-transform peer-checked:translate-x-4" />
@@ -90,13 +78,13 @@ onMounted(() => {
             </label>
             <div class="mx-4 border-t border-border/50" />
             <label class="flex cursor-pointer items-center justify-between px-4 py-3 transition-colors hover:bg-surface-hover last:rounded-b-lg">
-              <span class="text-sm text-foreground">Verbose Output</span>
+              <span class="text-sm text-foreground">Parallel Execution</span>
               <div class="relative">
                 <input
                   type="checkbox"
-                  :checked="settings.config.verbose"
+                  :checked="settings.config.parallel"
                   class="peer sr-only"
-                  @change="settings.saveConfig({ verbose: ($event.target as HTMLInputElement).checked })"
+                  @change="settings.saveConfig({ parallel: ($event.target as HTMLInputElement).checked })"
                 />
                 <div class="h-5 w-9 rounded-full bg-border transition-colors peer-checked:bg-accent" />
                 <div class="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-foreground transition-transform peer-checked:translate-x-4" />
@@ -155,8 +143,8 @@ onMounted(() => {
               </div>
             </label>
           </div>
-          <p class="mt-2 text-[10px] text-muted-foreground/50">
-            Notification settings are not persisted yet. Configure in hitspec.yaml for CI/CD use.
+          <p class="mt-2 text-[10px] text-warning/70">
+            These settings are not persisted and will be lost on page refresh. Configure in hitspec.yaml for CI/CD use.
           </p>
         </section>
 

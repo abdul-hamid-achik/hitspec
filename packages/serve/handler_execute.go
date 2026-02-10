@@ -129,14 +129,58 @@ func (s *Server) handleRunFile(w http.ResponseWriter, r *http.Request) {
 		AllowDB:            s.config.AllowDB,
 	}
 
+	execID := generateID()
+	s.hub.Broadcast("execution_start", WSExecEvent{
+		ID:        execID,
+		File:      req.File,
+		Status:    "started",
+		Timestamp: nowISO(),
+	})
+
 	rn := runner.NewRunner(cfg)
 	result, err := rn.RunFile(absPath)
 	if err != nil {
+		s.hub.Broadcast("error", WSExecEvent{
+			ID:        execID,
+			File:      req.File,
+			Status:    "error",
+			Error:     err.Error(),
+			Timestamp: nowISO(),
+		})
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	writeJSON(w, http.StatusOK, convertRunResult(result))
+	dto := convertRunResult(result)
+	s.hub.Broadcast("execution_complete", WSExecEvent{
+		ID:        execID,
+		File:      req.File,
+		Status:    "completed",
+		Result:    dto,
+		Timestamp: nowISO(),
+	})
+
+	// Add to history
+	for _, rr := range result.Results {
+		entry := HistoryEntryDTO{
+			ID:          generateID(),
+			File:        req.File,
+			RequestName: rr.Name,
+			Duration:    float64(rr.Duration.Milliseconds()),
+			Passed:      rr.Passed,
+			Timestamp:   nowISO(),
+		}
+		if rr.Request != nil {
+			entry.Method = rr.Request.Method
+			entry.URL = rr.Request.URL
+		}
+		if rr.Response != nil {
+			entry.StatusCode = rr.Response.StatusCode
+		}
+		s.history.Add(entry)
+	}
+
+	writeJSON(w, http.StatusOK, dto)
 }
 
 func (s *Server) getConfigEnvs() map[string]map[string]any {

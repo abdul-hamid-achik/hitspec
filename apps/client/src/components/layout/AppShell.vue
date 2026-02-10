@@ -27,15 +27,19 @@ const commandPaletteOpen = ref(false)
 const shortcutsOpen = ref(false)
 const sidebarCollapsed = ref(false)
 
-onMounted(() => {
+onMounted(async () => {
   if (!appInitialized) {
     appInitialized = true
     ws.connect()
-    collection.loadFiles()
+    collection.init()
+    // Load workspace first so we can seed the active environment from the server
+    await collection.loadFiles()
+    if (collection.workspaceEnvironment) {
+      environment.activeEnvName = collection.workspaceEnvironment
+    }
     environment.loadEnvironments()
     settings.loadConfig()
   }
-  collection.init()
 })
 
 function toggleSidebar() {

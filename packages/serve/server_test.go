@@ -139,6 +139,38 @@ func TestHandleListEnvironments(t *testing.T) {
 	}
 }
 
+func TestHandleSelectEnvironment(t *testing.T) {
+	s := newTestServer(t)
+
+	body := `{"name": "production"}`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/environments/active", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.handleSelectEnvironment(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", w.Code)
+	}
+
+	if s.config.Env != "production" {
+		t.Errorf("env = %q, want production", s.config.Env)
+	}
+}
+
+func TestHandleSelectEnvironment_EmptyName(t *testing.T) {
+	s := newTestServer(t)
+
+	body := `{"name": ""}`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/environments/active", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.handleSelectEnvironment(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
 func TestHandleGetConfig(t *testing.T) {
 	s := newTestServer(t)
 

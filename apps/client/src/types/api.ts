@@ -142,10 +142,7 @@ export interface ConfigDTO {
   timeout?: number
   retries?: number
   followRedirects?: boolean
-  maxRedirects?: number
   validateSSL?: boolean
-  insecure?: boolean
-  verbose?: boolean
   proxy?: string
   headers?: Record<string, string>
   parallel?: boolean

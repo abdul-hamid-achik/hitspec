@@ -35,7 +35,7 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   async function saveConfig(updates: Partial<ConfigDTO>) {
-    const prev = config.value ? { ...config.value } : null
+    const prev = config.value ? JSON.parse(JSON.stringify(config.value)) as ConfigDTO : null
     if (config.value) {
       config.value = { ...config.value, ...updates }
     }

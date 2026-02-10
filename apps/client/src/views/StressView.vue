@@ -2,19 +2,32 @@
 import AppShell from '@/components/layout/AppShell.vue'
 import StressConfig from '@/components/stress/StressConfig.vue'
 import StressProfiles from '@/components/stress/StressProfiles.vue'
-import { Zap, Square, Activity, Clock, AlertTriangle, BarChart3 } from 'lucide-vue-next'
-import { ref, onMounted } from 'vue'
+import { Square, Activity, Clock, AlertTriangle, BarChart3 } from 'lucide-vue-next'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { getStressStatus, stopStress } from '@/api/endpoints/stress'
-import type { StressStatus, StressProfile } from '@/types/api'
+import { ws } from '@/api/websocket'
+import type { StressStatus, StressStatsDTO, StressProfile } from '@/types/api'
 import { toast } from 'vue-sonner'
 
 const status = ref<StressStatus | null>(null)
+let pollTimer: ReturnType<typeof setInterval> | null = null
+let unsubWs: (() => void) | null = null
 
 async function loadStatus() {
   try {
     status.value = await getStressStatus()
   } catch {
     status.value = { running: false, elapsed: 0 }
+  }
+  syncPolling()
+}
+
+function syncPolling() {
+  if (status.value?.running && !pollTimer) {
+    pollTimer = setInterval(loadStatus, 3000)
+  } else if (!status.value?.running && pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
   }
 }
 
@@ -28,11 +41,24 @@ async function handleStop() {
   }
 }
 
-function handleProfileSelected(profile: StressProfile) {
-  // Profile selected - shown as reference panel
+function handleProfileSelected(_profile: StressProfile) {
+  // TODO: populate StressConfig fields from the selected profile
 }
 
-onMounted(loadStatus)
+onMounted(() => {
+  loadStatus()
+  unsubWs = ws.on('stress_update', (msg) => {
+    const payload = msg.payload as { stats: StressStatsDTO; elapsed: number } | undefined
+    if (payload && status.value) {
+      status.value = { ...status.value, running: true, stats: payload.stats, elapsed: payload.elapsed }
+    }
+  })
+})
+
+onBeforeUnmount(() => {
+  if (pollTimer) clearInterval(pollTimer)
+  unsubWs?.()
+})
 </script>
 
 <template>

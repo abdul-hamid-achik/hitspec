@@ -47,9 +47,16 @@ export const useEnvironmentStore = defineStore('environment', () => {
   }
 
   async function updateEnv(env: EnvironmentDTO) {
-    await updateEnvironment(env)
     const idx = environments.value.findIndex((e) => e.name === env.name)
+    const prev = idx >= 0 ? environments.value[idx] : null
     if (idx >= 0) environments.value[idx] = env
+    try {
+      await updateEnvironment(env)
+    } catch (e) {
+      // Rollback optimistic update on failure
+      if (prev && idx >= 0) environments.value[idx] = prev
+      error.value = e instanceof Error ? e.message : 'Failed to update environment'
+    }
   }
 
   return { environments, activeEnvName, activeEnv, envNames, loading, error, loadEnvironments, selectEnv, updateEnv }

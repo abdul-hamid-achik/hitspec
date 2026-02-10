@@ -27,10 +27,6 @@ function formatMs(ms: number): string {
         <div class="mt-1 text-xl font-bold text-accent">{{ metrics.rps.toFixed(1) }}</div>
       </div>
       <div class="rounded-md bg-surface p-3">
-        <div class="text-xs text-muted-foreground">P50 Latency</div>
-        <div class="mt-1 text-xl font-bold text-foreground">{{ formatMs(metrics.p50Ms) }}</div>
-      </div>
-      <div class="rounded-md bg-surface p-3">
         <div class="text-xs text-muted-foreground">P50</div>
         <div class="mt-1 text-lg font-semibold text-foreground">{{ formatMs(metrics.p50Ms) }}</div>
       </div>

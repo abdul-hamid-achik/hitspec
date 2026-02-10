@@ -57,6 +57,32 @@ func (s *Server) handleGetEnvironment(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleSelectEnvironment(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if req.Name == "" {
+		writeError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+
+	s.mu.Lock()
+	s.config.Env = req.Name
+	s.mu.Unlock()
+
+	s.hub.Broadcast("environment_changed", map[string]string{
+		"name":      req.Name,
+		"timestamp": nowISO(),
+	})
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) handlePutEnvironment(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {

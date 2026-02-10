@@ -2,7 +2,7 @@
 import AppShell from '@/components/layout/AppShell.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import MethodBadge from '@/components/common/MethodBadge.vue'
-import { Video, Play, Square, Trash2, Download, Copy } from 'lucide-vue-next'
+import { Play, Square, Trash2, Download, Copy } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue'
 import { getRecordStatus, startRecording, stopRecording, exportRecordings, clearRecordings } from '@/api/endpoints/record'
 import type { RecordStatus } from '@/types/api'
@@ -144,19 +144,20 @@ onMounted(loadStatus)
           </div>
         </div>
 
-        <!-- Exported content -->
-        <div v-if="exported" class="rounded-lg border border-border bg-background p-4 space-y-2">
-          <div class="flex items-center justify-between">
-            <h3 class="text-sm font-medium text-foreground">Exported .http content</h3>
-            <button
-              class="flex items-center gap-1 text-xs text-accent hover:underline"
-              @click="copyExported"
-            >
-              <Copy :size="12" /> Copy
-            </button>
-          </div>
-          <pre class="max-h-64 overflow-auto rounded bg-background p-3 font-mono text-xs text-foreground">{{ exported }}</pre>
+      </div>
+
+      <!-- Exported content (persists after stopping so users don't lose their export) -->
+      <div v-if="exported" class="mt-4 rounded-lg border border-border bg-background p-4 space-y-2">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-medium text-foreground">Exported .http content</h3>
+          <button
+            class="flex items-center gap-1 text-xs text-accent hover:underline"
+            @click="copyExported"
+          >
+            <Copy :size="12" /> Copy
+          </button>
         </div>
+        <pre class="max-h-64 overflow-auto rounded bg-background p-3 font-mono text-xs text-foreground">{{ exported }}</pre>
       </div>
 
       <!-- Not running -->

@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import AppShell from '@/components/layout/AppShell.vue'
 import { ref } from 'vue'
-import { importCurl } from '@/api/endpoints/import'
+import { importCurl, importInsomnia, importOpenAPI } from '@/api/endpoints/import'
 import { Copy, Check, AlertCircle } from 'lucide-vue-next'
 
 const activeTab = ref<'curl' | 'insomnia' | 'openapi'>('curl')
 const curlCommand = ref('')
+const insomniaJson = ref('')
+const openapiSpec = ref('')
+const openapiBaseUrl = ref('')
 const result = ref<string | null>(null)
 const error = ref<string | null>(null)
 const loading = ref(false)
@@ -17,6 +20,34 @@ async function handleImportCurl() {
   loading.value = true
   try {
     const res = await importCurl(curlCommand.value)
+    result.value = res.content
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleImportInsomnia() {
+  error.value = null
+  result.value = null
+  loading.value = true
+  try {
+    const res = await importInsomnia(insomniaJson.value)
+    result.value = res.content
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleImportOpenAPI() {
+  error.value = null
+  result.value = null
+  loading.value = true
+  try {
+    const res = await importOpenAPI(openapiSpec.value, openapiBaseUrl.value || undefined)
     result.value = res.content
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
@@ -75,9 +106,51 @@ async function copyResult() {
         </button>
       </div>
 
-      <!-- Insomnia/OpenAPI placeholders -->
-      <div v-else class="rounded-lg border border-border bg-surface p-6 text-center">
-        <p class="text-sm text-muted-foreground/60">{{ activeTab === 'insomnia' ? 'Insomnia' : 'OpenAPI' }} import coming soon</p>
+      <!-- Insomnia tab -->
+      <div v-else-if="activeTab === 'insomnia'" class="space-y-3">
+        <div class="relative">
+          <textarea
+            v-model="insomniaJson"
+            placeholder='Paste your Insomnia export JSON here... {"_type":"export","resources":[...]}'
+            class="h-32 w-full resize-none rounded-lg border border-border bg-background p-3 font-mono text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        <button
+          class="rounded-md bg-accent px-4 py-1.5 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/80 disabled:opacity-50"
+          :disabled="!insomniaJson.trim() || loading"
+          @click="handleImportInsomnia"
+        >
+          {{ loading ? 'Importing...' : 'Import' }}
+        </button>
+      </div>
+
+      <!-- OpenAPI tab -->
+      <div v-else-if="activeTab === 'openapi'" class="space-y-3">
+        <div>
+          <label class="mb-1 block text-xs text-muted-foreground">OpenAPI spec file path</label>
+          <input
+            v-model="openapiSpec"
+            type="text"
+            placeholder="./openapi.yaml or ./swagger.json"
+            class="w-full rounded-md border border-border bg-background px-3 py-1.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        <div>
+          <label class="mb-1 block text-xs text-muted-foreground">Base URL (optional)</label>
+          <input
+            v-model="openapiBaseUrl"
+            type="text"
+            placeholder="http://localhost:3000"
+            class="w-full rounded-md border border-border bg-background px-3 py-1.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        <button
+          class="rounded-md bg-accent px-4 py-1.5 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/80 disabled:opacity-50"
+          :disabled="!openapiSpec.trim() || loading"
+          @click="handleImportOpenAPI"
+        >
+          {{ loading ? 'Importing...' : 'Import' }}
+        </button>
       </div>
 
       <!-- Error -->

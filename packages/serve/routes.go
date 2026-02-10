@@ -14,6 +14,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	// Environments
 	mux.HandleFunc("GET /api/v1/environments", s.handleListEnvironments)
+	mux.HandleFunc("PUT /api/v1/environments/active", s.handleSelectEnvironment)
 	mux.HandleFunc("GET /api/v1/environments/{name}", s.handleGetEnvironment)
 	mux.HandleFunc("PUT /api/v1/environments/{name}", s.handlePutEnvironment)
 

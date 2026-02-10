@@ -48,6 +48,8 @@ function handleRequestClick(filePath: string, request: import('@/types/api').Req
 
 async function runFolder(item: FileInfo, event: Event) {
   event.stopPropagation()
+  if (requestStore.isExecuting) return
+
   // Collect all .http/.hitspec file paths under this directory
   const filePaths: string[] = []
   function collectFiles(items: FileInfo[]) {
@@ -59,10 +61,10 @@ async function runFolder(item: FileInfo, event: Event) {
   if (item.children) collectFiles(item.children)
   if (filePaths.length === 0) return
 
-  // Run the first file to show results (the backend runs full files)
-  // For a proper "run folder", we run each file sequentially and aggregate
+  // Run each file sequentially and aggregate results
   requestStore.isExecuting = true
   requestStore.error = null
+  requestStore.lastResult = null
   try {
     const { executeFile } = await import('@/api/endpoints/execute')
     const allResults: import('@/types/api').RunResult[] = []
