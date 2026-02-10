@@ -845,3 +845,108 @@ func TestIsTruthy(t *testing.T) {
 		})
 	}
 }
+
+func TestRunner_SSE_EventStream(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("event: message\ndata: hello\n\nevent: update\ndata: world\n\n"))
+	}))
+	defer server.Close()
+
+	content := `### SSE Test
+# @name sseTest
+
+GET ` + server.URL + `/events
+Accept: text/event-stream
+
+>>>
+expect status 200
+<<<`
+
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.http")
+	err := os.WriteFile(testFile, []byte(content), 0644)
+	require.NoError(t, err)
+
+	r := NewRunner(&Config{})
+	result, err := r.RunFile(testFile)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Passed)
+	assert.Equal(t, 0, result.Failed)
+	require.Len(t, result.Results, 1)
+	assert.True(t, result.Results[0].Passed)
+
+	// Verify SSE events were parsed
+	require.Len(t, result.Results[0].SSEEvents, 2)
+	assert.Equal(t, "message", result.Results[0].SSEEvents[0].Type)
+	assert.Equal(t, "hello", result.Results[0].SSEEvents[0].Data)
+	assert.Equal(t, "update", result.Results[0].SSEEvents[1].Type)
+	assert.Equal(t, "world", result.Results[0].SSEEvents[1].Data)
+}
+
+func TestRunner_SSE_NonEventStream(t *testing.T) {
+	// Verify that non-SSE responses don't get SSE parsing
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status": "ok"}`))
+	}))
+	defer server.Close()
+
+	content := `### JSON Test
+GET ` + server.URL + `/api
+
+>>>
+expect status 200
+<<<`
+
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.http")
+	err := os.WriteFile(testFile, []byte(content), 0644)
+	require.NoError(t, err)
+
+	r := NewRunner(&Config{})
+	result, err := r.RunFile(testFile)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Passed)
+	require.Len(t, result.Results, 1)
+	assert.Nil(t, result.Results[0].SSEEvents)
+}
+
+func TestRunner_SSE_MultiLineData(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("id: 42\nevent: payload\ndata: line1\ndata: line2\n\n"))
+	}))
+	defer server.Close()
+
+	content := `### SSE Multi-line
+GET ` + server.URL + `/events
+Accept: text/event-stream
+
+>>>
+expect status 200
+<<<`
+
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.http")
+	err := os.WriteFile(testFile, []byte(content), 0644)
+	require.NoError(t, err)
+
+	r := NewRunner(&Config{})
+	result, err := r.RunFile(testFile)
+
+	require.NoError(t, err)
+	require.Len(t, result.Results, 1)
+	require.Len(t, result.Results[0].SSEEvents, 1)
+
+	ev := result.Results[0].SSEEvents[0]
+	assert.Equal(t, "42", ev.ID)
+	assert.Equal(t, "payload", ev.Type)
+	assert.Equal(t, "line1\nline2", ev.Data)
+}

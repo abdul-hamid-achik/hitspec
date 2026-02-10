@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import AppShell from '@/components/layout/AppShell.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { FileCheck, Play, CheckCircle, XCircle, AlertCircle } from 'lucide-vue-next'
@@ -83,8 +82,7 @@ onMounted(loadFiles)
 </script>
 
 <template>
-  <AppShell>
-    <div class="h-full overflow-auto p-6">
+  <div class="h-full overflow-auto p-6">
       <div class="mb-4 flex items-center justify-between">
         <h1 class="text-lg font-semibold text-foreground">Contract Testing</h1>
         <button
@@ -221,6 +219,5 @@ onMounted(loadFiles)
           description="Add .http or .hitspec files to your workspace to verify API contracts"
         />
       </div>
-    </div>
-  </AppShell>
+  </div>
 </template>

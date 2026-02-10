@@ -105,6 +105,7 @@ export interface AssertionResult {
 
 export interface RunResult {
   name: string
+  description?: string
   passed: boolean
   skipped?: boolean
   skipReason?: string

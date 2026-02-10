@@ -407,6 +407,7 @@
                     </div>
                     <div class="test-info">
                         <div class="test-name">{{.Name}}</div>
+                        {{if .Description}}<div class="test-file">{{.Description}}</div>{{end}}
                         <div class="test-file">{{.File}}</div>
                     </div>
                     <div class="test-duration">{{printf "%.0f" .Duration}}ms</div>

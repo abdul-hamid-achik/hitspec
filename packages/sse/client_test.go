@@ -223,3 +223,60 @@ func TestParseEvents_Comments(t *testing.T) {
 		t.Errorf("expected data 'actual data', got %q", events[0].Data)
 	}
 }
+
+func TestClient_ParseBody(t *testing.T) {
+	client := NewClient("")
+	body := []byte("event: message\ndata: hello\n\nevent: update\ndata: world\n\n")
+
+	events, err := client.ParseBody(body)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(events))
+	}
+
+	if events[0].Type != "message" || events[0].Data != "hello" {
+		t.Errorf("unexpected first event: %+v", events[0])
+	}
+
+	if events[1].Type != "update" || events[1].Data != "world" {
+		t.Errorf("unexpected second event: %+v", events[1])
+	}
+}
+
+func TestClient_ParseBody_Empty(t *testing.T) {
+	client := NewClient("")
+	events, err := client.ParseBody([]byte{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("expected 0 events, got %d", len(events))
+	}
+}
+
+func TestClient_ParseBody_WithID(t *testing.T) {
+	client := NewClient("")
+	body := []byte("id: 99\nevent: tick\ndata: {\"count\":1}\n\n")
+
+	events, err := client.ParseBody(body)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+
+	if events[0].ID != "99" {
+		t.Errorf("expected ID 99, got %q", events[0].ID)
+	}
+	if events[0].Type != "tick" {
+		t.Errorf("expected type 'tick', got %q", events[0].Type)
+	}
+	if events[0].Data != `{"count":1}` {
+		t.Errorf("expected JSON data, got %q", events[0].Data)
+	}
+}

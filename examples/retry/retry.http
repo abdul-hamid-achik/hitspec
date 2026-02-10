@@ -1,0 +1,114 @@
+# Retry and Resilience Examples
+# Demonstrates @retry, @retryDelay, and @retryOn for handling flaky endpoints
+
+@baseUrl = https://httpbin.org
+
+### Basic Retry on Any Failure
+# @name basicRetry
+# @description Retries up to 3 times on any non-2xx response
+# @tags retry, basic
+# @retry 3
+
+GET {{baseUrl}}/get
+
+>>>
+expect status 200
+expect body.url exists
+<<<
+
+### Retry with Custom Delay
+# @name retryWithDelay
+# @description Retries with 2-second delay between attempts
+# @tags retry, delay
+# @retry 3
+# @retryDelay 2000
+
+GET {{baseUrl}}/get
+? timestamp = {{$timestamp()}}
+
+>>>
+expect status 200
+<<<
+
+### Retry on Specific Status Codes
+# @name retryOnServerError
+# @description Only retries when the server returns 500, 502, or 503
+# @tags retry, selective
+# @retry 5
+# @retryDelay 1000
+# @retryOn 500, 502, 503
+
+GET {{baseUrl}}/get
+
+>>>
+expect status 200
+expect body.headers exists
+<<<
+
+### Retry on Gateway Timeout
+# @name retryGatewayTimeout
+# @description Retries specifically on 504 Gateway Timeout
+# @tags retry, timeout
+# @retry 3
+# @retryDelay 3000
+# @retryOn 504
+# @timeout 10000
+
+GET {{baseUrl}}/delay/1
+
+>>>
+expect status 200
+expect duration < 10000
+<<<
+
+### Retry with Timeout
+# @name retryWithTimeout
+# @description Combines retry with a per-request timeout
+# @tags retry, timeout
+# @retry 2
+# @retryDelay 1000
+# @timeout 5000
+
+GET {{baseUrl}}/get
+
+>>>
+expect status 200
+expect duration < 5000
+<<<
+
+### Wait for Service then Retry
+# @name waitAndRetry
+# @description Wait for a health endpoint, then retry the actual request
+# @tags retry, waitfor
+# @waitFor {{baseUrl}}/get 200 10000 1000
+# @retry 2
+
+GET {{baseUrl}}/get
+? ready = true
+
+>>>
+expect status 200
+expect body.args.ready == "true"
+<<<
+
+### Retry POST (Idempotent Endpoint)
+# @name retryPost
+# @description Retry a POST request -- only safe for idempotent endpoints
+# @tags retry, write
+# @retry 2
+# @retryDelay 500
+# @retryOn 500, 502, 503
+
+POST {{baseUrl}}/post
+Content-Type: application/json
+
+{
+  "idempotencyKey": "{{$uuid()}}",
+  "action": "process",
+  "timestamp": "{{$now()}}"
+}
+
+>>>
+expect status 200
+expect body.json.idempotencyKey exists
+<<<

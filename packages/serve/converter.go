@@ -126,12 +126,13 @@ func convertRunResult(r *runner.RunResult) *RunResultDTO {
 
 func convertRequestResult(rr *runner.RequestResult) RequestResultDTO {
 	dto := RequestResultDTO{
-		Name:       rr.Name,
-		Passed:     rr.Passed,
-		Skipped:    rr.Skipped,
-		SkipReason: rr.SkipReason,
-		Duration:   float64(rr.Duration.Milliseconds()),
-		Captures:   rr.Captures,
+		Name:        rr.Name,
+		Description: rr.Description,
+		Passed:      rr.Passed,
+		Skipped:     rr.Skipped,
+		SkipReason:  rr.SkipReason,
+		Duration:    float64(rr.Duration.Milliseconds()),
+		Captures:    rr.Captures,
 	}
 	if rr.Error != nil {
 		dto.Error = rr.Error.Error()
@@ -161,6 +162,13 @@ func convertRequestResult(rr *runner.RequestResult) RequestResultDTO {
 			Actual:   a.Actual,
 			Passed:   a.Passed,
 			Message:  a.Message,
+		})
+	}
+	for _, ev := range rr.SSEEvents {
+		dto.SSEEvents = append(dto.SSEEvents, SSEEventDTO{
+			ID:   ev.ID,
+			Type: ev.Type,
+			Data: ev.Data,
 		})
 	}
 	return dto

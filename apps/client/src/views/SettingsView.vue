@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import AppShell from '@/components/layout/AppShell.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { AlertCircle } from 'lucide-vue-next'
@@ -27,8 +26,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <AppShell>
-    <div class="h-full overflow-auto"><div class="mx-auto max-w-2xl p-6">
+  <div class="h-full overflow-auto"><div class="mx-auto max-w-2xl p-6">
       <h1 class="mb-6 text-lg font-semibold text-foreground">Settings</h1>
 
       <LoadingSpinner v-if="settings.loading" label="Loading configuration..." />
@@ -226,6 +224,5 @@ onMounted(() => {
           </div>
         </section>
       </div>
-    </div></div>
-  </AppShell>
+  </div></div>
 </template>

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import AppShell from '@/components/layout/AppShell.vue'
 import { ref } from 'vue'
 import { importCurl, importInsomnia, importOpenAPI } from '@/api/endpoints/import'
 import { Copy, Check, AlertCircle } from 'lucide-vue-next'
@@ -70,8 +69,7 @@ async function copyResult() {
 </script>
 
 <template>
-  <AppShell>
-    <div class="h-full overflow-auto"><div class="mx-auto max-w-2xl p-6">
+  <div class="h-full overflow-auto"><div class="mx-auto max-w-2xl p-6">
       <h1 class="mb-4 text-lg font-semibold text-foreground">Import</h1>
 
       <!-- Tab bar -->
@@ -175,6 +173,5 @@ async function copyResult() {
         </div>
         <pre class="max-h-64 overflow-auto rounded-lg border border-border bg-background p-4 font-mono text-xs leading-relaxed text-foreground/90">{{ result }}</pre>
       </div>
-    </div></div>
-  </AppShell>
+  </div></div>
 </template>

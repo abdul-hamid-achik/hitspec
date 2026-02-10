@@ -103,6 +103,10 @@ func (f *ConsoleFormatter) FormatResult(result *runner.RunResult) {
 
 		fmt.Fprintf(f.writer, "  %s %s %s\n", symbol, r.Name, cyan(fmt.Sprintf("(%dms)", r.Duration.Milliseconds())))
 
+		if r.Description != "" {
+			fmt.Fprintf(f.writer, "    %s\n", color.New(color.Faint).Sprint(r.Description))
+		}
+
 		if f.verbose && r.Response != nil {
 			fmt.Fprintf(f.writer, "    Status: %d\n", r.Response.StatusCode)
 		}
@@ -128,6 +132,21 @@ func (f *ConsoleFormatter) FormatResult(result *runner.RunResult) {
 						}
 					}
 				}
+			}
+		}
+
+		if f.verbose && len(r.SSEEvents) > 0 {
+			fmt.Fprintf(f.writer, "    SSE Events: %d received\n", len(r.SSEEvents))
+			for i, ev := range r.SSEEvents {
+				evType := ev.Type
+				if evType == "" {
+					evType = "message"
+				}
+				data := ev.Data
+				if len(data) > 80 {
+					data = data[:80] + "..."
+				}
+				fmt.Fprintf(f.writer, "      [%d] %s: %s\n", i+1, evType, data)
 			}
 		}
 

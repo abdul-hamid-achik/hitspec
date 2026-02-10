@@ -52,7 +52,10 @@ function resultIconClass(result: RunResult) {
           :class="resultIconClass(result)"
         />
         <MethodBadge v-if="result.request?.method" :method="result.request.method" size="sm" />
-        <span class="flex-1 truncate text-xs text-foreground">{{ result.name }}</span>
+        <div class="flex flex-1 flex-col gap-0 truncate">
+          <span class="truncate text-xs text-foreground">{{ result.name }}</span>
+          <span v-if="result.description" class="truncate text-[10px] text-muted-foreground">{{ result.description }}</span>
+        </div>
         <StatusBadge v-if="result.response?.statusCode" :code="result.response.statusCode" />
         <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{{ result.duration }}ms</span>
       </button>

@@ -18,13 +18,14 @@ type TAPFormatter struct {
 }
 
 type tapResult struct {
-	number     int
-	name       string
-	passed     bool
-	skipped    bool
-	skipReason string
-	error      string
-	assertions []string
+	number      int
+	name        string
+	description string
+	passed      bool
+	skipped     bool
+	skipReason  string
+	error       string
+	assertions  []string
 }
 
 type TAPOption func(*TAPFormatter)
@@ -50,11 +51,12 @@ func (f *TAPFormatter) FormatResult(result *runner.RunResult) {
 	for _, r := range result.Results {
 		f.testCount++
 		tr := tapResult{
-			number:     f.testCount,
-			name:       r.Name,
-			passed:     r.Passed,
-			skipped:    r.Skipped,
-			skipReason: r.SkipReason,
+			number:      f.testCount,
+			name:        r.Name,
+			description: r.Description,
+			passed:      r.Passed,
+			skipped:     r.Skipped,
+			skipReason:  r.SkipReason,
 		}
 
 		if r.Error != nil {
@@ -113,6 +115,11 @@ func (f *TAPFormatter) Flush(totalDuration time.Duration) error {
 
 		if r.passed {
 			fmt.Fprintf(f.writer, "ok %d - %s\n", r.number, r.name)
+			if r.description != "" {
+				fmt.Fprintf(f.writer, "  ---\n")
+				fmt.Fprintf(f.writer, "  description: %s\n", escapeYAML(r.description))
+				fmt.Fprintf(f.writer, "  ...\n")
+			}
 		} else {
 			fmt.Fprintf(f.writer, "not ok %d - %s\n", r.number, r.name)
 			if len(r.assertions) > 0 {

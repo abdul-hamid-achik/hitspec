@@ -1,0 +1,116 @@
+# Database Assertion Examples
+# Demonstrates verifying database state after HTTP requests
+# Requires --allow-db flag and a SQLite database
+#
+# Setup: Create the test database first:
+#   sqlite3 ./test.db "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT, active BOOLEAN DEFAULT 1);"
+#   sqlite3 ./test.db "INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com');"
+
+@baseUrl = https://jsonplaceholder.typicode.com
+@dbConn = sqlite://./test.db
+
+### Create a User via API
+# @name createUser
+# @description Create a user and verify it exists in the database
+# @tags db, write
+# @db {{dbConn}}
+
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{
+  "name": "Bob Smith",
+  "email": "bob@example.com"
+}
+
+>>>
+expect status 201
+expect body.id exists
+<<<
+
+>>>db
+SELECT COUNT(*) as count FROM users WHERE name = 'Alice';
+expect count == 1
+<<<
+
+### Verify User Record Fields
+# @name verifyUserFields
+# @description Check that specific fields exist in the database
+# @tags db, read
+# @db {{dbConn}}
+
+GET {{baseUrl}}/users/1
+
+>>>
+expect status 200
+<<<
+
+>>>db
+SELECT name, email, active FROM users WHERE id = 1;
+expect name == "Alice"
+expect email == "alice@example.com"
+expect active == 1
+<<<
+
+### Check Row Count
+# @name checkRowCount
+# @description Verify the total number of records in a table
+# @tags db, read
+# @db {{dbConn}}
+
+GET {{baseUrl}}/users
+
+>>>
+expect status 200
+<<<
+
+>>>db
+SELECT COUNT(*) as total FROM users;
+expect total > 0
+<<<
+
+### Verify Data After Update
+# @name verifyUpdate
+# @description Update a resource and confirm DB reflects the change
+# @tags db, write
+# @db {{dbConn}}
+# @depends createUser
+
+PUT {{baseUrl}}/users/1
+Content-Type: application/json
+
+{
+  "name": "Alice Updated",
+  "email": "alice.updated@example.com"
+}
+
+>>>
+expect status 200
+<<<
+
+>>>db
+SELECT name FROM users WHERE id = 1;
+expect name == "Alice"
+<<<
+
+### Multiple DB Checks
+# @name multipleChecks
+# @description Run several database queries against the same request
+# @tags db, read
+# @db {{dbConn}}
+
+GET {{baseUrl}}/users
+
+>>>
+expect status 200
+<<<
+
+>>>db
+SELECT COUNT(*) as active_count FROM users WHERE active = 1;
+expect active_count > 0
+<<<
+
+>>>db
+SELECT COUNT(*) as total FROM users;
+expect total > 0
+<<<

@@ -1,0 +1,132 @@
+# Contract Testing Examples
+# Demonstrates API contract validation against an OpenAPI spec
+# Verifies that API responses match their documented schemas
+
+@baseUrl = https://petstore.swagger.io/v2
+
+### Find Available Pets (Schema Validation)
+# @name findPets
+# @description Verify the response matches the Pet schema
+# @tags contract, pets
+
+GET {{baseUrl}}/pet/findByStatus?status=available
+
+>>>
+expect status 200
+expect body type array
+expect body[0].id exists
+expect body[0].name exists
+expect body[0].status == "available"
+expect body[0].photoUrls type array
+<<<
+
+### Create Pet (Validate Response Shape)
+# @name createPet
+# @description Create a pet and validate response matches contract
+# @tags contract, pets, write
+
+POST {{baseUrl}}/pet
+Content-Type: application/json
+
+{
+  "id": 99999,
+  "category": {
+    "id": 1,
+    "name": "Dogs"
+  },
+  "name": "Rex",
+  "photoUrls": ["https://example.com/rex.jpg"],
+  "tags": [
+    {
+      "id": 1,
+      "name": "friendly"
+    }
+  ],
+  "status": "available"
+}
+
+>>>
+expect status 200
+expect body.id == 99999
+expect body.name == "Rex"
+expect body.category type object
+expect body.category.id type number
+expect body.category.name type string
+expect body.photoUrls type array
+expect body.tags type array
+expect body.tags[0].id type number
+expect body.tags[0].name type string
+expect body.status in ["available", "pending", "sold"]
+<<<
+
+>>>capture
+petId from body.id
+<<<
+
+### Get Pet by ID (Type Checks)
+# @name getPetById
+# @description Verify every field has the expected type per the contract
+# @tags contract, pets
+# @depends createPet
+
+GET {{baseUrl}}/pet/{{createPet.petId}}
+
+>>>
+expect status 200
+expect body.id type number
+expect body.name type string
+expect body.photoUrls type array
+expect body.status type string
+<<<
+
+### Get Store Inventory (Map Response)
+# @name getInventory
+# @description Verify the inventory endpoint returns a map of status counts
+# @tags contract, store
+
+GET {{baseUrl}}/store/inventory
+
+>>>
+expect status 200
+expect body type object
+<<<
+
+### Create Order (Validate Order Schema)
+# @name createOrder
+# @description Place an order and validate the response contract
+# @tags contract, store, write
+
+POST {{baseUrl}}/store/order
+Content-Type: application/json
+
+{
+  "id": 10,
+  "petId": 99999,
+  "quantity": 1,
+  "shipDate": "{{$now()}}",
+  "status": "placed",
+  "complete": false
+}
+
+>>>
+expect status 200
+expect body.id type number
+expect body.petId type number
+expect body.quantity type number
+expect body.status in ["placed", "approved", "delivered"]
+expect body.complete type boolean
+<<<
+
+### Invalid Request (Error Contract)
+# @name notFoundPet
+# @description Verify error responses follow the expected format
+# @tags contract, error
+
+GET {{baseUrl}}/pet/0
+
+>>>
+expect status 404
+expect body.code exists
+expect body.type exists
+expect body.message exists
+<<<

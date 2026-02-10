@@ -3,11 +3,9 @@ title: "Server-Sent Events (SSE)"
 description: "Test Server-Sent Events endpoints with hitspec."
 ---
 
-<Warning>
-  SSE support is **experimental**. The syntax and behavior may change in future releases.
-</Warning>
-
 hitspec can test Server-Sent Events (SSE) endpoints. SSE is a standard for servers to push real-time updates to clients over a single HTTP connection.
+
+When hitspec detects a `text/event-stream` Content-Type in a response, it automatically parses the SSE events and makes them available in the test results. Events are shown in verbose console output and returned in JSON/API results.
 
 ## Basic Usage
 
@@ -28,7 +26,11 @@ expect header Content-Type contains "text/event-stream"
 
 ## How It Works
 
-When hitspec detects a `text/event-stream` content type, it reads events from the stream for the duration of the configured timeout. You can then assert on the received events using standard assertion operators.
+1. hitspec sends the HTTP request normally (the `Accept: text/event-stream` header is set by your test file).
+2. The server responds with `Content-Type: text/event-stream` and a body containing SSE-formatted events.
+3. hitspec detects the content type and parses the response body into structured events.
+4. Each event has optional `id`, `type`, and `data` fields per the SSE specification.
+5. Parsed events appear in verbose output and in the JSON/API result under `sseEvents`.
 
 ## Configuration
 
@@ -47,6 +49,40 @@ expect status 200
 <<<
 ```
 
-<Note>
-  SSE support is still being developed. Additional assertion capabilities for event data, event types, and stream behavior are planned for future releases.
-</Note>
+## Verbose Output
+
+Run with `--verbose` to see parsed SSE events in the console:
+
+```
+  ✓ eventStream (234ms)
+    SSE Events: 3 received
+      [1] message: hello
+      [2] update: {"count":42}
+      [3] message: goodbye
+```
+
+## Multi-line Data
+
+SSE events with multiple `data:` lines are joined with newlines, per the SSE specification:
+
+```http
+### Multi-line event data
+
+GET {{baseUrl}}/events
+Accept: text/event-stream
+
+>>>
+expect status 200
+<<<
+```
+
+A server response like:
+
+```
+data: line one
+data: line two
+data: line three
+
+```
+
+Produces a single event with `data` equal to `"line one\nline two\nline three"`.

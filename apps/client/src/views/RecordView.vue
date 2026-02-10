@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import AppShell from '@/components/layout/AppShell.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import MethodBadge from '@/components/common/MethodBadge.vue'
 import { Play, Square, Trash2, Download, Copy } from 'lucide-vue-next'
@@ -91,8 +90,7 @@ onMounted(loadStatus)
 </script>
 
 <template>
-  <AppShell>
-    <div class="h-full overflow-auto p-6">
+  <div class="h-full overflow-auto p-6">
       <h1 class="mb-4 text-lg font-semibold text-foreground">Record Proxy</h1>
 
       <div v-if="status?.running" class="space-y-4">
@@ -205,6 +203,5 @@ onMounted(loadStatus)
           Point your client at the proxy port to start recording.
         </p>
       </div>
-    </div>
-  </AppShell>
+  </div>
 </template>

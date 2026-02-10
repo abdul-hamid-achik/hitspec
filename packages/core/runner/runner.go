@@ -14,6 +14,7 @@ import (
 	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
 	"github.com/abdul-hamid-achik/hitspec/packages/http"
 	"github.com/abdul-hamid-achik/hitspec/packages/snapshot"
+	"github.com/abdul-hamid-achik/hitspec/packages/sse"
 )
 
 const (
@@ -102,6 +103,7 @@ type RunResult struct {
 
 type RequestResult struct {
 	Name         string
+	Description  string
 	Passed       bool
 	Skipped      bool
 	SkipReason   string
@@ -111,6 +113,7 @@ type RequestResult struct {
 	Assertions   []*assertions.Result
 	DBAssertions []*DBAssertionResult
 	ShellResults []*ShellResult
+	SSEEvents    []sse.Event
 	Captures     map[string]any
 	Error        error
 }
@@ -167,9 +170,10 @@ func (r *Runner) runRequests(file *parser.File) (*RunResult, error) {
 	for _, req := range sortedRequests {
 		if !r.shouldRun(req, hasOnly) {
 			result.Results = append(result.Results, &RequestResult{
-				Name:       req.Name,
-				Skipped:    true,
-				SkipReason: "filtered out",
+				Name:        req.Name,
+				Description: req.Description,
+				Skipped:     true,
+				SkipReason:  "filtered out",
 			})
 			result.Skipped++
 			continue
@@ -177,9 +181,10 @@ func (r *Runner) runRequests(file *parser.File) (*RunResult, error) {
 
 		if req.Metadata != nil && req.Metadata.Skip != "" {
 			result.Results = append(result.Results, &RequestResult{
-				Name:       req.Name,
-				Skipped:    true,
-				SkipReason: req.Metadata.Skip,
+				Name:        req.Name,
+				Description: req.Description,
+				Skipped:     true,
+				SkipReason:  req.Metadata.Skip,
 			})
 			result.Skipped++
 			continue
@@ -228,9 +233,10 @@ func (r *Runner) runRequests(file *parser.File) (*RunResult, error) {
 				}
 				if dependencyFailed {
 					result.Results = append(result.Results, &RequestResult{
-						Name:       req.Name,
-						Skipped:    true,
-						SkipReason: "dependency failed",
+						Name:        req.Name,
+						Description: req.Description,
+						Skipped:     true,
+						SkipReason:  "dependency failed",
 					})
 					result.Skipped++
 					continue
@@ -491,8 +497,9 @@ func isTruthy(value string) bool {
 
 func (r *Runner) executeRequest(req *parser.Request, baseDir string, filePath string, parallel bool) *RequestResult {
 	result := &RequestResult{
-		Name:     req.Name,
-		Captures: make(map[string]any),
+		Name:        req.Name,
+		Description: req.Description,
+		Captures:    make(map[string]any),
 	}
 
 	// Check @if/@unless conditions
@@ -548,6 +555,13 @@ func (r *Runner) executeRequest(req *parser.Request, baseDir string, filePath st
 		return result
 	}
 	result.Response = resp
+
+	// Parse SSE events when response is text/event-stream
+	if strings.HasPrefix(resp.ContentType(), "text/event-stream") && len(resp.Body) > 0 {
+		sseClient := sse.NewClient("")
+		events, _ := sseClient.ParseBody(resp.Body)
+		result.SSEEvents = events
+	}
 
 	if len(req.Assertions) > 0 {
 		result.Assertions = assertions.EvaluateAllWithBaseDir(resp, req.Assertions, baseDir,

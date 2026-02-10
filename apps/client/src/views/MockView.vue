@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import AppShell from '@/components/layout/AppShell.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import MethodBadge from '@/components/common/MethodBadge.vue'
 import { Server, Square } from 'lucide-vue-next'
@@ -48,8 +47,7 @@ onMounted(loadStatus)
 </script>
 
 <template>
-  <AppShell>
-    <div class="h-full overflow-auto p-6">
+  <div class="h-full overflow-auto p-6">
       <div class="mb-4 flex items-center justify-between">
         <h1 class="text-lg font-semibold text-foreground">Mock Server</h1>
         <button
@@ -112,6 +110,5 @@ onMounted(loadStatus)
           </button>
         </div>
       </div>
-    </div>
-  </AppShell>
+  </div>
 </template>

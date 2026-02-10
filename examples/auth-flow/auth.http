@@ -1,0 +1,116 @@
+# Authentication Flow Examples
+# Demonstrates Bearer, Basic, API Key, and OAuth2 auth types
+
+@baseUrl = https://httpbin.org
+
+### Bearer Token Authentication
+# @name bearerAuth
+# @description Authenticate with a Bearer token
+# @tags auth, bearer
+
+@token = my-secret-token-123
+
+GET {{baseUrl}}/bearer
+# @auth bearer {{token}}
+
+>>>
+expect status 200
+expect body.authenticated == true
+expect body.token == "my-secret-token-123"
+<<<
+
+### Basic Authentication
+# @name basicAuth
+# @description Authenticate with username and password
+# @tags auth, basic
+
+@username = testuser
+@password = testpass
+
+GET {{baseUrl}}/basic-auth/testuser/testpass
+# @auth basic {{username}}, {{password}}
+
+>>>
+expect status 200
+expect body.authenticated == true
+expect body.user == "testuser"
+<<<
+
+### API Key in Header
+# @name apiKeyHeader
+# @description Send API key via custom header
+# @tags auth, apikey
+
+@apiKey = sk-test-key-abc123
+
+GET {{baseUrl}}/headers
+# @auth apiKey X-API-Key, {{apiKey}}
+
+>>>
+expect status 200
+expect header Content-Type contains json
+expect body.headers.X-Api-Key == "sk-test-key-abc123"
+<<<
+
+### API Key in Query String
+# @name apiKeyQuery
+# @description Send API key as query parameter
+# @tags auth, apikey
+
+GET {{baseUrl}}/get
+# @auth apiKeyQuery api_key, {{apiKey}}
+
+>>>
+expect status 200
+expect body.args.api_key == "sk-test-key-abc123"
+<<<
+
+### Digest Authentication
+# @name digestAuth
+# @description Authenticate with HTTP Digest auth
+# @tags auth, digest
+
+GET {{baseUrl}}/digest-auth/auth/user/passwd
+# @auth digest user, passwd
+
+>>>
+expect status 200
+expect body.authenticated == true
+expect body.user == "user"
+<<<
+
+### Chained Auth Flow: Login then Access Protected Resource
+# @name login
+# @description Simulate login to get a token
+# @tags auth, flow
+
+POST {{baseUrl}}/post
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "secret"
+}
+
+>>>
+expect status 200
+expect body.json.username == "admin"
+<<<
+
+>>>capture
+sessionToken from body.headers.Host
+<<<
+
+### Access Protected Resource with Captured Token
+# @name protectedResource
+# @description Use token from login to access a protected endpoint
+# @tags auth, flow
+# @depends login
+
+GET {{baseUrl}}/headers
+Authorization: Bearer {{login.sessionToken}}
+
+>>>
+expect status 200
+expect body.headers.Authorization startsWith "Bearer"
+<<<

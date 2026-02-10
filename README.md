@@ -295,6 +295,13 @@ See the [examples](examples/) directory:
 
 - [Basic CRUD](examples/basic/crud.http) - GET, POST, PUT, DELETE operations
 - [Petstore API](examples/petstore/petstore.http) - Real-world API example with dependencies
+- [Auth Flow](examples/auth-flow/auth.http) - Bearer, Basic, API Key, Digest authentication
+- [GraphQL](examples/graphql/graphql.http) - GraphQL queries with variables and assertions
+- [Stress Testing](examples/stress-test/stress.http) - Load testing with weights, setup, teardown
+- [Database](examples/database/database.http) - DB assertions with `>>>db` blocks
+- [Contract Testing](examples/contract/contract.http) - Schema/type validation against API contracts
+- [Conditional](examples/conditional/conditional.http) - `@if`/`@unless` conditional execution
+- [Retry](examples/retry/retry.http) - `@retry`, `@retryOn`, `@retryDelay` for flaky endpoints
 
 ---
 

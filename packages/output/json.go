@@ -54,17 +54,18 @@ type JSONSummary struct {
 
 // JSONTest represents a single test result
 type JSONTest struct {
-	Name       string          `json:"name"`
-	File       string          `json:"file"`
-	Passed     bool            `json:"passed"`
-	Skipped    bool            `json:"skipped,omitempty"`
-	SkipReason string          `json:"skipReason,omitempty"`
-	Duration   float64         `json:"duration"`
-	Error      string          `json:"error,omitempty"`
-	Request    *JSONRequest    `json:"request,omitempty"`
-	Response   *JSONResponse   `json:"response,omitempty"`
-	Assertions []JSONAssertion `json:"assertions,omitempty"`
-	Captures   map[string]any  `json:"captures,omitempty"`
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	File        string          `json:"file"`
+	Passed      bool            `json:"passed"`
+	Skipped     bool            `json:"skipped,omitempty"`
+	SkipReason  string          `json:"skipReason,omitempty"`
+	Duration    float64         `json:"duration"`
+	Error       string          `json:"error,omitempty"`
+	Request     *JSONRequest    `json:"request,omitempty"`
+	Response    *JSONResponse   `json:"response,omitempty"`
+	Assertions  []JSONAssertion `json:"assertions,omitempty"`
+	Captures    map[string]any  `json:"captures,omitempty"`
 }
 
 // JSONRequest represents request details
@@ -120,11 +121,12 @@ func JSONWithWriter(w io.Writer) JSONOption {
 func (f *JSONFormatter) FormatResult(result *runner.RunResult) {
 	for _, r := range result.Results {
 		test := JSONTest{
-			Name:     r.Name,
-			File:     result.File,
-			Passed:   r.Passed,
-			Skipped:  r.Skipped,
-			Duration: float64(r.Duration.Milliseconds()),
+			Name:        r.Name,
+			Description: r.Description,
+			File:        result.File,
+			Passed:      r.Passed,
+			Skipped:     r.Skipped,
+			Duration:    float64(r.Duration.Milliseconds()),
 		}
 
 		if r.SkipReason != "" && r.SkipReason != "filtered out" {

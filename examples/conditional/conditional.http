@@ -1,0 +1,108 @@
+# Conditional Execution Examples
+# Demonstrates @if and @unless directives for controlling which requests run
+
+@baseUrl = https://jsonplaceholder.typicode.com
+@runAuthTests = true
+@skipSlowTests = false
+@environment = staging
+
+### Always Runs (No Condition)
+# @name healthCheck
+# @description Basic health check that always runs
+# @tags smoke
+
+GET {{baseUrl}}/posts/1
+
+>>>
+expect status 200
+expect body.id == 1
+<<<
+
+### Runs Only When Auth Tests Are Enabled
+# @name authTest
+# @description Only runs when runAuthTests is truthy
+# @tags auth, conditional
+# @if {{runAuthTests}}
+
+GET {{baseUrl}}/users/1
+
+>>>
+expect status 200
+expect body.id == 1
+expect body.name exists
+expect body.email exists
+<<<
+
+### Skipped When Slow Tests Are Disabled
+# @name slowQuery
+# @description Skipped when skipSlowTests is truthy (currently false, so this runs)
+# @tags slow, conditional
+# @unless {{skipSlowTests}}
+
+GET {{baseUrl}}/posts
+
+>>>
+expect status 200
+expect body type array
+expect body length > 50
+<<<
+
+### Conditional Based on Environment
+# @name stagingOnly
+# @description Only runs when environment is set to staging
+# @tags staging, conditional
+# @if {{environment}}
+
+GET {{baseUrl}}/comments
+? postId = 1
+
+>>>
+expect status 200
+expect body type array
+expect body[0].postId == 1
+expect body[0].email exists
+<<<
+
+### Skipped Unless Debug Mode
+# @name debugInfo
+# @description Skipped unless debugMode variable is set
+# @tags debug, conditional
+# @if {{debugMode}}
+
+GET {{baseUrl}}/posts/1/comments
+
+>>>
+expect status 200
+expect body type array
+<<<
+
+### Combine Conditions with Dependencies
+# @name getUser
+# @description First get a user
+# @tags flow
+
+GET {{baseUrl}}/users/1
+
+>>>
+expect status 200
+<<<
+
+>>>capture
+userName from body.name
+<<<
+
+### Conditional Follow-up
+# @name getUserPosts
+# @description Only fetch posts if user was found (depends on getUser)
+# @tags flow, conditional
+# @depends getUser
+# @if {{getUser.userName}}
+
+GET {{baseUrl}}/posts
+? userId = 1
+
+>>>
+expect status 200
+expect body type array
+expect body[0].userId == 1
+<<<

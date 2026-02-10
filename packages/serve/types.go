@@ -145,16 +145,25 @@ type RunResultDTO struct {
 
 // RequestResultDTO holds results from a single request execution.
 type RequestResultDTO struct {
-	Name       string              `json:"name"`
-	Passed     bool                `json:"passed"`
-	Skipped    bool                `json:"skipped,omitempty"`
-	SkipReason string              `json:"skipReason,omitempty"`
-	Duration   float64             `json:"duration"`
-	Error      string              `json:"error,omitempty"`
-	Request    *HTTPRequestDTO     `json:"request,omitempty"`
-	Response   *HTTPResponseDTO    `json:"response,omitempty"`
-	Assertions []AssertionResultDTO `json:"assertions,omitempty"`
-	Captures   map[string]any      `json:"captures,omitempty"`
+	Name        string              `json:"name"`
+	Description string              `json:"description,omitempty"`
+	Passed      bool                `json:"passed"`
+	Skipped     bool                `json:"skipped,omitempty"`
+	SkipReason  string              `json:"skipReason,omitempty"`
+	Duration    float64             `json:"duration"`
+	Error       string              `json:"error,omitempty"`
+	Request     *HTTPRequestDTO     `json:"request,omitempty"`
+	Response    *HTTPResponseDTO    `json:"response,omitempty"`
+	Assertions  []AssertionResultDTO `json:"assertions,omitempty"`
+	SSEEvents   []SSEEventDTO        `json:"sseEvents,omitempty"`
+	Captures    map[string]any      `json:"captures,omitempty"`
+}
+
+// SSEEventDTO represents a parsed Server-Sent Event.
+type SSEEventDTO struct {
+	ID   string `json:"id,omitempty"`
+	Type string `json:"type,omitempty"`
+	Data string `json:"data"`
 }
 
 // HTTPRequestDTO is the executed HTTP request.

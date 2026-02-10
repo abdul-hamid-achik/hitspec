@@ -1,0 +1,117 @@
+# Stress Testing Examples
+# Demonstrates load testing configuration with hitspec
+# Run with: hitspec run examples/stress-test/stress.http --stress --duration 30s --rate 50
+
+@baseUrl = https://httpbin.org
+
+### Health Check (High Weight)
+# @name healthCheck
+# @description Quick health check endpoint - runs most frequently
+# @tags stress, smoke
+# @stress.weight 5
+
+GET {{baseUrl}}/get
+
+>>>
+expect status 200
+expect duration < 5000
+<<<
+
+### Get with Query Params
+# @name getWithParams
+# @description GET request with query parameters
+# @tags stress, read
+# @stress.weight 3
+
+GET {{baseUrl}}/get
+? page = 1
+? limit = 20
+? sort = created_at
+
+>>>
+expect status 200
+expect body.args.page == "1"
+expect body.args.limit == "20"
+<<<
+
+### Create Resource (Lower Weight)
+# @name createResource
+# @description POST request - runs less frequently in stress mode
+# @tags stress, write
+# @stress.weight 1
+
+POST {{baseUrl}}/post
+Content-Type: application/json
+
+{
+  "name": "Stress Test Item {{$uuid()}}",
+  "timestamp": "{{$now()}}",
+  "value": {{$random(1, 1000)}}
+}
+
+>>>
+expect status 200
+expect body.json.name exists
+<<<
+
+### Delayed Response
+# @name delayedEndpoint
+# @description Test a slow endpoint under load
+# @tags stress, latency
+# @stress.weight 1
+# @timeout 10000
+
+GET {{baseUrl}}/delay/1
+
+>>>
+expect status 200
+expect duration < 5000
+<<<
+
+### Setup Request (Runs Once Before Stress Test)
+# @name setupData
+# @description Prepare test data before stress test begins
+# @tags stress, setup
+# @stress.setup
+
+POST {{baseUrl}}/post
+Content-Type: application/json
+
+{
+  "action": "setup",
+  "testId": "{{$uuid()}}"
+}
+
+>>>
+expect status 200
+<<<
+
+### Teardown Request (Runs Once After Stress Test)
+# @name teardown
+# @description Clean up after stress test completes
+# @tags stress, teardown
+# @stress.teardown
+
+POST {{baseUrl}}/post
+Content-Type: application/json
+
+{
+  "action": "teardown"
+}
+
+>>>
+expect status 200
+<<<
+
+### Excluded from Stress Test
+# @name debugEndpoint
+# @description This request is skipped during stress testing
+# @tags debug
+# @stress.skip
+
+GET {{baseUrl}}/headers
+
+>>>
+expect status 200
+expect body.headers exists
+<<<

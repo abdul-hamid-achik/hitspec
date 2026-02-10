@@ -23,6 +23,9 @@ const tabs = [
   <div class="flex h-full flex-col">
     <template v-if="requestStore.activeRequest">
       <UrlBar />
+      <p v-if="requestStore.activeRequest.description" class="border-b border-border px-3 py-1.5 text-xs text-muted-foreground">
+        {{ requestStore.activeRequest.description }}
+      </p>
       <div class="border-b border-border">
         <div class="flex gap-0.5 px-2">
           <button

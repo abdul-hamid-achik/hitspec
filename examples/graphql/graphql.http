@@ -1,0 +1,168 @@
+# GraphQL Query Examples
+# Demonstrates GraphQL queries, mutations, and assertions
+# Uses the public Countries GraphQL API
+
+@baseUrl = https://countries.trevorblades.com
+
+### List All Countries
+# @name listCountries
+# @description Fetch all countries with code and name
+# @tags graphql, read
+
+POST {{baseUrl}}/graphql
+Content-Type: application/json
+
+>>>graphql
+query {
+  countries {
+    code
+    name
+    capital
+    emoji
+  }
+}
+<<<
+
+>>>
+expect status 200
+expect body.data.countries type array
+expect body.data.countries length > 100
+expect body.data.countries[0].code exists
+expect body.data.countries[0].name exists
+<<<
+
+### Get Country by Code
+# @name getCountry
+# @description Fetch a specific country by its code
+# @tags graphql, read
+
+POST {{baseUrl}}/graphql
+Content-Type: application/json
+
+>>>graphql
+query GetCountry($code: ID!) {
+  country(code: $code) {
+    code
+    name
+    capital
+    currency
+    languages {
+      name
+    }
+    continent {
+      name
+    }
+  }
+}
+
+>>>variables
+{
+  "code": "US"
+}
+<<<
+
+>>>
+expect status 200
+expect body.data.country.code == "US"
+expect body.data.country.name == "United States"
+expect body.data.country.capital == "Washington, D.C."
+expect body.data.country.languages type array
+expect body.data.country.languages length > 0
+expect body.data.country.continent.name == "North America"
+<<<
+
+>>>capture
+countryName from body.data.country.name
+<<<
+
+### Filter Countries by Continent
+# @name filterByContinent
+# @description Get all European countries
+# @tags graphql, filter
+
+POST {{baseUrl}}/graphql
+Content-Type: application/json
+
+>>>graphql
+query CountriesByContinent($code: ID!) {
+  continent(code: $code) {
+    name
+    countries {
+      code
+      name
+      capital
+    }
+  }
+}
+
+>>>variables
+{
+  "code": "EU"
+}
+<<<
+
+>>>
+expect status 200
+expect body.data.continent.name == "Europe"
+expect body.data.continent.countries type array
+expect body.data.continent.countries length > 30
+<<<
+
+### Get All Languages
+# @name listLanguages
+# @description Fetch all languages with their associated info
+# @tags graphql, read
+
+POST {{baseUrl}}/graphql
+Content-Type: application/json
+
+>>>graphql
+query {
+  languages {
+    code
+    name
+    native
+  }
+}
+<<<
+
+>>>
+expect status 200
+expect body.data.languages type array
+expect body.data.languages length > 0
+expect body.data.languages[0].code exists
+expect body.data.languages[0].name exists
+<<<
+
+### Multiple Fields in a Single Query
+# @name multiQuery
+# @description Fetch country details alongside continent list
+# @tags graphql, read
+
+POST {{baseUrl}}/graphql
+Content-Type: application/json
+
+>>>graphql
+query {
+  country(code: "JP") {
+    name
+    capital
+    emoji
+    languages {
+      name
+    }
+  }
+  continents {
+    code
+    name
+  }
+}
+<<<
+
+>>>
+expect status 200
+expect body.data.country.name == "Japan"
+expect body.data.country.emoji exists
+expect body.data.continents type array
+expect body.data.continents length 7
+<<<

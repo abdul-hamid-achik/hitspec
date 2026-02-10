@@ -33,6 +33,7 @@ type HTMLSummary struct {
 // HTMLTest represents a single test result for HTML output
 type HTMLTest struct {
 	Name        string
+	Description string
 	File        string
 	Passed      bool
 	Skipped     bool
@@ -106,12 +107,13 @@ func HTMLWithWriter(w io.Writer) HTMLOption {
 func (f *HTMLFormatter) FormatResult(result *runner.RunResult) {
 	for _, r := range result.Results {
 		test := HTMLTest{
-			Name:     r.Name,
-			File:     result.File,
-			Passed:   r.Passed,
-			Skipped:  r.Skipped,
-			Duration: float64(r.Duration.Milliseconds()),
-			Captures: r.Captures,
+			Name:        r.Name,
+			Description: r.Description,
+			File:        result.File,
+			Passed:      r.Passed,
+			Skipped:     r.Skipped,
+			Duration:    float64(r.Duration.Milliseconds()),
+			Captures:    r.Captures,
 		}
 
 		// Set status class for CSS

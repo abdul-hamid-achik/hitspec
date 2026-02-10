@@ -3,6 +3,7 @@ package sse
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -210,6 +211,11 @@ func (c *Client) parseEvents(reader io.Reader, maxEvents int) ([]Event, error) {
 	}
 
 	return events, scanner.Err()
+}
+
+// ParseBody parses SSE events from a raw response body.
+func (c *Client) ParseBody(body []byte) ([]Event, error) {
+	return c.parseEvents(bytes.NewReader(body), 0)
 }
 
 // EventHandler is a callback for handling SSE events.

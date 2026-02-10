@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import AppShell from '@/components/layout/AppShell.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MethodBadge from '@/components/common/MethodBadge.vue'
@@ -40,8 +39,7 @@ function confirmClear() {
 </script>
 
 <template>
-  <AppShell>
-    <div class="h-full overflow-auto p-6">
+  <div class="h-full overflow-auto p-6">
       <div class="mb-4 flex items-center justify-between">
         <h1 class="text-lg font-semibold text-foreground">History</h1>
         <button
@@ -90,6 +88,5 @@ function confirmClear() {
         </button>
       </div>
       <EmptyState v-else :icon="History" title="No history yet" description="Execute requests to see them here" />
-    </div>
-  </AppShell>
+  </div>
 </template>

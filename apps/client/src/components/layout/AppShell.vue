@@ -1,10 +1,6 @@
-<script lang="ts">
-let appInitialized = false
-</script>
-
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { RouterView, useRouter } from 'vue-router'
 import Sidebar from './Sidebar.vue'
 import TopBar from './TopBar.vue'
 import StatusBar from './StatusBar.vue'
@@ -28,18 +24,15 @@ const shortcutsOpen = ref(false)
 const sidebarCollapsed = ref(false)
 
 onMounted(async () => {
-  if (!appInitialized) {
-    appInitialized = true
-    ws.connect()
-    collection.init()
-    // Load workspace first so we can seed the active environment from the server
-    await collection.loadFiles()
-    if (collection.workspaceEnvironment) {
-      environment.activeEnvName = collection.workspaceEnvironment
-    }
-    environment.loadEnvironments()
-    settings.loadConfig()
+  ws.connect()
+  collection.init()
+  // Load workspace first so we can seed the active environment from the server
+  await collection.loadFiles()
+  if (collection.workspaceEnvironment) {
+    environment.activeEnvName = collection.workspaceEnvironment
   }
+  environment.loadEnvironments()
+  settings.loadConfig()
 })
 
 function toggleSidebar() {
@@ -79,7 +72,7 @@ useKeyboard({
         @collapse="toggleSidebar"
       />
       <main aria-label="Main content" class="flex-1 overflow-hidden">
-        <slot />
+        <RouterView />
       </main>
     </div>
     <StatusBar />

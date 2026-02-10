@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import AppShell from '@/components/layout/AppShell.vue'
 import RequestPanel from '@/components/request/RequestPanel.vue'
 import ResponsePanel from '@/components/response/ResponsePanel.vue'
 import { useCollectionStore } from '@/stores/collection'
@@ -25,14 +24,12 @@ watch(() => collection.activeFile, (file) => {
 </script>
 
 <template>
-  <AppShell>
-    <div class="flex h-full overflow-hidden">
-      <div class="flex-1 overflow-hidden border-r border-border">
-        <RequestPanel />
-      </div>
-      <div class="flex-1 overflow-hidden">
-        <ResponsePanel />
-      </div>
+  <div class="flex h-full overflow-hidden">
+    <div class="flex-1 overflow-hidden border-r border-border">
+      <RequestPanel />
     </div>
-  </AppShell>
+    <div class="flex-1 overflow-hidden">
+      <ResponsePanel />
+    </div>
+  </div>
 </template>

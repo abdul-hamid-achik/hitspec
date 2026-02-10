@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import AppShell from '@/components/layout/AppShell.vue'
 import StressConfig from '@/components/stress/StressConfig.vue'
 import StressProfiles from '@/components/stress/StressProfiles.vue'
 import { Square, Activity, Clock, AlertTriangle, BarChart3 } from 'lucide-vue-next'
@@ -63,8 +62,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <AppShell>
-    <div class="h-full overflow-auto p-6">
+  <div class="h-full overflow-auto p-6">
       <div class="mb-4 flex items-center justify-between">
         <h1 class="text-lg font-semibold text-foreground">Stress Testing</h1>
         <button
@@ -148,6 +146,5 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </div>
-    </div>
-  </AppShell>
+  </div>
 </template>
