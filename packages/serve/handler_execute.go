@@ -32,6 +32,8 @@ func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	execID := generateID()
+	s.logger.Info("execution started", "exec_id", execID, "file", req.File, "request_name", req.RequestName, "environment", env)
+
 	s.hub.Broadcast("execution_start", WSExecEvent{
 		ID:        execID,
 		File:      req.File,
@@ -53,6 +55,7 @@ func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 	rn := runner.NewRunner(cfg)
 	result, err := rn.RunFile(absPath)
 	if err != nil {
+		s.logger.Error("execution failed", "exec_id", execID, "file", req.File, "error", err)
 		s.hub.Broadcast("error", WSExecEvent{
 			ID:        execID,
 			File:      req.File,
@@ -62,6 +65,24 @@ func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 		})
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+
+	// Strip "filtered out" stubs — API returns only executed requests
+	if cfg.NameFilter != "" {
+		executed := make([]*runner.RequestResult, 0, len(result.Results))
+		for _, rr := range result.Results {
+			if rr.Skipped && rr.SkipReason == "filtered out" {
+				continue
+			}
+			executed = append(executed, rr)
+		}
+		result.Results = executed
+		result.Skipped = 0
+		for _, rr := range executed {
+			if rr.Skipped {
+				result.Skipped++
+			}
+		}
 	}
 
 	dto := convertRunResult(result)
@@ -95,6 +116,8 @@ func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Record to persistent history (non-blocking)
 	s.recordRunToHistory(req.File, env, dto)
+
+	s.logger.Info("execution completed", "exec_id", execID, "file", req.File, "duration_ms", result.Duration.Milliseconds(), "passed", result.Passed, "failed", result.Failed, "skipped", result.Skipped)
 
 	writeJSON(w, http.StatusOK, dto)
 }
@@ -133,6 +156,8 @@ func (s *Server) handleRunFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	execID := generateID()
+	s.logger.Info("run file started", "exec_id", execID, "file", req.File, "environment", env)
+
 	s.hub.Broadcast("execution_start", WSExecEvent{
 		ID:        execID,
 		File:      req.File,
@@ -143,6 +168,7 @@ func (s *Server) handleRunFile(w http.ResponseWriter, r *http.Request) {
 	rn := runner.NewRunner(cfg)
 	result, err := rn.RunFile(absPath)
 	if err != nil {
+		s.logger.Error("run file failed", "exec_id", execID, "file", req.File, "error", err)
 		s.hub.Broadcast("error", WSExecEvent{
 			ID:        execID,
 			File:      req.File,
@@ -185,6 +211,8 @@ func (s *Server) handleRunFile(w http.ResponseWriter, r *http.Request) {
 
 	// Record to persistent history (non-blocking)
 	s.recordRunToHistory(req.File, env, dto)
+
+	s.logger.Info("run file completed", "exec_id", execID, "file", req.File, "duration_ms", result.Duration.Milliseconds(), "passed", result.Passed, "failed", result.Failed, "skipped", result.Skipped)
 
 	writeJSON(w, http.StatusOK, dto)
 }

@@ -80,6 +80,8 @@ func (s *Server) handleRecordStart(w http.ResponseWriter, r *http.Request) {
 	s.recorderTarget = req.TargetURL
 	s.mu.Unlock()
 
+	s.logger.Info("recording proxy starting", "target", req.TargetURL, "port", port)
+
 	go func() {
 		_ = recorder.StartWithContext(ctx)
 		s.mu.Lock()
@@ -103,6 +105,7 @@ func (s *Server) handleRecordStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.logger.Info("recording proxy stopping")
 	s.recorderCancel()
 	writeJSON(w, http.StatusOK, map[string]string{"status": "stopping"})
 }

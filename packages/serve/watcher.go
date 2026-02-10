@@ -1,7 +1,6 @@
 package serve
 
 import (
-	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -16,7 +15,7 @@ const watchDebounce = 300 * time.Millisecond
 func (s *Server) startWatcher() {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.Printf("failed to create file watcher: %v", err)
+		s.logger.Error("failed to create file watcher", "error", err)
 		return
 	}
 
@@ -68,15 +67,13 @@ func (s *Server) startWatcher() {
 						Timestamp: nowISO(),
 					})
 
-					if s.config.Verbose {
-						log.Printf("file %s: %s", op, relPath)
-					}
+					s.logger.Info("file changed", "operation", op, "path", relPath)
 				})
 			case err, ok := <-watcher.Errors:
 				if !ok {
 					return
 				}
-				log.Printf("watcher error: %v", err)
+				s.logger.Warn("watcher error", "error", err)
 			}
 		}
 	}()

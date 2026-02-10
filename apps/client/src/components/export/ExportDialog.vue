@@ -51,6 +51,25 @@ async function copyToClipboard() {
   }
 }
 
+const formatExtensions: Record<ExportFormat, string> = {
+  curl: '.sh',
+  fetch: '.js',
+  wget: '.sh',
+  python: '.py',
+  httpie: '.sh',
+}
+
+function download() {
+  const blob = new Blob([code.value], { type: 'text/plain' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  const name = props.request.name || 'request'
+  a.download = `${name}${formatExtensions[activeFormat.value]}`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 function close() {
   emit('update:modelValue', false)
 }
@@ -109,6 +128,13 @@ function close() {
 
         <!-- Footer -->
         <div class="flex justify-end gap-2 border-t border-border px-4 py-3">
+          <button
+            class="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/80"
+            @click="download"
+          >
+            <Download class="h-3 w-3" />
+            Download
+          </button>
           <button
             class="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
             @click="close"

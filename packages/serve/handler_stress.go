@@ -67,6 +67,8 @@ func (s *Server) handleStressStart(w http.ResponseWriter, r *http.Request) {
 	s.stressCancel = cancel
 	s.mu.Unlock()
 
+	s.logger.Info("stress test starting", "duration", req.Duration, "rate", req.Rate, "vus", req.VUs)
+
 	// Run stress test in background, broadcast metrics via WebSocket
 	go func() {
 		// Broadcast metrics periodically
@@ -118,6 +120,7 @@ func (s *Server) handleStressStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.logger.Info("stress test stopping")
 	s.stressCancel()
 	writeJSON(w, http.StatusOK, map[string]string{"status": "stopping"})
 }

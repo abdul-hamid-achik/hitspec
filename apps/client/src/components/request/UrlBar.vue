@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { Play, Loader2, Share2 } from 'lucide-vue-next'
 import { useRequestStore } from '@/stores/request'
 import { useCollectionStore } from '@/stores/collection'
@@ -12,6 +12,22 @@ const collection = useCollectionStore()
 const envStore = useEnvironmentStore()
 
 const showExport = ref(false)
+
+// Merge file-level variables (@baseUrl = ...) with environment variables
+const exportVariables = computed(() => {
+  const vars: Record<string, unknown> = {}
+  // File-level variables first (lower priority)
+  const fileVars = collection.activeFile?.variables ?? []
+  for (const v of fileVars) {
+    vars[v.name] = v.value
+  }
+  // Environment variables override file-level ones
+  const envVars = envStore.activeEnv?.variables ?? {}
+  for (const [k, v] of Object.entries(envVars)) {
+    vars[k] = v
+  }
+  return vars
+})
 
 function handleSend() {
   if (!collection.activeFilePath || !requestStore.activeRequest) return
@@ -47,7 +63,7 @@ function handleSend() {
     <ExportDialog
       v-model="showExport"
       :request="requestStore.activeRequest"
-      :variables="envStore.activeEnv?.variables ?? {}"
+      :variables="exportVariables"
     />
   </div>
 </template>

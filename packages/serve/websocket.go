@@ -3,7 +3,7 @@ package serve
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -33,7 +33,7 @@ func (h *Hub) Broadcast(msgType string, payload any) {
 	msg := WSMessage{Type: msgType, Payload: payload, Timestamp: nowISO()}
 	data, err := json.Marshal(msg)
 	if err != nil {
-		log.Printf("ws broadcast marshal error: %v", err)
+		slog.Error("websocket broadcast marshal error", "error", err)
 		return
 	}
 
@@ -77,7 +77,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		OriginPatterns: []string{"localhost:*", "127.0.0.1:*", "[::1]:*"},
 	})
 	if err != nil {
-		log.Printf("ws accept error: %v", err)
+		s.logger.Error("websocket accept failed", "error", err)
 		return
 	}
 
@@ -87,7 +87,12 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.hub.register(client)
-	defer s.hub.unregister(client)
+	s.logger.Debug("websocket client connected", "remote_addr", r.RemoteAddr, "clients", s.hub.ClientCount())
+
+	defer func() {
+		s.logger.Debug("websocket client disconnected", "remote_addr", r.RemoteAddr)
+		s.hub.unregister(client)
+	}()
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()

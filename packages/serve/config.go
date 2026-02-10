@@ -16,6 +16,8 @@ type ServeConfig struct {
 	AllowShell    bool
 	AllowDB       bool
 	HistoryDBPath string // Path to persistent history SQLite database
+	LogFormat     string // "json" or "text" (default: "text")
+	LogLevel      string // "debug", "info", "warn", "error" (default: "info")
 }
 
 // Option configures ServeConfig.
@@ -91,14 +93,26 @@ func WithHistoryDBPath(path string) Option {
 	return func(c *ServeConfig) { c.HistoryDBPath = path }
 }
 
+// WithLogFormat sets the log output format ("json" or "text").
+func WithLogFormat(format string) Option {
+	return func(c *ServeConfig) { c.LogFormat = format }
+}
+
+// WithLogLevel sets the minimum log level ("debug", "info", "warn", "error").
+func WithLogLevel(level string) Option {
+	return func(c *ServeConfig) { c.LogLevel = level }
+}
+
 // DefaultConfig returns a ServeConfig with default values.
 func DefaultConfig() *ServeConfig {
 	return &ServeConfig{
-		Port:    4000,
-		Host:    "localhost",
-		Open:    true,
-		Watch:   true,
-		Env:     "dev",
-		WorkDir: ".",
+		Port:      4000,
+		Host:      "localhost",
+		Open:      true,
+		Watch:     true,
+		Env:       "dev",
+		WorkDir:   ".",
+		LogFormat: "text",
+		LogLevel:  "info",
 	}
 }

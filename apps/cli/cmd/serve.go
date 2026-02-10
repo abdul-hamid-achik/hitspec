@@ -23,6 +23,8 @@ var (
 	serveVerboseFlag    bool
 	serveAllowShellFlag bool
 	serveAllowDBFlag    bool
+	serveLogFormatFlag  string
+	serveLogLevelFlag   string
 )
 
 var serveCmd = &cobra.Command{
@@ -60,6 +62,8 @@ func init() {
 	serveCmd.Flags().BoolVarP(&serveVerboseFlag, "verbose", "v", false, "Verbose logging")
 	serveCmd.Flags().BoolVar(&serveAllowShellFlag, "allow-shell", false, "Allow shell command execution")
 	serveCmd.Flags().BoolVar(&serveAllowDBFlag, "allow-db", false, "Allow database assertions")
+	serveCmd.Flags().StringVar(&serveLogFormatFlag, "log-format", "text", "Log format: text or json")
+	serveCmd.Flags().StringVar(&serveLogLevelFlag, "log-level", "info", "Log level: debug, info, warn, error")
 }
 
 func serveCommand(cmd *cobra.Command, args []string) error {
@@ -82,6 +86,8 @@ func serveCommand(cmd *cobra.Command, args []string) error {
 		serve.WithVerbose(serveVerboseFlag),
 		serve.WithAllowShell(serveAllowShellFlag),
 		serve.WithAllowDB(serveAllowDBFlag),
+		serve.WithLogFormat(serveLogFormatFlag),
+		serve.WithLogLevel(serveLogLevelFlag),
 	)
 
 	s.Version = version

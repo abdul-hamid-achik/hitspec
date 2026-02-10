@@ -1,4 +1,4 @@
-import{_ as u}from"./vendor-vue-BPZHirUR.js";/**
+import{$ as u}from"./vendor-vue-BkwM3wFe.js";/**
  * @license lucide-vue-next v0.474.0 - ISC
  *
  * This source code is licensed under the ISC license.
@@ -23,4 +23,4 @@ import{_ as u}from"./vendor-vue-BPZHirUR.js";/**
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
- */const x=p("CircleAlertIcon",[["circle",{cx:"12",cy:"12",r:"10",key:"1mglay"}],["line",{x1:"12",x2:"12",y1:"8",y2:"12",key:"1pkeuh"}],["line",{x1:"12",x2:"12.01",y1:"16",y2:"16",key:"4dfq90"}]]);class y extends Error{constructor(e,r,n){super(`${e} ${r}`),this.status=e,this.statusText=r,this.body=n,this.name="ApiError"}}function g(){return window.location.origin}async function c(t,e,r){const n=`${g()}${e}`,s={};r!==void 0&&(s["Content-Type"]="application/json");const o=await fetch(n,{method:t,headers:s,body:r!==void 0?JSON.stringify(r):void 0});if(!o.ok){let i;try{i=await o.json()}catch{i=await o.text()}throw new y(o.status,o.statusText,i)}if(o.status!==204)return o.json()}function m(t){return c("GET",t)}function v(t,e){return c("POST",t,e)}function C(t,e){return c("PUT",t,e)}function E(t){return c("DELETE",t)}export{x as C,v as a,p as c,E as d,m as g,C as p};
+ */const x=p("CircleAlertIcon",[["circle",{cx:"12",cy:"12",r:"10",key:"1mglay"}],["line",{x1:"12",x2:"12",y1:"8",y2:"12",key:"1pkeuh"}],["line",{x1:"12",x2:"12.01",y1:"16",y2:"16",key:"4dfq90"}]]);class y extends Error{constructor(e,r,n){super(`${e} ${r}`),this.status=e,this.statusText=r,this.body=n,this.name="ApiError"}}function g(){return window.location.origin}async function c(t,e,r){const n=`${g()}${e}`,s={};r!==void 0&&(s["Content-Type"]="application/json");const o=await fetch(n,{method:t,headers:s,body:r!==void 0?JSON.stringify(r):void 0});if(!o.ok){let i;try{i=await o.json()}catch{i=await o.text()}throw new y(o.status,o.statusText,i)}if(o.status!==204)return o.json()}function m(t){return c("GET",t)}function v(t,e){return c("POST",t,e)}function $(t,e){return c("PUT",t,e)}function C(t){return c("DELETE",t)}export{x as C,v as a,p as c,C as d,m as g,$ as p};

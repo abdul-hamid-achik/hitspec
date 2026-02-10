@@ -37,6 +37,8 @@ const tabs = computed(() => {
 watch(() => requestStore.lastRunResult, (newVal) => {
   if (newVal && newVal.results.length > 0) {
     activeTab.value = 'results'
+  } else if (!newVal && activeTab.value === 'results') {
+    activeTab.value = 'body'
   }
 })
 

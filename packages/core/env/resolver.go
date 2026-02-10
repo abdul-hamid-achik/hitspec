@@ -159,7 +159,9 @@ func (r *Resolver) Resolve(input string) string {
 			return val
 		}
 
-		r.warn("unresolved variable: %s", expr)
+		if !strings.Contains(expr, ".") {
+			r.warn("unresolved variable: %s", expr)
+		}
 		return match
 	})
 }

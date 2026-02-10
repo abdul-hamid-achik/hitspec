@@ -20,11 +20,10 @@ export const useRequestStore = defineStore('request', () => {
     isExecuting.value = true
     error.value = null
     lastResult.value = null
+    lastRunResult.value = null
     try {
       const result = await apiExecute({ file: filePath, requestName, environment })
       if (thisId !== executionId) return // superseded by a newer execution
-      // Store the full run result so Results tab works
-      lastRunResult.value = result
       // Find the matching result for the specific request
       if (requestName) {
         const match = result.results.find(r => r.name === requestName)

@@ -3,7 +3,7 @@ package serve
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -27,6 +27,7 @@ type Server struct {
 	history      *History
 	historyStore *history.Store
 	fileConfig   *config.Config
+	logger       *slog.Logger
 
 	// Mutable state protected by mu
 	mu             sync.Mutex
@@ -78,6 +79,8 @@ func NewServer(opts ...Option) *Server {
 		fileConfig: fileConfig,
 	}
 
+	s.logger = newLogger(cfg)
+
 	// Open persistent history database
 	dbPath := cfg.HistoryDBPath
 	if dbPath == "" {
@@ -92,7 +95,7 @@ func NewServer(opts ...Option) *Server {
 		_ = os.MkdirAll(filepath.Dir(dbPath), 0o755)
 		store, err := history.NewStore(dbPath)
 		if err != nil {
-			log.Printf("warning: failed to open history db: %v", err)
+			s.logger.Warn("failed to open history database", "error", err, "path", dbPath)
 		} else {
 			s.historyStore = store
 		}
@@ -112,7 +115,7 @@ func (s *Server) Start(ctx context.Context) error {
 	go func() {
 		select {
 		case <-sigCh:
-			log.Println("Shutting down...")
+			s.logger.Info("shutting down")
 			s.cancel()
 		case <-s.ctx.Done():
 		}
@@ -128,9 +131,9 @@ func (s *Server) Start(ctx context.Context) error {
 	s.registerRoutes(mux)
 
 	handler := chain(mux,
-		recoveryMiddleware(),
+		recoveryMiddleware(s.logger),
 		corsMiddleware(s.config.CORS),
-		loggingMiddleware(s.config.Verbose),
+		loggingMiddleware(s.logger),
 		readOnlyMiddleware(s.config.ReadOnly),
 	)
 
@@ -154,16 +157,16 @@ func (s *Server) Start(ctx context.Context) error {
 		_ = server.Shutdown(shutdownCtx)
 	}()
 
-	log.Printf("hitspec serve running on http://%s", addr)
-	log.Printf("  Workspace: %s", s.config.WorkDir)
+	s.logger.Info("server started", "addr", addr)
+	s.logger.Info("workspace configured", "path", s.config.WorkDir)
 
 	files, _ := collectHitspecFiles(s.config.WorkDir)
-	log.Printf("  Files: %d .http/.hitspec files found", len(files))
+	s.logger.Info("hitspec files discovered", "count", len(files))
 
 	if !s.config.APIOnly {
-		log.Printf("  UI: http://%s", addr)
+		s.logger.Info("UI available", "url", fmt.Sprintf("http://%s", addr))
 	}
-	log.Printf("  API: http://%s/api/v1/", addr)
+	s.logger.Info("API available", "url", fmt.Sprintf("http://%s/api/v1/", addr))
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf("server error: %w", err)

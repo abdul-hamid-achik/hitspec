@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ChevronRight, FileText, Folder, FolderOpen, Play } from 'lucide-vue-next'
-import { shallowRef, triggerRef } from 'vue'
+import { ChevronRight, FileText, Folder, FolderOpen, Play, Share2 } from 'lucide-vue-next'
+import { ref, computed, shallowRef, triggerRef } from 'vue'
 import type { FileInfo } from '@/types/api'
 import { useCollectionStore } from '@/stores/collection'
 import { useRequestStore } from '@/stores/request'
 import { useEnvironmentStore } from '@/stores/environment'
 import MethodBadge from '@/components/common/MethodBadge.vue'
+import ExportDialog from '@/components/export/ExportDialog.vue'
 
 defineProps<{ items: FileInfo[]; depth?: number }>()
 
@@ -13,6 +14,29 @@ const collection = useCollectionStore()
 const requestStore = useRequestStore()
 const envStore = useEnvironmentStore()
 const expandedDirs = shallowRef<Set<string>>(new Set())
+const exportRequest = ref<import('@/types/api').RequestDTO | null>(null)
+const exportFilePath = ref<string | null>(null)
+const showExportDialog = ref(false)
+
+// Merge file-level variables with environment variables for export
+const exportVariables = computed(() => {
+  const vars: Record<string, unknown> = {}
+  // File-level variables first (lower priority)
+  if (exportFilePath.value) {
+    const parsed = collection.openFiles.get(exportFilePath.value)
+    if (parsed) {
+      for (const v of parsed.variables) {
+        vars[v.name] = v.value
+      }
+    }
+  }
+  // Environment variables override file-level ones
+  const envVars = envStore.activeEnv?.variables ?? {}
+  for (const [k, v] of Object.entries(envVars)) {
+    vars[k] = v
+  }
+  return vars
+})
 
 function toggleDir(path: string) {
   if (expandedDirs.value.has(path)) {
@@ -166,20 +190,39 @@ async function runFile(item: FileInfo, event: Event) {
       <div
         v-if="!item.isDir && collection.expandedFiles.has(item.path) && collection.openFiles.get(item.path)"
       >
-        <button
+        <div
           v-for="(req, idx) in collection.openFiles.get(item.path)!.requests"
           :key="idx"
-          class="flex w-full items-center gap-1.5 rounded-md px-1.5 py-[3px] text-left text-[12px] transition-colors hover:bg-surface-hover"
-          :class="[
-            requestStore.activeRequest === req ? 'bg-accent/10 text-foreground' : 'text-muted-foreground',
-          ]"
-          :style="{ paddingLeft: `${(depth ?? 0) * 12 + 24}px` }"
-          @click="handleRequestClick(item.path, req, idx)"
+          class="group flex items-center"
         >
-          <MethodBadge :method="req.method" size="sm" />
-          <span class="flex-1 truncate">{{ req.name || req.url }}</span>
-        </button>
+          <button
+            class="flex flex-1 items-center gap-1.5 rounded-md px-1.5 py-[3px] text-left text-[12px] transition-colors hover:bg-surface-hover"
+            :class="[
+              requestStore.activeRequest === req ? 'bg-accent/10 text-foreground' : 'text-muted-foreground',
+            ]"
+            :style="{ paddingLeft: `${(depth ?? 0) * 12 + 24}px` }"
+            @click="handleRequestClick(item.path, req, idx)"
+          >
+            <MethodBadge :method="req.method" size="sm" />
+            <span class="flex-1 truncate">{{ req.name || req.url }}</span>
+          </button>
+          <button
+            aria-label="Export request"
+            class="invisible mr-1 rounded p-0.5 text-muted-foreground/40 transition-colors hover:bg-accent/20 hover:text-accent group-hover:visible"
+            title="Export request"
+            @click.stop="exportRequest = req; exportFilePath = item.path; showExportDialog = true"
+          >
+            <Share2 class="h-3 w-3" />
+          </button>
+        </div>
       </div>
     </div>
+
+    <ExportDialog
+      v-if="exportRequest"
+      v-model="showExportDialog"
+      :request="exportRequest"
+      :variables="exportVariables"
+    />
   </div>
 </template>

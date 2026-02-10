@@ -1,7 +1,7 @@
 package serve
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -60,13 +60,31 @@ func isLocalhostOrigin(origin string) bool {
 	return false
 }
 
+// statusWriter wraps http.ResponseWriter to capture the status code.
+type statusWriter struct {
+	http.ResponseWriter
+	status  int
+	written int64
+}
+
+func (w *statusWriter) WriteHeader(code int) {
+	w.status = code
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *statusWriter) Write(b []byte) (int, error) {
+	n, err := w.ResponseWriter.Write(b)
+	w.written += int64(n)
+	return n, err
+}
+
 // recoveryMiddleware catches panics and returns 500.
-func recoveryMiddleware() Middleware {
+func recoveryMiddleware(logger *slog.Logger) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if err := recover(); err != nil {
-					log.Printf("panic: %v", err)
+					logger.Error("panic recovered", "error", err, "path", r.URL.Path)
 					writeError(w, http.StatusInternalServerError, "internal server error")
 				}
 			}()
@@ -75,16 +93,27 @@ func recoveryMiddleware() Middleware {
 	}
 }
 
-// loggingMiddleware logs HTTP requests when verbose.
-func loggingMiddleware(verbose bool) Middleware {
+// loggingMiddleware logs HTTP requests with structured fields.
+func loggingMiddleware(logger *slog.Logger) Middleware {
 	return func(next http.Handler) http.Handler {
-		if !verbose {
-			return next
-		}
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
-			next.ServeHTTP(w, r)
-			log.Printf("%s %s %s", r.Method, r.URL.Path, time.Since(start))
+			reqID := generateID()
+			ctx := contextWithRequestID(r.Context(), reqID)
+			r = r.WithContext(ctx)
+
+			sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+			next.ServeHTTP(sw, r)
+
+			logger.Info("http request",
+				"request_id", reqID,
+				"method", r.Method,
+				"path", r.URL.Path,
+				"status", sw.status,
+				"duration_ms", time.Since(start).Milliseconds(),
+				"bytes", sw.written,
+				"remote_addr", r.RemoteAddr,
+			)
 		})
 	}
 }

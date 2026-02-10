@@ -111,6 +111,8 @@ func (s *Server) handleMockStart(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	s.logger.Info("mock server starting", "port", port, "routes", len(routes))
+
 	writeJSON(w, http.StatusOK, MockStatusDTO{
 		Running: true,
 		Port:    port,
@@ -127,6 +129,7 @@ func (s *Server) handleMockStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.logger.Info("mock server stopping")
 	s.mockCancel()
 	writeJSON(w, http.StatusOK, map[string]string{"status": "stopping"})
 }
