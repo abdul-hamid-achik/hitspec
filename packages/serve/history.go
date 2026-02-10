@@ -33,3 +33,10 @@ func (h *History) Entries() []HistoryEntryDTO {
 	copy(out, h.entries)
 	return out
 }
+
+// Clear removes all history entries.
+func (h *History) Clear() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.entries = h.entries[:0]
+}

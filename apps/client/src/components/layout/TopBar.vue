@@ -10,8 +10,8 @@ const requestStore = useRequestStore()
 const collection = useCollectionStore()
 
 function handleRun() {
-  if (!collection.activeFilePath || !requestStore.activeRequest) return
-  requestStore.execute(collection.activeFilePath, requestStore.activeRequestIndex, envStore.activeEnvName)
+  if (!collection.activeFilePath) return
+  requestStore.runFile(collection.activeFilePath, envStore.activeEnvName)
 }
 </script>
 
@@ -33,11 +33,11 @@ function handleRun() {
       </select>
       <button
         class="flex items-center gap-1.5 rounded bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent/80 disabled:opacity-50"
-        :disabled="!requestStore.activeRequest || requestStore.isExecuting"
+        :disabled="!collection.activeFilePath || requestStore.isExecuting"
         @click="handleRun"
       >
         <Play class="h-3.5 w-3.5" />
-        {{ requestStore.isExecuting ? 'Running...' : 'Send' }}
+        {{ requestStore.isExecuting ? 'Running...' : 'Run All' }}
       </button>
     </div>
   </header>

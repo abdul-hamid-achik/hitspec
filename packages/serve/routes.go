@@ -23,6 +23,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	// History
 	mux.HandleFunc("GET /api/v1/history", s.handleGetHistory)
+	mux.HandleFunc("DELETE /api/v1/history", s.handleClearHistory)
 
 	// Stress testing
 	mux.HandleFunc("POST /api/v1/stress/start", s.handleStressStart)

@@ -62,47 +62,47 @@ export interface ParsedFile {
 }
 
 export interface ExecuteRequest {
-  filePath: string
-  requestIndex: number
+  file: string
+  requestName?: string
   environment?: string
-  variables?: Record<string, string>
 }
 
 export interface AssertionResult {
-  field: string
+  subject: string
   operator: string
-  expected: string
-  actual: string
+  expected: unknown
+  actual: unknown
   passed: boolean
-  message: string
-  line: number
-}
-
-export interface CaptureResult {
-  name: string
-  value: string
+  message?: string
 }
 
 export interface RunResult {
-  requestName: string
-  method: string
-  url: string
-  statusCode: number
-  duration: number
-  headers: Record<string, string[]>
-  body: string
-  bodySize: number
-  assertions: AssertionResult[]
-  captures: CaptureResult[]
-  error?: string
+  name: string
   passed: boolean
+  skipped?: boolean
+  skipReason?: string
+  duration: number
+  error?: string
+  request?: { method: string; url: string; headers?: Record<string, string> }
+  response?: {
+    statusCode: number
+    status: string
+    headers?: Record<string, string>
+    body?: string
+    duration: number
+    size: number
+  }
+  assertions?: AssertionResult[]
+  captures?: Record<string, unknown>
 }
 
 export interface ExecuteResult {
-  results: RunResult[]
-  totalDuration: number
+  file: string
+  duration: number
   passed: number
   failed: number
+  skipped: number
+  results: RunResult[]
 }
 
 export interface EnvironmentDTO {

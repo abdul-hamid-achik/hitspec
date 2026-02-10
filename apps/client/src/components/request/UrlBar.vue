@@ -10,8 +10,8 @@ const collection = useCollectionStore()
 const envStore = useEnvironmentStore()
 
 function handleSend() {
-  if (!collection.activeFilePath) return
-  requestStore.execute(collection.activeFilePath, requestStore.activeRequestIndex, envStore.activeEnvName)
+  if (!collection.activeFilePath || !requestStore.activeRequest) return
+  requestStore.execute(collection.activeFilePath, requestStore.activeRequest.name, envStore.activeEnvName)
 }
 </script>
 
