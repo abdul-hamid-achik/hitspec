@@ -1,7 +1,10 @@
 package serve
 
 import (
+	"bufio"
+	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 )
@@ -76,6 +79,21 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 	n, err := w.ResponseWriter.Write(b)
 	w.written += int64(n)
 	return n, err
+}
+
+// Hijack delegates to the underlying ResponseWriter for WebSocket support.
+func (w *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if hj, ok := w.ResponseWriter.(http.Hijacker); ok {
+		return hj.Hijack()
+	}
+	return nil, nil, fmt.Errorf("underlying ResponseWriter does not implement http.Hijacker")
+}
+
+// Flush delegates to the underlying ResponseWriter for SSE support.
+func (w *statusWriter) Flush() {
+	if fl, ok := w.ResponseWriter.(http.Flusher); ok {
+		fl.Flush()
+	}
 }
 
 // recoveryMiddleware catches panics and returns 500.
