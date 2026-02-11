@@ -4,18 +4,22 @@ import UrlBar from './UrlBar.vue'
 import HeadersEditor from './HeadersEditor.vue'
 import BodyEditor from './BodyEditor.vue'
 import AssertionBuilder from './AssertionBuilder.vue'
+import SourceEditor from './SourceEditor.vue'
 import { useRequestStore } from '@/stores/request'
+import { useCollectionStore } from '@/stores/collection'
 import EmptyState from '@/components/common/EmptyState.vue'
-import { FileText, Globe, AlignLeft, ShieldCheck, Link2 } from 'lucide-vue-next'
+import { FileText, Globe, AlignLeft, ShieldCheck, Link2, Code } from 'lucide-vue-next'
 
 const requestStore = useRequestStore()
-const activeTab = ref<'headers' | 'body' | 'assertions' | 'captures'>('headers')
+const collection = useCollectionStore()
+const activeTab = ref<'headers' | 'body' | 'assertions' | 'captures' | 'source'>('headers')
 
 const tabs = [
   { key: 'headers' as const, label: 'Headers', icon: Globe },
   { key: 'body' as const, label: 'Body', icon: AlignLeft },
   { key: 'assertions' as const, label: 'Assertions', icon: ShieldCheck },
   { key: 'captures' as const, label: 'Captures', icon: Link2 },
+  { key: 'source' as const, label: 'Source', icon: Code },
 ] as const
 </script>
 
@@ -51,10 +55,18 @@ const tabs = [
             >
               {{ requestStore.activeRequest.assertions?.length ?? 0 }}
             </span>
+            <span
+              v-if="tab.key === 'source' && collection.isActiveDirty"
+              class="h-1.5 w-1.5 rounded-full bg-nord-13"
+              title="Unsaved changes"
+            />
           </button>
         </div>
       </div>
-      <div class="flex-1 overflow-auto p-3">
+      <div v-if="activeTab === 'source'" class="flex-1 overflow-hidden">
+        <SourceEditor />
+      </div>
+      <div v-else class="flex-1 overflow-auto p-3">
         <HeadersEditor v-if="activeTab === 'headers'" :headers="requestStore.activeRequest.headers ?? []" />
         <BodyEditor v-else-if="activeTab === 'body'" :body="requestStore.activeRequest.body" />
         <AssertionBuilder

@@ -42,6 +42,7 @@ export const useSettingsStore = defineStore('settings', () => {
     }
     try {
       await updateConfig(updates)
+      toast.success('Settings saved')
     } catch (e) {
       config.value = prev
       toast.error(e instanceof Error ? e.message : 'Failed to save settings')

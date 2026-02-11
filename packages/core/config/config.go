@@ -223,6 +223,18 @@ func (c *Config) Merge(other *Config) *Config {
 	return &result
 }
 
+// FindConfigPath searches for an existing config file in the given directory
+// and returns its path, or empty string if none found.
+func FindConfigPath(dir string) string {
+	for _, filename := range ConfigFilenames {
+		configPath := filepath.Join(dir, filename)
+		if _, err := os.Stat(configPath); err == nil {
+			return configPath
+		}
+	}
+	return ""
+}
+
 // SaveConfig saves the configuration to a file
 func (c *Config) SaveConfig(path string) error {
 	data, err := yaml.Marshal(c)

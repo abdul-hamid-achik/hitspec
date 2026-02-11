@@ -2,6 +2,9 @@ package serve
 
 import (
 	"net/http"
+	"path/filepath"
+
+	"github.com/abdul-hamid-achik/hitspec/packages/core/config"
 )
 
 func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
@@ -32,9 +35,9 @@ func (s *Server) handlePutConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// If no config loaded yet, initialize with defaults so we can save
 	if s.fileConfig == nil {
-		writeError(w, http.StatusBadRequest, "no config file found")
-		return
+		s.fileConfig = config.DefaultConfig()
 	}
 
 	if dto.DefaultEnvironment != "" {
@@ -63,6 +66,17 @@ func (s *Server) handlePutConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	if dto.Concurrency > 0 {
 		s.fileConfig.Concurrency = dto.Concurrency
+	}
+
+	// If no config path was discovered, create hitspec.yaml in the workspace
+	if s.configPath == "" {
+		s.configPath = filepath.Join(s.config.WorkDir, "hitspec.yaml")
+	}
+
+	if err := s.fileConfig.SaveConfig(s.configPath); err != nil {
+		s.logger.Error("failed to save config", "error", err, "path", s.configPath)
+		writeError(w, http.StatusInternalServerError, "failed to save config to disk")
+		return
 	}
 
 	writeJSON(w, http.StatusOK, dto)

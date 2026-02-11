@@ -182,8 +182,8 @@ func (s *Server) recordRunToHistory(filePath, environment string, result *RunRes
 			bodyPreview := ""
 			if rr.Response != nil && len(rr.Response.Body) > 0 {
 				preview := rr.Response.Body
-				if len(preview) > 512 {
-					preview = preview[:512]
+				if len(preview) > 65536 {
+					preview = preview[:65536]
 				}
 				bodyPreview = preview
 			}

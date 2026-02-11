@@ -153,6 +153,11 @@ async function runFile(item: FileInfo, event: Event) {
         <Folder v-else-if="item.isDir" class="h-3.5 w-3.5 shrink-0 text-nord-13/70" />
         <FileText v-else class="h-3.5 w-3.5 shrink-0 text-nord-8/70" />
         <span class="flex-1 truncate">{{ item.name }}</span>
+        <span
+          v-if="!item.isDir && collection.isFileDirty(item.path)"
+          class="h-1.5 w-1.5 shrink-0 rounded-full bg-nord-13"
+          title="Unsaved changes"
+        />
         <button
           v-if="item.isDir"
           aria-label="Run all files in folder"

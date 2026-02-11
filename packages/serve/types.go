@@ -317,6 +317,18 @@ type StressStatsDTO struct {
 	ActiveVUs int32   `json:"activeVUs"`
 }
 
+// StressProfileReq is the request body for creating/updating a stress profile.
+type StressProfileReq struct {
+	Name       string            `json:"name"`
+	Duration   string            `json:"duration,omitempty"`
+	Rate       float64           `json:"rate,omitempty"`
+	VUs        int               `json:"vus,omitempty"`
+	MaxVUs     int               `json:"maxVUs,omitempty"`
+	ThinkTime  string            `json:"thinkTime,omitempty"`
+	RampUp     string            `json:"rampUp,omitempty"`
+	Thresholds map[string]string `json:"thresholds,omitempty"`
+}
+
 // --- Mock ---
 
 // MockStartReq is the request body for POST /mock/start.
@@ -431,9 +443,66 @@ type WSRequestProgress struct {
 
 // WSStressMetrics is a stress metrics broadcast.
 type WSStressMetrics struct {
+	Running   bool           `json:"running"`
+	Completed bool           `json:"completed,omitempty"`
 	Stats     StressStatsDTO `json:"stats"`
 	Elapsed   float64        `json:"elapsed"`
 	Timestamp string         `json:"timestamp"`
+}
+
+// StressResultDTO is the full result of a completed stress test.
+type StressResultDTO struct {
+	DurationMs   float64                   `json:"durationMs"`
+	Total        int64                     `json:"total"`
+	Success      int64                     `json:"success"`
+	Errors       int64                     `json:"errors"`
+	Timeouts     int64                     `json:"timeouts"`
+	RPS          float64                   `json:"rps"`
+	SuccessRate  float64                   `json:"successRate"`
+	ErrorRate    float64                   `json:"errorRate"`
+	P50Ms        float64                   `json:"p50Ms"`
+	P95Ms        float64                   `json:"p95Ms"`
+	P99Ms        float64                   `json:"p99Ms"`
+	MinMs        float64                   `json:"minMs"`
+	MaxMs        float64                   `json:"maxMs"`
+	MeanMs       float64                   `json:"meanMs"`
+	StdDevMs     float64                   `json:"stdDevMs"`
+	Breakdown    []StressRequestBreakdownDTO `json:"breakdown"`
+	TimeSeries   []StressTimePointDTO      `json:"timeSeries"`
+	Thresholds   []StressThresholdDTO      `json:"thresholds,omitempty"`
+	Timestamp    string                    `json:"timestamp"`
+}
+
+// StressRequestBreakdownDTO holds per-request stats.
+type StressRequestBreakdownDTO struct {
+	Name    string  `json:"name"`
+	Total   int64   `json:"total"`
+	Success int64   `json:"success"`
+	Errors  int64   `json:"errors"`
+	P50Ms   float64 `json:"p50Ms"`
+	P95Ms   float64 `json:"p95Ms"`
+	P99Ms   float64 `json:"p99Ms"`
+	MeanMs  float64 `json:"meanMs"`
+}
+
+// StressTimePointDTO is a time series data point.
+type StressTimePointDTO struct {
+	Timestamp string  `json:"timestamp"`
+	Requests  int64   `json:"requests"`
+	Errors    int64   `json:"errors"`
+	P50Ms     float64 `json:"p50Ms"`
+	P95Ms     float64 `json:"p95Ms"`
+	P99Ms     float64 `json:"p99Ms"`
+	RPS       float64 `json:"rps"`
+	ActiveVUs int32   `json:"activeVUs"`
+}
+
+// StressThresholdDTO is a threshold evaluation result.
+type StressThresholdDTO struct {
+	Name     string `json:"name"`
+	Passed   bool   `json:"passed"`
+	Expected string `json:"expected"`
+	Actual   string `json:"actual"`
 }
 
 // WSMockEvent is a mock server event.

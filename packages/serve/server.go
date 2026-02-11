@@ -27,12 +27,14 @@ type Server struct {
 	history      *History
 	historyStore *history.Store
 	fileConfig   *config.Config
+	configPath   string // resolved path to hitspec.yaml for write-back
 	logger       *slog.Logger
 
 	// Mutable state protected by mu
-	mu             sync.Mutex
-	stressRunner   *stress.Runner
-	stressCancel   context.CancelFunc
+	mu                sync.Mutex
+	stressRunner      *stress.Runner
+	stressCancel      context.CancelFunc
+	lastStressResult  *StressResultDTO
 	mockServer     *mock.Server
 	mockCancel     context.CancelFunc
 	mockPort       int
@@ -43,6 +45,9 @@ type Server struct {
 
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	// Watcher suppression for server-initiated writes
+	watchSuppress *watchSuppressor
 
 	// Version info set from CLI
 	Version   string
@@ -61,9 +66,14 @@ func NewServer(opts ...Option) *Server {
 		cfg.WorkDir = absWorkDir
 	}
 
-	// Load hitspec.yaml config
+	// Load hitspec.yaml config and track the resolved path for write-back
+	var configPath string
 	fileConfig, _ := config.LoadConfig(cfg.ConfigPath)
+	if fileConfig != nil && cfg.ConfigPath != "" {
+		configPath = cfg.ConfigPath
+	}
 	if fileConfig == nil {
+		configPath = config.FindConfigPath(cfg.WorkDir)
 		fileConfig, _ = config.FindAndLoadConfig(cfg.WorkDir)
 	}
 
@@ -77,6 +87,7 @@ func NewServer(opts ...Option) *Server {
 		hub:        NewHub(),
 		history:    NewHistory(),
 		fileConfig: fileConfig,
+		configPath: configPath,
 	}
 
 	s.logger = newLogger(cfg)

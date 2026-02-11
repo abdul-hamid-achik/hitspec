@@ -6,6 +6,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Workspace & files
 	mux.HandleFunc("GET /api/v1/workspace", s.handleGetWorkspace)
 	mux.HandleFunc("GET /api/v1/files", s.handleListFiles)
+	mux.HandleFunc("POST /api/v1/files", s.handleCreateFile)
+	mux.HandleFunc("GET /api/v1/files/raw/{path...}", s.handleGetFileRaw)
+	mux.HandleFunc("PUT /api/v1/files/{path...}", s.handleSaveFile)
+	mux.HandleFunc("DELETE /api/v1/files/{path...}", s.handleDeleteFile)
 	mux.HandleFunc("GET /api/v1/files/{path...}", s.handleGetFile)
 
 	// Execution
@@ -36,6 +40,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/stress/start", s.handleStressStart)
 	mux.HandleFunc("POST /api/v1/stress/stop", s.handleStressStop)
 	mux.HandleFunc("GET /api/v1/stress/status", s.handleStressStatus)
+	mux.HandleFunc("GET /api/v1/stress/result", s.handleStressResult)
 
 	// Mock server
 	mux.HandleFunc("POST /api/v1/mock/start", s.handleMockStart)
@@ -55,6 +60,9 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	// Stress profiles
 	mux.HandleFunc("GET /api/v1/stress/profiles", s.handleStressProfiles)
+	mux.HandleFunc("POST /api/v1/stress/profiles", s.handleCreateStressProfile)
+	mux.HandleFunc("PUT /api/v1/stress/profiles/{name}", s.handleUpdateStressProfile)
+	mux.HandleFunc("DELETE /api/v1/stress/profiles/{name}", s.handleDeleteStressProfile)
 
 	// Import/export
 	mux.HandleFunc("POST /api/v1/import/curl", s.handleImportCurl)

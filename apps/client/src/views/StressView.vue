@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import StressConfig from '@/components/stress/StressConfig.vue'
 import StressProfiles from '@/components/stress/StressProfiles.vue'
+import StressResults from '@/components/stress/StressResults.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { Square, Activity, Clock, AlertTriangle, BarChart3, AlertCircle } from 'lucide-vue-next'
 import { ref, onMounted, onBeforeUnmount } from 'vue'
-import { getStressStatus, stopStress } from '@/api/endpoints/stress'
+import { getStressStatus, stopStress, getStressResult } from '@/api/endpoints/stress'
 import { ws } from '@/api/websocket'
-import type { StressStatus, StressStatsDTO, StressProfile } from '@/types/api'
+import type { StressStatus, StressStatsDTO, StressProfile, StressResultDTO } from '@/types/api'
 import { toast } from 'vue-sonner'
 
 const status = ref<StressStatus | null>(null)
+const result = ref<StressResultDTO | null>(null)
 const loadingStatus = ref(true)
 const loadError = ref<string | null>(null)
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -38,6 +40,15 @@ function syncPolling() {
   }
 }
 
+async function fetchResult() {
+  try {
+    result.value = await getStressResult()
+  } catch {
+    // No result available — stay on config view
+    result.value = null
+  }
+}
+
 async function handleStop() {
   if (!window.confirm('Stop the running stress test?')) return
   try {
@@ -49,16 +60,34 @@ async function handleStop() {
   }
 }
 
-function handleProfileSelected(_profile: StressProfile) {
-  // TODO: populate StressConfig fields from the selected profile
+function handleNewTest() {
+  result.value = null
 }
 
-onMounted(() => {
-  loadStatus()
+const selectedProfile = ref<StressProfile | null>(null)
+
+function handleProfileSelected(profile: StressProfile) {
+  selectedProfile.value = profile
+}
+
+onMounted(async () => {
+  await loadStatus()
+
+  // If not running, try to fetch the last result
+  if (!status.value?.running) {
+    await fetchResult()
+  }
+
   unsubWs = ws.on('stress_update', (msg) => {
-    const payload = msg.payload as { stats: StressStatsDTO; elapsed: number } | undefined
+    const payload = msg.payload as { running: boolean; completed?: boolean; stats: StressStatsDTO; elapsed: number } | undefined
     if (payload && status.value) {
-      status.value = { ...status.value, running: true, stats: payload.stats, elapsed: payload.elapsed }
+      status.value = { ...status.value, running: payload.running, stats: payload.stats, elapsed: payload.elapsed }
+      syncPolling()
+
+      // When test completes, fetch the full result
+      if (!payload.running && payload.completed) {
+        fetchResult()
+      }
     }
   })
 })
@@ -96,6 +125,7 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
+      <!-- Running state -->
       <div v-if="status?.running" class="space-y-4">
         <!-- Running indicator -->
         <div class="flex items-center gap-2">
@@ -156,11 +186,16 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <!-- Configuration when not running -->
+      <!-- Results state -->
+      <div v-else-if="result" class="space-y-4">
+        <StressResults :result="result" @new-test="handleNewTest" />
+      </div>
+
+      <!-- Configuration when not running and no results -->
       <div v-else class="space-y-4">
         <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div class="lg:col-span-2">
-            <StressConfig :running="false" />
+            <StressConfig :running="false" :profile="selectedProfile" />
           </div>
           <div>
             <StressProfiles @select="handleProfileSelected" />

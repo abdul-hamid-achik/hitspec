@@ -1,7 +1,7 @@
 import { ref, shallowRef, computed, triggerRef } from 'vue'
 import { defineStore } from 'pinia'
 import type { FileInfo, ParsedFile } from '@/types/api'
-import { getWorkspace, getFile } from '@/api/endpoints/files'
+import { getWorkspace, getFile, getFileRaw, saveFile as apiSaveFile, createFile as apiCreateFile, deleteFile as apiDeleteFile } from '@/api/endpoints/files'
 import { ws } from '@/api/websocket'
 
 export const useCollectionStore = defineStore('collection', () => {
@@ -12,12 +12,29 @@ export const useCollectionStore = defineStore('collection', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
+  // Raw file content for the source editor
+  const rawContents = shallowRef<Map<string, string>>(new Map())
+  // Dirty state: tracks which files have unsaved edits
+  const dirtyFiles = shallowRef<Set<string>>(new Set())
+  // Saving state
+  const saving = ref(false)
+
   // Prevent concurrent openFile() calls from clobbering each other
   const pendingOpens = new Set<string>()
 
   const activeFile = computed(() => {
     if (!activeFilePath.value) return null
     return openFiles.value.get(activeFilePath.value) ?? null
+  })
+
+  const activeRawContent = computed(() => {
+    if (!activeFilePath.value) return null
+    return rawContents.value.get(activeFilePath.value) ?? null
+  })
+
+  const isActiveDirty = computed(() => {
+    if (!activeFilePath.value) return false
+    return dirtyFiles.value.has(activeFilePath.value)
   })
 
   const fileCount = computed(() => {
@@ -31,6 +48,10 @@ export const useCollectionStore = defineStore('collection', () => {
     walk(files.value)
     return count
   })
+
+  function isFileDirty(path: string): boolean {
+    return dirtyFiles.value.has(path)
+  }
 
   // Exposes the workspace environment name so callers can seed the env store
   const workspaceEnvironment = ref('')
@@ -56,9 +77,11 @@ export const useCollectionStore = defineStore('collection', () => {
       if (pendingOpens.has(path)) return // already loading this file
       pendingOpens.add(path)
       try {
-        const parsed = await getFile(path)
+        const [parsed, raw] = await Promise.all([getFile(path), getFileRaw(path)])
         openFiles.value.set(path, parsed)
+        rawContents.value.set(path, raw)
         triggerRef(openFiles)
+        triggerRef(rawContents)
       } catch (e) {
         error.value = e instanceof Error ? e.message : `Failed to open ${path}`
         return
@@ -69,6 +92,56 @@ export const useCollectionStore = defineStore('collection', () => {
     activeFilePath.value = path
     expandedFiles.value.add(path)
     triggerRef(expandedFiles)
+  }
+
+  function updateRawContent(path: string, content: string) {
+    rawContents.value.set(path, content)
+    dirtyFiles.value.add(path)
+    triggerRef(rawContents)
+    triggerRef(dirtyFiles)
+  }
+
+  async function saveActiveFile() {
+    const path = activeFilePath.value
+    if (!path) return
+    const content = rawContents.value.get(path)
+    if (content === undefined) return
+
+    saving.value = true
+    error.value = null
+    try {
+      const parsed = await apiSaveFile(path, content)
+      openFiles.value.set(path, parsed)
+      dirtyFiles.value.delete(path)
+      triggerRef(openFiles)
+      triggerRef(dirtyFiles)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to save file'
+    } finally {
+      saving.value = false
+    }
+  }
+
+  async function createNewFile(path: string, content?: string) {
+    error.value = null
+    try {
+      await apiCreateFile(path, content)
+      await loadFiles()
+      await openFile(path)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to create file'
+    }
+  }
+
+  async function deleteCurrentFile(path: string) {
+    error.value = null
+    try {
+      await apiDeleteFile(path)
+      closeFile(path)
+      await loadFiles()
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to delete file'
+    }
   }
 
   function toggleFileExpanded(path: string) {
@@ -82,7 +155,11 @@ export const useCollectionStore = defineStore('collection', () => {
 
   function closeFile(path: string) {
     openFiles.value.delete(path)
+    rawContents.value.delete(path)
+    dirtyFiles.value.delete(path)
     triggerRef(openFiles)
+    triggerRef(rawContents)
+    triggerRef(dirtyFiles)
     if (activeFilePath.value === path) {
       const paths = [...openFiles.value.keys()]
       activeFilePath.value = paths.length > 0 ? paths[paths.length - 1] : null
@@ -101,15 +178,22 @@ export const useCollectionStore = defineStore('collection', () => {
       fileChangeTimer = setTimeout(() => {
         fileChangeTimer = null
         loadFiles()
-        // Refresh all open files, not just the active one
+        // Refresh all open files that are NOT dirty (don't overwrite user edits)
         for (const path of openFiles.value.keys()) {
-          getFile(path).then((parsed) => {
+          if (dirtyFiles.value.has(path)) continue
+          Promise.all([getFile(path), getFileRaw(path)]).then(([parsed, raw]) => {
             openFiles.value.set(path, parsed)
+            rawContents.value.set(path, raw)
             triggerRef(openFiles)
+            triggerRef(rawContents)
           }).catch(() => {
             // File may have been deleted; remove from open files
             openFiles.value.delete(path)
+            rawContents.value.delete(path)
+            dirtyFiles.value.delete(path)
             triggerRef(openFiles)
+            triggerRef(rawContents)
+            triggerRef(dirtyFiles)
             if (activeFilePath.value === path) {
               const remaining = [...openFiles.value.keys()]
               activeFilePath.value = remaining.length > 0 ? remaining[remaining.length - 1] : null
@@ -120,5 +204,10 @@ export const useCollectionStore = defineStore('collection', () => {
     })
   }
 
-  return { files, openFiles, activeFilePath, expandedFiles, activeFile, fileCount, workspaceEnvironment, loading, error, loadFiles, openFile, closeFile, toggleFileExpanded, init }
+  return {
+    files, openFiles, activeFilePath, expandedFiles, activeFile, activeRawContent,
+    isActiveDirty, fileCount, workspaceEnvironment, loading, error, saving, dirtyFiles,
+    loadFiles, openFile, closeFile, toggleFileExpanded, init,
+    updateRawContent, saveActiveFile, createNewFile, deleteCurrentFile, isFileDirty,
+  }
 })

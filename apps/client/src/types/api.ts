@@ -355,6 +355,59 @@ export interface RecordStatus {
   recordings?: RecordingEntry[]
 }
 
+// --- Stress Results ---
+
+export interface StressResultDTO {
+  durationMs: number
+  total: number
+  success: number
+  errors: number
+  timeouts: number
+  rps: number
+  successRate: number
+  errorRate: number
+  p50Ms: number
+  p95Ms: number
+  p99Ms: number
+  minMs: number
+  maxMs: number
+  meanMs: number
+  stdDevMs: number
+  breakdown: StressRequestBreakdownDTO[]
+  timeSeries: StressTimePointDTO[]
+  thresholds?: StressThresholdDTO[]
+  timestamp: string
+}
+
+export interface StressRequestBreakdownDTO {
+  name: string
+  total: number
+  success: number
+  errors: number
+  p50Ms: number
+  p95Ms: number
+  p99Ms: number
+  meanMs: number
+}
+
+export interface StressTimePointDTO {
+  timestamp: string
+  requests: number
+  errors: number
+  p50Ms: number
+  p95Ms: number
+  p99Ms: number
+  rps: number
+  activeVUs: number
+}
+
+export interface StressThresholdDTO {
+  name: string
+  passed: boolean
+  expected: string
+  actual: string
+}
+
 // --- Stress Profiles ---
 
 export interface StressProfile {
