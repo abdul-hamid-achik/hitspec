@@ -909,7 +909,7 @@ func TestServer_StartWithContext_StartsAndShutdownsGracefully(t *testing.T) {
 		t.Fatalf("failed to find free port: %v", err)
 	}
 	port := listener.Addr().(*net.TCPAddr).Port
-	listener.Close()
+	_ = listener.Close()
 
 	s := NewServer(WithPort(port))
 	s.router.AddRoute(&Route{

@@ -1055,7 +1055,7 @@ func TestVerify_AssertionResultType(t *testing.T) {
 	require.Len(t, result.Results[0].Assertions, 1)
 
 	// Verify it is *assertions.Result
-	var _ *assertions.Result = result.Results[0].Assertions[0]
+	var _ *assertions.Result = result.Results[0].Assertions[0] //nolint:staticcheck // compile-time type assertion
 }
 
 // ---------- VerifyDirectory with parse error in one file ----------

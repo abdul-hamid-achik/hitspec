@@ -104,13 +104,13 @@ func TestNewStore_IdempotentSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first NewStore: %v", err)
 	}
-	s1.Close()
+	_ = s1.Close()
 
 	s2, err := NewStore(dbPath)
 	if err != nil {
 		t.Fatalf("second NewStore: %v", err)
 	}
-	s2.Close()
+	_ = s2.Close()
 }
 
 // ---------------------------------------------------------------------------
