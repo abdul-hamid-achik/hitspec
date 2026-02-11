@@ -6,13 +6,17 @@ import type { WorkspaceInfo, ParsedFile } from '@/types/api'
 vi.mock('@/api/endpoints/files', () => ({
   getWorkspace: vi.fn(),
   getFile: vi.fn(),
+  getFileRaw: vi.fn(),
+  saveFile: vi.fn(),
+  createFile: vi.fn(),
+  deleteFile: vi.fn(),
 }))
 
 vi.mock('@/api/websocket', () => ({
   ws: { on: vi.fn() },
 }))
 
-import { getWorkspace, getFile } from '@/api/endpoints/files'
+import { getWorkspace, getFile, getFileRaw } from '@/api/endpoints/files'
 import { ws } from '@/api/websocket'
 
 const mockWorkspace: WorkspaceInfo = {
@@ -48,6 +52,7 @@ describe('Collection Store', () => {
     setActivePinia(createPinia())
     vi.mocked(getWorkspace).mockReset()
     vi.mocked(getFile).mockReset()
+    vi.mocked(getFileRaw).mockReset()
   })
 
   afterEach(() => {
@@ -82,6 +87,7 @@ describe('Collection Store', () => {
 
     it('should return the parsed file when active path matches', async () => {
       vi.mocked(getFile).mockResolvedValueOnce(mockParsed)
+      vi.mocked(getFileRaw).mockResolvedValueOnce('GET http://localhost/users')
       const store = useCollectionStore()
 
       await store.openFile('api.http')
@@ -170,6 +176,7 @@ describe('Collection Store', () => {
   describe('openFile', () => {
     it('should fetch and open a file', async () => {
       vi.mocked(getFile).mockResolvedValueOnce(mockParsed)
+      vi.mocked(getFileRaw).mockResolvedValueOnce('GET http://localhost/users')
       const store = useCollectionStore()
 
       await store.openFile('api.http')
@@ -182,6 +189,7 @@ describe('Collection Store', () => {
 
     it('should not refetch an already-open file', async () => {
       vi.mocked(getFile).mockResolvedValueOnce(mockParsed)
+      vi.mocked(getFileRaw).mockResolvedValueOnce('GET http://localhost/users')
       const store = useCollectionStore()
 
       await store.openFile('api.http')
@@ -193,6 +201,7 @@ describe('Collection Store', () => {
 
     it('should set error on fetch failure', async () => {
       vi.mocked(getFile).mockRejectedValueOnce(new Error('Not found'))
+      vi.mocked(getFileRaw).mockRejectedValueOnce(new Error('Not found'))
       const store = useCollectionStore()
 
       await store.openFile('missing.http')
@@ -203,6 +212,7 @@ describe('Collection Store', () => {
 
     it('should not set activeFilePath on fetch failure', async () => {
       vi.mocked(getFile).mockRejectedValueOnce(new Error('fail'))
+      vi.mocked(getFileRaw).mockRejectedValueOnce(new Error('fail'))
       const store = useCollectionStore()
 
       await store.openFile('broken.http')
@@ -215,6 +225,7 @@ describe('Collection Store', () => {
       vi.mocked(getFile).mockReturnValueOnce(
         new Promise((resolve) => { resolveFirst = resolve }),
       )
+      vi.mocked(getFileRaw).mockResolvedValueOnce('GET http://localhost/users')
       const store = useCollectionStore()
 
       const p1 = store.openFile('api.http')
@@ -230,6 +241,7 @@ describe('Collection Store', () => {
   describe('closeFile', () => {
     it('should remove a file from openFiles', async () => {
       vi.mocked(getFile).mockResolvedValueOnce(mockParsed)
+      vi.mocked(getFileRaw).mockResolvedValueOnce('GET http://localhost/users')
       const store = useCollectionStore()
 
       await store.openFile('api.http')
@@ -243,6 +255,9 @@ describe('Collection Store', () => {
       vi.mocked(getFile)
         .mockResolvedValueOnce(mockParsed)
         .mockResolvedValueOnce(parsed2)
+      vi.mocked(getFileRaw)
+        .mockResolvedValueOnce('raw1')
+        .mockResolvedValueOnce('raw2')
       const store = useCollectionStore()
 
       await store.openFile('api.http')
@@ -254,6 +269,7 @@ describe('Collection Store', () => {
 
     it('should set activeFilePath to null when last file is closed', async () => {
       vi.mocked(getFile).mockResolvedValueOnce(mockParsed)
+      vi.mocked(getFileRaw).mockResolvedValueOnce('raw')
       const store = useCollectionStore()
 
       await store.openFile('api.http')
@@ -267,6 +283,9 @@ describe('Collection Store', () => {
       vi.mocked(getFile)
         .mockResolvedValueOnce(mockParsed)
         .mockResolvedValueOnce(parsed2)
+      vi.mocked(getFileRaw)
+        .mockResolvedValueOnce('raw1')
+        .mockResolvedValueOnce('raw2')
       const store = useCollectionStore()
 
       await store.openFile('api.http')
