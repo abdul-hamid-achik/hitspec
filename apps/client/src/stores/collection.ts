@@ -21,6 +21,8 @@ export const useCollectionStore = defineStore('collection', () => {
 
   // Prevent concurrent openFile() calls from clobbering each other
   const pendingOpens = new Set<string>()
+  // Tracks paths recently saved by this client to suppress redundant re-fetch
+  const recentlySaved = new Set<string>()
 
   const activeFile = computed(() => {
     if (!activeFilePath.value) return null
@@ -113,12 +115,42 @@ export const useCollectionStore = defineStore('collection', () => {
       const parsed = await apiSaveFile(path, content)
       openFiles.value.set(path, parsed)
       dirtyFiles.value.delete(path)
+      // Suppress the upcoming file_changed WS event for this path
+      recentlySaved.add(path)
+      setTimeout(() => recentlySaved.delete(path), 2000)
       triggerRef(openFiles)
       triggerRef(dirtyFiles)
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to save file'
     } finally {
       saving.value = false
+    }
+  }
+
+  async function saveAllDirtyFiles() {
+    const paths = [...dirtyFiles.value]
+    if (paths.length === 0) return
+    saving.value = true
+    error.value = null
+    const errors: string[] = []
+    for (const path of paths) {
+      const content = rawContents.value.get(path)
+      if (content === undefined) continue
+      try {
+        const parsed = await apiSaveFile(path, content)
+        openFiles.value.set(path, parsed)
+        dirtyFiles.value.delete(path)
+        recentlySaved.add(path)
+        setTimeout(() => recentlySaved.delete(path), 2000)
+      } catch (e) {
+        errors.push(`${path}: ${e instanceof Error ? e.message : 'Failed to save'}`)
+      }
+    }
+    triggerRef(openFiles)
+    triggerRef(dirtyFiles)
+    saving.value = false
+    if (errors.length > 0) {
+      error.value = errors.join('; ')
     }
   }
 
@@ -178,9 +210,9 @@ export const useCollectionStore = defineStore('collection', () => {
       fileChangeTimer = setTimeout(() => {
         fileChangeTimer = null
         loadFiles()
-        // Refresh all open files that are NOT dirty (don't overwrite user edits)
+        // Refresh all open files that are NOT dirty and not recently saved by us
         for (const path of openFiles.value.keys()) {
-          if (dirtyFiles.value.has(path)) continue
+          if (dirtyFiles.value.has(path) || recentlySaved.has(path)) continue
           Promise.all([getFile(path), getFileRaw(path)]).then(([parsed, raw]) => {
             openFiles.value.set(path, parsed)
             rawContents.value.set(path, raw)
@@ -208,6 +240,6 @@ export const useCollectionStore = defineStore('collection', () => {
     files, openFiles, activeFilePath, expandedFiles, activeFile, activeRawContent,
     isActiveDirty, fileCount, workspaceEnvironment, loading, error, saving, dirtyFiles,
     loadFiles, openFile, closeFile, toggleFileExpanded, init,
-    updateRawContent, saveActiveFile, createNewFile, deleteCurrentFile, isFileDirty,
+    updateRawContent, saveActiveFile, saveAllDirtyFiles, createNewFile, deleteCurrentFile, isFileDirty,
   }
 })

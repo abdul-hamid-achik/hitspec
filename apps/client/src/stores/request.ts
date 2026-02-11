@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { RequestDTO, RunResult, ExecuteResult, WSRequestProgress } from '@/types/api'
 import { executeRequest as apiExecute, executeFile as executeFileApi } from '@/api/endpoints/execute'
+import { useCookieStore } from './cookies'
 
 export interface ExecutionProgress {
   currentRequest: string
@@ -68,6 +69,7 @@ export const useRequestStore = defineStore('request', () => {
     try {
       const result = await apiExecute({ file: filePath, requestName, environment })
       if (thisId !== executionId) return // superseded by a newer execution
+      captureResponseCookies(result.results)
       // Find the matching result for the specific request
       if (requestName) {
         const match = result.results.find(r => r.name === requestName)
@@ -101,6 +103,7 @@ export const useRequestStore = defineStore('request', () => {
     try {
       const result = await executeFileApi(filePath, environment)
       if (thisId !== executionId) return
+      captureResponseCookies(result.results)
       // Store the full run result for the response panel
       lastRunResult.value = result
       if (result.results.length > 0) {
@@ -132,6 +135,21 @@ export const useRequestStore = defineStore('request', () => {
     // Keep lastRunResult intact so the Results tab persists
     lastResult.value = null
     error.value = null
+  }
+
+  function captureResponseCookies(results: RunResult[]) {
+    const cookies = useCookieStore()
+    for (const r of results) {
+      if (r.response?.headers) {
+        let domain: string | undefined
+        try {
+          domain = r.request?.url ? new URL(r.request.url).hostname : undefined
+        } catch {
+          // URL may be relative or malformed — skip cookie capture for this request
+        }
+        cookies.captureFromHeaders(r.response.headers, domain)
+      }
+    }
   }
 
   return { activeRequest, activeRequestIndex, lastResult, lastRunResult, isExecuting, error, executionProgress, execute, runFile, setActiveRequest, handleProgress }

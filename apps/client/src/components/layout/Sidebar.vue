@@ -2,8 +2,9 @@
 import { ref, computed } from 'vue'
 import {
   FolderTree, Zap, Server, History, Settings, Import, Cookie,
-  ChevronDown, Search, PanelLeftClose, FileCheck, Video, AlertCircle,
+  ChevronDown, Search, PanelLeftClose, FileCheck, Video, AlertCircle, FilePlus,
 } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
 import FileTree from '@/components/sidebar/FileTree.vue'
 import SearchInput from '@/components/sidebar/SearchInput.vue'
 import { useCollectionStore } from '@/stores/collection'
@@ -50,6 +51,18 @@ const navItems = [
 function handleSearch(value: string) {
   searchQuery.value = value
 }
+
+async function createFile() {
+  const name = prompt('New file name (e.g. api-tests.http):')
+  if (!name) return
+  const filename = name.endsWith('.http') || name.endsWith('.hitspec') ? name : `${name}.http`
+  try {
+    await collection.createNewFile(filename)
+    toast.success(`Created ${filename}`)
+  } catch (e) {
+    toast.error(e instanceof Error ? e.message : 'Failed to create file')
+  }
+}
 </script>
 
 <template>
@@ -72,6 +85,14 @@ function handleSearch(value: string) {
       </button>
       <div class="flex items-center gap-1">
         <span class="text-[10px] tabular-nums text-muted-foreground/60">{{ collection.fileCount }}</span>
+        <button
+          aria-label="New file"
+          class="rounded p-0.5 text-muted-foreground/60 transition-colors hover:bg-surface-hover hover:text-foreground"
+          title="New file"
+          @click="createFile"
+        >
+          <FilePlus class="h-3.5 w-3.5" />
+        </button>
         <button
           aria-label="Search files"
           class="rounded p-0.5 text-muted-foreground/60 transition-colors hover:bg-surface-hover hover:text-foreground"

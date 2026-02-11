@@ -30,6 +30,9 @@ type Server struct {
 	configPath   string // resolved path to hitspec.yaml for write-back
 	logger       *slog.Logger
 
+	// Config state protected by configMu (RWMutex for read-heavy access)
+	configMu sync.RWMutex
+
 	// Mutable state protected by mu
 	mu               sync.Mutex
 	stressRunner     *stress.Runner
@@ -150,8 +153,11 @@ func (s *Server) Start(ctx context.Context) error {
 
 	addr := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 	server := &http.Server{
-		Addr:    addr,
-		Handler: handler,
+		Addr:         addr,
+		Handler:      handler,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
 		BaseContext: func(l net.Listener) context.Context {
 			return s.ctx
 		},

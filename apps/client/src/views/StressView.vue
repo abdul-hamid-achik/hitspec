@@ -2,6 +2,7 @@
 import StressConfig from '@/components/stress/StressConfig.vue'
 import StressProfiles from '@/components/stress/StressProfiles.vue'
 import StressResults from '@/components/stress/StressResults.vue'
+import StressChart from '@/components/stress/StressChart.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { Square, Activity, Clock, AlertTriangle, BarChart3, AlertCircle } from 'lucide-vue-next'
 import { ref, onMounted, onBeforeUnmount } from 'vue'
@@ -184,6 +185,9 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </div>
+
+        <!-- Real-time chart -->
+        <StressChart v-if="status.stats" :metrics="status.stats" />
       </div>
 
       <!-- Results state -->

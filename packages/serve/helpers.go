@@ -14,9 +14,7 @@ import (
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(v); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+	_ = json.NewEncoder(w).Encode(v) // headers already sent; can't write error response
 }
 
 // maxRequestBody is the maximum size for JSON request bodies (10MB).
@@ -26,6 +24,8 @@ func readJSON(r *http.Request, v any) error {
 	if r.Body == nil {
 		return fmt.Errorf("empty request body")
 	}
+	// nil ResponseWriter is acceptable — MaxBytesReader returns an error
+	// to the reader when the limit is exceeded, which Decode propagates.
 	r.Body = http.MaxBytesReader(nil, r.Body, maxRequestBody)
 	defer r.Body.Close()
 	return json.NewDecoder(r.Body).Decode(v)

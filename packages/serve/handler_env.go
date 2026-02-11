@@ -5,6 +5,7 @@ import (
 )
 
 func (s *Server) handleListEnvironments(w http.ResponseWriter, r *http.Request) {
+	s.configMu.RLock()
 	envs := make([]EnvironmentDTO, 0)
 
 	if s.fileConfig != nil && s.fileConfig.Environments != nil {
@@ -30,6 +31,7 @@ func (s *Server) handleListEnvironments(w http.ResponseWriter, r *http.Request) 
 			Variables: make(map[string]any),
 		})
 	}
+	s.configMu.RUnlock()
 
 	writeJSON(w, http.StatusOK, envs)
 }
@@ -41,8 +43,10 @@ func (s *Server) handleGetEnvironment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.configMu.RLock()
 	if s.fileConfig != nil && s.fileConfig.Environments != nil {
 		if vars, ok := s.fileConfig.Environments[name]; ok {
+			s.configMu.RUnlock()
 			writeJSON(w, http.StatusOK, EnvironmentDTO{
 				Name:      name,
 				Variables: vars,
@@ -50,6 +54,7 @@ func (s *Server) handleGetEnvironment(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	s.configMu.RUnlock()
 
 	writeJSON(w, http.StatusOK, EnvironmentDTO{
 		Name:      name,
@@ -71,9 +76,9 @@ func (s *Server) handleSelectEnvironment(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	s.mu.Lock()
+	s.configMu.Lock()
 	s.config.Env = req.Name
-	s.mu.Unlock()
+	s.configMu.Unlock()
 
 	s.hub.Broadcast("environment_changed", map[string]string{
 		"name":      req.Name,
@@ -96,7 +101,9 @@ func (s *Server) handlePutEnvironment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.configMu.Lock()
 	if s.fileConfig == nil {
+		s.configMu.Unlock()
 		writeError(w, http.StatusBadRequest, "no config file found")
 		return
 	}
@@ -104,6 +111,13 @@ func (s *Server) handlePutEnvironment(w http.ResponseWriter, r *http.Request) {
 		s.fileConfig.Environments = make(map[string]map[string]any)
 	}
 	s.fileConfig.Environments[name] = dto.Variables
+
+	// Persist to disk while holding the lock
+	if !s.saveConfig(w) {
+		s.configMu.Unlock()
+		return
+	}
+	s.configMu.Unlock()
 
 	writeJSON(w, http.StatusOK, EnvironmentDTO{
 		Name:      name,

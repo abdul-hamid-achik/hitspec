@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useCollectionStore } from '@/stores/collection'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -50,6 +51,13 @@ const router = createRouter({
       redirect: '/',
     },
   ],
+})
+
+router.beforeEach(() => {
+  const collection = useCollectionStore()
+  if (collection.dirtyFiles.size > 0) {
+    return window.confirm('You have unsaved changes. Leave this page?')
+  }
 })
 
 export { router }

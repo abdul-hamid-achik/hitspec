@@ -45,6 +45,17 @@ func (p *Parser) parseBody() (*Body, error) {
 		return nil, nil
 	}
 
+	// File-based body: < ./path/to/file.json
+	if strings.HasPrefix(raw, "< ") {
+		filePath := strings.TrimSpace(raw[2:])
+		return &Body{
+			ContentType: BodyFile,
+			FilePath:    filePath,
+			Raw:         raw,
+			Line:        line,
+		}, nil
+	}
+
 	body := &Body{
 		Raw:  raw,
 		Line: line,
@@ -52,7 +63,7 @@ func (p *Parser) parseBody() (*Body, error) {
 
 	if strings.HasPrefix(raw, "{") || strings.HasPrefix(raw, "[") {
 		body.ContentType = BodyJSON
-	} else if strings.HasPrefix(raw, "<?xml") || strings.HasPrefix(raw, "<") {
+	} else if strings.HasPrefix(raw, "<?xml") {
 		body.ContentType = BodyXML
 	} else if strings.Contains(raw, "=") && !strings.Contains(raw, "\n") {
 		body.ContentType = BodyForm

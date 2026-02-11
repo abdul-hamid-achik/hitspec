@@ -8,7 +8,9 @@ import (
 )
 
 func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
+	s.configMu.RLock()
 	if s.fileConfig == nil {
+		s.configMu.RUnlock()
 		writeJSON(w, http.StatusOK, ConfigDTO{})
 		return
 	}
@@ -24,6 +26,7 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 		Parallel:           s.fileConfig.Parallel,
 		Concurrency:        s.fileConfig.Concurrency,
 	}
+	s.configMu.RUnlock()
 
 	writeJSON(w, http.StatusOK, dto)
 }
@@ -35,6 +38,7 @@ func (s *Server) handlePutConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.configMu.Lock()
 	// If no config loaded yet, initialize with defaults so we can save
 	if s.fileConfig == nil {
 		s.fileConfig = config.DefaultConfig()
@@ -73,11 +77,14 @@ func (s *Server) handlePutConfig(w http.ResponseWriter, r *http.Request) {
 		s.configPath = filepath.Join(s.config.WorkDir, "hitspec.yaml")
 	}
 
+	// Save while holding the lock to prevent concurrent mutation of fileConfig
 	if err := s.fileConfig.SaveConfig(s.configPath); err != nil {
+		s.configMu.Unlock()
 		s.logger.Error("failed to save config", "error", err, "path", s.configPath)
 		writeError(w, http.StatusInternalServerError, "failed to save config to disk")
 		return
 	}
+	s.configMu.Unlock()
 
 	writeJSON(w, http.StatusOK, dto)
 }

@@ -68,7 +68,11 @@ func (s *Server) handleContractVerify(w http.ResponseWriter, r *http.Request) {
 	files := req.Files
 	if len(files) == 0 {
 		// Use all hitspec files in workspace
-		collected, _ := collectHitspecFiles(s.config.WorkDir)
+		collected, err := collectHitspecFiles(s.config.WorkDir)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to scan workspace: "+err.Error())
+			return
+		}
 		files = collected
 	}
 
@@ -124,7 +128,11 @@ func (s *Server) handleContractVerify(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleContractFiles(w http.ResponseWriter, r *http.Request) {
-	files, _ := collectHitspecFiles(s.config.WorkDir)
+	files, err := collectHitspecFiles(s.config.WorkDir)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to scan workspace: "+err.Error())
+		return
+	}
 	relFiles := make([]string, 0, len(files))
 	for _, f := range files {
 		rel, err := filepath.Rel(s.config.WorkDir, f)

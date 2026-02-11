@@ -45,6 +45,40 @@ If you don't need hitspec-specific highlighting, the [REST Client extension](htt
   REST Client does not highlight hitspec assertion blocks (`>>> ... <<<`) or metadata directives (`# @name`, `# @depends`). For the best experience, use the official hitspec extension.
 </Note>
 
+## Neovim
+
+The hitspec Neovim plugin provides syntax highlighting and filetype detection for `.http` and `.hitspec` files.
+
+### Install with lazy.nvim
+
+```lua
+{
+  dir = "~/.local/share/hitspec/nvim",
+  -- Or clone from the repo:
+  -- "abdul-hamid-achik/hitspec",
+  ft = { "http", "hitspec" },
+  config = function()
+    -- Filetype detection is automatic
+  end,
+}
+```
+
+### Manual Install
+
+Copy the plugin files to your Neovim config:
+
+```bash
+# From the hitspec repo
+cp -r apps/nvim/ftdetect ~/.config/nvim/
+cp -r apps/nvim/syntax ~/.config/nvim/
+```
+
+### Features
+
+- Syntax highlighting for requests, headers, assertion blocks, and captures
+- Filetype detection for `.http` and `.hitspec` files
+- Variable interpolation highlighting (`{{variable}}`)
+
 ## Shell Completions
 
 hitspec can generate completion scripts for your shell, giving you tab completion for commands and flags.

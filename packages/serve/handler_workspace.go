@@ -41,12 +41,17 @@ func (s *Server) handleGetWorkspace(w http.ResponseWriter, r *http.Request) {
 
 	tree := buildFileTree(entries)
 
+	s.configMu.RLock()
+	env := s.config.Env
+	hasConfig := s.fileConfig != nil
+	s.configMu.RUnlock()
+
 	writeJSON(w, http.StatusOK, WorkspaceDTO{
 		Root:          s.config.WorkDir,
 		Files:         tree,
 		TotalRequests: totalRequests,
-		Environment:   s.config.Env,
-		HasConfig:     s.fileConfig != nil,
+		Environment:   env,
+		HasConfig:     hasConfig,
 	})
 }
 

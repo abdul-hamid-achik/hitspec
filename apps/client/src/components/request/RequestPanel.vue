@@ -72,6 +72,8 @@ const tabs = [
         <AssertionBuilder
           v-else-if="activeTab === 'assertions'"
           :assertions="requestStore.activeRequest.assertions ?? []"
+          @add="(a: any) => requestStore.activeRequest!.assertions = [...(requestStore.activeRequest!.assertions ?? []), a]"
+          @remove="(i: number) => requestStore.activeRequest!.assertions = (requestStore.activeRequest!.assertions ?? []).filter((_: any, idx: number) => idx !== i)"
           @copy="(text: string) => navigator.clipboard.writeText(text).catch(() => {})"
         />
         <div v-else-if="activeTab === 'captures'" class="space-y-1.5">

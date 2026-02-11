@@ -166,6 +166,7 @@ func (s *Server) handleStressProfiles(w http.ResponseWriter, r *http.Request) {
 
 	var profiles []ProfileDTO
 
+	s.configMu.RLock()
 	if s.fileConfig != nil && s.fileConfig.Stress != nil && s.fileConfig.Stress.Profiles != nil {
 		for name, p := range s.fileConfig.Stress.Profiles {
 			profiles = append(profiles, ProfileDTO{
@@ -180,6 +181,7 @@ func (s *Server) handleStressProfiles(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
+	s.configMu.RUnlock()
 
 	if profiles == nil {
 		profiles = []ProfileDTO{}
@@ -212,7 +214,9 @@ func (s *Server) handleCreateStressProfile(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	s.configMu.Lock()
 	if s.fileConfig == nil {
+		s.configMu.Unlock()
 		writeError(w, http.StatusBadRequest, "no config file found")
 		return
 	}
@@ -225,6 +229,7 @@ func (s *Server) handleCreateStressProfile(w http.ResponseWriter, r *http.Reques
 	}
 
 	if _, exists := s.fileConfig.Stress.Profiles[req.Name]; exists {
+		s.configMu.Unlock()
 		writeError(w, http.StatusConflict, "profile already exists: "+req.Name)
 		return
 	}
@@ -240,8 +245,10 @@ func (s *Server) handleCreateStressProfile(w http.ResponseWriter, r *http.Reques
 	}
 
 	if !s.saveConfig(w) {
+		s.configMu.Unlock()
 		return
 	}
+	s.configMu.Unlock()
 
 	writeJSON(w, http.StatusCreated, req)
 }
@@ -259,13 +266,16 @@ func (s *Server) handleUpdateStressProfile(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	s.configMu.Lock()
 	if s.fileConfig == nil || s.fileConfig.Stress == nil || s.fileConfig.Stress.Profiles == nil {
+		s.configMu.Unlock()
 		writeError(w, http.StatusNotFound, "profile not found: "+name)
 		return
 	}
 
 	profile, exists := s.fileConfig.Stress.Profiles[name]
 	if !exists {
+		s.configMu.Unlock()
 		writeError(w, http.StatusNotFound, "profile not found: "+name)
 		return
 	}
@@ -279,8 +289,10 @@ func (s *Server) handleUpdateStressProfile(w http.ResponseWriter, r *http.Reques
 	profile.Thresholds = req.Thresholds
 
 	if !s.saveConfig(w) {
+		s.configMu.Unlock()
 		return
 	}
+	s.configMu.Unlock()
 
 	req.Name = name
 	writeJSON(w, http.StatusOK, req)
@@ -293,12 +305,15 @@ func (s *Server) handleDeleteStressProfile(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	s.configMu.Lock()
 	if s.fileConfig == nil || s.fileConfig.Stress == nil || s.fileConfig.Stress.Profiles == nil {
+		s.configMu.Unlock()
 		writeError(w, http.StatusNotFound, "profile not found: "+name)
 		return
 	}
 
 	if _, exists := s.fileConfig.Stress.Profiles[name]; !exists {
+		s.configMu.Unlock()
 		writeError(w, http.StatusNotFound, "profile not found: "+name)
 		return
 	}
@@ -306,8 +321,10 @@ func (s *Server) handleDeleteStressProfile(w http.ResponseWriter, r *http.Reques
 	delete(s.fileConfig.Stress.Profiles, name)
 
 	if !s.saveConfig(w) {
+		s.configMu.Unlock()
 		return
 	}
+	s.configMu.Unlock()
 
 	w.WriteHeader(http.StatusNoContent)
 }

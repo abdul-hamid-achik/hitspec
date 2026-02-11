@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronRight, FileText, Folder, FolderOpen, Play, Share2 } from 'lucide-vue-next'
+import { ChevronRight, FileText, Folder, FolderOpen, Play, Share2, Trash2 } from 'lucide-vue-next'
 import { ref, computed, shallowRef, triggerRef } from 'vue'
 import type { FileInfo } from '@/types/api'
 import { useCollectionStore } from '@/stores/collection'
@@ -125,6 +125,12 @@ async function runFile(item: FileInfo, event: Event) {
   await collection.openFile(item.path)
   requestStore.runFile(item.path, envStore.activeEnvName)
 }
+
+async function deleteFile(item: FileInfo, event: Event) {
+  event.stopPropagation()
+  if (!window.confirm(`Delete ${item.name}?`)) return
+  await collection.deleteCurrentFile(item.path)
+}
 </script>
 
 <template>
@@ -175,6 +181,15 @@ async function runFile(item: FileInfo, event: Event) {
           @click="runFile(item, $event)"
         >
           <Play class="h-3 w-3" />
+        </button>
+        <button
+          v-if="!item.isDir"
+          aria-label="Delete file"
+          class="invisible rounded p-0.5 text-muted-foreground/40 transition-colors hover:bg-destructive/20 hover:text-destructive group-hover:visible"
+          title="Delete file"
+          @click="deleteFile(item, $event)"
+        >
+          <Trash2 class="h-3 w-3" />
         </button>
         <span
           v-if="!item.isDir && item.requestCount && item.requestCount > 0"

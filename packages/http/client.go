@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -367,30 +368,21 @@ func (c *Client) fetchOAuth2Token(auth *OAuth2AuthCredentials) (string, error) {
 		return "", fmt.Errorf("token request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Parse token response - simple extraction of access_token
+	// Parse token response
 	var tokenResp struct {
 		AccessToken string `json:"access_token"`
 		TokenType   string `json:"token_type"`
 		ExpiresIn   int    `json:"expires_in"`
 	}
 
-	// Simple JSON parsing for access_token
-	// Using strings to avoid importing encoding/json in this file
-	accessTokenStart := strings.Index(string(body), `"access_token"`)
-	if accessTokenStart == -1 {
+	if err := json.Unmarshal(body, &tokenResp); err != nil {
+		return "", fmt.Errorf("failed to parse token response: %w", err)
+	}
+
+	if tokenResp.AccessToken == "" {
 		return "", fmt.Errorf("no access_token in response: %s", string(body))
 	}
 
-	// Find the value after "access_token": "
-	valueStart := strings.Index(string(body)[accessTokenStart:], `"`) + accessTokenStart + 1
-	valueStart = strings.Index(string(body)[valueStart:], `"`) + valueStart + 1
-	valueEnd := strings.Index(string(body)[valueStart:], `"`) + valueStart
-
-	if valueEnd <= valueStart {
-		return "", fmt.Errorf("invalid token response format: %s", string(body))
-	}
-
-	tokenResp.AccessToken = string(body)[valueStart:valueEnd]
 	return tokenResp.AccessToken, nil
 }
 

@@ -111,6 +111,7 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     needs: build
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -138,7 +139,7 @@ jobs:
         run: task generate
 
       - name: Run Go tests
-        run: go test -v -race -coverprofile=coverage.out ./...
+        run: go test -v -race -timeout 10m -coverprofile=coverage.out ./...
 
       - name: Install client dependencies
         run: task client:install
@@ -186,7 +187,7 @@ jobs:
         run: go install github.com/securego/gosec/v2/cmd/gosec@latest
 
       - name: Run gosec
-        run: gosec -fmt=json -out=gosec-results.json ./... || true
+        run: gosec -severity=medium -confidence=medium -fmt=json -out=gosec-results.json ./...
 
       - name: Upload gosec results
         uses: actions/upload-artifact@v4

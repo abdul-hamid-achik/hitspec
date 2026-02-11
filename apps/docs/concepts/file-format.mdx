@@ -206,6 +206,28 @@ Content-Type: application/xml
 </request>
 ```
 
+### File-Based Body
+
+Reference an external file as the request body using `< ./path`:
+
+```http
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+< ./fixtures/user.json
+```
+
+The file path is resolved relative to the `.http` file's directory. Content-Type is auto-detected from the file extension (`.json`, `.xml`, `.yaml`, `.html`, `.csv`, `.txt`) when no explicit `Content-Type` header is set.
+
+Variable interpolation works in the file path:
+
+```http
+POST {{baseUrl}}/import
+Content-Type: application/json
+
+< ./fixtures/{{scenario}}.json
+```
+
 ## Query Parameters
 
 Inline with the URL:
@@ -299,6 +321,13 @@ Content-Type: application/json
 | `@after` | Shell script to run after the request (always runs) | `# @after ./cleanup.sh` |
 | `@db` | Database connection for DB assertions | `# @db sqlite://./test.db` |
 | `@waitFor` | Poll URL until ready before executing | `# @waitFor {{baseUrl}}/health 200 30000 1000` |
+| `@if` | Run only when variable is truthy | `# @if {{runSlow}}` |
+| `@unless` | Skip when variable is truthy | `# @unless {{skipAuth}}` |
+| `@stress.weight` | Relative selection weight for stress tests | `# @stress.weight 3` |
+| `@stress.think` | Think time in ms after this request (stress) | `# @stress.think 500` |
+| `@stress.skip` | Exclude from stress testing | `# @stress.skip` |
+| `@stress.setup` | Run once before stress test starts | `# @stress.setup` |
+| `@stress.teardown` | Run once after stress test ends | `# @stress.teardown` |
 
 ### @waitFor -- Service Readiness Polling
 
@@ -328,6 +357,66 @@ Content-Type: application/json
 | `interval_ms` | `1000` | Time between poll attempts (milliseconds) |
 
 If the URL does not return the expected status within the timeout, the request fails without executing.
+
+### @if / @unless -- Conditional Execution
+
+Skip requests based on variable values:
+
+```http
+### Run only in CI
+# @if {{CI}}
+
+POST {{baseUrl}}/deploy
+```
+
+```http
+### Skip when auth is disabled
+# @unless {{skipAuth}}
+# @auth bearer {{token}}
+
+GET {{baseUrl}}/admin
+```
+
+The condition is truthy when the variable is defined and not empty, `"0"`, or `"false"`.
+
+### Stress Test Annotations
+
+Fine-tune how individual requests behave during stress testing:
+
+```http
+### Create session (setup)
+# @name createSession
+# @stress.setup
+
+POST {{baseUrl}}/sessions
+
+### High-traffic endpoint
+# @name getProducts
+# @stress.weight 5
+# @stress.think 200
+
+GET {{baseUrl}}/products
+
+### Cleanup (teardown)
+# @name deleteSession
+# @stress.teardown
+
+DELETE {{baseUrl}}/sessions/{{createSession.id}}
+
+### Exclude from load test
+# @name healthCheck
+# @stress.skip
+
+GET {{baseUrl}}/health
+```
+
+| Annotation | Description |
+|-----------|-------------|
+| `@stress.weight N` | Relative selection weight (default 1). Higher weight = more frequent selection. |
+| `@stress.think N` | Think time in milliseconds after this request completes. |
+| `@stress.skip` | Exclude this request from stress test execution. |
+| `@stress.setup` | Run this request once before the stress test starts. |
+| `@stress.teardown` | Run this request once after the stress test ends. |
 
 ## Comments
 

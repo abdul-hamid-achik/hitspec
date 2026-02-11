@@ -183,44 +183,43 @@ func (p *Parser) parseRequest() (*Request, error) {
 		req.Body = body
 	}
 
-	p.skipNewlines()
-
-	if p.curToken.Type == TokenAssertionStart && p.curToken.Value == "" {
-		assertions, err := p.parseAssertions()
-		if err != nil {
-			return nil, err
-		}
-		req.Assertions = assertions
+	// Parse blocks in any order (assertions, db, shell, capture)
+	for {
 		p.skipNewlines()
-	}
 
-	if p.curToken.Type == TokenDBStart {
-		dbAssertions, err := p.parseDBBlock()
-		if err != nil {
-			return nil, err
+		switch {
+		case p.curToken.Type == TokenAssertionStart && p.curToken.Value == "":
+			assertions, err := p.parseAssertions()
+			if err != nil {
+				return nil, err
+			}
+			req.Assertions = assertions
+
+		case p.curToken.Type == TokenDBStart:
+			dbAssertions, err := p.parseDBBlock()
+			if err != nil {
+				return nil, err
+			}
+			req.DBAssertions = dbAssertions
+
+		case p.curToken.Type == TokenShellStart:
+			shellCommands, err := p.parseShellBlock()
+			if err != nil {
+				return nil, err
+			}
+			req.ShellCommands = shellCommands
+
+		case p.curToken.Type == TokenCaptureStart:
+			captures, err := p.parseCaptures()
+			if err != nil {
+				return nil, err
+			}
+			req.Captures = captures
+
+		default:
+			return req, nil
 		}
-		req.DBAssertions = dbAssertions
-		p.skipNewlines()
 	}
-
-	if p.curToken.Type == TokenShellStart {
-		shellCommands, err := p.parseShellBlock()
-		if err != nil {
-			return nil, err
-		}
-		req.ShellCommands = shellCommands
-		p.skipNewlines()
-	}
-
-	if p.curToken.Type == TokenCaptureStart {
-		captures, err := p.parseCaptures()
-		if err != nil {
-			return nil, err
-		}
-		req.Captures = captures
-	}
-
-	return req, nil
 }
 
 // parseURL reads tokens until end-of-line to build the request URL string.

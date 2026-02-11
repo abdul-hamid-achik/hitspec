@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { RouterView, useRouter } from 'vue-router'
 import Sidebar from './Sidebar.vue'
 import TopBar from './TopBar.vue'
@@ -23,9 +23,11 @@ const commandPaletteOpen = ref(false)
 const shortcutsOpen = ref(false)
 const sidebarCollapsed = ref(false)
 
+let unsubProgress: (() => void) | null = null
+
 onMounted(async () => {
   ws.connect()
-  ws.on('request_progress', (msg) => {
+  unsubProgress = ws.on('request_progress', (msg) => {
     requestStore.handleProgress(msg.payload as import('@/types/api').WSRequestProgress)
   })
   collection.init()
@@ -42,6 +44,11 @@ onMounted(async () => {
 function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value
 }
+
+onBeforeUnmount(() => {
+  unsubProgress?.()
+  ws.disconnect()
+})
 
 useKeyboard({
   'mod+k': () => { commandPaletteOpen.value = true },

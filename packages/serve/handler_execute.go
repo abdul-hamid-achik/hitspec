@@ -26,7 +26,11 @@ func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.configMu.RLock()
 	env := s.config.Env
+	configEnvs := s.getConfigEnvsLocked()
+	s.configMu.RUnlock()
+
 	if req.Environment != "" {
 		env = req.Environment
 	}
@@ -47,7 +51,7 @@ func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 		FollowRedirect:     true,
 		ValidateSSL:        true,
 		NameFilter:         req.RequestName,
-		ConfigEnvironments: s.getConfigEnvs(),
+		ConfigEnvironments: configEnvs,
 		AllowShell:         s.config.AllowShell,
 		AllowDB:            s.config.AllowDB,
 	}
@@ -157,7 +161,11 @@ func (s *Server) handleRunFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.configMu.RLock()
 	env := s.config.Env
+	configEnvs := s.getConfigEnvsLocked()
+	s.configMu.RUnlock()
+
 	if req.Environment != "" {
 		env = req.Environment
 	}
@@ -169,7 +177,7 @@ func (s *Server) handleRunFile(w http.ResponseWriter, r *http.Request) {
 		Timeout:            30 * time.Second,
 		FollowRedirect:     true,
 		ValidateSSL:        true,
-		ConfigEnvironments: s.getConfigEnvs(),
+		ConfigEnvironments: configEnvs,
 		AllowShell:         s.config.AllowShell,
 		AllowDB:            s.config.AllowDB,
 	}
@@ -252,7 +260,9 @@ func (s *Server) handleRunFile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, dto)
 }
 
-func (s *Server) getConfigEnvs() map[string]map[string]any {
+// getConfigEnvsLocked returns fileConfig environments.
+// Caller must hold s.configMu (at least RLock).
+func (s *Server) getConfigEnvsLocked() map[string]map[string]any {
 	if s.fileConfig != nil {
 		return s.fileConfig.Environments
 	}

@@ -629,7 +629,7 @@ func isDigit(ch rune) bool {
 
 func isHTTPMethod(s string) bool {
 	switch s {
-	case "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE", "CONNECT", "WS":
+	case "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE", "CONNECT":
 		return true
 	}
 	return false

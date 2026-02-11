@@ -2,6 +2,7 @@ package serve
 
 import (
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strings"
 
@@ -107,7 +108,22 @@ func (s *Server) handleImportOpenAPI(w http.ResponseWriter, r *http.Request) {
 
 	// Resolve path: could be URL or local file
 	specPath := req.SpecPath
-	if !strings.HasPrefix(specPath, "http://") && !strings.HasPrefix(specPath, "https://") {
+	if strings.HasPrefix(specPath, "http://") || strings.HasPrefix(specPath, "https://") {
+		// Validate URL to prevent SSRF against internal services
+		u, err := url.Parse(specPath)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid URL: "+err.Error())
+			return
+		}
+		host := strings.ToLower(u.Hostname())
+		if host == "localhost" || host == "127.0.0.1" || host == "::1" ||
+			host == "0.0.0.0" || strings.HasPrefix(host, "10.") ||
+			strings.HasPrefix(host, "192.168.") || strings.HasPrefix(host, "172.") ||
+			host == "169.254.169.254" || host == "metadata.google.internal" {
+			writeError(w, http.StatusForbidden, "URLs pointing to internal/private addresses are not allowed")
+			return
+		}
+	} else {
 		specPath = filepath.Join(s.config.WorkDir, specPath)
 		if !isPathWithin(s.config.WorkDir, specPath) {
 			writeError(w, http.StatusForbidden, "path outside workspace")

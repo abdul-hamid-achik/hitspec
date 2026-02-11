@@ -142,6 +142,7 @@ type QueryParam struct {
 type Body struct {
 	ContentType BodyType
 	Raw         string
+	FilePath    string // For BodyFile: path to external file (e.g. < ./body.json)
 	Multipart   []*MultipartField
 	GraphQL     *GraphQLBody
 	Line        int
@@ -158,6 +159,7 @@ const (
 	BodyRaw
 	BodyXML
 	BodyGraphQL
+	BodyFile
 )
 
 type MultipartField struct {

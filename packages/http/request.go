@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -183,7 +185,38 @@ func BuildRequestFromASTWithBaseDir(req *parser.Request, resolver func(string) s
 	}
 
 	if req.Body != nil {
-		if req.Body.ContentType == parser.BodyMultipart && len(req.Body.Multipart) > 0 {
+		if req.Body.ContentType == parser.BodyFile && req.Body.FilePath != "" {
+			// Resolve file path relative to the .http file's directory
+			resolvedPath := resolver(req.Body.FilePath)
+			if !filepath.IsAbs(resolvedPath) && baseDir != "" {
+				resolvedPath = filepath.Join(baseDir, resolvedPath)
+			}
+			if data, err := os.ReadFile(resolvedPath); err == nil {
+				body := string(data)
+				r.SetBody(body)
+				// Auto-detect content type from file extension
+				ext := strings.ToLower(filepath.Ext(resolvedPath))
+				if r.Headers["Content-Type"] == "" {
+					switch ext {
+					case ".json":
+						r.SetHeader("Content-Type", "application/json")
+					case ".xml":
+						r.SetHeader("Content-Type", "application/xml")
+					case ".html", ".htm":
+						r.SetHeader("Content-Type", "text/html")
+					case ".txt":
+						r.SetHeader("Content-Type", "text/plain")
+					case ".csv":
+						r.SetHeader("Content-Type", "text/csv")
+					case ".yaml", ".yml":
+						r.SetHeader("Content-Type", "application/yaml")
+					}
+				}
+			} else {
+				// If file can't be read, use the raw reference as body for error visibility
+				r.SetBody(req.Body.Raw)
+			}
+		} else if req.Body.ContentType == parser.BodyMultipart && len(req.Body.Multipart) > 0 {
 			// Handle multipart form data
 			resolvedFields := make([]*parser.MultipartField, len(req.Body.Multipart))
 			for i, field := range req.Body.Multipart {

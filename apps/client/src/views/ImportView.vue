@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { importCurl, importInsomnia, importOpenAPI } from '@/api/endpoints/import'
+import { useCollectionStore } from '@/stores/collection'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
-import { Copy, Check, AlertCircle } from 'lucide-vue-next'
+import { Copy, Check, AlertCircle, Save } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+
+const router = useRouter()
+const collection = useCollectionStore()
 
 const activeTab = ref<'curl' | 'insomnia' | 'openapi' | 'postman'>('curl')
 const curlCommand = ref('')
@@ -126,6 +131,25 @@ async function copyResult() {
     setTimeout(() => (copied.value = false), 2000)
   } catch {
     toast.error('Failed to copy to clipboard')
+  }
+}
+
+const savingFile = ref(false)
+
+async function saveAsHttpFile() {
+  if (!result.value) return
+  const name = prompt('File name (e.g. imported.http):', 'imported.http')
+  if (!name) return
+  const filename = name.endsWith('.http') || name.endsWith('.hitspec') ? name : `${name}.http`
+  savingFile.value = true
+  try {
+    await collection.createNewFile(filename, result.value)
+    toast.success(`Saved as ${filename}`)
+    router.push('/')
+  } catch (e) {
+    toast.error(e instanceof Error ? e.message : 'Failed to save file')
+  } finally {
+    savingFile.value = false
   }
 }
 </script>
@@ -256,14 +280,24 @@ async function copyResult() {
       <div v-if="result" class="mt-4">
         <div class="mb-2 flex items-center justify-between">
           <h3 class="text-xs font-medium text-foreground">Generated .http file</h3>
-          <button
-            class="flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
-            @click="copyResult"
-          >
-            <Check v-if="copied" class="h-3 w-3 text-success" />
-            <Copy v-else class="h-3 w-3" />
-            {{ copied ? 'Copied' : 'Copy' }}
-          </button>
+          <div class="flex items-center gap-1.5">
+            <button
+              class="flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+              @click="copyResult"
+            >
+              <Check v-if="copied" class="h-3 w-3 text-success" />
+              <Copy v-else class="h-3 w-3" />
+              {{ copied ? 'Copied' : 'Copy' }}
+            </button>
+            <button
+              class="flex items-center gap-1 rounded-md bg-accent px-2 py-0.5 text-[11px] font-medium text-accent-foreground transition-colors hover:bg-accent/80 disabled:opacity-50"
+              :disabled="savingFile"
+              @click="saveAsHttpFile"
+            >
+              <Save class="h-3 w-3" />
+              {{ savingFile ? 'Saving...' : 'Save as .http' }}
+            </button>
+          </div>
         </div>
         <pre class="max-h-64 overflow-auto rounded-lg border border-border bg-background p-4 font-mono text-xs leading-relaxed text-foreground/90">{{ result }}</pre>
       </div>

@@ -75,10 +75,15 @@ func (s *Server) startWatcher() {
 
 	go func() {
 		defer watcher.Close()
-		var timer *time.Timer
+		// Per-file timers so concurrent changes to different files
+		// don't drop events (previously a single timer was reused).
+		timers := make(map[string]*time.Timer)
 		for {
 			select {
 			case <-s.ctx.Done():
+				for _, t := range timers {
+					t.Stop()
+				}
 				return
 			case event, ok := <-watcher.Events:
 				if !ok {
@@ -87,11 +92,11 @@ func (s *Server) startWatcher() {
 				if !isHitspecFile(event.Name) {
 					continue
 				}
-				if timer != nil {
-					timer.Stop()
+				if t, exists := timers[event.Name]; exists {
+					t.Stop()
 				}
 				ev := event // capture
-				timer = time.AfterFunc(watchDebounce, func() {
+				timers[ev.Name] = time.AfterFunc(watchDebounce, func() {
 					// Skip broadcast for server-initiated writes
 					if s.watchSuppress.isSuppressed(ev.Name) {
 						s.logger.Debug("suppressed self-write notification", "path", ev.Name)

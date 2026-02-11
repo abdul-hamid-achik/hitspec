@@ -236,6 +236,11 @@ func (s *Server) handleGetFileRaw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !isHitspecFile(absPath) {
+		writeError(w, http.StatusForbidden, "only .http and .hitspec files can be read")
+		return
+	}
+
 	content, err := os.ReadFile(absPath)
 	if err != nil {
 		if os.IsNotExist(err) {
