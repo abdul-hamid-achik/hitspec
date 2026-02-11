@@ -904,14 +904,14 @@ func TestGenerateName(t *testing.T) {
 		want   string
 	}{
 		{"GET", "/api/users", "List Users"},
-		{"GET", "/api/users/123", "Get Users"},     // 123 is numeric, skipped in name
+		{"GET", "/api/users/123", "Get Users"}, // 123 is numeric, skipped in name
 		{"POST", "/api/users", "Create Users"},
 		{"PUT", "/api/users/1", "Update Users"},
 		{"PATCH", "/api/users/1", "Patch Users"},
 		{"DELETE", "/api/users/1", "Delete Users"},
 		{"GET", "/v1/products", "List Products"},
 		{"GET", "/v2/items/42", "Get Items"},
-		{"GET", "/", "List "},                       // root path with no parts after trim
+		{"GET", "/", "List "}, // root path with no parts after trim
 		{"OPTIONS", "/api/test", "OPTIONS Test"},
 	}
 
@@ -936,7 +936,7 @@ func TestSanitizeExportName(t *testing.T) {
 	}{
 		{"List Users", "List_Users"},
 		{"Get User 123", "Get_User_123"},
-		{"Create  Item", "Create_Item"},  // double space -> single underscore
+		{"Create  Item", "Create_Item"}, // double space -> single underscore
 		{"hello-world", "hello_world"},
 		{"a  b  c", "a_b_c"},
 		{"__leading__", "leading"},
@@ -1263,9 +1263,9 @@ func TestExport_ContainsNameAnnotation(t *testing.T) {
 
 func TestSortedHeaders(t *testing.T) {
 	headers := map[string]string{
-		"Zebra":   "z",
-		"Alpha":   "a",
-		"Middle":  "m",
+		"Zebra":  "z",
+		"Alpha":  "a",
+		"Middle": "m",
 	}
 
 	pairs := sortedHeaders(headers)
