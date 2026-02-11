@@ -234,12 +234,16 @@ hitspec serve --read-only --cors      # Safe mode for sharing
 
 **Features:**
 - Three-panel workspace: file tree, request editor, response viewer
-- Real-time file watching with WebSocket updates
-- Stress testing dashboard with live ECharts metrics
+- **Source editor** with CodeMirror syntax highlighting and `Cmd+S` save to disk
+- **Stress test results panel** with latency percentiles, per-request breakdown, and threshold pass/fail
+- **Stress profile CRUD** -- create, edit, and delete profiles from the UI (persisted to `hitspec.yaml`)
+- **Settings persistence** -- config changes save to `hitspec.yaml` on disk
+- Real-time file watching with WebSocket updates (self-write suppression)
+- Stress testing dashboard with live metrics
 - Mock server management
 - Import from curl/Insomnia/OpenAPI
 - Environment switcher
-- Execution history
+- Persistent execution history with run comparison
 
 **Serve Flags:**
 

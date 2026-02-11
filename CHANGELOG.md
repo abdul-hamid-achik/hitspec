@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.11.0] - 2026-02-11
+
+### Added
+
+- **File Editor Write-Back**: New Source tab in the request panel with a CodeMirror editor for editing `.http` files directly in the UI
+  - `Cmd+S` / `Ctrl+S` save shortcut with dirty state indicators
+  - PUT, POST, DELETE file endpoints with workspace path validation
+  - File watcher self-write suppression to prevent reload loops
+- **Stress Test Results Panel**: Full results dashboard shown after a stress test completes
+  - Summary cards: total requests, avg RPS, success rate, errors
+  - Latency percentiles: min, P50, P95, P99, max, mean, stddev
+  - Per-request breakdown table with individual latency metrics
+  - Threshold pass/fail indicators
+  - "Run Again" button to return to config view
+  - `GET /api/v1/stress/result` endpoint for fetching last test result
+- **Settings Persistence**: Settings changes in the UI now persist to `hitspec.yaml` on disk
+  - `PUT /api/v1/config` writes changes to the config file
+  - Creates `hitspec.yaml` if none exists
+- **Stress Profile CRUD**: Create, edit, and delete stress profiles from the UI
+  - `POST /api/v1/stress/profiles` to create a profile
+  - `PUT /api/v1/stress/profiles/{name}` to update a profile
+  - `DELETE /api/v1/stress/profiles/{name}` to delete a profile
+  - All changes persist to `hitspec.yaml`
+  - Profile selection populates stress config fields in the UI
+
+### Fixed
+
+- **Diff Coloring**: Increase body preview limit from 512 bytes to 64KB so response diffs render correctly
+- **Stress Test Latency**: Use fractional milliseconds (`float64(d.Microseconds()) / 1000.0`) instead of truncating integer milliseconds
+- **Stop Button State**: WebSocket `stress_update` events now include a `running` boolean so the UI updates when a test finishes naturally
+- **Stop Endpoint**: Return `200 OK` with `"already_stopped"` status instead of `400 Bad Request` when no test is running
+
+## [2.10.1] - 2026-02-10
+
+### Fixed
+
+- Scope execution progress WebSocket events to current `execId` to prevent stale updates
+- Add auto-scroll to execution progress list
+
+## [2.10.0] - 2026-02-10
+
+### Added
+
+- **CI Pipeline Overhaul**: Parallel fan-out for lint, test, and security scan stages
+- **Unified Taskfile**: Cross-stack `task build/test/lint/security/check` covering Go and TypeScript
+- **Client Linting**: oxlint with Vue plugin (0 errors, 0 warnings on 93 files)
+- **Editor Extensions**: VSCode extension at `apps/vscode/` with syntax highlighting and snippets, Neovim plugin at `apps/nvim/`
+- **Neovim Support**: TreeSitter grammar and filetype detection for `.http` and `.hitspec` files
+
+### Changed
+
+- Migrate Mintlify docs from `mint.json` to `docs.json` (v2 format)
+- Pin Go version in `.tool-versions` for reproducible local builds
+- Format all 29 Go files with `gofmt` for consistency
+
 ## [2.9.0] - 2026-02-10
 
 ### Fixed
@@ -278,7 +333,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `hitspec init` - Initialize a new project
 - `hitspec version` - Show version information
 
-[Unreleased]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.9.0...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.11.0...HEAD
+[2.11.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.10.1...v2.11.0
+[2.10.1]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.10.0...v2.10.1
+[2.10.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.9.0...v2.10.0
 [2.9.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.8.0...v2.9.0
 [2.8.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.7.0...v2.8.0
 [2.7.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.6.0...v2.7.0

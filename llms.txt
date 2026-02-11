@@ -370,21 +370,43 @@ All endpoints are prefixed with `/api/v1/`.
 |--------|------|-------------|
 | GET | /workspace | Workspace info and file stats |
 | GET | /files | List .http/.hitspec files |
+| POST | /files | Create a new .http/.hitspec file |
+| GET | /files/raw/{path...} | Get raw file content as plain text |
 | GET | /files/{path...} | Parse file as structured JSON |
+| PUT | /files/{path...} | Save raw file content to disk |
+| DELETE | /files/{path...} | Delete a file |
 | POST | /execute | Execute single request |
 | POST | /run | Run all requests in a file |
 | GET | /environments | List environments |
 | GET | /environments/{name} | Get environment variables |
 | PUT | /environments/{name} | Update environment |
+| PUT | /environments/active | Set active environment |
 | GET | /config | Get hitspec.yaml config |
-| PUT | /config | Update config |
-| GET | /history | Execution history |
+| PUT | /config | Update config (persists to hitspec.yaml) |
+| GET | /history | In-memory execution history |
+| DELETE | /history | Clear in-memory history |
+| GET | /history/runs | List persistent runs (SQLite) |
+| GET | /history/runs/{id} | Get run details with results |
+| DELETE | /history/runs | Delete all persistent runs |
+| DELETE | /history/runs/{id} | Delete a specific run |
 | POST | /stress/start | Start stress test |
 | POST | /stress/stop | Stop stress test |
 | GET | /stress/status | Stress test status/metrics |
+| GET | /stress/result | Get last stress test result |
+| GET | /stress/profiles | List stress profiles |
+| POST | /stress/profiles | Create a stress profile |
+| PUT | /stress/profiles/{name} | Update a stress profile |
+| DELETE | /stress/profiles/{name} | Delete a stress profile |
 | POST | /mock/start | Start mock server |
 | POST | /mock/stop | Stop mock server |
 | GET | /mock/routes | List mock routes |
+| POST | /contract/verify | Verify API contracts |
+| GET | /contract/files | List contract files |
+| POST | /record/start | Start recording proxy |
+| POST | /record/stop | Stop recording proxy |
+| GET | /record/status | Recording proxy status |
+| POST | /record/export | Export recordings as .http |
+| DELETE | /record/clear | Clear recordings |
 | POST | /import/curl | Import from curl command |
 | POST | /import/insomnia | Import from Insomnia JSON |
 | POST | /import/openapi | Import from OpenAPI spec |
@@ -403,7 +425,7 @@ Connect to `/api/v1/ws` for real-time updates. Message envelope: `{"type": "stri
 | `file:deleted` | server→client | File removed |
 | `exec:started` | server→client | Request execution began |
 | `exec:completed` | server→client | Request execution finished |
-| `stress:metrics` | server→client | Stress test progress (every 500ms) |
+| `stress_update` | server→client | Stress test progress (every 500ms), includes `running` and `completed` bools |
 | `mock:request` | server→client | Mock server received request |
 | `ping` | client→server | Heartbeat |
 

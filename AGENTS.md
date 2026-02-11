@@ -34,8 +34,16 @@ hitspec/
 │   ├── snapshot/           # Snapshot testing
 │   ├── sse/                # Server-Sent Events support
 │   └── contract/           # Contract testing
-├── examples/               # Example .http files
-└── vscode-hitspec/         # VSCode extension (syntax highlighting)
+│   ├── history/           # SQLite-backed persistent run history (sqlc-generated)
+│   ├── db/                # Database assertion support
+│   ├── auth/oauth2/       # OAuth2 token acquisition
+│   └── notify/            # Slack/Teams notifications
+├── internal/
+│   ├── pathutil/          # Path validation helpers
+│   └── conv/              # Numeric conversion helpers
+├── examples/              # Example .http files
+├── apps/vscode/           # VSCode extension (syntax highlighting + snippets)
+└── apps/nvim/             # Neovim plugin (TreeSitter + ftdetect)
 ```
 
 ## Key Files
@@ -76,7 +84,7 @@ hitspec serve [dir]
      ▼
 Go HTTP Server (net/http.ServeMux, port 4000)
      │
-     ├── /api/v1/*        REST API (24 endpoints, JSON)
+     ├── /api/v1/*        REST API (45 endpoints, JSON)
      ├── /api/v1/ws       WebSocket (real-time events)
      └── /*               Embedded Vue SPA (//go:embed)
 ```
@@ -87,21 +95,43 @@ Go HTTP Server (net/http.ServeMux, port 4000)
 |--------|------|-------------|
 | GET | /api/v1/workspace | Workspace info and file stats |
 | GET | /api/v1/files | List .http/.hitspec files |
+| POST | /api/v1/files | Create a new file |
+| GET | /api/v1/files/raw/{path...} | Get raw file content (text/plain) |
 | GET | /api/v1/files/{path...} | Parse file as structured JSON |
+| PUT | /api/v1/files/{path...} | Save raw file content |
+| DELETE | /api/v1/files/{path...} | Delete a file |
 | POST | /api/v1/execute | Execute single request |
 | POST | /api/v1/run | Run all requests in a file |
 | GET | /api/v1/environments | List environments |
+| PUT | /api/v1/environments/active | Set active environment |
 | GET | /api/v1/environments/{name} | Get environment variables |
 | PUT | /api/v1/environments/{name} | Update environment |
 | GET | /api/v1/config | Get hitspec.yaml config |
-| PUT | /api/v1/config | Update config |
-| GET | /api/v1/history | Execution history |
+| PUT | /api/v1/config | Update config (persists to hitspec.yaml) |
+| GET | /api/v1/history | In-memory execution history |
+| DELETE | /api/v1/history | Clear in-memory history |
+| GET | /api/v1/history/runs | List persistent runs (SQLite) |
+| GET | /api/v1/history/runs/{id} | Get run details with results |
+| DELETE | /api/v1/history/runs | Delete all persistent runs |
+| DELETE | /api/v1/history/runs/{id} | Delete a specific run |
 | POST | /api/v1/stress/start | Start stress test |
 | POST | /api/v1/stress/stop | Stop stress test |
 | GET | /api/v1/stress/status | Stress test status/metrics |
+| GET | /api/v1/stress/result | Last stress test result |
+| GET | /api/v1/stress/profiles | List stress profiles |
+| POST | /api/v1/stress/profiles | Create a stress profile |
+| PUT | /api/v1/stress/profiles/{name} | Update a stress profile |
+| DELETE | /api/v1/stress/profiles/{name} | Delete a stress profile |
 | POST | /api/v1/mock/start | Start mock server |
 | POST | /api/v1/mock/stop | Stop mock server |
 | GET | /api/v1/mock/routes | List mock routes |
+| POST | /api/v1/contract/verify | Verify API contracts |
+| GET | /api/v1/contract/files | List contract files |
+| POST | /api/v1/record/start | Start recording proxy |
+| POST | /api/v1/record/stop | Stop recording proxy |
+| GET | /api/v1/record/status | Recording proxy status |
+| POST | /api/v1/record/export | Export recordings as .http |
+| DELETE | /api/v1/record/clear | Clear recordings |
 | POST | /api/v1/import/curl | Import from curl |
 | POST | /api/v1/import/insomnia | Import from Insomnia |
 | POST | /api/v1/import/openapi | Import from OpenAPI |
@@ -118,7 +148,7 @@ Go HTTP Server (net/http.ServeMux, port 4000)
 | `file:deleted` | server→client | File removed |
 | `exec:started` | server→client | Request execution began |
 | `exec:completed` | server→client | Request execution finished |
-| `stress:metrics` | server→client | Stress test progress (every 500ms) |
+| `stress_update` | server→client | Stress test metrics (every 500ms), includes `running` and `completed` bools |
 | `mock:request` | server→client | Mock server received request |
 | `ping` | client→server | Heartbeat |
 
@@ -127,7 +157,7 @@ Go HTTP Server (net/http.ServeMux, port 4000)
 | Layer | Technology |
 |-------|-----------|
 | Framework | Vue 3.5 + TypeScript |
-| State | Pinia 3 (5 stores: collection, request, environment, history, settings) |
+| State | Pinia 3 (stores: collection, request, settings, theme, history) |
 | Routing | Vue Router 4 (6 routes) |
 | Styling | TailwindCSS v4 + Nord color palette |
 | Code Editor | CodeMirror 6 with Nord theme |

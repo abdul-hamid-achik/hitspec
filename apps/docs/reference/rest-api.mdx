@@ -158,6 +158,112 @@ curl http://localhost:8080/api/v1/files/tests/api.http
 
 ---
 
+### Get Raw File Content
+
+Returns the raw text content of a file. Use this for source editing.
+
+<CodeGroup>
+```bash curl
+curl http://localhost:8080/api/v1/files/raw/tests/api.http
+```
+</CodeGroup>
+
+<ParamField path="path" type="string" required>
+  Relative path to the file within the workspace.
+</ParamField>
+
+**Response** `200 OK` with `Content-Type: text/plain`
+
+```
+@baseUrl = https://api.example.com
+
+### Get Users
+GET {{baseUrl}}/users
+```
+
+---
+
+### Create File
+
+Create a new `.http` or `.hitspec` file in the workspace.
+
+<CodeGroup>
+```bash curl
+curl -X POST http://localhost:8080/api/v1/files \
+  -H "Content-Type: application/json" \
+  -d '{"path": "tests/new-api.http", "content": "### Health Check\nGET https://api.example.com/health\n"}'
+```
+</CodeGroup>
+
+**Request Body**
+
+```typescript
+{
+  path: string;      // Required. Relative path for the new file
+  content?: string;  // Optional. Initial file content
+}
+```
+
+<ParamField body="path" type="string" required>
+  Relative path for the new file. Must end in `.http` or `.hitspec` and be within the workspace.
+</ParamField>
+
+**Response** `201 Created`
+
+```json
+{ "path": "tests/new-api.http" }
+```
+
+---
+
+### Save File
+
+Save raw text content to an existing file. The file watcher suppresses the corresponding change notification to prevent UI reload loops.
+
+<CodeGroup>
+```bash curl
+curl -X PUT http://localhost:8080/api/v1/files/tests/api.http \
+  -H "Content-Type: text/plain" \
+  -d '@baseUrl = https://api.example.com
+
+### Get Users
+GET {{baseUrl}}/users
+'
+```
+</CodeGroup>
+
+<ParamField path="path" type="string" required>
+  Relative path to the file within the workspace.
+</ParamField>
+
+**Request Body:** Raw file content as `text/plain`.
+
+**Response** `200 OK`
+
+```json
+{ "path": "tests/api.http" }
+```
+
+---
+
+### Delete File
+
+Delete a `.http` or `.hitspec` file from the workspace.
+
+<CodeGroup>
+```bash curl
+curl -X DELETE http://localhost:8080/api/v1/files/tests/old-api.http
+```
+</CodeGroup>
+
+<ParamField path="path" type="string" required>
+  Relative path to the file within the workspace.
+</ParamField>
+
+**Response** `204 No Content`
+
+---
+
 ## Execution
 
 ### Execute Request
@@ -441,7 +547,7 @@ curl http://localhost:8080/api/v1/config
 
 ### Update Configuration
 
-Partially update the server configuration. Only provided fields are updated; omitted fields remain unchanged.
+Partially update the server configuration. Only provided fields are updated; omitted fields remain unchanged. Changes are persisted to the `hitspec.yaml` config file on disk. If no config file exists, one is created in the workspace root.
 
 <CodeGroup>
 ```bash curl
@@ -743,7 +849,7 @@ curl -X POST http://localhost:8080/api/v1/stress/start \
 
 ### Stop Stress Test
 
-Stop a running stress test.
+Stop a running stress test. If no test is currently running, the endpoint returns `200 OK` with an `"already_stopped"` status instead of an error.
 
 <CodeGroup>
 ```bash curl
@@ -755,6 +861,12 @@ curl -X POST http://localhost:8080/api/v1/stress/stop
 
 ```json
 { "status": "stopping" }
+```
+
+When no test is running:
+
+```json
+{ "status": "already_stopped" }
 ```
 
 ---
@@ -798,6 +910,63 @@ When no stress test is running:
 
 ---
 
+### Get Stress Test Result
+
+Returns the result of the last completed stress test, including summary metrics, latency percentiles, and per-request breakdown.
+
+<CodeGroup>
+```bash curl
+curl http://localhost:8080/api/v1/stress/result
+```
+</CodeGroup>
+
+**Response** `200 OK`
+
+```json
+{
+  "duration": 30.0,
+  "totalRequests": 1500,
+  "successCount": 1485,
+  "errorCount": 15,
+  "avgRps": 50.0,
+  "latency": {
+    "min": 2.1,
+    "max": 350.0,
+    "mean": 25.3,
+    "stddev": 18.7,
+    "p50": 12.5,
+    "p95": 45.2,
+    "p99": 120.0
+  },
+  "thresholds": [
+    { "metric": "p95", "threshold": "200ms", "actual": 45.2, "passed": true },
+    { "metric": "errors", "threshold": "1%", "actual": 1.0, "passed": true }
+  ],
+  "perRequest": [
+    {
+      "name": "Get Users",
+      "count": 750,
+      "successCount": 745,
+      "errorCount": 5,
+      "avgMs": 22.1,
+      "minMs": 2.1,
+      "maxMs": 200.0,
+      "p50Ms": 11.0,
+      "p95Ms": 40.0,
+      "p99Ms": 100.0
+    }
+  ]
+}
+```
+
+When no result is available:
+
+```json
+{ "error": "Not Found", "message": "no stress test result available" }
+```
+
+---
+
 ### List Stress Profiles
 
 Returns the stress test profiles defined in `hitspec.yaml`.
@@ -836,6 +1005,108 @@ curl http://localhost:8080/api/v1/stress/profiles
   }
 ]
 ```
+
+---
+
+### Create Stress Profile
+
+Create a new stress profile. The profile is persisted to `hitspec.yaml`.
+
+<CodeGroup>
+```bash curl
+curl -X POST http://localhost:8080/api/v1/stress/profiles \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "smoke",
+    "duration": "30s",
+    "rate": 10,
+    "maxVUs": 5
+  }'
+```
+</CodeGroup>
+
+**Request Body**
+
+```typescript
+{
+  name: string;           // Required. Unique profile name
+  duration: string;       // Required. Go duration string (e.g., "30s", "5m")
+  rate?: number;          // Optional. Target requests per second
+  vus?: number;           // Optional. Number of virtual users
+  maxVUs?: number;        // Optional. Maximum concurrent virtual users
+  rampUp?: string;        // Optional. Ramp-up duration
+  thinkTime?: string;     // Optional. Think time between requests per VU
+  thresholds?: {          // Optional. Pass/fail thresholds
+    p95?: string;
+    p99?: string;
+    errors?: string;
+  };
+}
+```
+
+<ParamField body="name" type="string" required>
+  Unique name for the profile. Must not conflict with an existing profile.
+</ParamField>
+
+<ParamField body="duration" type="string" required>
+  Duration of the stress test as a Go duration string.
+</ParamField>
+
+**Response** `201 Created`
+
+```json
+{ "name": "smoke" }
+```
+
+**Error** `409 Conflict` if a profile with the same name already exists.
+
+---
+
+### Update Stress Profile
+
+Update an existing stress profile. The changes are persisted to `hitspec.yaml`.
+
+<CodeGroup>
+```bash curl
+curl -X PUT http://localhost:8080/api/v1/stress/profiles/smoke \
+  -H "Content-Type: application/json" \
+  -d '{"duration": "1m", "rate": 20, "maxVUs": 10}'
+```
+</CodeGroup>
+
+<ParamField path="name" type="string" required>
+  Name of the profile to update.
+</ParamField>
+
+**Request Body:** Same fields as [Create Stress Profile](#create-stress-profile) (except `name`).
+
+**Response** `200 OK`
+
+```json
+{ "name": "smoke" }
+```
+
+**Error** `404 Not Found` if the profile does not exist.
+
+---
+
+### Delete Stress Profile
+
+Delete a stress profile. The deletion is persisted to `hitspec.yaml`.
+
+<CodeGroup>
+```bash curl
+curl -X DELETE http://localhost:8080/api/v1/stress/profiles/smoke
+```
+</CodeGroup>
+
+<ParamField path="name" type="string" required>
+  Name of the profile to delete.
+</ParamField>
+
+**Response** `204 No Content`
+
+**Error** `404 Not Found` if the profile does not exist.
 
 ---
 
@@ -1594,12 +1865,14 @@ Sent when a `.http` or `.hitspec` file is created, modified, or deleted in the w
 
 #### `stress_update`
 
-Sent every 500ms during an active stress test with current metrics.
+Sent every 500ms during an active stress test with current metrics. The `running` and `completed` booleans indicate the test lifecycle -- the UI uses these to detect when a test finishes naturally (without an explicit stop) and transition to the results view.
 
 ```json
 {
   "type": "stress_update",
   "payload": {
+    "running": true,
+    "completed": false,
     "stats": {
       "total": 750,
       "success": 745,

@@ -117,6 +117,7 @@ When a request is selected, the center panel shows:
 1. **URL bar** -- Displays the HTTP method badge and full URL. Contains a **Share** button to export the request and a **Send** button to execute just this request.
 2. **Description** -- If the request has an `@description` annotation, it appears below the URL bar.
 3. **Tabs**:
+   - **Source** -- A CodeMirror editor showing the raw `.http` file content for this request. Edit the source directly and press `Cmd+S` (`Ctrl+S` on Windows/Linux) to save changes back to disk. A dot indicator appears on the tab when there are unsaved changes. The file watcher suppresses the reload notification for your own save to avoid UI flicker.
    - **Headers** -- Read-only view of request headers, with a count badge
    - **Body** -- Request body content (JSON, form data, multipart, etc.)
    - **Assertions** -- All assertion rules defined for the request, with a count badge
@@ -224,6 +225,7 @@ Use arrow keys to navigate, `Enter` to select, and `Escape` to close.
 | Shortcut | Action |
 |----------|--------|
 | `Cmd+K` | Open command palette |
+| `Cmd+S` | Save source editor changes to disk |
 | `Cmd+Enter` | Run all requests in the active file |
 | `Cmd+?` | Show keyboard shortcuts dialog |
 | `Escape` | Dismiss errors / close dialogs |
@@ -293,6 +295,8 @@ Navigate to the **Stress Test** view (`Cmd+2`) to configure and run load tests.
     - **Concurrency** -- Number of virtual users (default: 10)
     - **Duration** -- How long to run (e.g., `30s`, `5m`)
     - **Target RPS** -- Requests per second (default: 100)
+
+    You can also select a saved **Stress Profile** from the dropdown to populate these fields automatically. See [Stress Profiles](/features/stress-testing#stress-profiles) for details.
   </Step>
   <Step title="Start the test">
     Click **Start**. Live metrics stream in via WebSocket with a polling fallback every 3 seconds.
@@ -308,7 +312,24 @@ While running, the dashboard shows:
 
 Click **Stop Test** to end the test early.
 
-You can also select from saved **Stress Profiles** defined in your `hitspec.yaml` to quickly load predefined configurations.
+### Results
+
+After a stress test completes, a results panel replaces the live dashboard. It shows:
+
+- **Summary cards** -- Total requests, average RPS, success rate, and error count
+- **Latency percentiles** -- Min, P50, P95, P99, Max, Mean, Standard Deviation (fractional milliseconds)
+- **Per-request breakdown** -- A table with each request's count, success/error split, and individual latency metrics
+- **Threshold pass/fail** -- Badges for each configured threshold showing whether it passed or failed
+
+Click **Run Again** to return to the configuration view.
+
+### Managing stress profiles
+
+Create, edit, and delete stress profiles directly from the UI:
+
+- **Create**: Configure your desired parameters and click **Save as Profile**. Enter a name and the profile is saved to `hitspec.yaml`.
+- **Edit**: Select a profile from the dropdown, modify its parameters, and click **Update Profile**.
+- **Delete**: Select a profile and click the delete icon to remove it from `hitspec.yaml`.
 
 ## Mock server
 
@@ -371,7 +392,7 @@ Navigate to the **Contracts** view (`Cmd+4`) to verify API contracts against a l
 
 ## Settings
 
-Navigate to the **Settings** view (`Cmd+8`) to configure the application.
+Navigate to the **Settings** view (`Cmd+8`) to configure the application. All settings changes are automatically persisted to the `hitspec.yaml` config file on disk. If no config file exists, one is created in the workspace root when you save.
 
 ### Appearance
 
@@ -389,10 +410,6 @@ Switch between **Light**, **Dark**, and **System** themes. The system option fol
 ### Notifications
 
 Configure webhook URLs for Slack and Microsoft Teams to receive notifications on test failures or successes.
-
-<Warning>
-  Notification settings are not yet persisted and will be lost on page refresh. Configure them in `hitspec.yaml` for CI/CD use.
-</Warning>
 
 ### Database assertions
 
