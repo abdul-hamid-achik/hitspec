@@ -31,17 +31,17 @@ type Server struct {
 	logger       *slog.Logger
 
 	// Mutable state protected by mu
-	mu                sync.Mutex
-	stressRunner      *stress.Runner
-	stressCancel      context.CancelFunc
-	lastStressResult  *StressResultDTO
-	mockServer     *mock.Server
-	mockCancel     context.CancelFunc
-	mockPort       int
-	recorder       *proxy.Recorder
-	recorderCancel context.CancelFunc
-	recorderPort   int
-	recorderTarget string
+	mu               sync.Mutex
+	stressRunner     *stress.Runner
+	stressCancel     context.CancelFunc
+	lastStressResult *StressResultDTO
+	mockServer       *mock.Server
+	mockCancel       context.CancelFunc
+	mockPort         int
+	recorder         *proxy.Recorder
+	recorderCancel   context.CancelFunc
+	recorderPort     int
+	recorderTarget   string
 
 	ctx    context.Context
 	cancel context.CancelFunc
