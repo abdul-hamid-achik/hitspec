@@ -22,12 +22,12 @@ The extension is currently available as a manual VSIX install:
 <Steps>
 <Step title="Build the extension">
 ```bash
-cd vscode-hitspec
+cd apps/vscode
 npm install
 npm run package
 ```
 
-This generates a `.vsix` file in the `vscode-hitspec` directory.
+This generates a `.vsix` file in the `apps/vscode` directory.
 </Step>
 
 <Step title="Install in VSCode">
@@ -53,8 +53,9 @@ The hitspec Neovim plugin provides syntax highlighting and filetype detection fo
 
 ```lua
 {
-  dir = "~/.local/share/hitspec/nvim",
-  -- Or clone from the repo:
+  -- Point to the nvim plugin directory in the hitspec repo
+  dir = "/path/to/hitspec/apps/nvim",
+  -- Or use the repo directly:
   -- "abdul-hamid-achik/hitspec",
   ft = { "http", "hitspec" },
   config = function()

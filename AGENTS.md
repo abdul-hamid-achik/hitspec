@@ -22,7 +22,7 @@ hitspec/
 │   │   └── config/         # Configuration loading (hitspec.yaml)
 │   ├── serve/              # HTTP server + REST API for hitspec serve
 │   ├── http/               # HTTP client and request/response types
-│   ├── assertions/         # Assertion evaluation (24 operators)
+│   ├── assertions/         # Assertion evaluation (26 operators)
 │   ├── capture/            # Response value capturing
 │   ├── output/             # Output formatters (console, JSON, JUnit, TAP, HTML)
 │   ├── stress/             # Stress testing engine
@@ -158,7 +158,7 @@ Go HTTP Server (net/http.ServeMux, port 4000)
 |-------|-----------|
 | Framework | Vue 3.5 + TypeScript |
 | State | Pinia 3 (stores: collection, request, settings, theme, history) |
-| Routing | Vue Router 4 (6 routes) |
+| Routing | Vue Router 4 (9 routes: workspace, stress, mock, contract, record, history, settings, import, cookies) |
 | Styling | TailwindCSS v4 + Nord color palette |
 | Code Editor | CodeMirror 6 with Nord theme |
 | Charts | ECharts 5 (stress dashboard) |
@@ -195,19 +195,19 @@ token from body.access_token
 <<<
 ```
 
-## Assertion Operators (24)
+## Assertion Operators (26)
 
-`==`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `!contains`, `startsWith`, `endsWith`, `matches`, `exists`, `!exists`, `length`, `includes`, `!includes`, `in`, `!in`, `type`, `schema`, `each`, `snapshot`
+`==`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `!contains`, `startsWith`, `endsWith`, `matches`, `exists`, `!exists`, `length`, `length >`, `length >=`, `length <`, `length <=`, `includes`, `!includes`, `in`, `!in`, `type`, `schema`, `each`, `snapshot`
 
 ## Running Tests
 
 ```bash
 # Go backend tests
 go test ./...                        # All tests
-go test ./packages/serve/...         # Serve package only (14 tests)
+go test ./packages/serve/...         # Serve package only
 
 # Frontend tests
-cd apps/client && bun run test       # Vitest (28 tests)
+cd apps/client && bun run test       # Vitest
 cd apps/client && bun run type-check # TypeScript check
 
 # Build
@@ -285,5 +285,5 @@ Production:
 ## Documentation
 
 - [Mintlify Docs](apps/docs/) - Full documentation site
-- [CLI Reference](docs/cli.md) - All commands and flags
+- [CLI Reference](apps/docs/reference/) - All commands and flags (Mintlify MDX)
 - [LLM Reference](llms.txt) - Complete syntax reference for AI assistants

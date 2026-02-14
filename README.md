@@ -130,7 +130,7 @@ hitspec run api.http
 Install the official hitspec VSCode extension for full syntax support:
 
 **From VSIX (manual install):**
-1. Build the extension: `cd vscode-hitspec && npm run package`
+1. Build the extension: `cd apps/vscode && npm run package`
 2. In VSCode, open Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`)
 3. Run "Extensions: Install from VSIX..."
 4. Select the generated `.vsix` file
@@ -671,7 +671,9 @@ hitspec/
 ├── apps/
 │   ├── cli/              # CLI binary (Go + Cobra)
 │   ├── client/           # Web API Client Manager (Vue 3 + TypeScript)
-│   └── docs/             # Mintlify documentation site
+│   ├── docs/             # Mintlify documentation site
+│   ├── vscode/           # VSCode extension
+│   └── nvim/             # Neovim plugin
 ├── packages/
 │   ├── core/             # Parser + runner
 │   ├── serve/            # HTTP API server (embeds client SPA)
@@ -683,7 +685,6 @@ hitspec/
 │   ├── import/           # Importers (curl, Insomnia, OpenAPI)
 │   └── ...               # Other feature packages
 ├── examples/             # Example .http files
-└── vscode-hitspec/       # VSCode extension
 ```
 
 ## Development
