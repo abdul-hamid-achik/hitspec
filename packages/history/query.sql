@@ -40,3 +40,16 @@ DELETE FROM runs WHERE started_at < ?;
 
 -- name: ClearAllRuns :exec
 DELETE FROM runs;
+
+-- name: ListResultsByRequestName :many
+SELECT r.*, runs.file_path, runs.environment, runs.started_at AS run_started_at
+FROM results r
+JOIN runs ON r.run_id = runs.id
+WHERE r.request_name = ? AND runs.file_path = ?
+ORDER BY runs.started_at DESC
+LIMIT ? OFFSET ?;
+
+-- name: CountResultsByRequestName :one
+SELECT COUNT(*) FROM results r
+JOIN runs ON r.run_id = runs.id
+WHERE r.request_name = ? AND runs.file_path = ?;

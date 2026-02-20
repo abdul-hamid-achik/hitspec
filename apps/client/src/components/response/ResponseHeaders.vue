@@ -17,7 +17,7 @@ const { headers } = defineProps<{ headers: Record<string, string | string[]> }>(
       </div>
     </template>
     <div v-else class="flex flex-col items-center gap-2 py-6 text-center">
-      <Globe class="h-8 w-8 text-muted-foreground/30" />
+      <Globe class="h-8 w-8 text-muted-foreground/50" />
       <span class="text-xs text-muted-foreground/60">No response headers</span>
     </div>
   </div>

@@ -8,7 +8,7 @@ const { body } = defineProps<{ body?: BodyDTO | null }>()
 <template>
   <div>
     <div v-if="!body" class="flex flex-col items-center gap-2 py-6 text-center">
-      <AlignLeft class="h-8 w-8 text-muted-foreground/30" />
+      <AlignLeft class="h-8 w-8 text-muted-foreground/50" />
       <span class="text-xs text-muted-foreground/60">No request body</span>
     </div>
     <div v-else>

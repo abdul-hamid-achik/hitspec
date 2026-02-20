@@ -31,6 +31,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/v1/history", s.handleClearHistory)
 
 	// History (persistent, SQLite-backed)
+	mux.HandleFunc("GET /api/v1/history/results", s.handleListResultsByRequest)
 	mux.HandleFunc("GET /api/v1/history/runs", s.handleListRuns)
 	mux.HandleFunc("GET /api/v1/history/runs/{id}", s.handleGetRun)
 	mux.HandleFunc("DELETE /api/v1/history/runs", s.handleClearAllRuns)

@@ -148,7 +148,7 @@ function confirmClearDomain(domain: string, event: Event) {
         <h2 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Add Cookie</h2>
         <button
           aria-label="Close form"
-          class="rounded p-1 text-muted-foreground/40 transition-colors hover:bg-surface-hover hover:text-foreground"
+          class="rounded p-1 text-muted-foreground/60 transition-colors hover:bg-surface-hover hover:text-foreground"
           @click="showAddForm = false"
         >
           <X class="h-3.5 w-3.5" />
@@ -161,7 +161,7 @@ function confirmClearDomain(domain: string, event: Event) {
             v-model="newCookie.domain"
             type="text"
             placeholder="example.com"
-            class="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+            class="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
         <div>
@@ -170,7 +170,7 @@ function confirmClearDomain(domain: string, event: Event) {
             v-model="newCookie.name"
             type="text"
             placeholder="session_id"
-            class="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+            class="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
         <div class="col-span-2">
@@ -179,7 +179,7 @@ function confirmClearDomain(domain: string, event: Event) {
             v-model="newCookie.value"
             type="text"
             placeholder="abc123..."
-            class="w-full rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+            class="w-full rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
         <div>
@@ -188,7 +188,7 @@ function confirmClearDomain(domain: string, event: Event) {
             v-model="newCookie.path"
             type="text"
             placeholder="/"
-            class="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+            class="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
         <div>
@@ -235,13 +235,13 @@ function confirmClearDomain(domain: string, event: Event) {
     <!-- Search -->
     <div v-if="cookieStore.totalCount() > 0" class="mb-3">
       <div class="relative">
-        <Search class="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/40" />
+        <Search class="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" />
         <input
           v-model="searchQuery"
           type="text"
           placeholder="Search by domain or cookie name..."
           aria-label="Search cookies"
-          class="w-full rounded-md border border-border bg-background py-1.5 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+          class="w-full rounded-md border border-border bg-background py-1.5 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
         />
       </div>
     </div>
@@ -270,7 +270,7 @@ function confirmClearDomain(domain: string, event: Event) {
           </span>
           <button
             aria-label="Clear domain cookies"
-            class="rounded p-1 text-muted-foreground/30 transition-colors hover:bg-destructive/10 hover:text-destructive"
+            class="rounded p-1 text-muted-foreground/50 transition-colors hover:bg-destructive/10 hover:text-destructive"
             title="Clear domain"
             @click="confirmClearDomain(group.domain, $event)"
           >
@@ -289,17 +289,17 @@ function confirmClearDomain(domain: string, event: Event) {
               >
                 <component
                   :is="expandedCookie === cookieKey(cookie) ? ChevronDown : ChevronRight"
-                  class="h-3 w-3 shrink-0 text-muted-foreground/30"
+                  class="h-3 w-3 shrink-0 text-muted-foreground/50"
                 />
                 <span class="font-mono text-xs font-medium text-foreground/80">{{ cookie.name }}</span>
                 <span class="flex-1 truncate font-mono text-[11px] text-muted-foreground/50">
                   {{ truncate(cookie.value, 40) }}
                 </span>
-                <span class="text-[11px] text-muted-foreground/40">{{ cookie.path }}</span>
-                <span class="text-[11px] text-muted-foreground/40">{{ formatExpires(cookie.expires) }}</span>
+                <span class="text-[11px] text-muted-foreground/60">{{ cookie.path }}</span>
+                <span class="text-[11px] text-muted-foreground/60">{{ formatExpires(cookie.expires) }}</span>
                 <button
                   aria-label="Delete cookie"
-                  class="rounded p-1 text-muted-foreground/30 transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  class="rounded p-1 text-muted-foreground/50 transition-colors hover:bg-destructive/10 hover:text-destructive"
                   title="Delete cookie"
                   @click.stop="cookieStore.removeCookie(cookie.domain, cookie.name, cookie.path)"
                 >

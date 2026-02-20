@@ -81,7 +81,7 @@ const tabs = [
           <div v-for="(cap, i) in requestStore.activeRequest.captures ?? []" :key="i"
             class="flex items-center gap-2 rounded-md bg-background/50 px-2.5 py-1.5 font-mono text-xs">
             <span class="font-medium text-nord-14">{{ cap.name }}</span>
-            <span class="text-muted-foreground/40">&larr;</span>
+            <span class="text-muted-foreground/60">&larr;</span>
             <span class="text-nord-8">{{ cap.source }}</span>
             <span class="text-muted-foreground">{{ cap.path }}</span>
           </div>

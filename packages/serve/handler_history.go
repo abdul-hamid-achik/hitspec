@@ -151,6 +151,88 @@ func (s *Server) handleClearAllRuns(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (s *Server) handleListResultsByRequest(w http.ResponseWriter, r *http.Request) {
+	if s.historyStore == nil {
+		writeError(w, http.StatusServiceUnavailable, "history database not available")
+		return
+	}
+
+	requestName := r.URL.Query().Get("requestName")
+	filePath := r.URL.Query().Get("filePath")
+	if requestName == "" || filePath == "" {
+		writeError(w, http.StatusBadRequest, "requestName and filePath query params are required")
+		return
+	}
+
+	limit := int64(20)
+	offset := int64(0)
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 && n <= 100 {
+			limit = n
+		}
+	}
+	if v := r.URL.Query().Get("offset"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+
+	ctx := r.Context()
+	results, err := s.historyStore.Queries().ListResultsByRequestName(ctx, history.ListResultsByRequestNameParams{
+		RequestName: requestName,
+		FilePath:    filePath,
+		Limit:       limit,
+		Offset:      offset,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	total, err := s.historyStore.Queries().CountResultsByRequestName(ctx, history.CountResultsByRequestNameParams{
+		RequestName: requestName,
+		FilePath:    filePath,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	dtos := make([]HistoryResultWithRunDTO, 0, len(results))
+	for _, res := range results {
+		dto := HistoryResultWithRunDTO{
+			HistoryResultDTO: convertResultToDTO(history.Result{
+				ID:          res.ID,
+				RunID:       res.RunID,
+				RequestName: res.RequestName,
+				Method:      res.Method,
+				Url:         res.Url,
+				StatusCode:  res.StatusCode,
+				DurationMs:  res.DurationMs,
+				Passed:      res.Passed,
+				Skipped:     res.Skipped,
+				Error:       res.Error,
+				Description: res.Description,
+				BodyPreview: res.BodyPreview,
+				CreatedAt:   res.CreatedAt,
+			}),
+			FilePath:     res.FilePath,
+			RunStartedAt: res.RunStartedAt.UTC().Format(time.RFC3339),
+		}
+		if res.Environment.Valid {
+			dto.Environment = res.Environment.String
+		}
+		dtos = append(dtos, dto)
+	}
+
+	writeJSON(w, http.StatusOK, HistoryResultsByRequestDTO{
+		Results: dtos,
+		Total:   total,
+		Limit:   limit,
+		Offset:  offset,
+	})
+}
+
 // recordRunToHistory persists a run result to the history store in a goroutine.
 // It is safe to call even if historyStore is nil.
 func (s *Server) recordRunToHistory(filePath, environment string, result *RunResultDTO) {

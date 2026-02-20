@@ -219,6 +219,19 @@ export interface HistoryList {
   offset: number
 }
 
+export interface HistoryResultWithRun extends HistoryResult {
+  filePath: string
+  environment?: string
+  runStartedAt: string
+}
+
+export interface HistoryResultsByRequest {
+  results: HistoryResultWithRun[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export interface StressStartRequest {
   files: string[]
   duration: string

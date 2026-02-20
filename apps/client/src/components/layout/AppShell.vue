@@ -6,6 +6,7 @@ import TopBar from './TopBar.vue'
 import StatusBar from './StatusBar.vue'
 import CommandPalette from '@/components/command/CommandPalette.vue'
 import KeyboardShortcuts from '@/components/command/KeyboardShortcuts.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { useCollectionStore } from '@/stores/collection'
 import { useEnvironmentStore } from '@/stores/environment'
 import { useSettingsStore } from '@/stores/settings'
@@ -54,6 +55,11 @@ useKeyboard({
   'mod+k': () => { commandPaletteOpen.value = true },
   'mod+b': () => { toggleSidebar() },
   'mod+shift+?': () => { shortcutsOpen.value = true },
+  'mod+shift+enter': () => {
+    if (collection.activeFilePath && requestStore.activeRequest) {
+      requestStore.execute(collection.activeFilePath, requestStore.activeRequest.name, environment.activeEnvName)
+    }
+  },
   'mod+enter': () => {
     if (collection.activeFilePath) {
       requestStore.runFile(collection.activeFilePath, environment.activeEnvName)
@@ -105,5 +111,6 @@ useKeyboard({
       @show-shortcuts="shortcutsOpen = true; commandPaletteOpen = false"
     />
     <KeyboardShortcuts v-model:open="shortcutsOpen" />
+    <ConfirmDialog />
   </div>
 </template>

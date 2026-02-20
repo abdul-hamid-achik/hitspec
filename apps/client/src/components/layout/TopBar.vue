@@ -39,7 +39,7 @@ function handleRun() {
 
       <!-- Active request breadcrumb -->
       <template v-if="requestStore.activeRequest">
-        <span class="text-muted-foreground/30">/</span>
+        <span class="text-muted-foreground/50">/</span>
         <span class="flex items-center gap-1.5 text-sm text-muted-foreground">
           <MethodBadge :method="requestStore.activeRequest.method" size="sm" />
           <span class="max-w-[300px] truncate font-mono text-xs">{{ requestStore.activeRequest.url }}</span>

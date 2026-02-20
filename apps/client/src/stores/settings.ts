@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import type { ConfigDTO, SystemInfo } from '@/types/api'
 import { getConfig, updateConfig } from '@/api/endpoints/config'
@@ -9,6 +9,10 @@ export const useSettingsStore = defineStore('settings', () => {
   const config = ref<ConfigDTO | null>(null)
   const systemInfo = ref<SystemInfo | null>(null)
   const sidebarWidth = ref(260)
+  const workspaceSplitRatio = ref(
+    parseFloat(localStorage.getItem('hitspec:workspaceSplitRatio') ?? '0.5'),
+  )
+  watch(workspaceSplitRatio, (v) => localStorage.setItem('hitspec:workspaceSplitRatio', String(v)))
   const loading = ref(false)
   const loaded = ref(false)
   const error = ref<string | null>(null)
@@ -49,5 +53,5 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  return { config, systemInfo, sidebarWidth, loading, error, loadConfig, loadSystemInfo, saveConfig }
+  return { config, systemInfo, sidebarWidth, workspaceSplitRatio, loading, error, loadConfig, loadSystemInfo, saveConfig }
 })

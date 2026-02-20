@@ -389,6 +389,7 @@ All endpoints are prefixed with `/api/v1/`.
 | GET | /history/runs/{id} | Get run details with results |
 | DELETE | /history/runs | Delete all persistent runs |
 | DELETE | /history/runs/{id} | Delete a specific run |
+| GET | /history/results | Results for a specific request (for comparison) |
 | POST | /stress/start | Start stress test |
 | POST | /stress/stop | Stop stress test |
 | GET | /stress/status | Stress test status/metrics |

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { DialogRoot, DialogPortal, DialogOverlay, DialogContent, DialogTitle } from 'reka-ui'
-import { X, Copy, Check, Columns2, AlignJustify } from 'lucide-vue-next'
-import { computeDiff, formatUnifiedDiff, type DiffLine } from '@/lib/diff'
+import { X, Copy, Check, Columns2, AlignJustify, Loader2 } from 'lucide-vue-next'
+import { formatUnifiedDiff, type DiffLine } from '@/lib/diff'
+import { useDiffWorker } from '@/composables/useDiffWorker'
 import { toast } from 'vue-sonner'
 
 export interface DiffSource {
@@ -23,7 +24,8 @@ const emit = defineEmits<{
 const viewMode = ref<'unified' | 'split'>('unified')
 const copied = ref(false)
 
-const diffLines = computed(() => computeDiff(left.body, right.body))
+const { compute: computeDiffAsync, computing } = useDiffWorker()
+const diffLines = ref<DiffLine[]>([])
 
 const stats = computed(() => {
   let added = 0
@@ -46,13 +48,11 @@ const splitPairs = computed(() => {
       pairs.push({ left: line, right: line })
       i++
     } else if (line.type === 'remove') {
-      // Collect consecutive removes
       const removes: DiffLine[] = []
       while (i < lines.length && lines[i].type === 'remove') {
         removes.push(lines[i])
         i++
       }
-      // Collect consecutive adds
       const adds: DiffLine[] = []
       while (i < lines.length && lines[i].type === 'add') {
         adds.push(lines[i])
@@ -66,7 +66,6 @@ const splitPairs = computed(() => {
         })
       }
     } else {
-      // add without preceding remove
       pairs.push({ left: null, right: line })
       i++
     }
@@ -76,8 +75,12 @@ const splitPairs = computed(() => {
 
 watch(
   () => modelValue,
-  (open) => {
-    if (open) copied.value = false
+  async (open) => {
+    if (open) {
+      copied.value = false
+      diffLines.value = []
+      diffLines.value = await computeDiffAsync(left.body, right.body)
+    }
   },
 )
 
@@ -105,7 +108,7 @@ function lineClass(type: DiffLine['type']): string {
 function gutterClass(type: DiffLine['type']): string {
   if (type === 'add') return 'bg-success/15 text-success/60'
   if (type === 'remove') return 'bg-destructive/15 text-destructive/60'
-  return 'text-muted-foreground/30'
+  return 'text-muted-foreground/50'
 }
 
 function prefix(type: DiffLine['type']): string {
@@ -124,7 +127,6 @@ function prefix(type: DiffLine['type']): string {
         <div class="flex items-center justify-between border-b border-border px-4 py-3">
           <DialogTitle class="text-sm font-semibold text-foreground">Response Diff</DialogTitle>
           <div class="flex items-center gap-2">
-            <!-- Stats -->
             <span v-if="stats.added > 0" class="text-[11px] font-medium text-success">+{{ stats.added }}</span>
             <span v-if="stats.removed > 0" class="text-[11px] font-medium text-destructive">-{{ stats.removed }}</span>
             <button
@@ -158,7 +160,8 @@ function prefix(type: DiffLine['type']): string {
             </button>
           </div>
           <button
-            class="flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+            :disabled="computing"
+            class="flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground disabled:opacity-50"
             @click="copyDiff"
           >
             <Check v-if="copied" class="h-3 w-3 text-success" />
@@ -174,14 +177,20 @@ function prefix(type: DiffLine['type']): string {
         </div>
         <div v-else class="flex items-center gap-3 border-b border-border px-4 py-1.5 text-[11px] font-medium">
           <span class="text-destructive/70">{{ left.label }}</span>
-          <span class="text-muted-foreground/30">&rarr;</span>
+          <span class="text-muted-foreground/50">&rarr;</span>
           <span class="text-success/70">{{ right.label }}</span>
         </div>
 
         <!-- Diff content -->
         <div class="max-h-[60vh] overflow-auto">
+          <!-- Computing spinner -->
+          <div v-if="computing" class="flex items-center justify-center gap-2 p-8">
+            <Loader2 class="h-5 w-5 animate-spin text-accent" />
+            <span class="text-sm text-muted-foreground">Computing diff...</span>
+          </div>
+
           <!-- Unified view -->
-          <div v-if="viewMode === 'unified'" class="font-mono text-xs leading-relaxed">
+          <div v-else-if="viewMode === 'unified'" class="font-mono text-xs leading-relaxed">
             <div v-if="diffLines.length === 0" class="p-8 text-center text-sm text-muted-foreground">
               Responses are identical
             </div>

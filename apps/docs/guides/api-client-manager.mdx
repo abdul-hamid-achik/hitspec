@@ -129,10 +129,13 @@ After execution, the response panel shows:
 
 1. **Status bar** -- HTTP status badge (color-coded), response duration, response size, and a pass/fail indicator
 2. **Tabs**:
-   - **Results** -- Appears after "Run All"; lists every request result with pass/fail status. Click a result to inspect it.
-   - **Body** -- Auto-formatted response body (JSON is pretty-printed)
+   - **Results** -- Appears after "Run All"; lists every request result with pass/fail status (failed first, then passed, then skipped). Use checkboxes to select results, Shift+click for range selection. Click a result to inspect it.
+   - **Body** -- Response body rendered in a CodeMirror read-only editor with syntax highlighting, line numbers, and built-in search (`Cmd+F`). Large payloads are virtualized for smooth scrolling.
    - **Headers** -- Response headers as key-value pairs
    - **Assertions** -- Each assertion with pass/fail status, expected vs. actual values
+   - **Compare** -- Compare responses from previous runs side-by-side. A sidebar lists historical results for the current request; select two to see a unified or split diff view with syntax-highlighted additions and removals.
+
+The workspace split between request and response panels is resizable — drag the divider to adjust. Your preferred ratio is saved across sessions.
 
 ### Status bar
 
@@ -149,7 +152,7 @@ There are two ways to execute requests:
 
 <Steps>
   <Step title="Run a single request">
-    Click the **Send** button in the URL bar, or select a request and it will execute individually. The response appears immediately in the right panel.
+    Click the **Send** button in the URL bar, or press `Cmd+Shift+Enter` to run only the active request. The response appears immediately in the right panel.
   </Step>
   <Step title="Run all requests in a file">
     Click the **Run All** button in the top bar, or press `Cmd+Enter`. This executes every request in the active file sequentially. A progress bar shows completion status with per-request pass/fail indicators streaming in real time via WebSocket.
@@ -227,6 +230,7 @@ Use arrow keys to navigate, `Enter` to select, and `Escape` to close.
 | `Cmd+K` | Open command palette |
 | `Cmd+S` | Save source editor changes to disk |
 | `Cmd+Enter` | Run all requests in the active file |
+| `Cmd+Shift+Enter` | Run active request only |
 | `Cmd+?` | Show keyboard shortcuts dialog |
 | `Escape` | Dismiss errors / close dialogs |
 
@@ -275,6 +279,10 @@ Click a result to expand its assertion details, showing:
 - Subject, operator, and expected value for each assertion
 - Actual value for failed assertions
 - Custom assertion messages
+
+**Selection and bulk actions:** Use checkboxes to select multiple results (Shift+click for range selection). When exactly two results are selected, a **Compare (2)** button appears to diff their response bodies.
+
+**Response comparison:** You can also compare responses over time using the **Compare** tab in the response panel. When viewing a request, switch to the Compare tab to see a sidebar of all previous runs for that request. Select two runs to see a side-by-side or unified diff of their response bodies. The diff computation runs in a background Web Worker to keep the UI responsive.
 
 Use the **Clear All** button to delete all history, or the trash icon on individual runs to remove them.
 

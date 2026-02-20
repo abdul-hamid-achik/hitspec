@@ -8,14 +8,15 @@ import ResponseBody from './ResponseBody.vue'
 import ResponseHeaders from './ResponseHeaders.vue'
 import ResponseAssertions from './ResponseAssertions.vue'
 import RunResultsList from './RunResultsList.vue'
+import ComparePanel from './ComparePanel.vue'
 import {
   CheckCircle, XCircle, MinusCircle, Send, AlignLeft, Globe, ShieldCheck, List,
-  Timer, HardDrive,
+  Timer, HardDrive, GitCompareArrows,
 } from 'lucide-vue-next'
 import type { RunResult } from '@/types/api'
 
 const requestStore = useRequestStore()
-const activeTab = ref<'body' | 'headers' | 'assertions' | 'results'>('body')
+const activeTab = ref<'body' | 'headers' | 'assertions' | 'results' | 'compare'>('body')
 
 const hasRunResults = computed(() =>
   requestStore.lastRunResult !== null && requestStore.lastRunResult.results.length > 0
@@ -26,6 +27,7 @@ const tabs = computed(() => {
     { key: 'body' as const, label: 'Body', icon: AlignLeft },
     { key: 'headers' as const, label: 'Headers', icon: Globe },
     { key: 'assertions' as const, label: 'Assertions', icon: ShieldCheck },
+    { key: 'compare' as const, label: 'Compare', icon: GitCompareArrows },
   ]
   if (hasRunResults.value) {
     return [{ key: 'results' as const, label: 'Results', icon: List }, ...base]
@@ -75,6 +77,11 @@ watch(
             </div>
             <div class="h-1.5 w-full overflow-hidden rounded-full bg-surface">
               <div
+                role="progressbar"
+                :aria-valuenow="requestStore.executionProgress.completed"
+                :aria-valuemin="0"
+                :aria-valuemax="requestStore.executionProgress.total"
+                aria-label="Execution progress"
                 class="h-full rounded-full bg-accent transition-all duration-300"
                 :style="{ width: `${(requestStore.executionProgress.completed / requestStore.executionProgress.total) * 100}%` }"
               />
@@ -137,10 +144,13 @@ watch(
 
       <!-- Tabs -->
       <div class="border-b border-border">
-        <div class="flex gap-0.5 px-2">
+        <div class="flex gap-0.5 px-2" role="tablist" aria-label="Response tabs">
           <button
             v-for="tab in tabs"
             :key="tab.key"
+            role="tab"
+            :aria-selected="activeTab === tab.key"
+            :aria-controls="`tabpanel-${tab.key}`"
             class="flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors"
             :class="activeTab === tab.key
               ? 'border-accent text-foreground'
@@ -166,12 +176,13 @@ watch(
       </div>
 
       <!-- Tab content -->
-      <div class="flex-1 overflow-auto">
+      <div :id="`tabpanel-${activeTab}`" role="tabpanel" :aria-label="activeTab" class="flex-1 overflow-auto">
         <RunResultsList
           v-if="activeTab === 'results' && requestStore.lastRunResult"
           :results="requestStore.lastRunResult"
           @select="selectResult"
         />
+        <ComparePanel v-else-if="activeTab === 'compare'" />
         <template v-else-if="requestStore.lastResult">
           <ResponseBody v-if="activeTab === 'body'" :body="requestStore.lastResult.response?.body" :error="requestStore.lastResult.error" />
           <ResponseHeaders v-else-if="activeTab === 'headers'" :headers="requestStore.lastResult.response?.headers ?? {}" />

@@ -5,6 +5,7 @@ import type { FileInfo } from '@/types/api'
 import { useCollectionStore } from '@/stores/collection'
 import { useRequestStore } from '@/stores/request'
 import { useEnvironmentStore } from '@/stores/environment'
+import { useConfirm } from '@/composables/useConfirm'
 import MethodBadge from '@/components/common/MethodBadge.vue'
 import ExportDialog from '@/components/export/ExportDialog.vue'
 
@@ -13,6 +14,7 @@ const { items, depth } = defineProps<{ items: FileInfo[]; depth?: number }>()
 const collection = useCollectionStore()
 const requestStore = useRequestStore()
 const envStore = useEnvironmentStore()
+const { confirm } = useConfirm()
 const expandedDirs = shallowRef<Set<string>>(new Set())
 const exportRequest = ref<import('@/types/api').RequestDTO | null>(null)
 const exportFilePath = ref<string | null>(null)
@@ -128,18 +130,26 @@ async function runFile(item: FileInfo, event: Event) {
 
 async function deleteFile(item: FileInfo, event: Event) {
   event.stopPropagation()
-  if (!window.confirm(`Delete ${item.name}?`)) return
+  const ok = await confirm({
+    title: 'Delete file',
+    message: `Delete ${item.name}? This cannot be undone.`,
+    confirmLabel: 'Delete',
+    variant: 'destructive',
+  })
+  if (!ok) return
   await collection.deleteCurrentFile(item.path)
 }
 </script>
 
 <template>
-  <div>
+  <div :role="(depth ?? 0) === 0 ? 'tree' : 'group'">
     <div
       v-for="item in items"
       :key="item.path"
     >
-      <button
+      <div
+        role="treeitem"
+        tabindex="0"
         class="group flex w-full items-center gap-1 rounded-md px-1.5 py-[5px] text-left text-[13px] transition-colors hover:bg-surface-hover"
         :class="[
           collection.activeFilePath === item.path
@@ -147,11 +157,14 @@ async function deleteFile(item: FileInfo, event: Event) {
             : 'text-muted-foreground',
         ]"
         :style="{ paddingLeft: `${(depth ?? 0) * 12 + 6}px` }"
+        :aria-expanded="item.isDir ? expandedDirs.has(item.path) : (!item.isDir && item.requestCount && item.requestCount > 0) ? collection.expandedFiles.has(item.path) : undefined"
         @click="item.isDir ? toggleDir(item.path) : handleFileClick(item)"
+        @keydown.enter.prevent="item.isDir ? toggleDir(item.path) : handleFileClick(item)"
+        @keydown.space.prevent="item.isDir ? toggleDir(item.path) : handleFileClick(item)"
       >
         <ChevronRight
           v-if="item.isDir || (!item.isDir && item.requestCount && item.requestCount > 0)"
-          class="h-3 w-3 shrink-0 text-muted-foreground/40 transition-transform"
+          class="h-3 w-3 shrink-0 text-muted-foreground/60 transition-transform"
           :class="{ 'rotate-90': item.isDir ? expandedDirs.has(item.path) : collection.expandedFiles.has(item.path) }"
         />
         <span v-else class="w-3 shrink-0" />
@@ -167,37 +180,37 @@ async function deleteFile(item: FileInfo, event: Event) {
         <button
           v-if="item.isDir"
           aria-label="Run all files in folder"
-          class="invisible rounded p-0.5 text-muted-foreground/40 transition-colors hover:bg-accent/20 hover:text-accent group-hover:visible"
+          class="invisible rounded p-0.5 text-muted-foreground/60 transition-colors hover:bg-accent/20 hover:text-accent group-hover:visible"
           title="Run all files in folder"
-          @click="runFolder(item, $event)"
+          @click.stop="runFolder(item, $event)"
         >
           <Play class="h-3 w-3" />
         </button>
         <button
           v-else-if="item.requestCount && item.requestCount > 0"
           aria-label="Run file"
-          class="invisible rounded p-0.5 text-muted-foreground/40 transition-colors hover:bg-accent/20 hover:text-accent group-hover:visible"
+          class="invisible rounded p-0.5 text-muted-foreground/60 transition-colors hover:bg-accent/20 hover:text-accent group-hover:visible"
           title="Run file"
-          @click="runFile(item, $event)"
+          @click.stop="runFile(item, $event)"
         >
           <Play class="h-3 w-3" />
         </button>
         <button
           v-if="!item.isDir"
           aria-label="Delete file"
-          class="invisible rounded p-0.5 text-muted-foreground/40 transition-colors hover:bg-destructive/20 hover:text-destructive group-hover:visible"
+          class="invisible rounded p-0.5 text-muted-foreground/60 transition-colors hover:bg-destructive/20 hover:text-destructive group-hover:visible"
           title="Delete file"
-          @click="deleteFile(item, $event)"
+          @click.stop="deleteFile(item, $event)"
         >
           <Trash2 class="h-3 w-3" />
         </button>
         <span
           v-if="!item.isDir && item.requestCount && item.requestCount > 0"
-          class="rounded-full px-1.5 text-[10px] tabular-nums text-muted-foreground/40 group-hover:text-muted-foreground/60"
+          class="rounded-full px-1.5 text-[10px] tabular-nums text-muted-foreground/60 group-hover:text-muted-foreground/70"
         >
           {{ item.requestCount }}
         </span>
-      </button>
+      </div>
 
       <!-- Directory children -->
       <FileTree

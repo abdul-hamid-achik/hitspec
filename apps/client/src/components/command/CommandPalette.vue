@@ -187,22 +187,30 @@ function onKeydown(e: KeyboardEvent) {
             v-model="query"
             placeholder="Type a command or search..."
             class="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls="command-palette-listbox"
+            :aria-expanded="filtered.length > 0"
+            :aria-activedescendant="filtered[selectedIndex]?.id"
           />
           <kbd class="rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">ESC</kbd>
         </div>
 
         <!-- Results -->
-        <div class="max-h-72 overflow-y-auto p-1.5">
+        <div id="command-palette-listbox" role="listbox" class="max-h-72 overflow-y-auto p-1.5">
           <div v-if="filtered.length === 0" class="px-3 py-6 text-center text-sm text-muted-foreground">
             No results found
           </div>
           <template v-for="[group, items] in groups" :key="group">
-            <div class="px-2.5 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+            <div class="px-2.5 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60" role="presentation">
               {{ group }}
             </div>
             <button
               v-for="(item, i) in items"
               :key="item.id"
+              :id="item.id"
+              role="option"
+              :aria-selected="filtered.indexOf(item) === selectedIndex"
               class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors"
               :class="filtered.indexOf(item) === selectedIndex ? 'bg-accent/15 text-foreground' : 'text-muted-foreground hover:bg-surface-hover hover:text-foreground'"
               @click="execute(item)"
@@ -214,7 +222,7 @@ function onKeydown(e: KeyboardEvent) {
                 <div class="truncate">{{ item.label }}</div>
                 <div v-if="item.description" class="truncate text-xs text-muted-foreground/50">{{ item.description }}</div>
               </div>
-              <ArrowRight v-if="filtered.indexOf(item) === selectedIndex" class="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
+              <ArrowRight v-if="filtered.indexOf(item) === selectedIndex" class="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
             </button>
           </template>
         </div>

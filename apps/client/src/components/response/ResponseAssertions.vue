@@ -8,7 +8,7 @@ const { assertions } = defineProps<{ assertions: AssertionResult[] }>()
 <template>
   <div class="space-y-2 p-4">
     <div v-if="assertions.length === 0" class="flex flex-col items-center gap-2 py-6 text-center">
-      <ShieldCheck class="h-8 w-8 text-muted-foreground/30" />
+      <ShieldCheck class="h-8 w-8 text-muted-foreground/50" />
       <span class="text-xs text-muted-foreground/60">No assertions to display</span>
     </div>
     <div

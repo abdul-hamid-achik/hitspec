@@ -20,7 +20,7 @@ const { icon, title, description, compact } = defineProps<{
       <component
         :is="icon"
         :class="[
-          'text-muted-foreground/40',
+          'text-muted-foreground/60',
           compact ? 'h-8 w-8' : 'h-10 w-10',
         ]"
       />

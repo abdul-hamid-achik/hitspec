@@ -1,5 +1,5 @@
 import { get, del } from '@/api/client'
-import type { HistoryEntry, HistoryList, HistoryRun, HistoryResult } from '@/types/api'
+import type { HistoryEntry, HistoryList, HistoryRun, HistoryResult, HistoryResultsByRequest } from '@/types/api'
 
 // Legacy in-memory history
 export function getHistory(): Promise<HistoryEntry[]> {
@@ -26,4 +26,19 @@ export function clearAllHistory(): Promise<void> {
 
 export function deleteRun(id: number): Promise<void> {
   return del(`/api/v1/history/runs/${id}`)
+}
+
+export function fetchResultsByRequest(
+  requestName: string,
+  filePath: string,
+  limit = 20,
+  offset = 0,
+): Promise<HistoryResultsByRequest> {
+  const params = new URLSearchParams({
+    requestName,
+    filePath,
+    limit: String(limit),
+    offset: String(offset),
+  })
+  return get<HistoryResultsByRequest>(`/api/v1/history/results?${params}`)
 }

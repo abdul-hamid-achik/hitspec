@@ -179,7 +179,7 @@ async function saveAsHttpFile() {
           <textarea
             v-model="curlCommand"
             placeholder="Paste your curl command here..."
-            class="h-32 w-full resize-none rounded-lg border border-border bg-background p-3 font-mono text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+            class="h-32 w-full resize-none rounded-lg border border-border bg-background p-3 font-mono text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
         <button
@@ -197,7 +197,7 @@ async function saveAsHttpFile() {
           <textarea
             v-model="insomniaJson"
             placeholder='Paste your Insomnia export JSON here... {"_type":"export","resources":[...]}'
-            class="h-32 w-full resize-none rounded-lg border border-border bg-background p-3 font-mono text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+            class="h-32 w-full resize-none rounded-lg border border-border bg-background p-3 font-mono text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
         <button
@@ -217,7 +217,7 @@ async function saveAsHttpFile() {
             v-model="openapiSpec"
             type="text"
             placeholder="./openapi.yaml or ./swagger.json"
-            class="w-full rounded-md border border-border bg-background px-3 py-1.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+            class="w-full rounded-md border border-border bg-background px-3 py-1.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
         <div>
@@ -226,7 +226,7 @@ async function saveAsHttpFile() {
             v-model="openapiBaseUrl"
             type="text"
             placeholder="http://localhost:3000"
-            class="w-full rounded-md border border-border bg-background px-3 py-1.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+            class="w-full rounded-md border border-border bg-background px-3 py-1.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
         <button
@@ -244,7 +244,7 @@ async function saveAsHttpFile() {
           <textarea
             v-model="postmanJson"
             placeholder='Paste your Postman Collection v2.1 JSON here... {"info":{"name":"..."},"item":[...]}'
-            class="h-32 w-full resize-none rounded-lg border border-border bg-background p-3 font-mono text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+            class="h-32 w-full resize-none rounded-lg border border-border bg-background p-3 font-mono text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
         <p class="text-[10px] text-muted-foreground/50">

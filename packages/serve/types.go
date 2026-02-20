@@ -285,6 +285,22 @@ type HistoryListDTO struct {
 	Offset int64           `json:"offset"`
 }
 
+// HistoryResultWithRunDTO extends HistoryResultDTO with run metadata.
+type HistoryResultWithRunDTO struct {
+	HistoryResultDTO
+	FilePath     string `json:"filePath"`
+	Environment  string `json:"environment,omitempty"`
+	RunStartedAt string `json:"runStartedAt"`
+}
+
+// HistoryResultsByRequestDTO wraps paginated results for a specific request.
+type HistoryResultsByRequestDTO struct {
+	Results []HistoryResultWithRunDTO `json:"results"`
+	Total   int64                    `json:"total"`
+	Limit   int64                    `json:"limit"`
+	Offset  int64                    `json:"offset"`
+}
+
 // --- Stress ---
 
 // StressStartReq is the request body for POST /stress/start.

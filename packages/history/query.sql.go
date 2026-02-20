@@ -20,6 +20,24 @@ func (q *Queries) ClearAllRuns(ctx context.Context) error {
 	return err
 }
 
+const countResultsByRequestName = `-- name: CountResultsByRequestName :one
+SELECT COUNT(*) FROM results r
+JOIN runs ON r.run_id = runs.id
+WHERE r.request_name = ? AND runs.file_path = ?
+`
+
+type CountResultsByRequestNameParams struct {
+	RequestName string
+	FilePath    string
+}
+
+func (q *Queries) CountResultsByRequestName(ctx context.Context, arg CountResultsByRequestNameParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countResultsByRequestName, arg.RequestName, arg.FilePath)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countRuns = `-- name: CountRuns :one
 SELECT COUNT(*) FROM runs
 `
@@ -203,6 +221,86 @@ func (q *Queries) ListAssertionsByResult(ctx context.Context, resultID int64) ([
 			&i.Actual,
 			&i.Passed,
 			&i.Message,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listResultsByRequestName = `-- name: ListResultsByRequestName :many
+SELECT r.id, r.run_id, r.request_name, r.method, r.url, r.status_code, r.duration_ms, r.passed, r.skipped, r.error, r.description, r.body_preview, r.created_at, runs.file_path, runs.environment, runs.started_at AS run_started_at
+FROM results r
+JOIN runs ON r.run_id = runs.id
+WHERE r.request_name = ? AND runs.file_path = ?
+ORDER BY runs.started_at DESC
+LIMIT ? OFFSET ?
+`
+
+type ListResultsByRequestNameParams struct {
+	RequestName string
+	FilePath    string
+	Limit       int64
+	Offset      int64
+}
+
+type ListResultsByRequestNameRow struct {
+	ID           int64
+	RunID        int64
+	RequestName  string
+	Method       string
+	Url          string
+	StatusCode   sql.NullInt64
+	DurationMs   int64
+	Passed       bool
+	Skipped      bool
+	Error        sql.NullString
+	Description  sql.NullString
+	BodyPreview  sql.NullString
+	CreatedAt    time.Time
+	FilePath     string
+	Environment  sql.NullString
+	RunStartedAt time.Time
+}
+
+func (q *Queries) ListResultsByRequestName(ctx context.Context, arg ListResultsByRequestNameParams) ([]ListResultsByRequestNameRow, error) {
+	rows, err := q.db.QueryContext(ctx, listResultsByRequestName,
+		arg.RequestName,
+		arg.FilePath,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListResultsByRequestNameRow
+	for rows.Next() {
+		var i ListResultsByRequestNameRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RunID,
+			&i.RequestName,
+			&i.Method,
+			&i.Url,
+			&i.StatusCode,
+			&i.DurationMs,
+			&i.Passed,
+			&i.Skipped,
+			&i.Error,
+			&i.Description,
+			&i.BodyPreview,
+			&i.CreatedAt,
+			&i.FilePath,
+			&i.Environment,
+			&i.RunStartedAt,
 		); err != nil {
 			return nil, err
 		}

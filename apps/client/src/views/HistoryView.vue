@@ -18,8 +18,13 @@ import {
   Minus,
   Search,
   GitCompareArrows,
+  Square,
+  CheckSquare,
+  MinusSquare,
 } from 'lucide-vue-next'
 import { useHistoryStore } from '@/stores/history'
+import { useConfirm } from '@/composables/useConfirm'
+import { useSelection } from '@/composables/useSelection'
 import { onMounted, ref, computed } from 'vue'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
@@ -28,6 +33,7 @@ import type { HistoryResult } from '@/types/api'
 dayjs.extend(relativeTime)
 
 const historyStore = useHistoryStore()
+const { confirm } = useConfirm()
 
 // Search and filter state
 const searchQuery = ref('')
@@ -56,6 +62,10 @@ const filteredRuns = computed(() => {
 
   return result
 })
+
+// Selection system for result rows
+const expandedResults = computed(() => historyStore.expandedResults)
+const { selectedItems, allSelected, someSelected, isSelected, toggle: toggleSelection, toggleAll, deselectAll } = useSelection(expandedResults)
 
 // Track which result is expanded to show assertions
 const expandedResultId = ref<number | null>(null)
@@ -112,17 +122,25 @@ function clearCompare() {
 
 onMounted(() => historyStore.loadRuns())
 
-function confirmClear() {
-  if (window.confirm('Clear all history? This cannot be undone.')) {
-    historyStore.clearAll()
-  }
+async function confirmClear() {
+  const ok = await confirm({
+    title: 'Clear all history',
+    message: 'This will permanently delete all history. This cannot be undone.',
+    confirmLabel: 'Clear All',
+    variant: 'destructive',
+  })
+  if (ok) historyStore.clearAll()
 }
 
-function confirmDeleteRun(id: number, event: Event) {
+async function confirmDeleteRun(id: number, event: Event) {
   event.stopPropagation()
-  if (window.confirm('Delete this run? This cannot be undone.')) {
-    historyStore.removeRun(id)
-  }
+  const ok = await confirm({
+    title: 'Delete run',
+    message: 'This will permanently delete this run. This cannot be undone.',
+    confirmLabel: 'Delete',
+    variant: 'destructive',
+  })
+  if (ok) historyStore.removeRun(id)
 }
 
 function formatDuration(ms: number): string {
@@ -154,13 +172,13 @@ function fileName(filePath: string): string {
     <!-- Search and filter controls -->
     <div v-if="historyStore.runs.length > 0" class="mb-3 flex flex-wrap items-center gap-2">
       <div class="relative flex-1">
-        <Search class="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/40" />
+        <Search class="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" />
         <input
           v-model="searchQuery"
           type="text"
           placeholder="Search by file name..."
           aria-label="Search history"
-          class="w-full rounded-md border border-border bg-background py-1.5 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+          class="w-full rounded-md border border-border bg-background py-1.5 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
         />
       </div>
       <select
@@ -205,10 +223,15 @@ function fileName(filePath: string): string {
       </div>
       <!-- Run list -->
       <div v-for="run in filteredRuns" :key="run.id" class="rounded-lg border border-border bg-surface">
-        <!-- Run header (clickable) -->
-        <button
+        <!-- Run header -->
+        <div
+          role="button"
+          tabindex="0"
           class="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-surface-hover"
+          :aria-expanded="historyStore.expandedRunId === run.id"
           @click="historyStore.loadRunDetails(run.id)"
+          @keydown.enter.prevent="historyStore.loadRunDetails(run.id)"
+          @keydown.space.prevent="historyStore.loadRunDetails(run.id)"
         >
           <component
             :is="historyStore.expandedRunId === run.id ? ChevronDown : ChevronRight"
@@ -242,19 +265,19 @@ function fileName(filePath: string): string {
             {{ formatDuration(run.durationMs) }}
           </span>
 
-          <span class="text-[11px] text-muted-foreground/40" :title="dayjs(run.startedAt).format('YYYY-MM-DD HH:mm:ss')">
+          <span class="text-[11px] text-muted-foreground/60" :title="dayjs(run.startedAt).format('YYYY-MM-DD HH:mm:ss')">
             {{ dayjs(run.startedAt).fromNow() }}
           </span>
 
           <button
             aria-label="Delete run"
-            class="rounded p-1 text-muted-foreground/30 transition-colors hover:bg-destructive/10 hover:text-destructive"
+            class="rounded p-1 text-muted-foreground/50 transition-colors hover:bg-destructive/10 hover:text-destructive"
             title="Delete run"
             @click="confirmDeleteRun(run.id, $event)"
           >
             <Trash2 class="h-3 w-3" />
           </button>
-        </button>
+        </div>
 
         <!-- Expanded run details -->
         <div v-if="historyStore.expandedRunId === run.id" class="border-t border-border">
@@ -262,53 +285,112 @@ function fileName(filePath: string): string {
           <div v-else-if="historyStore.expandedResults.length === 0" class="p-4 text-center text-xs text-muted-foreground">
             No results recorded
           </div>
-          <!-- Compare selection banner -->
-          <div v-if="compareSelection.length > 0" class="flex items-center gap-2 border-b border-border bg-accent/5 px-4 py-1.5">
-            <GitCompareArrows class="h-3.5 w-3.5 text-accent" />
-            <span class="text-[11px] text-accent">
-              {{ compareSelection.length === 1 ? 'Select another result to compare' : 'Comparing 2 results' }}
-            </span>
+          <!-- Selection / compare toolbar -->
+          <div v-if="selectedItems.length > 0 || compareSelection.length > 0" class="flex items-center gap-2 border-b border-border bg-accent/5 px-4 py-1.5">
+            <template v-if="selectedItems.length > 0">
+              <span class="text-[11px] text-accent">{{ selectedItems.length }} selected</span>
+              <button
+                v-if="selectedItems.length === 2"
+                class="flex items-center gap-1 rounded-md bg-accent/15 px-2 py-0.5 text-[11px] font-medium text-accent transition-colors hover:bg-accent/25"
+                @click="() => {
+                  const [a, b] = selectedItems
+                  if (a.bodyPreview && b.bodyPreview) {
+                    diffLeft = { body: a.bodyPreview, label: `${a.method} ${a.requestName} (${a.statusCode ?? 'no status'})` }
+                    diffRight = { body: b.bodyPreview, label: `${b.method} ${b.requestName} (${b.statusCode ?? 'no status'})` }
+                    showDiffDialog = true
+                  }
+                }"
+              >
+                <GitCompareArrows class="h-3 w-3" />
+                Compare (2)
+              </button>
+              <div class="flex-1" />
+              <button
+                class="text-[11px] text-muted-foreground hover:text-foreground"
+                @click="deselectAll()"
+              >
+                Deselect All
+              </button>
+            </template>
+            <template v-else-if="compareSelection.length > 0">
+              <GitCompareArrows class="h-3.5 w-3.5 text-accent" />
+              <span class="text-[11px] text-accent">
+                {{ compareSelection.length === 1 ? 'Select another result to compare' : 'Comparing 2 results' }}
+              </span>
+              <button
+                class="ml-auto text-[11px] text-muted-foreground hover:text-foreground"
+                @click="clearCompare"
+              >
+                Cancel
+              </button>
+            </template>
+          </div>
+          <!-- Select all header -->
+          <div v-if="historyStore.expandedResults.length > 0" class="flex items-center gap-2 border-b border-border/50 px-4 py-1.5">
             <button
-              class="ml-auto text-[11px] text-muted-foreground hover:text-foreground"
-              @click="clearCompare"
+              class="shrink-0 text-muted-foreground/60 hover:text-foreground"
+              aria-label="Toggle select all"
+              @click="toggleAll()"
             >
-              Cancel
+              <CheckSquare v-if="allSelected" class="h-3.5 w-3.5" />
+              <MinusSquare v-else-if="someSelected" class="h-3.5 w-3.5" />
+              <Square v-else class="h-3.5 w-3.5" />
             </button>
+            <span class="text-[10px] text-muted-foreground/50">Select all</span>
           </div>
           <div class="divide-y divide-border/50">
             <div v-for="result in historyStore.expandedResults" :key="result.id">
               <!-- Result row -->
-              <button
+              <div
                 class="flex w-full items-center gap-2 px-4 py-2 text-left transition-colors hover:bg-surface-hover"
-                @click="toggleResult(result)"
+                :class="{ 'bg-accent/5': isSelected(result) }"
               >
-                <component
-                  :is="result.skipped ? Minus : result.passed ? CheckCircle : XCircle"
-                  class="h-3.5 w-3.5 shrink-0"
-                  :class="
-                    result.skipped
-                      ? 'text-muted-foreground/40'
-                      : result.passed
-                        ? 'text-success/60'
-                        : 'text-destructive/60'
-                  "
-                />
-                <MethodBadge :method="result.method" size="sm" />
-                <span class="flex-1 truncate font-mono text-xs text-foreground/70">
-                  {{ result.requestName }}
-                </span>
-                <span v-if="result.statusCode" class="font-mono text-[11px] tabular-nums" :class="
-                  result.statusCode < 300
-                    ? 'text-success/70'
-                    : result.statusCode < 400
-                      ? 'text-warning/70'
-                      : 'text-destructive/70'
-                ">
-                  {{ result.statusCode }}
-                </span>
-                <span class="text-[11px] tabular-nums text-muted-foreground/40">
-                  {{ formatDuration(result.durationMs) }}
-                </span>
+                <button
+                  class="shrink-0 text-muted-foreground/60 hover:text-foreground"
+                  aria-label="Toggle selection"
+                  @click.stop="toggleSelection(result, $event)"
+                >
+                  <CheckSquare v-if="isSelected(result)" class="h-3.5 w-3.5 text-accent" />
+                  <Square v-else class="h-3.5 w-3.5" />
+                </button>
+                <button
+                  class="flex flex-1 items-center gap-2"
+                  :aria-expanded="expandedResultId === result.id"
+                  @click="toggleResult(result)"
+                >
+                  <component
+                    :is="result.skipped ? Minus : result.passed ? CheckCircle : XCircle"
+                    class="h-3.5 w-3.5 shrink-0"
+                    :class="
+                      result.skipped
+                        ? 'text-muted-foreground/60'
+                        : result.passed
+                          ? 'text-success/60'
+                          : 'text-destructive/60'
+                    "
+                  />
+                  <MethodBadge :method="result.method" size="sm" />
+                  <span class="flex-1 truncate font-mono text-xs text-foreground/70">
+                    {{ result.requestName }}
+                  </span>
+                  <span v-if="result.statusCode" class="font-mono text-[11px] tabular-nums" :class="
+                    result.statusCode < 300
+                      ? 'text-success/70'
+                      : result.statusCode < 400
+                        ? 'text-warning/70'
+                        : 'text-destructive/70'
+                  ">
+                    {{ result.statusCode }}
+                  </span>
+                  <span class="text-[11px] tabular-nums text-muted-foreground/60">
+                    {{ formatDuration(result.durationMs) }}
+                  </span>
+                  <component
+                    :is="expandedResultId === result.id ? ChevronDown : ChevronRight"
+                    v-if="result.assertions && result.assertions.length > 0"
+                    class="h-3 w-3 text-muted-foreground/50"
+                  />
+                </button>
                 <!-- Compare button -->
                 <button
                   v-if="result.bodyPreview"
@@ -316,18 +398,13 @@ function fileName(filePath: string): string {
                   class="rounded p-1 transition-colors"
                   :class="isSelectedForCompare(result)
                     ? 'bg-accent/15 text-accent'
-                    : 'text-muted-foreground/30 hover:bg-accent/10 hover:text-accent'"
+                    : 'text-muted-foreground/50 hover:bg-accent/10 hover:text-accent'"
                   title="Select for diff comparison"
                   @click="toggleCompare(result, $event)"
                 >
                   <GitCompareArrows class="h-3 w-3" />
                 </button>
-                <component
-                  :is="expandedResultId === result.id ? ChevronDown : ChevronRight"
-                  v-if="result.assertions && result.assertions.length > 0"
-                  class="h-3 w-3 text-muted-foreground/30"
-                />
-              </button>
+              </div>
 
               <!-- Error message -->
               <div v-if="result.error" class="mx-4 mb-2 rounded bg-destructive/5 px-3 py-1.5 text-xs text-destructive">
@@ -347,7 +424,7 @@ function fileName(filePath: string): string {
                   <component
                     :is="assertion.passed ? CheckCircle : XCircle"
                     class="h-3 w-3 shrink-0"
-                    :class="assertion.passed ? 'text-success/50' : 'text-destructive/50'"
+                    :class="assertion.passed ? 'text-success/70' : 'text-destructive/70'"
                   />
                   <span class="font-mono text-muted-foreground">{{ assertion.subject }}</span>
                   <span class="text-foreground/50">{{ assertion.operator }}</span>

@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import RequestPanel from '@/components/request/RequestPanel.vue'
 import ResponsePanel from '@/components/response/ResponsePanel.vue'
+import SplitPane from '@/components/common/SplitPane.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { useCollectionStore } from '@/stores/collection'
 import { useRequestStore } from '@/stores/request'
+import { useSettingsStore } from '@/stores/settings'
 import { onMounted, watch } from 'vue'
 import { FolderTree, AlertCircle } from 'lucide-vue-next'
 
 const collection = useCollectionStore()
 const requestStore = useRequestStore()
+const settings = useSettingsStore()
 
 onMounted(() => {
   // File loading and env loading is handled by AppShell.
@@ -59,12 +62,12 @@ watch(() => collection.activeFile, (file) => {
   </div>
 
   <!-- Normal workspace: request editor + response panel -->
-  <div v-else class="flex h-full overflow-hidden">
-    <div class="flex-1 overflow-hidden border-r border-border">
+  <SplitPane v-else v-model:ratio="settings.workspaceSplitRatio" :min-left="300" :min-right="300">
+    <template #left>
       <RequestPanel />
-    </div>
-    <div class="flex-1 overflow-hidden">
+    </template>
+    <template #right>
       <ResponsePanel />
-    </div>
-  </div>
+    </template>
+  </SplitPane>
 </template>

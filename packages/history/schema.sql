@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS results (
 );
 
 CREATE INDEX IF NOT EXISTS idx_results_run_id ON results(run_id);
+CREATE INDEX IF NOT EXISTS idx_results_request_name ON results(request_name);
 
 CREATE TABLE IF NOT EXISTS assertions (
     id        INTEGER PRIMARY KEY,
