@@ -134,16 +134,16 @@ describe('FileTree', () => {
     expect(wrapper.findComponent(Folder).exists()).toBe(true)
     expect(wrapper.findComponent(FolderOpen).exists()).toBe(false)
 
-    // Click the directory button
-    const buttons = wrapper.findAll('button')
-    const dirButton = buttons.find((b) => b.text().includes('api'))
-    await dirButton!.trigger('click')
+    // Click the directory tree item
+    const treeItems = wrapper.findAll('[role="treeitem"]')
+    const dirItem = treeItems.find((el) => el.text().includes('api'))
+    await dirItem!.trigger('click')
 
     // Now expanded - FolderOpen icon shown
     expect(wrapper.findComponent(FolderOpen).exists()).toBe(true)
 
     // Click again to collapse
-    await dirButton!.trigger('click')
+    await dirItem!.trigger('click')
 
     expect(wrapper.findComponent(Folder).exists()).toBe(true)
     expect(wrapper.findComponent(FolderOpen).exists()).toBe(false)
@@ -172,9 +172,9 @@ describe('FileTree', () => {
 
     const wrapper = mountTree(items)
 
-    const buttons = wrapper.findAll('button')
-    const fileButton = buttons.find((b) => b.text().includes('test.http'))
-    expect(fileButton!.classes()).toContain('bg-accent/10')
+    const treeItems = wrapper.findAll('[role="treeitem"]')
+    const fileItem = treeItems.find((el) => el.text().includes('test.http'))
+    expect(fileItem!.classes()).toContain('bg-accent/10')
   })
 
   it('should show request sub-list when file is expanded', () => {

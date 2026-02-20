@@ -296,9 +296,9 @@ type HistoryResultWithRunDTO struct {
 // HistoryResultsByRequestDTO wraps paginated results for a specific request.
 type HistoryResultsByRequestDTO struct {
 	Results []HistoryResultWithRunDTO `json:"results"`
-	Total   int64                    `json:"total"`
-	Limit   int64                    `json:"limit"`
-	Offset  int64                    `json:"offset"`
+	Total   int64                     `json:"total"`
+	Limit   int64                     `json:"limit"`
+	Offset  int64                     `json:"offset"`
 }
 
 // --- Stress ---
