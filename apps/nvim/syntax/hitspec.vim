@@ -12,7 +12,7 @@ syn match hitspecSeparatorName /[^ #].*$/ contained
 
 " Comments
 syn match hitspecComment /^#\s[^@].*$/ contains=hitspecTodo
-syn match hitspecComment /^#$/ contains=hitspecTodo
+syn match hitspecComment /^#\s*$/ contains=hitspecTodo
 syn match hitspecComment /^\/\/.*$/ contains=hitspecTodo
 syn keyword hitspecTodo TODO FIXME XXX NOTE HACK BUG WARN contained
 
@@ -33,7 +33,7 @@ syn match hitspecAnnotation /^#\s*@only\>.*$/ contains=hitspecAnnotationKey,hits
 syn match hitspecAnnotation /^#\s*@before\s.*$/ contains=hitspecAnnotationKey,hitspecAnnotationValue
 syn match hitspecAnnotation /^#\s*@after\s.*$/ contains=hitspecAnnotationKey,hitspecAnnotationValue
 syn match hitspecAnnotation /^#\s*@db\s.*$/ contains=hitspecAnnotationKey,hitspecAnnotationValue
-syn match hitspecAnnotation /^#\s*@waitfor\s.*$/ contains=hitspecAnnotationKey,hitspecAnnotationValue
+syn match hitspecAnnotation /^#\s*@wait[Ff]or\s.*$/ contains=hitspecAnnotationKey,hitspecAnnotationValue
 syn match hitspecAnnotation /^#\s*@import\s.*$/ contains=hitspecAnnotationKey,hitspecAnnotationValue
 syn match hitspecAnnotation /^#\s*@stress\.\w\+\s.*$/ contains=hitspecAnnotationKey,hitspecAnnotationValue
 syn match hitspecAnnotation /^#\s*@stress\.\w\+\s*$/ contains=hitspecAnnotationKey
@@ -41,7 +41,7 @@ syn match hitspecAnnotation /^#\s*@contract\.\w\+\s.*$/ contains=hitspecAnnotati
 syn match hitspecAnnotation /^#\s*@x-[a-zA-Z0-9._-]\+\s.*$/ contains=hitspecAnnotationKey,hitspecAnnotationValue
 
 syn match hitspecAnnotationKey /@[a-zA-Z0-9._-]\+/ contained
-syn match hitspecAnnotationValue /\s\zs[^@#].*$/ contained
+syn match hitspecAnnotationValue /\s\zs[^@#].*$/ contained contains=hitspecVariable
 
 " HTTP methods
 syn match hitspecMethod /^\(GET\|POST\|PUT\|PATCH\|DELETE\|HEAD\|OPTIONS\|TRACE\|CONNECT\|WS\)\ze\s/
@@ -55,7 +55,7 @@ syn match hitspecHeaderValue /:\s*\zs.*$/ contained contains=hitspecVariable
 " Variable assignment: @var = value
 syn match hitspecVarAssign /^@\w\+\s*=\s*.*$/ contains=hitspecVarName,hitspecVarEquals,hitspecVariable
 syn match hitspecVarName /^@\w\+/ contained
-syn match hitspecVarEquals /=/ contained
+syn match hitspecVarEquals /\s\zs=\ze\s/ contained
 
 " Variable interpolation: {{...}}
 syn region hitspecVariable matchgroup=hitspecVariableBrace start=/{{/ end=/}}/ oneline contains=hitspecBuiltinFunc
@@ -66,7 +66,6 @@ syn match hitspecFuncName /\$\w\+/ contained
 
 " Assertion block markers
 syn match hitspecAssertStart /^>>>\w*$/
-syn match hitspecAssertStart /^>>>$/
 syn match hitspecAssertEnd /^<<<$/
 
 " Typed block markers
@@ -81,28 +80,45 @@ syn match hitspecBlockType /^>>>variables$/
 syn match hitspecCaptureStart /^\[\[\[$/
 syn match hitspecCaptureEnd /^\]\]\]$/
 
-" Assertion keywords
-syn keyword hitspecExpect expect
-syn keyword hitspecAssertSubject status body header duration headers contained containedin=hitspecExpect
+" Assertion lines: expect subject operator [value]
+syn match hitspecExpect /^expect\s\+.*$/ contains=hitspecExpectKeyword,hitspecAssertSubject,hitspecAssertOp,hitspecString,hitspecNumber,hitspecBoolean,hitspecNull,hitspecVariable,hitspecType
+syn match hitspecExpectKeyword /^expect/ contained
+syn match hitspecAssertSubject /\<\(status\|body\|header\|duration\|headers\)\>/ contained
 
-" Assertion operators
-syn keyword hitspecOperator == != contains matches exists startsWith endsWith includes type schema snapshot each in length
-syn match hitspecOperator /!exists/
-syn match hitspecOperator /!contains/
-syn match hitspecOperator /!includes/
-syn match hitspecOperator /!in/
-syn match hitspecOperator /[><]=\?/
+" Assertion operators (contained — only match inside expect lines)
+syn match hitspecAssertOp /\<\(contains\|matches\|exists\|startsWith\|endsWith\|includes\|type\|schema\|snapshot\|each\|in\|length\)\>/ contained
+syn match hitspecAssertOp /==/ contained
+syn match hitspecAssertOp /!=/ contained
+syn match hitspecAssertOp /[><]=\?/ contained
+syn match hitspecAssertOp /!exists/ contained
+syn match hitspecAssertOp /!contains/ contained
+syn match hitspecAssertOp /!includes/ contained
+syn match hitspecAssertOp /!in/ contained
+
+" Type keywords in assertions (expect body type string)
+syn keyword hitspecType string number boolean array object contained
 
 " Capture keyword
 syn keyword hitspecFrom from
+
+" File include: < ./path/to/file
+syn match hitspecFileInclude /^<\s\+\S\+$/ contains=hitspecFileIncludeOp,hitspecFileIncludePath
+syn match hitspecFileIncludeOp /^</ contained
+syn match hitspecFileIncludePath /\s\zs\S\+$/ contained
+
+" Multipart block keywords
+syn keyword hitspecMultipartKw field file
+
+" Database block keyword
+syn keyword hitspecDBKeyword query
 
 " Strings
 syn region hitspecString start=/"/ skip=/\\"/ end=/"/ oneline contains=hitspecVariable
 syn region hitspecString start=/'/ skip=/\\'/ end=/'/ oneline
 
-" Numbers
-syn match hitspecNumber /\<\d\+\>/
-syn match hitspecNumber /\<\d\+\.\d\+\>/
+" Numbers (including negative)
+syn match hitspecNumber /-\?\<\d\+\>/
+syn match hitspecNumber /-\?\<\d\+\.\d\+\>/
 
 " Booleans and null
 syn keyword hitspecBoolean true false
@@ -111,8 +127,8 @@ syn keyword hitspecNull null
 " URL (after method)
 syn match hitspecURL /\(GET\|POST\|PUT\|PATCH\|DELETE\|HEAD\|OPTIONS\|TRACE\|CONNECT\|WS\)\s\+\zs\S\+/ contains=hitspecVariable
 
-" Query parameters
-syn match hitspecQueryParam /^\s\+[?&]\w[^=]*=.*$/ contains=hitspecVariable
+" Query parameters and form data
+syn match hitspecQueryParam /^\s*[?&]\s*\w[^=]*=.*$/ contains=hitspecVariable
 
 " JSON body highlighting (basic)
 syn match hitspecJsonKey /"[^"]*"\s*:/ contains=hitspecString
@@ -142,10 +158,17 @@ hi def link hitspecAssertEnd Structure
 hi def link hitspecBlockType Type
 hi def link hitspecCaptureStart Structure
 hi def link hitspecCaptureEnd Structure
-hi def link hitspecExpect Keyword
+hi def link hitspecExpect Normal
+hi def link hitspecExpectKeyword Keyword
 hi def link hitspecAssertSubject Type
-hi def link hitspecOperator Operator
+hi def link hitspecAssertOp Operator
+hi def link hitspecType Type
 hi def link hitspecFrom Keyword
+hi def link hitspecFileInclude Normal
+hi def link hitspecFileIncludeOp Operator
+hi def link hitspecFileIncludePath String
+hi def link hitspecMultipartKw Keyword
+hi def link hitspecDBKeyword Keyword
 hi def link hitspecString String
 hi def link hitspecNumber Number
 hi def link hitspecBoolean Boolean

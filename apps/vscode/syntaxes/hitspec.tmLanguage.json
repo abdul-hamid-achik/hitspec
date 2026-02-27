@@ -3,17 +3,20 @@
   "name": "hitspec",
   "scopeName": "source.hitspec",
   "patterns": [
-    { "include": "#comments" },
     { "include": "#separators" },
+    { "include": "#comments" },
     { "include": "#annotations" },
     { "include": "#variables" },
     { "include": "#methods" },
+    { "include": "#file-include" },
+    { "include": "#query-params" },
     { "include": "#headers" },
     { "include": "#typed-blocks" },
     { "include": "#assertions" },
+    { "include": "#legacy-capture" },
     { "include": "#strings" },
     { "include": "#numbers" },
-    { "include": "#operators" },
+    { "include": "#constants" },
     { "include": "#functions" },
     { "include": "#interpolation" }
   ],
@@ -26,7 +29,7 @@
         },
         {
           "name": "comment.line.number-sign.hitspec",
-          "match": "^#(?!\\s*@).*$"
+          "match": "^#(?!##)(?!\\s*@).*$"
         }
       ]
     },
@@ -42,7 +45,7 @@
       "patterns": [
         {
           "name": "entity.name.tag.hitspec",
-          "match": "^#\\s*@(name|description|tags|skip|only|timeout|retry|retryOn|retryDelay|depends|auth|before|after|db|waitfor|if|unless|import|stress\\.\\w+|contract\\.\\w+|x-\\w+)\\b",
+          "match": "^#\\s*@(name|description|tags|skip|only|timeout|retry|retryOn|retryDelay|depends|auth|before|after|db|wait[Ff]or|if|unless|import|stress\\.\\w+|contract\\.\\w+|x-[\\w.-]+)\\b",
           "captures": {
             "1": { "name": "keyword.other.annotation.hitspec" }
           }
@@ -80,6 +83,40 @@
         }
       ]
     },
+    "file-include": {
+      "patterns": [
+        {
+          "name": "meta.file-include.hitspec",
+          "match": "^(<)\\s+(\\S+)",
+          "captures": {
+            "1": { "name": "keyword.operator.include.hitspec" },
+            "2": { "name": "string.unquoted.file-path.hitspec" }
+          }
+        }
+      ]
+    },
+    "query-params": {
+      "patterns": [
+        {
+          "name": "meta.query-param.hitspec",
+          "match": "^\\s*([?&])\\s*(\\S+)\\s*(=)\\s*(.*)",
+          "captures": {
+            "1": { "name": "punctuation.definition.query.hitspec" },
+            "2": { "name": "variable.parameter.query.hitspec" },
+            "3": { "name": "keyword.operator.assignment.hitspec" },
+            "4": {
+              "patterns": [
+                { "include": "#interpolation" },
+                {
+                  "name": "string.unquoted.query-value.hitspec",
+                  "match": ".+"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
     "typed-blocks": {
       "patterns": [
         {
@@ -108,12 +145,25 @@
             },
             {
               "name": "keyword.operator.comparison.hitspec",
-              "match": "\\b(==|!=|>=|<=|>|<|contains|!contains|startsWith|endsWith|matches|exists|!exists|length|includes|!includes|in|!in|type|each|schema|snapshot)\\b"
+              "match": "==|!=|>=|<=|>|<"
+            },
+            {
+              "name": "keyword.operator.comparison.hitspec",
+              "match": "!(?:contains|exists|includes|in)\\b"
+            },
+            {
+              "name": "keyword.operator.comparison.hitspec",
+              "match": "\\b(contains|startsWith|endsWith|matches|exists|length|includes|in|type|each|schema|snapshot)\\b"
             },
             {
               "name": "variable.other.subject.hitspec",
-              "match": "\\b(status|duration|body|header|p50|p95|p99)\\b"
+              "match": "\\b(status|duration|body|headers?|p50|p95|p99)\\b"
             },
+            {
+              "name": "support.type.hitspec",
+              "match": "\\b(string|number|boolean|array|object)\\b"
+            },
+            { "include": "#constants" },
             { "include": "#strings" },
             { "include": "#numbers" },
             { "include": "#interpolation" }
@@ -140,16 +190,41 @@
             },
             {
               "name": "keyword.operator.comparison.hitspec",
-              "match": "\\b(==|!=|>=|<=|>|<|contains|!contains|startsWith|endsWith|matches|exists|!exists|length|includes|!includes|in|!in|type|each|schema|snapshot)\\b"
+              "match": "==|!=|>=|<=|>|<"
+            },
+            {
+              "name": "keyword.operator.comparison.hitspec",
+              "match": "!(?:contains|exists|includes|in)\\b"
+            },
+            {
+              "name": "keyword.operator.comparison.hitspec",
+              "match": "\\b(contains|startsWith|endsWith|matches|exists|length|includes|in|type|each|schema|snapshot)\\b"
             },
             {
               "name": "variable.other.subject.hitspec",
-              "match": "\\b(status|duration|body|header|p50|p95|p99)\\b"
+              "match": "\\b(status|duration|body|headers?|p50|p95|p99)\\b"
             },
+            {
+              "name": "support.type.hitspec",
+              "match": "\\b(string|number|boolean|array|object)\\b"
+            },
+            { "include": "#constants" },
             { "include": "#strings" },
             { "include": "#numbers" },
             { "include": "#interpolation" }
           ]
+        }
+      ]
+    },
+    "legacy-capture": {
+      "patterns": [
+        {
+          "name": "punctuation.definition.capture.begin.hitspec",
+          "match": "^\\[\\[\\[$"
+        },
+        {
+          "name": "punctuation.definition.capture.end.hitspec",
+          "match": "^\\]\\]\\]$"
         }
       ]
     },
@@ -181,15 +256,19 @@
       "patterns": [
         {
           "name": "constant.numeric.hitspec",
-          "match": "\\b\\d+(\\.\\d+)?\\b"
+          "match": "-?\\d+(\\.\\d+)?\\b"
         }
       ]
     },
-    "operators": {
+    "constants": {
       "patterns": [
         {
-          "name": "keyword.operator.hitspec",
-          "match": "(==|!=|>=|<=|>|<|=)"
+          "name": "constant.language.boolean.hitspec",
+          "match": "\\b(true|false)\\b"
+        },
+        {
+          "name": "constant.language.null.hitspec",
+          "match": "\\bnull\\b"
         }
       ]
     },
@@ -197,7 +276,7 @@
       "patterns": [
         {
           "name": "support.function.builtin.hitspec",
-          "match": "\\$(?:uuid|timestamp|random|randomInt|randomString|randomEmail|randomName|env|file|base64|md5|sha256|now|dateFormat|urlEncode|urlDecode|jsonPath|xpath|lower|upper|trim|replace|split|join|length|slice|first|last|nth|sum|avg|min|max|count|sort|reverse|unique|filter|map|reduce|find|some|every|flatten|merge|keys|values|entries|fromEntries|pick|omit|get|set|has|delete|typeof|isNull|isNumber|isString|isArray|isObject|isEmpty|isTruthy|default|coalesce|if|switch|range|repeat|concat|pad|padStart|padEnd|truncate|escape|unescape|stringify|parse|format|match|test|exec|groups|index|lastIndex|startsWith|endsWith|includes|indexOf|lastIndexOf|charAt|charCodeAt|codePointAt|normalize|localeCompare|toLocaleLowerCase|toLocaleUpperCase|substring|substr|slice|split|repeat|trimStart|trimEnd|valueOf|toString)\\b"
+          "match": "\\$(?:uuid|timestamp|timestampMs|random|randomInt|randomString|randomEmail|randomAlphanumeric|env|file|base64|base64Decode|md5|sha256|now|date|urlEncode|urlDecode|json)\\b"
         }
       ]
     },
