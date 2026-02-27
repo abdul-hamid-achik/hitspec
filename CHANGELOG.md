@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.13.0] - 2026-02-27
+
+### Fixed
+
+- **Neovim: Operators not highlighted**: `syn keyword` silently ignored non-keyword chars (`==`, `!=`); switched to `syn match`
+- **Neovim: Assertion subjects never highlighted**: `containedin=` on a `syn keyword` is ineffective; redesigned as full-line `syn match` with `contains=`
+- **Neovim: `contains` keyword error**: `contains` is a reserved Vim syntax argument; switched operator keywords to `syn match`
+- **VSCode: Separators rendered as comments**: Comment pattern matched `###` lines before separator pattern could; fixed pattern ordering
+- **VSCode: Symbolic operators never matched**: `\b` word boundary fails on `==`, `!=`, `>=`, `<=`, `>`, `<`; split into separate patterns
+- **Both: `@waitFor` not recognized**: Annotation pattern used lowercase `waitfor`; fixed to match camelCase `waitFor`
+- **Both: Query params/form data not highlighted**: Pattern required leading whitespace; real files use column 0
+- **VSCode: Global operator false positives**: Removed top-level operators rule that matched `=`, `>`, `<` everywhere
+
+### Added
+
+- **Neovim/VSCode: File include syntax**: Highlighting for `< ./path/to/file` body references
+- **Neovim/VSCode: Type keywords**: `string`, `number`, `boolean`, `array`, `object` in assertions
+- **Neovim: Multipart keywords**: `field` and `file` keywords in `>>>multipart` blocks
+- **Neovim: Database keyword**: `query` keyword in `>>>db` blocks
+- **Both: Negative number support**: `-42` and `-3.14` now highlighted as numbers
+- **VSCode: Boolean and null literals**: `true`, `false`, `null` highlighting
+- **VSCode: Legacy capture markers**: `[[[` and `]]]` block delimiters
+- **VSCode: `headers` (plural)**: Added as assertion subject alongside `header`
+- **Neovim: Variables in annotation values**: `{{var}}` inside `# @auth bearer {{token}}` now highlighted
+- **Neovim: Assertion operators scoped**: Operators like `contains`, `type`, `in` now only match inside `expect` lines, preventing false positives in JSON bodies
+
+### Changed
+
+- VSCode built-in functions list trimmed to actual parser builtins (was bloated with 100+ nonexistent functions)
+
+## [2.12.0] - 2026-02-27
+
+### Fixed
+
+- Format `types.go` with gofmt
+- Update FileTree component tests for `treeitem` role
+
 ## [2.11.0] - 2026-02-11
 
 ### Added
@@ -54,7 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Unified Taskfile**: Cross-stack `task build/test/lint/security/check` covering Go and TypeScript
 - **Client Linting**: oxlint with Vue plugin (0 errors, 0 warnings on 93 files)
 - **Editor Extensions**: VSCode extension at `apps/vscode/` with syntax highlighting and snippets, Neovim plugin at `apps/nvim/`
-- **Neovim Support**: TreeSitter grammar and filetype detection for `.http` and `.hitspec` files
+- **Neovim Support**: Vim syntax highlighting and filetype detection for `.http` and `.hitspec` files
 
 ### Changed
 

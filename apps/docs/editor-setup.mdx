@@ -1,23 +1,37 @@
 ---
 title: "Editor Setup"
-description: "Configure syntax highlighting and shell completions for hitspec."
+description: "Configure syntax highlighting, snippets, and shell completions for hitspec."
 ---
 
 ## VSCode Extension
 
-The official hitspec VSCode extension provides full syntax support for `.http` and `.hitspec` files.
+The official hitspec VSCode extension (v0.2.0) provides syntax highlighting, snippets, and language configuration for `.http` and `.hitspec` files.
 
 ### Features
 
-- Full syntax highlighting for `.http` and `.hitspec` files
-- Code snippets for requests, assertions, and captures
-- Support for hitspec-specific syntax: `>>>`, `<<<`, `[[[`, `]]]`
-- Variable interpolation highlighting (`{{variable}}`)
-- Built-in function highlighting (`$uuid()`, `$timestamp()`, etc.)
+- Full syntax highlighting via TextMate grammar
+- 46 code snippets covering requests, assertions, captures, annotations, blocks, and built-in functions
+- Comment toggling (`#`)
+- Bracket matching and auto-closing for `{}`, `[]`, `()`, `""`, `''`, `{{}}`, and `>>>` / `<<<`
+- Code folding for request separators (`###`) and assertion blocks
 
-### Install from VSIX
+### Syntax Highlighting
 
-The extension is currently available as a manual VSIX install:
+The TextMate grammar highlights these elements:
+
+- **HTTP methods** -- GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, TRACE, CONNECT, WS
+- **Request separators** -- `###` lines
+- **Annotations** -- `@name`, `@tags`, `@auth`, `@depends`, `@if`, `@unless`, `@import`, `@stress.*`, `@contract.*`, and others
+- **Headers** -- key-value pairs like `Content-Type: application/json`
+- **Assertion blocks** (`>>>` / `<<<`) -- `expect` keyword, comparison operators (`==`, `!=`, `>`, `<`, `>=`, `<=`), matchers (`contains`, `matches`, `exists`, `type`, `schema`, `snapshot`, etc.), and subjects (`status`, `body`, `header`, `duration`)
+- **Typed blocks** -- `>>>capture`, `>>>graphql`, `>>>db`, `>>>shell`, `>>>multipart`, `>>>variables`
+- **Variable interpolation** -- `{{variable}}`
+- **Built-in functions** -- `$uuid()`, `$timestamp()`, `$env()`, `$random()`, and others
+- **File includes** -- `< ./path/to/file`
+- **Query parameters** -- `? key = value` and `& key = value`
+- **Strings, numbers, booleans, null**
+
+### Installation
 
 <Steps>
 <Step title="Build the extension">
@@ -37,48 +51,57 @@ This generates a `.vsix` file in the `apps/vscode` directory.
 </Step>
 </Steps>
 
-### Alternative: REST Client Extension
-
-If you don't need hitspec-specific highlighting, the [REST Client extension](https://marketplace.visualstudio.com/items?itemName=humao.rest-client) provides basic HTTP syntax highlighting that works with `.http` files.
-
 <Note>
-  REST Client does not highlight hitspec assertion blocks (`>>> ... <<<`) or metadata directives (`# @name`, `# @depends`). For the best experience, use the official hitspec extension.
+  The extension is declarative-only -- no IntelliSense or autocomplete beyond snippets. The [REST Client](https://marketplace.visualstudio.com/items?itemName=humao.rest-client) extension is an alternative for basic `.http` support, but it does not highlight assertion blocks, typed blocks, or annotations.
 </Note>
 
 ## Neovim
 
-The hitspec Neovim plugin provides syntax highlighting and filetype detection for `.http` and `.hitspec` files.
-
-### Install with lazy.nvim
-
-```lua
-{
-  -- Point to the nvim plugin directory in the hitspec repo
-  dir = "/path/to/hitspec/apps/nvim",
-  -- Or use the repo directly:
-  -- "abdul-hamid-achik/hitspec",
-  ft = { "http", "hitspec" },
-  config = function()
-    -- Filetype detection is automatic
-  end,
-}
-```
-
-### Manual Install
-
-Copy the plugin files to your Neovim config:
-
-```bash
-# From the hitspec repo
-cp -r apps/nvim/ftdetect ~/.config/nvim/
-cp -r apps/nvim/syntax ~/.config/nvim/
-```
+The hitspec Neovim plugin provides syntax highlighting, filetype detection, buffer settings, and optional LuaSnip snippets for `.http` and `.hitspec` files.
 
 ### Features
 
-- Syntax highlighting for requests, headers, assertion blocks, and captures
-- Filetype detection for `.http` and `.hitspec` files
-- Variable interpolation highlighting (`{{variable}}`)
+- Syntax highlighting via Vim syntax file (not TreeSitter)
+- Filetype detection for `.http` and `.hitspec`
+- Buffer settings: `commentstring` (`# %s`), 2-space indentation
+- 57 LuaSnip snippets (optional) covering HTTP methods, assertion/capture blocks, annotations, built-in functions, and a complete request template
+
+### Installation
+
+<Tabs>
+<Tab title="lazy.nvim">
+```lua
+{
+  "abdul-hamid-achik/hitspec",
+  ft = { "http", "hitspec" },
+  config = function()
+    require("hitspec").setup()
+  end,
+}
+```
+</Tab>
+
+<Tab title="Manual">
+Copy the plugin directories to your Neovim config:
+
+```bash
+cp -r apps/nvim/ftdetect ~/.config/nvim/
+cp -r apps/nvim/syntax ~/.config/nvim/
+cp -r apps/nvim/ftplugin ~/.config/nvim/
+cp -r apps/nvim/lua ~/.config/nvim/
+```
+
+Then add to your `init.lua`:
+
+```lua
+require("hitspec").setup()
+```
+</Tab>
+</Tabs>
+
+<Tip>
+  Snippets require [LuaSnip](https://github.com/L3MON4D3/LuaSnip). Call `require("hitspec").setup()` in your config to register them. If LuaSnip is not installed, snippets are silently skipped.
+</Tip>
 
 ## Shell Completions
 
