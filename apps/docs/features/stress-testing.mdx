@@ -188,13 +188,13 @@ Run a profile:
 hitspec run api.http --stress --profile load --env staging
 ```
 
-### Managing Profiles from the Web UI
+### Managing Profiles from studio
 
-The [API Client Manager](/guides/api-client-manager) stress test view lets you create, edit, and delete profiles without touching `hitspec.yaml` directly. Select a profile from the dropdown to populate the stress config fields, or click **New Profile** to save the current configuration. All changes are persisted to `hitspec.yaml` automatically.
+The [hitspec studio](/guides/api-client-manager) stress screen lets you create, edit, and delete profiles without touching `hitspec.yaml` directly. Changes are persisted to `hitspec.yaml` automatically.
 
 ## Results Panel
 
-After a stress test completes (either naturally or via stop), the web UI displays a results dashboard with:
+After a stress test completes (either naturally or via stop), studio displays a results view with:
 
 - **Summary cards** -- Total requests, average RPS, success rate, and error count
 - **Latency percentiles** -- Min, P50, P95, P99, Max, Mean, and Standard Deviation (all in fractional milliseconds)

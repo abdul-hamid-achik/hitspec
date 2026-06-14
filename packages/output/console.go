@@ -327,7 +327,7 @@ func (f *ConsoleFormatter) formatDiff(expected, actual any) string {
 		maxDiffs := 10
 		for i, diff := range diffs {
 			if i >= maxDiffs {
-				sb.WriteString(fmt.Sprintf("        ... and %d more differences\n", len(diffs)-maxDiffs))
+				fmt.Fprintf(&sb, "        ... and %d more differences\n", len(diffs)-maxDiffs)
 				break
 			}
 
@@ -338,13 +338,13 @@ func (f *ConsoleFormatter) formatDiff(expected, actual any) string {
 
 			switch diff.Type {
 			case DiffTypeAdded:
-				sb.WriteString(fmt.Sprintf("        %s %s: %s\n", green("+"), path, formatValue(diff.Actual, 60)))
+				fmt.Fprintf(&sb, "        %s %s: %s\n", green("+"), path, formatValue(diff.Actual, 60))
 			case DiffTypeRemoved:
-				sb.WriteString(fmt.Sprintf("        %s %s: %s\n", red("-"), path, formatValue(diff.Expected, 60)))
+				fmt.Fprintf(&sb, "        %s %s: %s\n", red("-"), path, formatValue(diff.Expected, 60))
 			case DiffTypeChanged:
-				sb.WriteString(fmt.Sprintf("        %s %s:\n", yellow("~"), path))
-				sb.WriteString(fmt.Sprintf("          %s %s\n", red("-"), formatValue(diff.Expected, 60)))
-				sb.WriteString(fmt.Sprintf("          %s %s\n", green("+"), formatValue(diff.Actual, 60)))
+				fmt.Fprintf(&sb, "        %s %s:\n", yellow("~"), path)
+				fmt.Fprintf(&sb, "          %s %s\n", red("-"), formatValue(diff.Expected, 60))
+				fmt.Fprintf(&sb, "          %s %s\n", green("+"), formatValue(diff.Actual, 60))
 			}
 		}
 

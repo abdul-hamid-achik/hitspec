@@ -54,7 +54,7 @@ func ExportRecordings(recordings []Recording) string {
 		// Assertions based on response
 		if rec.Response != nil {
 			sb.WriteString("\n>>>\n")
-			sb.WriteString(fmt.Sprintf("expect status == %d\n", rec.Response.StatusCode))
+			fmt.Fprintf(&sb, "expect status == %d\n", rec.Response.StatusCode)
 
 			// Add content-type assertion if JSON
 			if strings.Contains(rec.Response.ContentType, "json") {
@@ -208,12 +208,12 @@ func generateBodyAssertions(body string) string {
 	case map[string]interface{}:
 		// Generate assertions for top-level keys
 		for key := range v {
-			sb.WriteString(fmt.Sprintf("expect body.%s exists\n", key))
+			fmt.Fprintf(&sb, "expect body.%s exists\n", key)
 		}
 	case []interface{}:
 		sb.WriteString("expect body type array\n")
 		if len(v) > 0 {
-			sb.WriteString(fmt.Sprintf("expect body length >= %d\n", len(v)))
+			fmt.Fprintf(&sb, "expect body length >= %d\n", len(v))
 		}
 	}
 

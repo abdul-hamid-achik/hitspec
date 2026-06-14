@@ -69,22 +69,26 @@ go test ./packages/core/parser/...
 - Test edge cases and error conditions
 - Use the `testdata/` directory for test fixtures
 
-## Frontend Development
+## Terminal UI Development
 
-The web client lives in `apps/client/` and is built with Vue 3, Pinia, and Reka UI.
+The API Client Manager is a native terminal UI (Charm Bubble Tea v2) in
+`packages/tui/`, driven by the in-process `packages/clientmgr` facade. There is
+no web build step — it ships inside the Go binary.
 
 ```bash
-# Start the dev server (with hot reload)
-task client:dev
+# Run the TUI locally
+task serve:dev          # == go run ./apps/cli serve
 
-# Build for production (output goes to packages/serve/dist/)
-task client:build
+# Test + lint the TUI
+go test -race ./packages/tui/...
+golangci-lint run ./packages/tui/...
 
-# Type-check
-cd apps/client && bun run type-check
+# Regenerate golden snapshots after intentional render changes
+go test ./packages/tui/ -run Golden -update
 ```
 
-The built client is embedded into the Go server binary via `go:embed`.
+`hitspec serve --api-only` runs the legacy REST/WebSocket server (`packages/serve`)
+for integrations. See `AGENTS.md` for the TUI architecture and keybindings.
 
 ## Code Generation
 
@@ -143,18 +147,19 @@ task generate
 hitspec/
 ├── apps/
 │   ├── cli/           # CLI application (Cobra commands)
-│   ├── client/        # Vue 3 + Pinia web client (Bun/Vite)
 │   ├── docs/          # Mintlify documentation
 │   ├── vscode/        # VSCode extension
 │   └── nvim/          # Neovim plugin
 ├── packages/
 │   ├── core/          # Parser, runner, config, env
+│   ├── tui/           # Native terminal UI (Charm Bubble Tea v2)
+│   ├── clientmgr/     # In-process API Client Manager facade
 │   ├── http/          # HTTP client
 │   ├── output/        # Formatters (console, json, junit, tap, html)
 │   ├── assertions/    # Test assertions
 │   ├── capture/       # Response capture
 │   ├── builtin/       # Built-in functions
-│   ├── serve/         # HTTP server (embeds web client)
+│   ├── serve/         # REST/WebSocket API (hitspec serve --api-only)
 │   ├── stress/        # Stress/load testing
 │   ├── mock/          # Mock server
 │   ├── proxy/         # Recording proxy

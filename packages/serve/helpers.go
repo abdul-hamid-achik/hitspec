@@ -60,15 +60,20 @@ func isPathWithin(base, target string) bool {
 		return false
 	}
 
-	// Resolve symlinks if the target exists
-	if resolved, err := filepath.EvalSymlinks(absTarget); err == nil {
-		absTarget = resolved
-	}
 	if resolved, err := filepath.EvalSymlinks(absBase); err == nil {
 		absBase = resolved
 	}
+	if resolved, err := filepath.EvalSymlinks(absTarget); err == nil {
+		absTarget = resolved
+	} else if rel, relErr := filepath.Rel(base, target); relErr == nil {
+		absTarget = filepath.Join(absBase, rel)
+	}
 
-	return strings.HasPrefix(absTarget, absBase+string(filepath.Separator)) || absTarget == absBase
+	rel, err := filepath.Rel(absBase, absTarget)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
 // collectHitspecFiles walks dir and returns all .http/.hitspec files.

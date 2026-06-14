@@ -1,0 +1,42 @@
+version: 1
+
+# Glyphrun resolves spec paths (cwd ".", preconditions, artifactRoot, vars)
+# relative to THIS config's directory (the e2e/ folder). Run from anywhere:
+#   glyph run e2e/specs/glyphrun/*.yml --format md
+# or use `task e2e` from the repo root.
+
+defaultEnvironment: local
+
+artifactRoot: .glyphrun/runs
+snapshotRoot: .glyphrun/snapshots
+
+environments:
+  local:
+    vars:
+      # paths are relative to e2e/
+      bin: ./bin/hitspec
+      pkg: ../apps/cli
+      workspace: ./fixtures/workspace
+      empty: ./fixtures/empty
+      # absolute so the file verifier and the target agree regardless of cwd
+      gendir: /tmp/hitspec-studio-e2e/gen
+    env:
+      TERM: xterm-256color
+      COLORTERM: truecolor
+      LANG: en_US.UTF-8
+      CI: "1"
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  normalize:
+    trimRight: true
+    normalizeLineEndings: true
+
+artifacts:
+  rawLog: true
+  frames: true
+  finalScreen: true
+  snapshots: true
+  agentContext: true

@@ -71,8 +71,9 @@ func NewServer(opts ...Option) *Server {
 
 	// Load hitspec.yaml config and track the resolved path for write-back
 	var configPath string
-	fileConfig, _ := config.LoadConfig(cfg.ConfigPath)
-	if fileConfig != nil && cfg.ConfigPath != "" {
+	var fileConfig *config.Config
+	if cfg.ConfigPath != "" {
+		fileConfig, _ = config.LoadConfig(cfg.ConfigPath)
 		configPath = cfg.ConfigPath
 	}
 	if fileConfig == nil {
@@ -180,9 +181,6 @@ func (s *Server) Start(ctx context.Context) error {
 	files, _ := collectHitspecFiles(s.config.WorkDir)
 	s.logger.Info("hitspec files discovered", "count", len(files))
 
-	if !s.config.APIOnly {
-		s.logger.Info("UI available", "url", fmt.Sprintf("http://%s", addr))
-	}
 	s.logger.Info("API available", "url", fmt.Sprintf("http://%s/api/v1/", addr))
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

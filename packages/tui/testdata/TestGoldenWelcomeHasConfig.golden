@@ -1,0 +1,30 @@
+ hitspec studio   WORKSPACE                                                                   dev   
+  1 workspace   2 stress  3 mock  4 contract  5 record  6 history  7 import  8 cookies  9 settings  
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                        ┌─────────────────────────────────────────────────┐                         
+                        │                                                 │                         
+                        │                  hitspec studio                 │                         
+                        │         Plain text API tests. No magic.         │                         
+                        │                                                 │                         
+                        │    ✓ project ready — no .http files here yet    │                         
+                        │                                                 │                         
+                        │     g   generate a sample project               │                         
+                        │     n   new request file                        │                         
+                        │     7   import from curl · OpenAPI · Postman    │                         
+                        │     ctrl+p   command palette                    │                         
+                        │     ?   keyboard help                           │                         
+                        │                                                 │                         
+                        └─────────────────────────────────────────────────┘                         
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+ ready                             enter open · e edit · n new · D delete · ? help · ctrl+p palette 
+                                                                                                    

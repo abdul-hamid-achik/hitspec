@@ -1,0 +1,5 @@
+.glyphrun/runs/
+.glyphrun/tmp/
+.glyphrun/snapshots/
+.tmp/
+bin/

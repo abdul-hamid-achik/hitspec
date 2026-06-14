@@ -1,0 +1,14 @@
+Configuration
+
+Default environment: dev
+Timeout: 30000
+Retries: 2
+Proxy: 
+Concurrency: 4
+
+Environments
+
+● dev  (1 variables)
+    baseUrl = http://localhost:3000
+  prod  (1 variables)
+    baseUrl = https://api.example.com

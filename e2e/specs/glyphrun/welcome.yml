@@ -1,0 +1,51 @@
+version: 1
+name: studio_welcome
+
+intent: |
+  opening studio in a folder with no hitspec files shows a welcoming first-run
+  card with actionable next steps instead of a blank screen.
+
+target:
+  cmd: ["${vars.bin}", "studio", "${vars.empty}"]
+  cwd: "."
+  timeoutMs: 15000
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+
+steps:
+  - wait:
+      screen:
+        contains: "generate a sample project"
+      timeoutMs: 8000
+  - snapshot: welcome
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  - id: welcome_card
+    description: the empty-workspace welcome card is shown
+    verify:
+      screen:
+        contains: "generate a sample project"
+  - id: tagline
+    description: the welcome card shows the product tagline
+    verify:
+      screen:
+        contains: "Plain text API tests. No magic."
+  - id: clean_exit
+    description: q exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0

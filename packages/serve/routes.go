@@ -76,9 +76,4 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	// WebSocket
 	mux.HandleFunc("GET /api/v1/ws", s.handleWebSocket)
-
-	// SPA fallback (must be last)
-	if !s.config.APIOnly {
-		mux.Handle("/", spaHandler())
-	}
 }

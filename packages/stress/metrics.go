@@ -71,12 +71,16 @@ func NewMetrics() *Metrics {
 
 // Start marks the beginning of the test
 func (m *Metrics) Start() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.startTime = time.Now()
 	m.lastTimePoint = m.startTime
 }
 
 // Stop marks the end of the test
 func (m *Metrics) Stop() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.endTime = time.Now()
 }
 

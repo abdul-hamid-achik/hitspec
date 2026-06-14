@@ -1,0 +1,64 @@
+version: 1
+name: studio_help_overlay
+
+intent: |
+  pressing ? opens a centered keyboard-shortcut overlay, and any key dismisses it.
+
+target:
+  cmd: ["${vars.bin}", "studio", "${vars.workspace}"]
+  cwd: "."
+  timeoutMs: 15000
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+
+steps:
+  - wait:
+      screen:
+        contains: "sample.http"
+      timeoutMs: 8000
+  - press: "?"
+  - wait:
+      screen:
+        contains: "Keyboard shortcuts"
+      timeoutMs: 5000
+  - snapshot: help_open
+  # The help overlay is modal and dismisses on ANY key — press q once to close
+  # it (consumed by the overlay), then q again to quit.
+  - press: "q"
+  - wait:
+      screen:
+        notContains: "Keyboard shortcuts"
+      timeoutMs: 5000
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  # The overlay open/close is asserted by the wait steps above (a failed wait
+  # errors the run). Outcomes assert the durable end state.
+  - id: dismissed_to_workspace
+    description: dismissing help returns to the workspace
+    verify:
+      screen:
+        contains: "sample.http"
+  - id: help_closed
+    description: the help overlay is no longer shown after dismissal
+    verify:
+      screen:
+        notContains: "Keyboard shortcuts"
+  - id: clean_exit
+    description: q exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0

@@ -1,0 +1,8 @@
+Last result
+Duration 30.0s   Total 1000   990 success   10 errors   0 timeouts
+RPS 33.3   success rate 99.0%   error rate 1.0%
+Latency  min 5.0 · mean 15.0 · p50 12.0 · p95 45.0 · p99 80.0 · max 120.0 ms
+
+Per request
+login                    total 500  ok 495  err 5  p95 40.0ms
+fetch                    total 500  ok 495  err 5  p95 50.0ms

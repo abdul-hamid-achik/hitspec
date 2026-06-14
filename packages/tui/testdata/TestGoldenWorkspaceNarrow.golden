@@ -1,0 +1,25 @@
+ hitspec studio   WORKSPACE                   dev  api.http 
+  1/9 workspace    1-9 switch                               
+┌────────────────────────────────────────────────────────┐  
+│ files                                                  │  
+│    Files                                               │  
+│                                                        │  
+│   1 item                                               │  
+│                                                        │  
+│ │ api.http                                             │  
+│ │ api.http  1 requests                                 │  
+│                                                        │  
+│                                                        │  
+│                                                        │  
+│                                                        │  
+│                                                        │  
+│                                                        │  
+│                                                        │  
+│                                                        │  
+│                                                        │  
+│                                                        │  
+│                                                        │  
+│                                                        │  
+└────────────────────────────────────────────────────────┘  
+ ready enter open · e edit · n new · D delete · ? help ·    
+ ctrl+p palette                                             

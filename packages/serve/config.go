@@ -38,7 +38,7 @@ func WithWorkDir(dir string) Option {
 	return func(c *ServeConfig) { c.WorkDir = dir }
 }
 
-// WithOpen enables auto-opening the browser.
+// WithOpen is kept for compatibility with older serve callers.
 func WithOpen(open bool) Option {
 	return func(c *ServeConfig) { c.Open = open }
 }
@@ -53,7 +53,7 @@ func WithCORS(cors bool) Option {
 	return func(c *ServeConfig) { c.CORS = cors }
 }
 
-// WithAPIOnly disables the SPA frontend.
+// WithAPIOnly keeps the REST/WebSocket server path explicit.
 func WithAPIOnly(apiOnly bool) Option {
 	return func(c *ServeConfig) { c.APIOnly = apiOnly }
 }

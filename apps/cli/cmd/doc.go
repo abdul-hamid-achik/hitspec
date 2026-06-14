@@ -5,7 +5,8 @@
 //   - validate:   Check test file syntax without executing
 //   - list:       Display all tests defined in files
 //   - init:       Create a new hitspec project with example files
-//   - serve:      Start the web-based API Client Manager
+//   - studio:     Open the interactive terminal app for hitspec files
+//   - serve:      Start the REST/WebSocket API server
 //   - import:     Import from OpenAPI, Postman, curl, or Insomnia
 //   - export:     Export requests to curl format
 //   - mock:       Start a mock server from hitspec files

@@ -226,9 +226,9 @@ func (r *Report) FormatConsole() string {
 	sb.WriteString("\nAPI Coverage Report\n")
 	sb.WriteString("==================\n\n")
 
-	sb.WriteString(fmt.Sprintf("Total Endpoints:   %d\n", r.TotalEndpoints))
-	sb.WriteString(fmt.Sprintf("Covered Endpoints: %d\n", r.CoveredEndpoints))
-	sb.WriteString(fmt.Sprintf("Coverage:          %.1f%%\n\n", r.CoveragePercent))
+	fmt.Fprintf(&sb, "Total Endpoints:   %d\n", r.TotalEndpoints)
+	fmt.Fprintf(&sb, "Covered Endpoints: %d\n", r.CoveredEndpoints)
+	fmt.Fprintf(&sb, "Coverage:          %.1f%%\n\n", r.CoveragePercent)
 
 	// Show by tag if any
 	if len(r.ByTag) > 0 {
@@ -243,8 +243,8 @@ func (r *Report) FormatConsole() string {
 
 		for _, tag := range tags {
 			tagReport := r.ByTag[tag]
-			sb.WriteString(fmt.Sprintf("  %s: %d/%d (%.1f%%)\n",
-				tag, tagReport.CoveredEndpoints, tagReport.TotalEndpoints, tagReport.CoveragePercent))
+			fmt.Fprintf(&sb, "  %s: %d/%d (%.1f%%)\n",
+				tag, tagReport.CoveredEndpoints, tagReport.TotalEndpoints, tagReport.CoveragePercent)
 		}
 		sb.WriteString("\n")
 	}
@@ -256,9 +256,9 @@ func (r *Report) FormatConsole() string {
 		if endpoint.Covered {
 			status = "[x]"
 		}
-		sb.WriteString(fmt.Sprintf("  %s %s %s", status, endpoint.Method, endpoint.Path))
+		fmt.Fprintf(&sb, "  %s %s %s", status, endpoint.Method, endpoint.Path)
 		if endpoint.TestCount > 1 {
-			sb.WriteString(fmt.Sprintf(" (x%d)", endpoint.TestCount))
+			fmt.Fprintf(&sb, " (x%d)", endpoint.TestCount)
 		}
 		sb.WriteString("\n")
 	}
@@ -306,10 +306,10 @@ func (r *Report) FormatHTML() string {
 	// Summary
 	sb.WriteString("<div class=\"summary\">\n")
 	sb.WriteString("<h2>Summary</h2>\n")
-	sb.WriteString(fmt.Sprintf("<p><strong>Coverage:</strong> %.1f%% (%d/%d endpoints)</p>\n",
-		r.CoveragePercent, r.CoveredEndpoints, r.TotalEndpoints))
+	fmt.Fprintf(&sb, "<p><strong>Coverage:</strong> %.1f%% (%d/%d endpoints)</p>\n",
+		r.CoveragePercent, r.CoveredEndpoints, r.TotalEndpoints)
 	sb.WriteString("<div class=\"coverage-bar\">\n")
-	sb.WriteString(fmt.Sprintf("<div class=\"coverage-fill\" style=\"width: %.1f%%\"></div>\n", r.CoveragePercent))
+	fmt.Fprintf(&sb, "<div class=\"coverage-fill\" style=\"width: %.1f%%\"></div>\n", r.CoveragePercent)
 	sb.WriteString("</div>\n")
 	sb.WriteString("</div>\n")
 
@@ -327,15 +327,15 @@ func (r *Report) FormatHTML() string {
 		}
 
 		sb.WriteString("<tr>\n")
-		sb.WriteString(fmt.Sprintf("<td class=\"%s\">%s</td>\n", statusClass, statusIcon))
-		sb.WriteString(fmt.Sprintf("<td><strong>%s</strong></td>\n", endpoint.Method))
-		sb.WriteString(fmt.Sprintf("<td>%s</td>\n", endpoint.Path))
+		fmt.Fprintf(&sb, "<td class=\"%s\">%s</td>\n", statusClass, statusIcon)
+		fmt.Fprintf(&sb, "<td><strong>%s</strong></td>\n", endpoint.Method)
+		fmt.Fprintf(&sb, "<td>%s</td>\n", endpoint.Path)
 		sb.WriteString("<td>")
 		for _, tag := range endpoint.Tags {
-			sb.WriteString(fmt.Sprintf("<span class=\"tag\">%s</span>", tag))
+			fmt.Fprintf(&sb, "<span class=\"tag\">%s</span>", tag)
 		}
 		sb.WriteString("</td>\n")
-		sb.WriteString(fmt.Sprintf("<td>%d</td>\n", endpoint.TestCount))
+		fmt.Fprintf(&sb, "<td>%d</td>\n", endpoint.TestCount)
 		sb.WriteString("</tr>\n")
 	}
 

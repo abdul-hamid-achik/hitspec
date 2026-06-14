@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **API Client Manager is now a native interactive terminal app** launched with **`hitspec studio`** (the Vue.js web SPA was removed and replaced by a keyboard-first Charm Bubble Tea v2 app). `hitspec serve --api-only` runs the REST/WebSocket API server; `hitspec serve` without `--api-only` still opens the app for backward compatibility but prints a hint to use `hitspec studio`. The app is driven by a new in-process `clientmgr` facade shared by both surfaces.
+- **Removed the deprecated `--open` flag** from `serve`, and scrubbed user-facing "TUI"/"web-based" jargon from CLI help, `init` next-steps, README, and docs.
+
+### Added
+
+- **Tabbed response viewer**: Body / Headers / Assertions / Timing / Captures, with pretty-printed and syntax-highlighted JSON (chroma) and status colored by class.
+- **Copy/export as code**: render the selected request as curl / HTTPie / Python / fetch / Go to the system clipboard, plus copy the response body (command palette).
+- **Toast notifications**: severity-colored, auto-dismissing — errors and successes no longer vanish on the next keypress.
+- **Confirm dialogs**: destructive actions (delete file/cookie/run, clear recordings/history) now require confirmation.
+- **Environment switcher** (`ctrl+e`) and **environment-variable editing** on the settings screen (read-modify-write so other variables are preserved).
+- **Interactive run history**: select a run, drill into per-request details (`GetRun`), and delete runs.
+- **Full stress results**: percentiles and per-request breakdown shown after a load test completes.
+- **Color themes**: choose between Nord, Catppuccin Mocha, Dracula, Tokyo Night, and Gruvbox Dark via the theme picker (`ctrl+t`), the command palette, or the `--theme` flag. Per-method color badges and status-by-class coloring track the active theme.
+- **Welcoming first-run experience**: an empty workspace now shows a centered welcome card with next steps, including a one-key "generate sample project" (`g`) that scaffolds `hitspec.yaml` + `example.http` (shared with `hitspec init`).
+- **Centered keyboard help overlay** (`?`): a sectioned, aligned shortcut reference replaces the cramped single-line help.
+- **Screen navigation strip + context-aware hints**: a numbered (1–9) screen tab strip and a status bar that shows the keys relevant to the focused pane.
+
+### Fixed
+
+- **studio input routing**: a key that opened a modal or moved focus into an editor is no longer re-delivered to that widget; modals now capture all input.
+- **Pure render path**: the stress/mock/record screens no longer perform manager I/O during `View()` (status is cached on the update path).
+- **Errors persist until resolved**: a status-bar error no longer vanishes on the next keypress — it stays until you navigate or the next operation succeeds, and is truncated to fit instead of overflowing.
+- **Quit protects unsaved work**: pressing `q` with unsaved edits now asks for confirmation (`ctrl+c` still hard-quits); the command palette and overlays render consistently over the workspace; mock/record screens and the search overlay show actionable guidance and result counts; secondary form fields and viewports adapt to small terminals.
+
 ## [2.13.0] - 2026-02-27
 
 ### Fixed

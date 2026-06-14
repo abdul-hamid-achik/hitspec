@@ -8,7 +8,6 @@ on:
 
 env:
   GO_VERSION: '1.25.7'
-  BUN_VERSION: 'latest'
 
 jobs:
   build:
@@ -23,32 +22,16 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-
       - name: Install Task
         uses: arduino/setup-task@v2
         with:
           version: '3.x'
-
-      - name: Install client dependencies
-        run: task client:install
-
-      - name: Build client
-        run: task client:build
 
       - name: Generate code
         run: task generate
 
       - name: Build Go binary
         run: task go:build
-
-      - name: Upload client dist
-        uses: actions/upload-artifact@v4
-        with:
-          name: client-dist
-          path: packages/serve/dist/
-          retention-days: 1
 
   lint:
     name: Lint
@@ -63,19 +46,10 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-
       - name: Install Task
         uses: arduino/setup-task@v2
         with:
           version: '3.x'
-
-      - name: Download client dist
-        uses: actions/download-artifact@v4
-        with:
-          name: client-dist
-          path: packages/serve/dist/
 
       - name: Generate code
         run: task generate
@@ -97,16 +71,6 @@ jobs:
             exit 1
           }
 
-      - name: Install client dependencies
-        run: task client:install
-
-      - name: Client type check
-        run: bun run type-check
-        working-directory: apps/client
-
-      - name: Client lint (oxlint)
-        run: task client:lint
-
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -121,31 +85,16 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-
       - name: Install Task
         uses: arduino/setup-task@v2
         with:
           version: '3.x'
-
-      - name: Download client dist
-        uses: actions/download-artifact@v4
-        with:
-          name: client-dist
-          path: packages/serve/dist/
 
       - name: Generate code
         run: task generate
 
       - name: Run Go tests
         run: go test -v -race -timeout 10m -coverprofile=coverage.out ./...
-
-      - name: Install client dependencies
-        run: task client:install
-
-      - name: Run client tests
-        run: task client:test
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -166,19 +115,10 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-
       - name: Install Task
         uses: arduino/setup-task@v2
         with:
           version: '3.x'
-
-      - name: Download client dist
-        uses: actions/download-artifact@v4
-        with:
-          name: client-dist
-          path: packages/serve/dist/
 
       - name: Generate code
         run: task generate
@@ -200,10 +140,3 @@ jobs:
 
       - name: Run govulncheck
         run: govulncheck ./...
-
-      - name: Install client dependencies
-        run: task client:install
-
-      - name: Audit client dependencies
-        run: bun pm untrusted
-        working-directory: apps/client

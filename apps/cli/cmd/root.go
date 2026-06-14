@@ -21,9 +21,9 @@ that look like actual HTTP requests.
 
 Quick start:
   hitspec init                          Create a new project
+  hitspec studio                        Open the interactive app
   hitspec run api.http                  Run tests in a file
   hitspec run ./tests/ --env staging    Run all tests with an environment
-  hitspec serve                         Open the web UI
   hitspec import openapi spec.yaml      Import from OpenAPI spec`,
 	Version:       version,
 	SilenceUsage:  true,
@@ -54,5 +54,6 @@ func init() {
 	rootCmd.AddCommand(mockCmd)
 	rootCmd.AddCommand(recordCmd)
 	rootCmd.AddCommand(contractCmd)
+	rootCmd.AddCommand(studioCmd)
 	rootCmd.AddCommand(serveCmd)
 }

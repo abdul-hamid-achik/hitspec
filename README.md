@@ -101,7 +101,7 @@ hitspec run api.http
 ## Features
 
 - **Plain text test files** - `.http` format, readable and version-controllable
-- **Web API Client Manager** - Browser-based UI via `hitspec serve` (like Postman, but file-backed)
+- **Interactive terminal app** - Charm-powered `hitspec studio` (like Postman, but file-backed and keyboard-first)
 - **26 assertion operators** - `==`, `!=`, `>`, `<`, `contains`, `matches`, `exists`, `length`, `type`, `schema`, `snapshot`, and more
 - **22 metadata directives** - `@name`, `@tags`, `@depends`, `@timeout`, `@retry`, `@auth`, `@waitFor`, and more
 - **17 built-in functions** - `$uuid()`, `$timestamp()`, `$random()`, `$base64()`, `$sha256()`, `$env()`, and more
@@ -220,55 +220,42 @@ GET {{baseUrl}}/users/{{login.userId}}
 Authorization: Bearer {{login.token}}
 ```
 
-## API Client Manager (`hitspec serve`)
+## Interactive app (`hitspec studio`)
 
-Launch a browser-based API Client Manager for visual test editing, execution, and debugging:
+Open a keyboard-first interactive workspace for editing, running, and debugging your `.http` files — right in the terminal:
 
 ```bash
-hitspec serve                         # Open UI at http://localhost:4000
-hitspec serve ./tests/                # Serve specific directory
-hitspec serve --port 8080             # Custom port
-hitspec serve --api-only              # REST API only, no UI
-hitspec serve --read-only --cors      # Safe mode for sharing
+hitspec studio                        # Open in the current directory
+hitspec studio ./tests/               # Open a specific workspace
+hitspec studio ./tests/users.http     # Open the file's parent workspace
+hitspec studio --read-only            # Safe mode for inspection
 ```
 
 **Features:**
-- Three-panel workspace: file tree, request editor, response viewer
-- **Source editor** with CodeMirror syntax highlighting and `Cmd+S` save to disk
-- **Stress test results panel** with latency percentiles, per-request breakdown, and threshold pass/fail
-- **Stress profile CRUD** -- create, edit, and delete profiles from the UI (persisted to `hitspec.yaml`)
-- **Settings persistence** -- config changes save to `hitspec.yaml` on disk
-- Real-time file watching with WebSocket updates (self-write suppression)
-- Stress testing dashboard with live metrics
-- Mock server management
-- Import from curl/Insomnia/OpenAPI
-- Environment switcher
-- Persistent execution history with run comparison
+- Responsive workspace: file tree, source editor, request table, tabbed response viewer
+- **Inline source editing** with `Ctrl+S` save to disk
+- Tabbed responses (Body / Headers / Assertions / Timing / Captures) with syntax-highlighted JSON
+- Command palette (`Ctrl+P`), fuzzy workspace search (`Ctrl+F`), environment switcher (`Ctrl+E`)
+- Copy/export any request as curl, HTTPie, Python, fetch, or Go
+- Run history with drill-down, rename/duplicate files, quick ad-hoc requests
+- Stress, mock, recording proxy, contract, import, cookies, and settings screens
+- Toast notifications, confirm dialogs, real-time file watching, live execution progress
 
-**Serve Flags:**
+**Flags:** `--read-only`, `--watch/-w`, `--env/-e`, `--config`, `--allow-shell`, `--allow-db`, `--verbose/-v`, `--log-format`, `--log-level`
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--port, -p` | 4000 | Server port |
-| `--host` | localhost | Bind address |
-| `--open` | true | Auto-open browser |
-| `--watch, -w` | true | Watch for file changes |
-| `--cors` | false | Enable CORS headers |
-| `--api-only` | false | REST API only, no SPA |
-| `--read-only` | false | Disallow file mutations |
-| `--env, -e` | dev | Default environment |
-| `--allow-shell` | false | Allow shell command execution |
-| `--allow-db` | false | Allow database assertions |
+**REST/WebSocket API server** — for integrations and editors:
+
+```bash
+hitspec serve --api-only --port 8080  # JSON endpoints + WebSocket events
+hitspec serve --api-only --cors       # Enable CORS
+```
 
 **Development:**
 
 ```bash
-# Two-terminal dev workflow
-task serve:dev                        # Go API server on :4000
-task client:dev                       # Vite dev server on :5173
-
-# Production build (single binary with embedded UI)
-task build:full
+task studio:dev                       # Run the interactive app locally
+task serve:dev                        # Run the REST/WebSocket API server
+task build                            # Build the single Go binary
 ```
 
 ## CLI Usage
@@ -289,8 +276,8 @@ hitspec import openapi spec.yaml     # Import from OpenAPI spec
 hitspec export curl tests/api.http   # Export as curl commands
 hitspec diff baseline.json current.json  # Compare test results
 hitspec diff baseline.json current.json --threshold 10%
-hitspec serve                         # Launch API Client Manager
-hitspec serve ./tests/ --port 8080    # Serve specific directory
+hitspec studio                        # Open the interactive app
+hitspec serve --api-only --port 8080  # Start the REST/WebSocket API server
 ```
 
 ## Examples
@@ -670,13 +657,14 @@ See [.github/workflows/example-hitspec.yml](.github/workflows/example-hitspec.ym
 hitspec/
 ├── apps/
 │   ├── cli/              # CLI binary (Go + Cobra)
-│   ├── client/           # Web API Client Manager (Vue 3 + TypeScript)
 │   ├── docs/             # Mintlify documentation site
 │   ├── vscode/           # VSCode extension
 │   └── nvim/             # Neovim plugin
 ├── packages/
 │   ├── core/             # Parser + runner
-│   ├── serve/            # HTTP API server (embeds client SPA)
+│   ├── clientmgr/        # In-process API Client Manager (drives studio)
+│   ├── tui/              # hitspec studio — Charm v2 interactive terminal app
+│   ├── serve/            # REST/WebSocket API server for --api-only
 │   ├── stress/           # Stress testing engine
 │   ├── mock/             # Mock server
 │   ├── http/             # HTTP client
@@ -692,19 +680,16 @@ hitspec/
 ```bash
 # Install dependencies
 task deps                             # Go dependencies
-task client:install                   # Frontend dependencies (bun)
 
 # Run tests
 task test                             # Go tests
-task client:test                      # Frontend tests (vitest)
 
 # Build
-task build                            # CLI binary only
-task build:full                       # CLI + embedded web UI
+task build                            # CLI binary
 
-# Development servers
-task serve:dev                        # Go API server on :4000
-task client:dev                       # Vite dev server on :5173
+# Development
+task studio:dev                       # Interactive app
+task serve:dev                        # REST/WebSocket API server
 task docs:dev                         # Mintlify docs locally
 
 # Run with example

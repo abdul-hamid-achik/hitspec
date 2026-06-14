@@ -26,10 +26,19 @@ func NewStore(dbPath string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("history: open database: %w", err)
 	}
+	// SQLite allows only one writer at a time. Serializing to a single connection
+	// avoids SQLITE_BUSY from the app's own concurrent access (the run recorder
+	// writes asynchronously while the UI reads/deletes) and ensures the
+	// connection-level pragmas below apply to every query.
+	db.SetMaxOpenConns(1)
 
-	// Enable WAL mode and foreign keys for better concurrency and referential integrity.
+	// Enable WAL mode and foreign keys for better concurrency and referential
+	// integrity. busy_timeout makes a writer wait for the lock (history is
+	// written asynchronously after a run, so it can overlap with reads/deletes)
+	// instead of failing immediately with SQLITE_BUSY.
 	for _, pragma := range []string{
 		"PRAGMA journal_mode=WAL",
+		"PRAGMA busy_timeout=5000",
 		"PRAGMA foreign_keys=ON",
 	} {
 		if _, err := db.Exec(pragma); err != nil {

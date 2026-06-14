@@ -1,0 +1,30 @@
+ hitspec studio   WORKSPACE                                                           dev  api.http 
+  1 workspace   2 stress  3 mock  4 contract  5 record  6 history  7 import  8 cookies  9 settings  
+┌─────────────────────┐┌────────────────────────────────────────────────────────────────────────────
+───┐                                                                                                
+│ files               ││ requests                                                                   
+│                                     ┌──────────────────────┐                                      
+│    Files            ││  Name        │    Switch Theme      │L                                     
+│                                     │                      │                                      
+│                     ││              │   5 items            │                                      
+│                                     │                      │                                      
+│   1 item            ││              │ │ ● Nord             │                                      
+│                                     │ │ color theme        │                                      
+│                     ││              │                      │                                      
+│                                     │     Catppuccin Mocha │                                      
+│ │ api.http          ││              │   color theme        │                                      
+│                                     │                      │                                      
+│ │ api.http  1       ││              │     Dracula          │                                      
+│                                     │   color theme        │                                      
+│ requests            ││              │                      │                                      
+│                                     │     Tokyo Night      │                                      
+│                     ││              │   color theme        │                                      
+│                                     │                      │                                      
+│                                     │                      │                                      
+│└────────────────────────────────────│   ••                 │───────────────────┘                  
+│                     │┌──────────────└──────────────────────┘───────────────────────────────┐      
+│                     ││ main                                                                │      
+│                     ││   1 Open a .http file                                               │      
+│                     ││                                                                     │      
+│                     ││                                                                     │      
+│                     ││                                                                     │      

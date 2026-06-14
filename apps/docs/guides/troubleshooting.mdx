@@ -141,15 +141,15 @@ stress:
 
 ---
 
-## hitspec serve Issues
+## hitspec serve & studio Issues
 
 ### Port already in use
 
-If you see `listen tcp :4000: bind: address already in use`:
+If you see `listen tcp :4000: bind: address already in use` from `hitspec serve --api-only`:
 
 ```bash
 # Use a different port
-hitspec serve --port 8080
+hitspec serve --api-only --port 8080
 
 # Or find and kill the process using port 4000
 lsof -ti:4000 | xargs kill
@@ -171,7 +171,7 @@ If you're behind a reverse proxy (nginx, Caddy), ensure WebSocket upgrade header
 
 If your `.http` or `.hitspec` files don't appear:
 
-1. **Check the working directory** — `hitspec serve` uses the current directory by default.
+1. **Check the working directory** — `hitspec studio` uses the current directory by default.
 2. **Check file extensions** — Only `.http` and `.hitspec` files are shown.
 3. **Nested directories** — Files in subdirectories are shown in a tree structure. Expand the folder.
 

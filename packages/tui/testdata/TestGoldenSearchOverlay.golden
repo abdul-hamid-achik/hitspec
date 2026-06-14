@@ -1,0 +1,20 @@
+> users                                                                  
+                                                                         
+   Search Requests                                                       
+                                                                         
+  2 items                                                                
+                                                                         
+│ GET    List users                                                      
+│ api.http  https://x/users                                              
+                                                                         
+  POST   line 12                                                         
+  api.http  https://x/users                                              
+                                                                         
+                                                                         
+                                                                         
+                                                                         
+                                                                         
+                                                                         
+                                                                         
+                                                                         
+                                                                         

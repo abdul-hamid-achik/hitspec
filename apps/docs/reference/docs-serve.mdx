@@ -1,6 +1,6 @@
 ---
-title: "hitspec docs & hitspec serve"
-description: "Reference for the docs and serve commands -- AI documentation and the web-based API client."
+title: "hitspec docs, studio & serve"
+description: "Reference for the docs command, the interactive studio app, and the REST/WebSocket API server."
 ---
 
 # hitspec docs
@@ -11,13 +11,72 @@ Output AI-readable documentation (`llms.txt`) for AI agents to learn hitspec syn
 hitspec docs
 ```
 
-This prints the complete hitspec specification in a format optimized for LLM consumption. Useful for integrating hitspec with AI coding assistants.
+This prints the complete hitspec specification in a format optimized for LLM consumption.
+
+---
+
+# hitspec studio
+
+Open the keyboard-first interactive app for working with hitspec files, right in the terminal.
+
+```bash
+hitspec studio [file|directory] [flags]
+```
+
+## What It Provides
+
+- Inline `.http` and `.hitspec` source editing with syntax highlighting and save
+- File tree, request table, response viewer, headers, assertions, and history
+- Stress, mock, contract, record, import, cookies, and settings screens
+- Copy/export as curl, HTTPie, Python, fetch, or Go; workspace search; environment switching
+- Command palette and keyboard-first navigation
+- Real-time file watching and execution progress
+
+## Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--watch` | `-w` | Watch for file changes | `true` |
+| `--read-only` | | Disallow file mutations | `false` |
+| `--env` | `-e` | Default environment | `dev` |
+| `--config` | | Path to `hitspec.yaml` | |
+| `--verbose` | `-v` | Verbose logging | `false` |
+| `--allow-shell` | | Allow shell command execution | `false` |
+| `--allow-db` | | Allow database assertions | `false` |
+| `--log-format` | | Log format: `text` or `json` | `text` |
+| `--log-level` | | Log level: `debug`, `info`, `warn`, `error` | `info` |
+| `--theme` | | Color theme (see below) | `Nord` |
+
+## Themes
+
+studio ships with five built-in color themes: **Nord**, **Catppuccin Mocha**, **Dracula**, **Tokyo Night**, and **Gruvbox Dark**. Switch at any time with `ctrl+t` (or the command palette), or set one at launch with `--theme`:
+
+```bash
+hitspec studio --theme "Tokyo Night"
+```
+
+## Examples
+
+```bash
+# Open the current directory
+hitspec studio
+
+# Open a specific workspace
+hitspec studio ./tests/
+
+# Open a single file
+hitspec studio ./tests/users.http
+
+# Inspect without file mutations
+hitspec studio --read-only --env staging
+```
 
 ---
 
 # hitspec serve
 
-Start a browser-based API Client Manager for working with hitspec files.
+Start the REST/WebSocket API server for scripts and integrations. With no flags it
+opens `hitspec studio`; pass `--api-only` to run just the API with no interactive UI.
 
 ```bash
 hitspec serve [file|directory] [flags]
@@ -25,44 +84,36 @@ hitspec serve [file|directory] [flags]
 
 ## What It Provides
 
-- Web-based UI for editing and running API tests
-- REST API for programmatic access
-- Real-time file watching with WebSocket updates
-- Stress testing dashboard
-- Mock server management
+- REST endpoints under `/api/v1/*`
+- Realtime events over WebSocket at `/api/v1/ws`
+- The same parser, runner, history store, and engines as the CLI
+
+No web SPA is served; non-API browser routes are not part of `serve`.
 
 ## Flags
 
 | Flag | Short | Description | Default |
 |------|-------|-------------|---------|
-| `--port` | `-p` | Port to run the server on | `4000` |
-| `--host` | | Bind address | `localhost` |
-| `--open` | | Auto-open browser | `true` |
-| `--watch` | `-w` | Watch for file changes | `true` |
+| `--api-only` | | REST/WebSocket API only, no interactive UI | `false` |
+| `--port` | `-p` | API server port | `4000` |
+| `--host` | | API bind address | `localhost` |
 | `--cors` | | Enable CORS headers | `false` |
-| `--api-only` | | REST API only, no web UI | `false` |
-| `--read-only` | | Disallow file mutations | `false` |
+| `--watch` | `-w` | Watch for file changes | `true` |
+| `--read-only` | | Disallow mutating actions | `false` |
 | `--env` | `-e` | Default environment | `dev` |
-| `--config` | | Path to hitspec.yaml | |
+| `--config` | | Path to `hitspec.yaml` | |
 | `--verbose` | `-v` | Verbose logging | `false` |
 | `--allow-shell` | | Allow shell command execution | `false` |
 | `--allow-db` | | Allow database assertions | `false` |
+| `--log-format` | | Log format: `text` or `json` | `text` |
+| `--log-level` | | Log level: `debug`, `info`, `warn`, `error` | `info` |
 
 ## Examples
 
 ```bash
-# Start with defaults (opens browser at localhost:4000)
-hitspec serve
+# Start the REST/WebSocket API for integrations
+hitspec serve --api-only --port 8080 --cors
 
-# Serve a specific directory
-hitspec serve ./tests/
-
-# Custom port, no auto-open
-hitspec serve --port 8080 --open=false
-
-# API-only mode for headless/CI usage
-hitspec serve --api-only --cors
-
-# Read-only mode for shared environments
-hitspec serve --read-only --cors --host 0.0.0.0
+# API server bound to localhost
+hitspec serve --api-only --host localhost --port 4000
 ```

@@ -1,0 +1,594 @@
+package clientmgr
+
+import "time"
+
+// WorkspaceDTO describes the current workspace.
+type WorkspaceDTO struct {
+	Root          string            `json:"root"`
+	Files         []FileTreeNodeDTO `json:"files"`
+	TotalRequests int               `json:"totalRequests"`
+	Environment   string            `json:"environment"`
+	HasConfig     bool              `json:"hasConfig"`
+}
+
+// FileTreeNodeDTO is a node in the file tree.
+type FileTreeNodeDTO struct {
+	Path         string            `json:"path"`
+	Name         string            `json:"name"`
+	Dir          string            `json:"dir"`
+	IsDir        bool              `json:"isDir"`
+	Children     []FileTreeNodeDTO `json:"children,omitempty"`
+	RequestCount int               `json:"requestCount,omitempty"`
+}
+
+// FileInfoDTO describes a hitspec file.
+type FileInfoDTO struct {
+	Path         string `json:"path"`
+	RelativePath string `json:"relativePath"`
+	Name         string `json:"name"`
+	Size         int64  `json:"size"`
+	ModTime      string `json:"modTime"`
+	RequestCount int    `json:"requestCount"`
+}
+
+// SearchResultDTO is one request matched by a workspace search.
+type SearchResultDTO struct {
+	File        string   `json:"file"`
+	RequestName string   `json:"requestName,omitempty"`
+	Method      string   `json:"method,omitempty"`
+	URL         string   `json:"url,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	Line        int      `json:"line,omitempty"`
+}
+
+// ParsedFileDTO is a fully parsed hitspec file.
+type ParsedFileDTO struct {
+	Path      string        `json:"path"`
+	Variables []VariableDTO `json:"variables"`
+	Requests  []RequestDTO  `json:"requests"`
+}
+
+// VariableDTO is a file-level variable.
+type VariableDTO struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+	Line  int    `json:"line"`
+}
+
+// RequestDTO represents a parsed HTTP request.
+type RequestDTO struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description,omitempty"`
+	Tags        []string       `json:"tags,omitempty"`
+	Method      string         `json:"method"`
+	URL         string         `json:"url"`
+	Headers     []HeaderDTO    `json:"headers,omitempty"`
+	QueryParams []QueryDTO     `json:"queryParams,omitempty"`
+	Body        *BodyDTO       `json:"body,omitempty"`
+	Assertions  []AssertionDTO `json:"assertions,omitempty"`
+	Captures    []CaptureDTO   `json:"captures,omitempty"`
+	Line        int            `json:"line"`
+	Metadata    *MetadataDTO   `json:"metadata,omitempty"`
+}
+
+// HeaderDTO is a request header.
+type HeaderDTO struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+	Line  int    `json:"line"`
+}
+
+// QueryDTO is a query parameter.
+type QueryDTO struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+	Line  int    `json:"line"`
+}
+
+// BodyDTO is the request body.
+type BodyDTO struct {
+	ContentType string `json:"contentType"`
+	Raw         string `json:"raw,omitempty"`
+	GraphQL     string `json:"graphql,omitempty"`
+	Variables   string `json:"variables,omitempty"`
+	Line        int    `json:"line"`
+}
+
+// AssertionDTO is an assertion on a response.
+type AssertionDTO struct {
+	Subject  string `json:"subject"`
+	Operator string `json:"operator"`
+	Expected any    `json:"expected"`
+	Line     int    `json:"line"`
+}
+
+// CaptureDTO is a captured value.
+type CaptureDTO struct {
+	Name   string `json:"name"`
+	Source string `json:"source"`
+	Path   string `json:"path,omitempty"`
+	Line   int    `json:"line"`
+}
+
+// MetadataDTO is request metadata/annotations.
+type MetadataDTO struct {
+	Skip    string   `json:"skip,omitempty"`
+	Only    bool     `json:"only,omitempty"`
+	Timeout int      `json:"timeout,omitempty"`
+	Retry   int      `json:"retry,omitempty"`
+	Depends []string `json:"depends,omitempty"`
+	Auth    *AuthDTO `json:"auth,omitempty"`
+}
+
+// AuthDTO is authentication config.
+type AuthDTO struct {
+	Type   string   `json:"type"`
+	Params []string `json:"params,omitempty"`
+}
+
+// ExecuteReq is the request body for executing a single request.
+type ExecuteReq struct {
+	File        string `json:"file"`
+	RequestName string `json:"requestName,omitempty"`
+	Environment string `json:"environment,omitempty"`
+}
+
+// RunReq is the request body for running a full file.
+type RunReq struct {
+	File        string `json:"file"`
+	Environment string `json:"environment,omitempty"`
+}
+
+// AdHocReq is an unsaved, one-off request executed directly (not from a file).
+type AdHocReq struct {
+	Method      string            `json:"method"`
+	URL         string            `json:"url"`
+	Headers     map[string]string `json:"headers,omitempty"`
+	Body        string            `json:"body,omitempty"`
+	Environment string            `json:"environment,omitempty"`
+}
+
+// RunResultDTO holds results from running a file.
+type RunResultDTO struct {
+	File     string             `json:"file"`
+	Duration float64            `json:"duration"`
+	Passed   int                `json:"passed"`
+	Failed   int                `json:"failed"`
+	Skipped  int                `json:"skipped"`
+	Results  []RequestResultDTO `json:"results"`
+}
+
+// RequestResultDTO holds results from a single request execution.
+type RequestResultDTO struct {
+	Name        string               `json:"name"`
+	Description string               `json:"description,omitempty"`
+	Passed      bool                 `json:"passed"`
+	Skipped     bool                 `json:"skipped,omitempty"`
+	SkipReason  string               `json:"skipReason,omitempty"`
+	Duration    float64              `json:"duration"`
+	Error       string               `json:"error,omitempty"`
+	Request     *HTTPRequestDTO      `json:"request,omitempty"`
+	Response    *HTTPResponseDTO     `json:"response,omitempty"`
+	Assertions  []AssertionResultDTO `json:"assertions,omitempty"`
+	SSEEvents   []SSEEventDTO        `json:"sseEvents,omitempty"`
+	Captures    map[string]any       `json:"captures,omitempty"`
+}
+
+// SSEEventDTO represents a parsed Server-Sent Event.
+type SSEEventDTO struct {
+	ID   string `json:"id,omitempty"`
+	Type string `json:"type,omitempty"`
+	Data string `json:"data"`
+}
+
+// HTTPRequestDTO is the executed HTTP request.
+type HTTPRequestDTO struct {
+	Method  string            `json:"method"`
+	URL     string            `json:"url"`
+	Headers map[string]string `json:"headers,omitempty"`
+}
+
+// HTTPResponseDTO is the received HTTP response.
+type HTTPResponseDTO struct {
+	StatusCode int               `json:"statusCode"`
+	Status     string            `json:"status"`
+	Headers    map[string]string `json:"headers,omitempty"`
+	Body       string            `json:"body,omitempty"`
+	Duration   float64           `json:"duration"`
+	Size       int64             `json:"size"`
+}
+
+// AssertionResultDTO is the result of evaluating one assertion.
+type AssertionResultDTO struct {
+	Subject  string `json:"subject"`
+	Operator string `json:"operator"`
+	Expected any    `json:"expected"`
+	Actual   any    `json:"actual"`
+	Passed   bool   `json:"passed"`
+	Message  string `json:"message,omitempty"`
+}
+
+// EnvironmentDTO is an environment with its variables.
+type EnvironmentDTO struct {
+	Name      string         `json:"name"`
+	Variables map[string]any `json:"variables"`
+}
+
+// ConfigDTO is the hitspec.yaml configuration.
+type ConfigDTO struct {
+	DefaultEnvironment string            `json:"defaultEnvironment,omitempty"`
+	Timeout            int               `json:"timeout,omitempty"`
+	Retries            int               `json:"retries,omitempty"`
+	FollowRedirects    *bool             `json:"followRedirects,omitempty"`
+	ValidateSSL        *bool             `json:"validateSSL,omitempty"`
+	Proxy              string            `json:"proxy,omitempty"`
+	Headers            map[string]string `json:"headers,omitempty"`
+	Parallel           *bool             `json:"parallel,omitempty"`
+	Concurrency        int               `json:"concurrency,omitempty"`
+}
+
+// HistoryEntryDTO is a single execution history entry.
+type HistoryEntryDTO struct {
+	ID          string  `json:"id"`
+	File        string  `json:"file"`
+	RequestName string  `json:"requestName,omitempty"`
+	Method      string  `json:"method"`
+	URL         string  `json:"url"`
+	StatusCode  int     `json:"statusCode"`
+	Duration    float64 `json:"duration"`
+	Passed      bool    `json:"passed"`
+	Timestamp   string  `json:"timestamp"`
+}
+
+// HistoryRunDTO is a run stored in persistent history.
+type HistoryRunDTO struct {
+	ID          int64              `json:"id"`
+	FilePath    string             `json:"filePath"`
+	Environment string             `json:"environment,omitempty"`
+	StartedAt   string             `json:"startedAt"`
+	FinishedAt  string             `json:"finishedAt,omitempty"`
+	DurationMs  int64              `json:"durationMs"`
+	Passed      int64              `json:"passed"`
+	Failed      int64              `json:"failed"`
+	Skipped     int64              `json:"skipped"`
+	Total       int64              `json:"total"`
+	Results     []HistoryResultDTO `json:"results,omitempty"`
+}
+
+// HistoryResultDTO is a single request result in persistent history.
+type HistoryResultDTO struct {
+	ID          int64                 `json:"id"`
+	RequestName string                `json:"requestName"`
+	Method      string                `json:"method"`
+	URL         string                `json:"url"`
+	StatusCode  int                   `json:"statusCode,omitempty"`
+	DurationMs  int64                 `json:"durationMs"`
+	Passed      bool                  `json:"passed"`
+	Skipped     bool                  `json:"skipped,omitempty"`
+	Error       string                `json:"error,omitempty"`
+	Description string                `json:"description,omitempty"`
+	BodyPreview string                `json:"bodyPreview,omitempty"`
+	Assertions  []HistoryAssertionDTO `json:"assertions,omitempty"`
+}
+
+// HistoryAssertionDTO is an assertion result in persistent history.
+type HistoryAssertionDTO struct {
+	ID       int64  `json:"id"`
+	Operator string `json:"operator"`
+	Subject  string `json:"subject"`
+	Expected string `json:"expected,omitempty"`
+	Actual   string `json:"actual,omitempty"`
+	Passed   bool   `json:"passed"`
+	Message  string `json:"message,omitempty"`
+}
+
+// HistoryListDTO wraps paginated history results.
+type HistoryListDTO struct {
+	Runs   []HistoryRunDTO `json:"runs"`
+	Total  int64           `json:"total"`
+	Limit  int64           `json:"limit"`
+	Offset int64           `json:"offset"`
+}
+
+// StressStartReq starts a stress test.
+type StressStartReq struct {
+	Files    []string `json:"files"`
+	Duration string   `json:"duration"`
+	Rate     float64  `json:"rate,omitempty"`
+	VUs      int      `json:"vus,omitempty"`
+	MaxVUs   int      `json:"maxVUs,omitempty"`
+}
+
+// StressStatusDTO is the current stress test status.
+type StressStatusDTO struct {
+	Running bool            `json:"running"`
+	Elapsed float64         `json:"elapsed"`
+	Stats   *StressStatsDTO `json:"stats,omitempty"`
+}
+
+// StressStatsDTO holds real-time stress metrics.
+type StressStatsDTO struct {
+	Total     int64   `json:"total"`
+	Success   int64   `json:"success"`
+	Errors    int64   `json:"errors"`
+	RPS       float64 `json:"rps"`
+	P50Ms     float64 `json:"p50Ms"`
+	P95Ms     float64 `json:"p95Ms"`
+	P99Ms     float64 `json:"p99Ms"`
+	MaxMs     float64 `json:"maxMs"`
+	ErrorRate float64 `json:"errorRate"`
+	ActiveVUs int32   `json:"activeVUs"`
+}
+
+// StressProfileReq creates or updates a stress profile.
+type StressProfileReq struct {
+	Name       string            `json:"name"`
+	Duration   string            `json:"duration,omitempty"`
+	Rate       float64           `json:"rate,omitempty"`
+	VUs        int               `json:"vus,omitempty"`
+	MaxVUs     int               `json:"maxVUs,omitempty"`
+	ThinkTime  string            `json:"thinkTime,omitempty"`
+	RampUp     string            `json:"rampUp,omitempty"`
+	Thresholds map[string]string `json:"thresholds,omitempty"`
+}
+
+// StressProfileDTO is a persisted profile.
+type StressProfileDTO = StressProfileReq
+
+// StressResultDTO is the full result of a completed stress test.
+type StressResultDTO struct {
+	DurationMs  float64                     `json:"durationMs"`
+	Total       int64                       `json:"total"`
+	Success     int64                       `json:"success"`
+	Errors      int64                       `json:"errors"`
+	Timeouts    int64                       `json:"timeouts"`
+	RPS         float64                     `json:"rps"`
+	SuccessRate float64                     `json:"successRate"`
+	ErrorRate   float64                     `json:"errorRate"`
+	P50Ms       float64                     `json:"p50Ms"`
+	P95Ms       float64                     `json:"p95Ms"`
+	P99Ms       float64                     `json:"p99Ms"`
+	MinMs       float64                     `json:"minMs"`
+	MaxMs       float64                     `json:"maxMs"`
+	MeanMs      float64                     `json:"meanMs"`
+	StdDevMs    float64                     `json:"stdDevMs"`
+	Breakdown   []StressRequestBreakdownDTO `json:"breakdown"`
+	TimeSeries  []StressTimePointDTO        `json:"timeSeries"`
+	Thresholds  []StressThresholdDTO        `json:"thresholds,omitempty"`
+	Timestamp   string                      `json:"timestamp"`
+}
+
+// StressRequestBreakdownDTO holds per-request stats.
+type StressRequestBreakdownDTO struct {
+	Name    string  `json:"name"`
+	Total   int64   `json:"total"`
+	Success int64   `json:"success"`
+	Errors  int64   `json:"errors"`
+	P50Ms   float64 `json:"p50Ms"`
+	P95Ms   float64 `json:"p95Ms"`
+	P99Ms   float64 `json:"p99Ms"`
+	MeanMs  float64 `json:"meanMs"`
+}
+
+// StressTimePointDTO is a time series data point.
+type StressTimePointDTO struct {
+	Timestamp string  `json:"timestamp"`
+	Requests  int64   `json:"requests"`
+	Errors    int64   `json:"errors"`
+	P50Ms     float64 `json:"p50Ms"`
+	P95Ms     float64 `json:"p95Ms"`
+	P99Ms     float64 `json:"p99Ms"`
+	RPS       float64 `json:"rps"`
+	ActiveVUs int32   `json:"activeVUs"`
+}
+
+// StressThresholdDTO is a threshold evaluation result.
+type StressThresholdDTO struct {
+	Name     string `json:"name"`
+	Passed   bool   `json:"passed"`
+	Expected string `json:"expected"`
+	Actual   string `json:"actual"`
+}
+
+// MockStartReq starts a mock server.
+type MockStartReq struct {
+	Files []string `json:"files"`
+	Port  int      `json:"port,omitempty"`
+	Delay string   `json:"delay,omitempty"`
+}
+
+// MockRouteDTO is a mock server route.
+type MockRouteDTO struct {
+	Method      string `json:"method"`
+	Path        string `json:"path"`
+	Name        string `json:"name,omitempty"`
+	StatusCode  int    `json:"statusCode"`
+	ContentType string `json:"contentType"`
+}
+
+// MockStatusDTO is the current mock server status.
+type MockStatusDTO struct {
+	Running bool           `json:"running"`
+	Port    int            `json:"port,omitempty"`
+	Routes  []MockRouteDTO `json:"routes,omitempty"`
+}
+
+// RecordStartReq starts the recording proxy.
+type RecordStartReq struct {
+	TargetURL   string   `json:"targetUrl"`
+	Port        int      `json:"port,omitempty"`
+	Exclude     []string `json:"exclude,omitempty"`
+	Sanitize    []string `json:"sanitize,omitempty"`
+	Deduplicate bool     `json:"deduplicate,omitempty"`
+}
+
+// RecordStatusDTO is the recording proxy status.
+type RecordStatusDTO struct {
+	Running    bool           `json:"running"`
+	TargetURL  string         `json:"targetUrl,omitempty"`
+	Port       int            `json:"port,omitempty"`
+	Count      int            `json:"count"`
+	Recordings []RecordingDTO `json:"recordings,omitempty"`
+}
+
+// RecordingDTO is a single recorded request/response.
+type RecordingDTO struct {
+	Method      string  `json:"method"`
+	Path        string  `json:"path"`
+	URL         string  `json:"url"`
+	ContentType string  `json:"contentType,omitempty"`
+	StatusCode  int     `json:"statusCode,omitempty"`
+	Duration    float64 `json:"duration,omitempty"`
+}
+
+// ContractVerifyReq verifies provider contracts.
+type ContractVerifyReq struct {
+	Files        []string `json:"files"`
+	ProviderURL  string   `json:"providerUrl"`
+	StateHandler string   `json:"stateHandler,omitempty"`
+}
+
+// ContractResultDTO is the result of contract verification.
+type ContractResultDTO struct {
+	File     string                   `json:"file"`
+	Passed   int                      `json:"passed"`
+	Failed   int                      `json:"failed"`
+	Skipped  int                      `json:"skipped"`
+	Duration float64                  `json:"duration"`
+	Results  []ContractInteractionDTO `json:"results"`
+}
+
+// ContractInteractionDTO is a single contract interaction result.
+type ContractInteractionDTO struct {
+	Name     string  `json:"name"`
+	Provider string  `json:"provider,omitempty"`
+	State    string  `json:"state,omitempty"`
+	Passed   bool    `json:"passed"`
+	Error    string  `json:"error,omitempty"`
+	Duration float64 `json:"duration"`
+}
+
+// ContractStatusDTO is contract file status.
+type ContractStatusDTO struct {
+	Files   []string            `json:"files"`
+	Results []ContractResultDTO `json:"results,omitempty"`
+}
+
+// ImportCurlReq imports a curl command (or file) into hitspec content.
+type ImportCurlReq struct {
+	Command  string `json:"command,omitempty"`
+	FilePath string `json:"filePath,omitempty"`
+}
+
+type ImportInsomniaReq struct {
+	Data     string `json:"data,omitempty"`
+	FilePath string `json:"filePath,omitempty"`
+}
+
+type ImportOpenAPIReq struct {
+	SpecPath string `json:"specPath"`
+	BaseURL  string `json:"baseUrl,omitempty"`
+}
+
+type ImportPostmanReq struct {
+	Data     string `json:"data,omitempty"`
+	FilePath string `json:"filePath,omitempty"`
+}
+
+// ImportResultDTO is the result of an import operation.
+type ImportResultDTO struct {
+	Content      string `json:"content"`
+	RequestCount int    `json:"requestCount"`
+}
+
+// ExportReq exports requests to another client format.
+type ExportReq struct {
+	File        string `json:"file"`
+	RequestName string `json:"requestName,omitempty"`
+	Format      string `json:"format,omitempty"`
+}
+
+// ExportResultDTO is the result of an export operation.
+type ExportResultDTO struct {
+	Commands []string `json:"commands"`
+}
+
+// CookieDTO is a local TUI cookie record. It is never injected automatically.
+type CookieDTO struct {
+	Domain    string `json:"domain"`
+	Path      string `json:"path"`
+	Name      string `json:"name"`
+	Value     string `json:"value"`
+	ExpiresAt string `json:"expiresAt,omitempty"`
+	Secure    bool   `json:"secure,omitempty"`
+	HTTPOnly  bool   `json:"httpOnly,omitempty"`
+}
+
+// SystemInfoDTO contains version and build information.
+type SystemInfoDTO struct {
+	Version   string `json:"version"`
+	BuildTime string `json:"buildTime"`
+	GoVersion string `json:"goVersion"`
+	OS        string `json:"os"`
+	Arch      string `json:"arch"`
+}
+
+// Event is the manager's realtime event envelope.
+type Event struct {
+	Type      string `json:"type"`
+	Payload   any    `json:"payload"`
+	Timestamp string `json:"timestamp"`
+}
+
+// FileEvent is a file change event.
+type FileEvent struct {
+	Path      string `json:"path"`
+	Operation string `json:"operation"`
+	Timestamp string `json:"timestamp"`
+}
+
+// ExecEvent is an execution lifecycle event.
+type ExecEvent struct {
+	ID        string        `json:"id"`
+	File      string        `json:"file"`
+	Status    string        `json:"status"`
+	Result    *RunResultDTO `json:"result,omitempty"`
+	Error     string        `json:"error,omitempty"`
+	Timestamp string        `json:"timestamp"`
+}
+
+// RequestProgress is a per-request progress event.
+type RequestProgress struct {
+	ExecID      string  `json:"execId"`
+	File        string  `json:"file"`
+	RequestName string  `json:"requestName"`
+	Status      string  `json:"status"`
+	Index       int     `json:"index"`
+	Total       int     `json:"total"`
+	Passed      bool    `json:"passed,omitempty"`
+	Duration    float64 `json:"duration,omitempty"`
+	Timestamp   string  `json:"timestamp"`
+}
+
+// StressMetrics is a stress metrics event.
+type StressMetrics struct {
+	Running   bool           `json:"running"`
+	Completed bool           `json:"completed,omitempty"`
+	Stats     StressStatsDTO `json:"stats"`
+	Elapsed   float64        `json:"elapsed"`
+	Timestamp string         `json:"timestamp"`
+}
+
+// MockEvent is a mock server event.
+type MockEvent struct {
+	Event     string  `json:"event"`
+	Method    string  `json:"method,omitempty"`
+	Path      string  `json:"path,omitempty"`
+	Status    int     `json:"status,omitempty"`
+	Duration  float64 `json:"duration,omitempty"`
+	Timestamp string  `json:"timestamp"`
+}
+
+func nowISO() string {
+	return time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+}

@@ -65,6 +65,26 @@ func TestHandleGetWorkspace(t *testing.T) {
 	}
 }
 
+func TestRegisterRoutes_NoSPAFallback(t *testing.T) {
+	s := newTestServer(t)
+	mux := http.NewServeMux()
+	s.registerRoutes(mux)
+
+	apiReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspace", nil)
+	apiW := httptest.NewRecorder()
+	mux.ServeHTTP(apiW, apiReq)
+	if apiW.Code != http.StatusOK {
+		t.Fatalf("expected API route to remain available, got %d", apiW.Code)
+	}
+
+	spaReq := httptest.NewRequest(http.MethodGet, "/workspace", nil)
+	spaW := httptest.NewRecorder()
+	mux.ServeHTTP(spaW, spaReq)
+	if spaW.Code != http.StatusNotFound {
+		t.Fatalf("expected non-API route to 404 after SPA removal, got %d", spaW.Code)
+	}
+}
+
 func TestHandleListFiles_Empty(t *testing.T) {
 	s := newTestServer(t)
 

@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/abdul-hamid-achik/hitspec/packages/clientmgr"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 var forceInit bool
@@ -36,8 +36,8 @@ func initCommand(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	configFile := filepath.Join(cwd, "hitspec.yaml")
-	exampleFile := filepath.Join(cwd, "example.http")
+	configFile := filepath.Join(cwd, clientmgr.SampleConfigFile)
+	exampleFile := filepath.Join(cwd, clientmgr.SampleRequestFile)
 
 	if !forceInit {
 		for _, f := range []string{configFile, exampleFile} {
@@ -47,93 +47,22 @@ func initCommand(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Combined config with environments (single file, proper YAML format)
-	configContent := map[string]any{
-		"defaultEnvironment": "dev",
-		"timeout":            "30s",
-		"retries":            0,
-		"followRedirects":    true,
-		"maxRedirects":       10,
-		"validateSSL":        true,
-		"headers": map[string]string{
-			"User-Agent": "hitspec/1.0",
-		},
-		"environments": map[string]map[string]string{
-			"dev": {
-				"baseUrl": "http://localhost:3000",
-			},
-			"staging": {
-				"baseUrl": "https://staging.api.example.com",
-			},
-			"prod": {
-				"baseUrl": "https://api.example.com",
-			},
-		},
-	}
-
-	configYAML, _ := yaml.Marshal(configContent)
-	if err := os.WriteFile(configFile, configYAML, 0644); err != nil {
+	// The sample config and example file are shared with the in-app "generate
+	// sample project" action (clientmgr.ScaffoldSample) so both stay in sync.
+	if err := os.WriteFile(configFile, []byte(clientmgr.SampleConfigYAML), 0644); err != nil {
 		return fmt.Errorf("failed to create config file: %w", err)
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Created: %s\n", configFile)
 
-	exampleContent := `@baseUrl = {{baseUrl}}
-
-### Get health status
-# @name healthCheck
-# @description Check if the API is running
-# @tags smoke
-
-GET {{baseUrl}}/health
-
->>>
-expect status 200
-<<<
-
-### Create a resource
-# @name createResource
-# @tags crud
-
-POST {{baseUrl}}/resources
-Content-Type: application/json
-
-{
-  "name": "Test Resource",
-  "description": "Created by hitspec"
-}
-
->>>
-expect status 201
-expect body.id exists
-expect body.name == "Test Resource"
-<<<
-
->>>capture
-resourceId from body.id
-<<<
-
-### Get the created resource
-# @name getResource
-# @tags crud
-# @depends createResource
-
-GET {{baseUrl}}/resources/{{createResource.resourceId}}
-
->>>
-expect status 200
-expect body.id == {{createResource.resourceId}}
-<<<
-`
-
-	if err := os.WriteFile(exampleFile, []byte(exampleContent), 0644); err != nil {
+	if err := os.WriteFile(exampleFile, []byte(clientmgr.SampleRequestHTTP), 0644); err != nil {
 		return fmt.Errorf("failed to create example file: %w", err)
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Created: %s\n", exampleFile)
 
 	fmt.Fprintf(cmd.OutOrStdout(), "\nProject initialized. Next steps:\n")
+	fmt.Fprintf(cmd.OutOrStdout(), "  hitspec studio                    Open the interactive app\n")
 	fmt.Fprintf(cmd.OutOrStdout(), "  hitspec run example.http          Run the example tests\n")
 	fmt.Fprintf(cmd.OutOrStdout(), "  hitspec run example.http -v       Run with verbose output\n")
-	fmt.Fprintf(cmd.OutOrStdout(), "  hitspec serve                     Open the web UI\n")
 
 	return nil
 }

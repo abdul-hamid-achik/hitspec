@@ -8,8 +8,6 @@ vars:
     sh: date -u '+%Y-%m-%d_%H:%M:%S'
   LDFLAGS: -ldflags "-X main.version={{.VERSION}} -X main.buildTime={{.BUILD_TIME}}"
   MAIN_PATH: ./apps/cli
-  CLIENT_DIR: apps/client
-  SERVE_DIST: packages/serve/dist
 
 tasks:
   default:
@@ -22,17 +20,15 @@ tasks:
   # ---------------------------------------------------------------------------
 
   setup:
-    desc: Install all dependencies for both Go and client
+    desc: Install all Go dependencies and generate code
     cmds:
       - task: go:deps
-      - task: client:install
       - task: generate
 
   deps:
-    desc: Download and tidy all dependencies (Go + client)
+    desc: Download and tidy Go dependencies
     cmds:
       - task: go:deps
-      - task: client:install
 
   generate:
     desc: Run go generate
@@ -40,32 +36,36 @@ tasks:
       - go generate ./...
 
   build:
-    desc: Build Go binary and client
+    desc: Build Go CLI binary
     cmds:
-      - task: client:build
       - task: go:build
 
   test:
-    desc: Run all tests (Go + client)
+    desc: Run all Go tests
     cmds:
       - task: go:test
-      - task: client:test
+
+  e2e:
+    desc: Run studio end-to-end tests (PTY behavior specs via glyphrun's `glyph`)
+    cmds:
+      - go build -o ./e2e/bin/hitspec ./apps/cli
+      - glyph run e2e/specs/glyphrun/*.yml --format md
+    preconditions:
+      - sh: command -v glyph
+        msg: "glyph (glyphrun) is not installed — see https://github.com/abdul-hamid-achik/glyphrun"
 
   lint:
-    desc: Run all linters (Go fmt/vet/golangci-lint + client oxlint + type-check)
+    desc: Run Go format, vet, and golangci-lint
     cmds:
       - task: go:lint
-      - task: client:lint
-      - task: client:type-check
 
   security:
-    desc: Run security checks (gosec + govulncheck + bun audit)
+    desc: Run Go security checks
     cmds:
       - task: go:security
-      - task: client:audit
 
   check:
-    desc: Run all checks across both stacks (lint + test + security)
+    desc: Run all checks (lint + test + security)
     cmds:
       - task: lint
       - task: test
@@ -76,8 +76,6 @@ tasks:
     cmds:
       - rm -rf bin/
       - rm -f coverage.out coverage.html
-      - rm -rf {{.SERVE_DIST}}
-      - rm -rf {{.CLIENT_DIR}}/dist
 
   # ---------------------------------------------------------------------------
   # Go tasks
@@ -141,54 +139,6 @@ tasks:
       - govulncheck ./...
 
   # ---------------------------------------------------------------------------
-  # Client tasks
-  # ---------------------------------------------------------------------------
-
-  client:install:
-    desc: Install client dependencies
-    dir: '{{.CLIENT_DIR}}'
-    cmds:
-      - bun install
-
-  client:dev:
-    desc: Run client dev server
-    dir: '{{.CLIENT_DIR}}'
-    cmds:
-      - bun run dev
-
-  client:build:
-    desc: Build client and copy to server embed directory
-    dir: '{{.CLIENT_DIR}}'
-    cmds:
-      - bun run build
-      - mkdir -p ../../{{.SERVE_DIST}}
-      - cp -r dist/* ../../{{.SERVE_DIST}}/
-
-  client:test:
-    desc: Run client tests
-    dir: '{{.CLIENT_DIR}}'
-    cmds:
-      - bun run test
-
-  client:lint:
-    desc: Run oxlint on client
-    dir: '{{.CLIENT_DIR}}'
-    cmds:
-      - bun run lint
-
-  client:type-check:
-    desc: Run TypeScript type checking on client
-    dir: '{{.CLIENT_DIR}}'
-    cmds:
-      - bun run type-check
-
-  client:audit:
-    desc: Audit client dependencies for vulnerabilities
-    dir: '{{.CLIENT_DIR}}'
-    cmds:
-      - bun pm untrusted 2>/dev/null || true
-
-  # ---------------------------------------------------------------------------
   # Development tasks
   # ---------------------------------------------------------------------------
 
@@ -217,10 +167,15 @@ tasks:
     cmds:
       - watchexec -e go,http -r -- go run {{.MAIN_PATH}} run examples/petstore/petstore.http -v
 
-  serve:dev:
-    desc: Run serve command in dev mode (no SPA embed)
+  studio:dev:
+    desc: Run the interactive terminal app
     cmds:
-      - go run -tags dev {{.MAIN_PATH}} serve {{.CLI_ARGS}}
+      - go run {{.MAIN_PATH}} studio {{.CLI_ARGS}}
+
+  serve:dev:
+    desc: Run the REST/WebSocket API server
+    cmds:
+      - go run {{.MAIN_PATH}} serve --api-only {{.CLI_ARGS}}
 
   docs:dev:
     desc: Run Mintlify docs locally
@@ -255,12 +210,6 @@ tasks:
       - GOOS=darwin GOARCH=amd64 go build {{.LDFLAGS}} -o bin/{{.BINARY_NAME}}-darwin-amd64 {{.MAIN_PATH}}
       - GOOS=darwin GOARCH=arm64 go build {{.LDFLAGS}} -o bin/{{.BINARY_NAME}}-darwin-arm64 {{.MAIN_PATH}}
       - GOOS=windows GOARCH=amd64 go build {{.LDFLAGS}} -o bin/{{.BINARY_NAME}}-windows-amd64.exe {{.MAIN_PATH}}
-
-  build:full:
-    desc: Rebuild client + Go binary with embedded web UI
-    cmds:
-      - task: client:build
-      - task: go:build
 
   release:snapshot:
     desc: Create a snapshot release (no publishing)

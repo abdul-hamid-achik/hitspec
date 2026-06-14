@@ -2,9 +2,8 @@ package cmd
 
 import (
 	"context"
-	"fmt"
-	"os/exec"
-	"runtime"
+	"os"
+	"path/filepath"
 
 	"github.com/abdul-hamid-achik/hitspec/packages/serve"
 	"github.com/spf13/cobra"
@@ -13,7 +12,6 @@ import (
 var (
 	servePortFlag       int
 	serveHostFlag       string
-	serveOpenFlag       bool
 	serveWatchFlag      bool
 	serveCORSFlag       bool
 	serveAPIOnlyFlag    bool
@@ -29,33 +27,34 @@ var (
 
 var serveCmd = &cobra.Command{
 	Use:   "serve [file|directory]",
-	Short: "Start the API Client Manager web interface",
-	Long: `Start a browser-based API Client Manager for working with hitspec files.
+	Short: "Start the REST/WebSocket API server",
+	Long: `Start the hitspec REST/WebSocket API server for integrations and editors.
 
-The serve command launches an HTTP server that provides:
-  - A web-based UI for editing and running API tests
-  - A REST API for programmatic access
-  - Real-time file watching with WebSocket updates
-  - Stress testing dashboard
-  - Mock server management
+It exposes JSON endpoints (files, execute/run, environments, stress, mock,
+contract, record, import/export, history) plus a WebSocket for realtime events.
+
+  hitspec serve --api-only        Start the API server
+
+For the interactive terminal app, use:
+
+  hitspec studio                  Open the interactive app
+
+(Running 'serve' without --api-only opens the interactive app for backward
+compatibility, but 'hitspec studio' is the dedicated command.)
 
 Examples:
-  hitspec serve
-  hitspec serve ./tests/
-  hitspec serve --port 8080
-  hitspec serve --api-only
-  hitspec serve --read-only --cors`,
+  hitspec serve --api-only --port 8080 --cors
+  hitspec serve --api-only ./tests/ --read-only`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: serveCommand,
 }
 
 func init() {
-	serveCmd.Flags().IntVarP(&servePortFlag, "port", "p", 4000, "Port to run the server on")
-	serveCmd.Flags().StringVar(&serveHostFlag, "host", "localhost", "Bind address")
-	serveCmd.Flags().BoolVar(&serveOpenFlag, "open", true, "Auto-open browser")
+	serveCmd.Flags().IntVarP(&servePortFlag, "port", "p", 4000, "API server port")
+	serveCmd.Flags().StringVar(&serveHostFlag, "host", "localhost", "API server bind address")
 	serveCmd.Flags().BoolVarP(&serveWatchFlag, "watch", "w", true, "Watch for file changes")
-	serveCmd.Flags().BoolVar(&serveCORSFlag, "cors", false, "Enable CORS headers")
-	serveCmd.Flags().BoolVar(&serveAPIOnlyFlag, "api-only", false, "REST API only, no SPA")
+	serveCmd.Flags().BoolVar(&serveCORSFlag, "cors", false, "Enable CORS headers (API server)")
+	serveCmd.Flags().BoolVar(&serveAPIOnlyFlag, "api-only", false, "Start the REST/WebSocket API server")
 	serveCmd.Flags().BoolVar(&serveReadOnlyFlag, "read-only", false, "Disallow file mutations")
 	serveCmd.Flags().StringVarP(&serveEnvFlag, "env", "e", "dev", "Default environment")
 	serveCmd.Flags().StringVar(&serveConfigFlag, "config", "", "Path to hitspec.yaml")
@@ -71,15 +70,38 @@ func serveCommand(cmd *cobra.Command, args []string) error {
 	if len(args) > 0 {
 		workDir = args[0]
 	}
+	workDir = normalizeServeWorkDir(workDir)
+
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	// Backward compatibility: `serve` without --api-only opened the interactive
+	// app. Keep that working but steer users to the dedicated `studio` command.
+	if !serveAPIOnlyFlag {
+		cmd.PrintErrln(`tip: use "hitspec studio" to open the interactive app ("hitspec serve --api-only" starts the API server).`)
+		return launchStudio(ctx, workDir, studioLaunchFlags{
+			watch:      serveWatchFlag,
+			readOnly:   serveReadOnlyFlag,
+			env:        serveEnvFlag,
+			config:     serveConfigFlag,
+			verbose:    serveVerboseFlag,
+			allowShell: serveAllowShellFlag,
+			allowDB:    serveAllowDBFlag,
+			logFormat:  serveLogFormatFlag,
+			logLevel:   serveLogLevelFlag,
+		})
+	}
 
 	s := serve.NewServer(
 		serve.WithPort(servePortFlag),
 		serve.WithHost(serveHostFlag),
 		serve.WithWorkDir(workDir),
-		serve.WithOpen(serveOpenFlag),
+		serve.WithOpen(false),
 		serve.WithWatch(serveWatchFlag),
 		serve.WithCORS(serveCORSFlag),
-		serve.WithAPIOnly(serveAPIOnlyFlag),
+		serve.WithAPIOnly(true),
 		serve.WithReadOnly(serveReadOnlyFlag),
 		serve.WithEnv(serveEnvFlag),
 		serve.WithConfigPath(serveConfigFlag),
@@ -89,32 +111,15 @@ func serveCommand(cmd *cobra.Command, args []string) error {
 		serve.WithLogFormat(serveLogFormatFlag),
 		serve.WithLogLevel(serveLogLevelFlag),
 	)
-
 	s.Version = version
 	s.BuildTime = buildTime
-
-	// Auto-open browser
-	if serveOpenFlag && !serveAPIOnlyFlag {
-		go func() {
-			url := fmt.Sprintf("http://%s:%d", serveHostFlag, servePortFlag)
-			openBrowser(url)
-		}()
-	}
-
-	return s.Start(context.Background())
+	return s.Start(ctx)
 }
 
-func openBrowser(url string) {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", url)
-	case "linux":
-		cmd = exec.Command("xdg-open", url)
-	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", url)
-	default:
-		return
+func normalizeServeWorkDir(path string) string {
+	info, err := os.Stat(path)
+	if err == nil && !info.IsDir() {
+		return filepath.Dir(path)
 	}
-	_ = cmd.Start()
+	return path
 }

@@ -1,3 +1,3 @@
-// Package serve provides an HTTP server that exposes a REST API and serves
-// a browser-based API Client Manager for hitspec files.
+// Package serve provides the REST and WebSocket compatibility API for
+// hitspec serve --api-only.
 package serve

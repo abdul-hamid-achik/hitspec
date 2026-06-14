@@ -1,0 +1,25 @@
+### Health check
+# @name health
+# @tags smoke
+
+GET https://example.com/health
+
+>>>
+expect status 200
+<<<
+
+### Create user
+# @name createUser
+# @tags crud
+
+POST https://example.com/users
+Content-Type: application/json
+
+{
+  "name": "Ada Lovelace"
+}
+
+>>>
+expect status 201
+expect body.name == "Ada Lovelace"
+<<<

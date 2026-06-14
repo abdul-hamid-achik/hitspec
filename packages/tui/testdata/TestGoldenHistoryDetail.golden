@@ -1,0 +1,7 @@
+#7  api.http
+dev   started 2026-06-14T10:00:00Z   1.2s
+
+1 passed · 0 failed · 0 skipped (of 1)
+
+✓ Ping   GET https://example.com/api   200   42ms
+  ✓ status == 200
