@@ -368,6 +368,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.files = msg.files
 		m.refreshFileList()
 		m.status = fmt.Sprintf("%d files, %d requests", len(msg.files), msg.workspace.TotalRequests)
+		// If the selected file no longer exists (e.g. it was just deleted), drop
+		// the stale selection so the topbar/source don't reference a gone file.
+		if m.selected != "" && !containsFile(msg.files, m.selected) {
+			m.selected = ""
+			m.parsed = nil
+			m.raw = ""
+			m.source.SetValue("")
+			m.respView.setPlaceholder(m.fileSummary())
+		}
 		if m.selected == "" && len(msg.files) > 0 {
 			m.selected = msg.files[0].RelativePath
 			cmds = append(cmds, loadFileCmd(m.ctx, m.mgr, m.selected))

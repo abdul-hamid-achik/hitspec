@@ -1,0 +1,58 @@
+version: 1
+name: studio_new_file
+
+intent: |
+  pressing n creates a new scratch request file, which appears in the sidebar.
+
+target:
+  cmd: ["${vars.bin}", "studio", "/tmp/hitspec-studio-e2e/newfile"]
+  cwd: "."
+  timeoutMs: 15000
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+    - run: "rm -rf /tmp/hitspec-studio-e2e/newfile && mkdir -p /tmp/hitspec-studio-e2e/newfile"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "generate a sample project"
+      timeoutMs: 8000
+  - press: "n"
+  - wait:
+      screen:
+        contains: "scratch"
+      timeoutMs: 8000
+  - snapshot: created
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  - id: scratch_in_sidebar
+    description: a new scratch-*.http file appears in the file list
+    verify:
+      screen:
+        contains: "scratch"
+  - id: file_on_disk
+    description: the scratch file was written to the workspace
+    verify:
+      file:
+        glob: /tmp/hitspec-studio-e2e/newfile/scratch-*.http
+        timeoutMs: 5000
+  - id: clean_exit
+    description: q exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0

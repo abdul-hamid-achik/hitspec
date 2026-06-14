@@ -1,0 +1,57 @@
+version: 1
+name: studio_empty_states
+
+intent: |
+  the mock and record screens show actionable guidance before anything is
+  running, instead of a blank panel.
+
+target:
+  cmd: ["${vars.bin}", "studio", "${vars.workspace}"]
+  cwd: "."
+  timeoutMs: 15000
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+
+steps:
+  - wait:
+      screen:
+        contains: "sample.http"
+      timeoutMs: 8000
+  - press: "3"
+  - wait:
+      screen:
+        contains: "No mock server running"
+      timeoutMs: 5000
+  - snapshot: mock_empty
+  - press: "5"
+  - wait:
+      screen:
+        contains: "No recording proxy running"
+      timeoutMs: 5000
+  - snapshot: record_empty
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  - id: record_guidance
+    description: the record screen guides the user to start the proxy
+    verify:
+      screen:
+        contains: "No recording proxy running"
+  - id: clean_exit
+    description: q exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0

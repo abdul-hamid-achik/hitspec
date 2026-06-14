@@ -51,6 +51,25 @@ func TestSuccessfulResultMessagesClearError(t *testing.T) {
 	}
 }
 
+// After the selected file is deleted, a refreshed file list must drop the stale
+// selection (so the topbar/source don't reference a gone file).
+func TestDeletedSelectionIsCleared(t *testing.T) {
+	m := goldenModel(t, 100, 30)
+	m.selected = "gone.http"
+	m.raw = "### x\nGET https://example.com\n"
+	m.parsed = &clientmgr.ParsedFileDTO{Requests: []clientmgr.RequestDTO{{Method: "GET"}}}
+
+	// The refreshed list no longer contains the selected file.
+	next, _ := m.Update(filesLoadedMsg{workspace: clientmgr.WorkspaceDTO{}, files: nil})
+	got := next.(model)
+	if got.selected != "" {
+		t.Fatalf("selected = %q, want cleared", got.selected)
+	}
+	if got.parsed != nil || got.raw != "" {
+		t.Fatalf("stale parsed/raw not cleared: parsed=%v raw=%q", got.parsed, got.raw)
+	}
+}
+
 func TestQuitConfirmsWhenDirty(t *testing.T) {
 	m := goldenModel(t, 100, 30)
 	m.selected = "api.http"

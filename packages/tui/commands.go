@@ -244,6 +244,16 @@ func atoi(s string, fallback int) int {
 	return n
 }
 
+// containsFile reports whether rel is among the files by relative path.
+func containsFile(files []clientmgr.FileInfoDTO, rel string) bool {
+	for _, f := range files {
+		if f.RelativePath == rel {
+			return true
+		}
+	}
+	return false
+}
+
 func selectedFiles(path string) []string {
 	if path == "" {
 		return nil
