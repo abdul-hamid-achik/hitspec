@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/abdul-hamid-achik/hitspec/packages/core/runner"
 )
 
 var cookieMu sync.Mutex
@@ -64,7 +66,10 @@ func (m *Manager) DeleteCookie(ctx context.Context, domain, path, name string) (
 	return next, m.saveCookies(next)
 }
 
-func (m *Manager) captureCookies(result *RunResultDTO) {
+// captureCookies persists Set-Cookie headers from a run into the local cookie
+// store. It reads the RAW runner result (not the DTO), because the DTO's response
+// headers are redacted — reading the DTO would only ever see "[REDACTED]".
+func (m *Manager) captureCookies(result *runner.RunResult) {
 	if result == nil {
 		return
 	}

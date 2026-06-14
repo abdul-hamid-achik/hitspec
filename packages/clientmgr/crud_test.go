@@ -6,6 +6,9 @@ import (
 )
 
 func TestCookiesCRUD(t *testing.T) {
+	// The cookie store lives at ~/.hitspec/tui-cookies.json; isolate HOME so the
+	// test never reads or writes the developer's real cookie store.
+	t.Setenv("HOME", t.TempDir())
 	ctx := context.Background()
 	m := newTestManager(t)
 

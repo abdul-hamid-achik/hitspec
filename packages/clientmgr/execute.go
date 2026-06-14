@@ -93,7 +93,7 @@ func (m *Manager) ExecuteAdHoc(ctx context.Context, req AdHocReq) (*RunResultDTO
 	}
 	dto := convertRunResult(result)
 	dto.File = "(ad-hoc)"
-	m.captureCookies(dto)
+	m.captureCookies(result)
 	return dto, nil
 }
 
@@ -208,7 +208,7 @@ func (m *Manager) run(ctx context.Context, file, requestName, environment string
 		m.history.add(entry)
 	}
 	m.recordRunToHistory(file, env, dto)
-	m.captureCookies(dto)
+	m.captureCookies(result)
 	return dto, nil
 }
 
