@@ -13,7 +13,10 @@ folder is the terminal-UI suite.)
 ## Running
 
 ```bash
-task e2e                                   # build + run the whole suite
+task e2e                 # build + run the whole suite
+task e2e -- settings     # run one spec (bare name from specs/glyphrun/, or a path)
+task --watch e2e         # rebuild + rerun on any TUI or spec change
+
 # or directly (from the repo root):
 go build -o ./e2e/bin/hitspec ./apps/cli
 glyph run e2e/specs/glyphrun/*.yml --format md
