@@ -70,13 +70,18 @@ config and build/artifact dirs at the `e2e/` root:
 | `history_after_run.yml` | a run is persisted and appears on the history screen (`6`) |
 | `adhoc_request.yml` | palette → filter "Quick" → prompt a URL → run a one-off ad-hoc request |
 | `duplicate_file.yml` | palette → filter "Duplicate" → accept prompt → the copy appears (scratch ws) |
-| `copy_as_curl.yml` | palette → filter "as curl" → renders the selected request as curl |
 | `rename_file.yml` | palette → filter "Rename" → clear + retype the path → file renamed (scratch ws) |
 | `settings_save.yml` | settings form: `e` edit → set retries → submit → config dump updates (scratch ws) |
 | `response_tabs.yml` | after a run, `]` cycles the response viewer tabs (Body…Captures) |
 | `import_scratch.yml` | import screen submits the curl form → generated request opens (scratch ws) |
 | `clear_history.yml` | palette → "Clear history" → confirm `y` → history list empties (isolated HOME) |
 | `mock_start_stop.yml` | mock screen: `s` starts the server (custom port), `x` stops it (scratch ws) |
+| `stress_run.yml` | stress screen: edit duration to 2s, start, watch live metrics, see the result |
+| `record_start_stop.yml` | record screen: `s` starts the proxy (custom port), `x` stops it |
+
+(The palette "copy as curl" export is covered by a `packages/tui` unit test
+rather than a spec — its clipboard subprocess made the e2e assertion flaky under
+full-suite load.)
 
 Specs that run requests or touch cookies set `target.env.HOME` to a throwaway dir
 so they never read or pollute the user's real `~/.hitspec` history/cookie store

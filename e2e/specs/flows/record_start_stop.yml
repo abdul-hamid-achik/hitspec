@@ -1,0 +1,66 @@
+version: 1
+name: studio_record_start_stop
+
+intent: |
+  the record screen starts and stops a recording proxy: edit the port, start it
+  with `s` (reporting running + target), and stop it with `x`. Uses an uncommon
+  port to avoid collisions.
+
+imports:
+  - ../actions/quit_clean.yml
+
+target:
+  cmd: ["${vars.bin}", "studio", "/tmp/hitspec-studio-e2e/record"]
+  cwd: "."
+  timeoutMs: 15000
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+    - run: "rm -rf /tmp/hitspec-studio-e2e/record && mkdir -p /tmp/hitspec-studio-e2e/record"
+      timeoutMs: 10000
+
+steps:
+  - press: "5"
+  - wait:
+      screen:
+        contains: "No recording proxy running"
+      timeoutMs: 8000
+  # fields: 0 target URL, 1 port, 2 deduplicate — set an uncommon port then start
+  - press: "e"
+  - press: "down"
+  - press: "ctrl+u"
+  - type: "39811"
+  - press: "enter"
+  - wait:
+      screen:
+        contains: "Running: true"
+      timeoutMs: 8000
+  - snapshot: running
+  - press: "x"
+  - wait:
+      screen:
+        contains: "No recording proxy running"
+      timeoutMs: 8000
+  - use: quit_clean
+
+outcomes:
+  # "Running: true" is asserted by the wait step mid-cycle; the final screen
+  # rests on the stopped state after x.
+  - id: record_start_then_stop
+    description: the recording proxy starts then stops cleanly
+    verify:
+      screen:
+        contains: "No recording proxy running"
+  - id: clean_exit
+    description: q exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0

@@ -38,7 +38,7 @@ steps:
   - press: "enter"
   - wait:
       screen:
-        contains: "imported"
+        contains: "imported-"
       timeoutMs: 8000
   - snapshot: imported
   - use: quit_clean
@@ -48,7 +48,7 @@ outcomes:
     description: importing opens a generated scratch file (status reports it)
     verify:
       screen:
-        contains: "imported"
+        contains: "imported-"
   - id: clean_exit
     description: q exits the app with status code 0
     verify:

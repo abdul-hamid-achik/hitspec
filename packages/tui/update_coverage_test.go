@@ -2,7 +2,11 @@ package tui
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
+
+	"github.com/abdul-hamid-achik/hitspec/packages/clientmgr"
 )
 
 func TestFocusCyclingWraps(t *testing.T) {
@@ -231,6 +235,47 @@ func TestImportCmdError(t *testing.T) {
 		t.Fatal("importCmd with an unknown format should surface an error")
 	}
 }
+
+// TestImportAndRenameMsgUpdates covers the importMsg and fileRenamedMsg arms of
+// Update: both switch to the workspace, open the resulting file, and report it.
+func TestImportAndRenameMsgUpdates(t *testing.T) {
+	parsed := &clientmgr.ParsedFileDTO{Requests: []clientmgr.RequestDTO{{Name: "r", Method: "GET", URL: "https://x/y"}}}
+
+	t.Run("import success", func(t *testing.T) {
+		m := newModel(context.Background(), newTestManager(t), Options{})
+		m.screen = screenImport
+		next, _ := m.Update(importMsg{path: "imported-1.http", raw: "GET https://x/y\n", parsed: parsed})
+		nm := next.(model)
+		if nm.screen != screenWorkspace {
+			t.Fatalf("importMsg should switch to workspace, got %v", nm.screen)
+		}
+		if nm.selected != "imported-1.http" || !strings.Contains(nm.status, "imported") {
+			t.Fatalf("importMsg state wrong: selected=%q status=%q", nm.selected, nm.status)
+		}
+	})
+
+	t.Run("import error", func(t *testing.T) {
+		m := newModel(context.Background(), newTestManager(t), Options{})
+		next, _ := m.Update(importMsg{err: errBoom})
+		if next.(model).err == "" {
+			t.Fatal("importMsg error should set m.err")
+		}
+	})
+
+	t.Run("rename success", func(t *testing.T) {
+		m := newModel(context.Background(), newTestManager(t), Options{})
+		next, _ := m.Update(fileRenamedMsg{path: "after.http", raw: "GET https://x/y\n", parsed: parsed, action: "renamed"})
+		nm := next.(model)
+		if nm.selected != "after.http" || !strings.Contains(nm.status, "renamed") {
+			t.Fatalf("fileRenamedMsg state wrong: selected=%q status=%q", nm.selected, nm.status)
+		}
+		if nm.dirty || nm.editing {
+			t.Fatal("fileRenamedMsg should land in a clean, non-editing state")
+		}
+	})
+}
+
+var errBoom = fmt.Errorf("boom")
 
 func TestExecuteCommandStartActionsReturnCommands(t *testing.T) {
 	m := newModel(context.Background(), newTestManager(t), Options{})

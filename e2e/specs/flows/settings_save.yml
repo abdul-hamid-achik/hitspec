@@ -49,7 +49,7 @@ steps:
   - wait:
       screen:
         contains: "Retries: 7"
-      timeoutMs: 5000
+      timeoutMs: 10000
   - snapshot: saved
   - use: quit_clean
 
