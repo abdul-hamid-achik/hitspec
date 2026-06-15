@@ -2,7 +2,7 @@ module github.com/abdul-hamid-achik/hitspec
 
 go 1.25.0
 
-toolchain go1.25.7
+toolchain go1.25.11
 
 require (
 	charm.land/bubbles/v2 v2.1.0
