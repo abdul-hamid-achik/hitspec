@@ -152,6 +152,86 @@ func TestExecuteCommandOpenAndSwitch(t *testing.T) {
 	}
 }
 
+// TestExecuteCommandMore covers the export/copy/scaffold/stop command ids and
+// the confirm/prompt-opening ids, which the other tests don't reach.
+func TestExecuteCommandMore(t *testing.T) {
+	mgr := newTestManager(t)
+	ctx := context.Background()
+	if _, err := mgr.CreateFile(ctx, "x.http", sampleHTTP); err != nil {
+		t.Fatalf("seed file: %v", err)
+	}
+
+	// ids that just return a (non-nil) command.
+	for _, id := range []string{
+		"copy-httpie", "copy-python", "copy-fetch", "copy-go", "copy-response",
+		"scaffold", "record-export", "stress-stop", "mock-stop", "refresh",
+	} {
+		m := newModel(ctx, mgr, Options{})
+		m.selected = "x.http"
+		if m.executeCommand(id) == nil {
+			t.Fatalf("executeCommand(%q) returned nil", id)
+		}
+	}
+
+	// history-clear and record-clear open a confirm dialog rather than acting.
+	for _, id := range []string{"history-clear", "record-clear"} {
+		m := newModel(ctx, mgr, Options{})
+		m.executeCommand(id)
+		if m.confirm == nil {
+			t.Fatalf("executeCommand(%q) should open a confirm dialog", id)
+		}
+	}
+
+	// search opens the search overlay.
+	m := newModel(ctx, mgr, Options{})
+	if m.executeCommand("search"); !m.searchOpen {
+		t.Fatal("search should open the search overlay")
+	}
+}
+
+// TestRenameDuplicatePrompts covers the prompt-opening commands and their
+// onSubmit callbacks (which build the rename/copy commands).
+func TestRenameDuplicatePrompts(t *testing.T) {
+	mgr := newTestManager(t)
+	ctx := context.Background()
+	if _, err := mgr.CreateFile(ctx, "orig.http", sampleHTTP); err != nil {
+		t.Fatalf("seed file: %v", err)
+	}
+
+	for _, id := range []string{"rename-file", "duplicate-file"} {
+		// With no selection the command sets an error and opens no prompt.
+		m := newModel(ctx, mgr, Options{})
+		if m.executeCommand(id) != nil || m.prompt != nil {
+			t.Fatalf("%s with no selection should not open a prompt", id)
+		}
+		if m.err == "" {
+			t.Fatalf("%s with no selection should set an error", id)
+		}
+
+		// With a selection it opens a prompt whose onSubmit builds a command.
+		m = newModel(ctx, mgr, Options{})
+		m.selected = "orig.http"
+		m.executeCommand(id)
+		if m.prompt == nil {
+			t.Fatalf("%s with a selection should open a prompt", id)
+		}
+		if cmd := m.prompt.onSubmit("dest.http"); cmd == nil {
+			t.Fatalf("%s prompt onSubmit should return a command", id)
+		}
+	}
+}
+
+func TestImportCmdError(t *testing.T) {
+	msg := importCmd(context.Background(), newTestManager(t), "nonsense-format", "data", "")()
+	im, ok := msg.(importMsg)
+	if !ok {
+		t.Fatalf("importCmd -> %T, want importMsg", msg)
+	}
+	if im.err == nil {
+		t.Fatal("importCmd with an unknown format should surface an error")
+	}
+}
+
 func TestExecuteCommandStartActionsReturnCommands(t *testing.T) {
 	m := newModel(context.Background(), newTestManager(t), Options{})
 	// Don't invoke the closures (they'd start real servers) — just assert wiring.
