@@ -1,0 +1,68 @@
+version: 1
+name: studio_stress_run
+
+intent: |
+  the stress screen runs a short load test: edit the duration to 2s, start it,
+  watch live metrics, and see the completed result. The target is a closed local
+  port so requests resolve deterministically with no external network.
+
+imports:
+  - ../actions/quit_clean.yml
+
+target:
+  cmd: ["${vars.bin}", "studio", "/tmp/hitspec-studio-e2e/stress"]
+  cwd: "."
+  timeoutMs: 20000
+  # stress doesn't touch ~/.hitspec, but keep the store isolated for consistency
+  env:
+    HOME: /tmp/hitspec-studio-e2e/home
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+    - run: "rm -rf /tmp/hitspec-studio-e2e/stress && mkdir -p /tmp/hitspec-studio-e2e/stress"
+      timeoutMs: 10000
+    - run: "printf '### Strping\\n# @name strping\\nGET http://localhost:1/health\\n\\n>>>\\nexpect status 200\\n<<<\\n' > /tmp/hitspec-studio-e2e/stress/strping.http"
+      timeoutMs: 10000
+
+steps:
+  - press: "2"
+  - wait:
+      screen:
+        contains: "No stress test running"
+      timeoutMs: 8000
+  # edit the duration field (field 0, pre-filled "30s") down to 2s, then start
+  - press: "e"
+  - press: "ctrl+u"
+  - type: "2s"
+  - press: "enter"
+  - wait:
+      screen:
+        contains: "Running: true"
+      timeoutMs: 8000
+  # after ~2s the test completes and the final report appears
+  - wait:
+      screen:
+        contains: "Last result"
+      timeoutMs: 12000
+  - snapshot: stress_result
+  - use: quit_clean
+
+outcomes:
+  - id: stress_completed
+    description: the short stress test runs to completion and shows a result
+    verify:
+      screen:
+        contains: "Last result"
+  - id: clean_exit
+    description: q exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0

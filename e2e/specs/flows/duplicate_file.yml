@@ -55,17 +55,17 @@ steps:
   - press: "enter"
   - wait:
       screen:
-        contains: "duplicated"
-      timeoutMs: 5000
+        contains: "2 items"
+      timeoutMs: 10000
   - snapshot: duplicated
   - use: quit_clean
 
 outcomes:
   - id: file_duplicated
-    description: duplicating reports success in the status line
+    description: the duplicate appears in the file list (2 items)
     verify:
       screen:
-        contains: "duplicated"
+        contains: "2 items"
   - id: clean_exit
     description: q exits the app with status code 0
     verify:

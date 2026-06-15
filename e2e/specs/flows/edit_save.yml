@@ -45,11 +45,13 @@ steps:
         contains: "ZZTOP"
       timeoutMs: 5000
   - press: "ctrl+s"
-  # After the async save the file reloads ("opened …") and the modified flag clears.
+  # Saving clears the modified flag (and exits edit mode). We assert the dirty
+  # flag clears rather than the transient "opened" status — the file watcher
+  # fires a "file event received" status on save that races and clobbers it.
   - wait:
       screen:
-        contains: "opened"
-      timeoutMs: 5000
+        notContains: "modified"
+      timeoutMs: 10000
   - snapshot: saved
   - use: quit_clean
 
@@ -59,11 +61,13 @@ outcomes:
     verify:
       screen:
         contains: "ZZTOP"
-  - id: save_reloads
-    description: ctrl+s saves and the status line reports the reloaded file
+  - id: saved_to_disk
+    description: ctrl+s persists the edit to the file on disk
     verify:
-      screen:
-        contains: "opened"
+      file:
+        glob: /tmp/hitspec-studio-e2e/edit/edit.http
+        contains: "ZZTOP"
+        timeoutMs: 10000
   - id: clean_exit
     description: q exits the app with status code 0
     verify:

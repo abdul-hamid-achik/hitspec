@@ -56,12 +56,8 @@ steps:
   - press: "enter"
   - wait:
       screen:
-        contains: "renamed"
-      timeoutMs: 5000
-  - wait:
-      screen:
         contains: "after.http"
-      timeoutMs: 5000
+      timeoutMs: 10000
   - snapshot: renamed
   - use: quit_clean
 
