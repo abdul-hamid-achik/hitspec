@@ -1,50 +1,26 @@
 # Studio end-to-end tests
 
-Two complementary black-box suites:
+Black-box behavior tests for `hitspec studio`, driven through a real pseudo-terminal
+by [glyphrun](https://github.com/abdul-hamid-achik/glyphrun) (the `glyph` binary).
 
-- **glyphrun** (`specs/glyphrun/`) — drives `hitspec studio` (the terminal UI)
-  through a real pseudo-terminal, asserting against the rendered virtual-terminal
-  screen and the process exit code. This is the UI suite.
-- **cairntrace** (`cairntrace/`) — drives the `hitspec serve` REST API
-  (`/api/v1/*`, the same functional layer the TUI consumes) through a browser
-  backend, asserting JSON responses and request health. This is the API suite.
+Each spec launches the studio binary in a PTY, drives it with keystrokes, and
+asserts against the rendered virtual-terminal screen and the process exit code —
+no coupling to studio's internals.
 
-Each glyphrun spec launches the studio binary in a PTY, drives it with
-keystrokes, and asserts against the screen — no coupling to studio's internals.
+(The `hitspec serve` REST API has its own Go tests in `packages/serve`; this
+folder is the terminal-UI suite.)
 
 ## Running
 
 ```bash
-task e2e            # glyphrun TUI suite (build + run)
-task e2e-cairn      # cairntrace serve-API suite (starts/stops the server for you)
-task e2e-all        # both suites
-
+task e2e                                   # build + run the whole suite
 # or directly (from the repo root):
 go build -o ./e2e/bin/hitspec ./apps/cli
 glyph run e2e/specs/glyphrun/*.yml --format md
 ```
 
 Requires `glyph` on PATH (`brew install abdul-hamid-achik/tap/glyph` or
-`go install github.com/abdul-hamid-achik/glyphrun/cmd/glyph@latest`) for the TUI
-suite, and `cairn` (cairntrace) + `agent-browser` for the API suite.
-
-### cairntrace serve-API suite
-
-`task e2e-cairn` builds the binary, starts `hitspec serve --api-only` on port
-4517 against a scratch workspace, waits for readiness, runs the flows in
-`cairntrace/flows/`, and always stops the server. Run flows manually with the
-server already up:
-
-```bash
-hitspec serve --api-only --cors --port 4517 /tmp/hitspec-cairn-ws &
-cairn run e2e/cairntrace/flows --format md
-```
-
-Flows cover system info, workspace + file CRUD, environments + config, run
-execution, curl import, and the stress/mock/record status endpoints. They use
-`httpJson`/`noFailedRequests` verifiers and a `script` escape hatch; the
-`execute_run` flow targets the server's own endpoint so it needs no external
-network. Run artifacts land in `~/.cairntrace/runs` (outside the repo).
+`go install github.com/abdul-hamid-achik/glyphrun/cmd/glyph@latest`).
 
 Glyphrun discovers `glyphrun.config.yml` by walking up from each spec, and
 resolves spec paths (`cwd`, preconditions, `artifactRoot`, `vars`) **relative to
@@ -59,9 +35,7 @@ a precondition, so the specs are self-contained.
 | `specs/glyphrun/*.yml` | the behavior specs |
 | `fixtures/workspace/` | a sample `.http` workspace |
 | `fixtures/empty/` | an empty workspace (triggers the welcome card) |
-| `.glyphrun/runs/` | glyphrun artifact packs per run (gitignored) |
-| `cairntrace/cairntrace.config.yml` | cairntrace config (baseUrl → the serve API) |
-| `cairntrace/flows/*.yml` | serve-API behavior flows |
+| `.glyphrun/runs/` | artifact packs per run (gitignored) |
 
 ## Specs
 
