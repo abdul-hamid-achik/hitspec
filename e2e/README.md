@@ -68,16 +68,23 @@ config and build/artifact dirs at the `e2e/` root:
 | `edit_save.yml` | `e` edits the source, text marks it modified, `ctrl+s` saves and reloads |
 | `focus_cycle.yml` | `tab` cycles files → requests → source → response; hints update per pane |
 | `history_after_run.yml` | a run is persisted and appears on the history screen (`6`) |
+| `adhoc_request.yml` | palette → filter "Quick" → prompt a URL → run a one-off ad-hoc request |
+| `duplicate_file.yml` | palette → filter "Duplicate" → accept prompt → the copy appears (scratch ws) |
+| `copy_as_curl.yml` | palette → filter "as curl" → renders the selected request as curl |
 
 Reusable actions live in `specs/actions/` (`quit_clean`, `open_workspace`) and
 are pulled in with `imports:` + `use:`.
 
 ## Note on key encoding
 
-These specs drive studio with printable keys (`q`, `g`, digits) and `ctrl+<key>`
-(`ctrl+t`). The Bubble Tea v2 input parser does **not** match the `enter`/`esc`
-key *bindings* when those keys arrive as bare control bytes over glyphrun's PTY
-(real terminals and the Go unit tests in `packages/tui` exercise those paths
-directly). So overlays that close only on Enter/Escape (theme picker, env
-switcher, command-palette execute) are covered by `packages/tui` unit tests and,
-for theming, by the `--theme` flag spec here rather than by driving the picker.
+These specs drive studio with printable keys (`q`, `g`, digits), `ctrl+<key>`
+(`ctrl+t`, `ctrl+p`, `ctrl+f`), **and `enter`/`esc`** — the latter now bind
+correctly over glyphrun's PTY (earlier toolchain versions didn't, so older specs
+leaned on `ctrl+c` to quit and the `--theme` flag instead of driving the picker;
+those still work and are kept). `enter`/`esc` are exercised directly now by the
+palette/prompt specs (`adhoc_request`, `duplicate_file`, `copy_as_curl`).
+
+Palette tip: the command list filters via `/` then a query (not type-to-filter).
+Use a **short, unique** token and `wait` for `1 item` before `enter`, both to
+avoid dropped keystrokes on long queries and so `enter` executes the single match
+rather than just applying the filter.

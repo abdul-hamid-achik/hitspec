@@ -1,0 +1,68 @@
+version: 1
+name: studio_adhoc_request
+
+intent: |
+  the command palette can run a one-off ad-hoc request: filter to "Quick
+  request", run it, type a URL into the prompt, and submit. The URL targets a
+  closed local port so the run resolves deterministically with no external
+  network. Exercises palette filtering, enter-to-execute, and the prompt flow.
+
+imports:
+  - ../actions/open_workspace.yml
+  - ../actions/quit_clean.yml
+
+target:
+  cmd: ["${vars.bin}", "studio", "${vars.workspace}"]
+  cwd: "."
+  timeoutMs: 15000
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+
+steps:
+  - use: open_workspace
+  - press: "ctrl+p"
+  - wait:
+      screen:
+        contains: "Command Palette"
+      timeoutMs: 5000
+  - press: "/"
+  # "Quick" uniquely matches the ad-hoc command; wait for the single match first
+  - type: "Quick"
+  - wait:
+      screen:
+        contains: "1 item"
+      timeoutMs: 5000
+  - press: "enter"
+  - wait:
+      screen:
+        contains: "Quick request"
+      timeoutMs: 5000
+  - type: "GET http://localhost:1/health"
+  - press: "enter"
+  - wait:
+      screen:
+        contains: "run complete"
+      timeoutMs: 8000
+  - snapshot: adhoc_result
+  - use: quit_clean
+
+outcomes:
+  - id: adhoc_ran
+    description: the ad-hoc request executed and reported a completed run
+    verify:
+      screen:
+        contains: "run complete"
+  - id: clean_exit
+    description: q exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0

@@ -1,0 +1,73 @@
+version: 1
+name: studio_duplicate_file
+
+intent: |
+  the command palette duplicates the selected file: filter to "Duplicate file",
+  run it, accept the pre-filled destination prompt, and the copy appears in the
+  file list. Runs in a scratch workspace so the new file is throwaway.
+
+imports:
+  - ../actions/quit_clean.yml
+
+target:
+  cmd: ["${vars.bin}", "studio", "/tmp/hitspec-studio-e2e/dup"]
+  cwd: "."
+  timeoutMs: 15000
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+    - run: "rm -rf /tmp/hitspec-studio-e2e/dup && mkdir -p /tmp/hitspec-studio-e2e/dup"
+      timeoutMs: 10000
+    - run: "printf '### Orig\\n# @name orig\\nGET https://example.com/\\n' > /tmp/hitspec-studio-e2e/dup/orig.http"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "orig.http"
+      timeoutMs: 8000
+  - press: "ctrl+p"
+  - wait:
+      screen:
+        contains: "Command Palette"
+      timeoutMs: 5000
+  - press: "/"
+  # "Duplicate" uniquely matches; wait for the single match before executing
+  - type: "Duplicate"
+  - wait:
+      screen:
+        contains: "1 item"
+      timeoutMs: 5000
+  - press: "enter"
+  - wait:
+      screen:
+        contains: "Duplicate file"
+      timeoutMs: 5000
+  # the prompt is pre-filled with a suggested copy name; accept it
+  - press: "enter"
+  - wait:
+      screen:
+        contains: "duplicated"
+      timeoutMs: 5000
+  - snapshot: duplicated
+  - use: quit_clean
+
+outcomes:
+  - id: file_duplicated
+    description: duplicating reports success in the status line
+    verify:
+      screen:
+        contains: "duplicated"
+  - id: clean_exit
+    description: q exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0
