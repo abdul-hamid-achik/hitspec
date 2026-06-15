@@ -47,9 +47,19 @@ steps:
   - press: "tab"
   - press: "tab"
   - press: "tab"
-  # Body → Headers → Assertions → Timing
+  # Body → Headers → Assertions: the Assertions tab renders the actual failed
+  # assertion from the file (status == 200), not just a tab label
   - press: "]"
   - press: "]"
+  - wait:
+      screen:
+        contains: "status"
+      timeoutMs: 5000
+  - wait:
+      screen:
+        contains: "200"
+      timeoutMs: 5000
+  # Assertions → Timing
   - press: "]"
   - wait:
       screen:
