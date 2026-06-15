@@ -1,0 +1,11 @@
+version: 1
+name: quit_clean
+
+# Reusable tail: press q and assert the process exits 0. Imported by specs that
+# end on the workspace/secondary screens (not those mid-edit, where q is typed).
+steps:
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000

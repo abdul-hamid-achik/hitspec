@@ -14,12 +14,12 @@ folder is the terminal-UI suite.)
 
 ```bash
 task e2e                 # build + run the whole suite
-task e2e -- settings     # run one spec (bare name from specs/glyphrun/, or a path)
+task e2e -- settings     # run one spec (bare name from specs/flows/, or a path)
 task --watch e2e         # rebuild + rerun on any TUI or spec change
 
 # or directly (from the repo root):
 go build -o ./e2e/bin/hitspec ./apps/cli
-glyph run e2e/specs/glyphrun/*.yml --format md
+glyph run e2e/specs/flows/*.yml --format md
 ```
 
 Requires `glyph` on PATH (`brew install abdul-hamid-achik/tap/glyph` or
@@ -32,12 +32,17 @@ a precondition, so the specs are self-contained.
 
 ## Layout
 
+Authored content lives under `specs/` (flows + actions + fixtures), with the
+config and build/artifact dirs at the `e2e/` root:
+
 | Path | Purpose |
 |------|---------|
 | `glyphrun.config.yml` | terminal defaults, vars (`bin`, `workspace`, …), env |
-| `specs/glyphrun/*.yml` | the behavior specs |
-| `fixtures/workspace/` | a sample `.http` workspace |
-| `fixtures/empty/` | an empty workspace (triggers the welcome card) |
+| `specs/flows/*.yml` | the behavior specs |
+| `specs/actions/*.yml` | reusable action snippets (imported, invoked via `use:`) |
+| `specs/fixtures/workspace/` | a sample `.http` workspace |
+| `specs/fixtures/empty/` | an empty workspace (triggers the welcome card) |
+| `bin/` | the built `hitspec` binary (gitignored) |
 | `.glyphrun/runs/` | artifact packs per run (gitignored) |
 
 ## Specs

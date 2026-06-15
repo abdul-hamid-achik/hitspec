@@ -5,6 +5,9 @@ intent: |
   the number keys switch between studio's screens, and the active screen is
   reflected in the top bar.
 
+imports:
+  - ../actions/quit_clean.yml
+
 target:
   cmd: ["${vars.bin}", "studio", "${vars.workspace}"]
   cwd: "."
@@ -42,11 +45,7 @@ steps:
       screen:
         contains: "WORKSPACE"
       timeoutMs: 5000
-  - press: "q"
-  - wait:
-      process:
-        exitCode: 0
-      timeoutMs: 5000
+  - use: quit_clean
 
 outcomes:
   # Intermediate screens (STRESS, HISTORY) are asserted by the wait steps above.
