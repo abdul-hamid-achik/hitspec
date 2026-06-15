@@ -46,10 +46,30 @@ tasks:
       - task: go:test
 
   e2e:
-    desc: Run studio end-to-end tests (PTY behavior specs via glyphrun's `glyph`)
+    desc: Run studio e2e specs (glyphrun). `task e2e -- settings` runs one; `task --watch e2e` reruns on change.
+    # method:none disables up-to-date skipping so the suite always runs, while
+    # `sources` still lets `task --watch e2e` rerun on TUI/spec changes.
+    method: none
+    sources:
+      - apps/cli/**/*.go
+      - packages/tui/**/*.go
+      - packages/clientmgr/**/*.go
+      - e2e/specs/glyphrun/*.yml
+      - e2e/fixtures/**/*
     cmds:
       - go build -o ./e2e/bin/hitspec ./apps/cli
-      - glyph run e2e/specs/glyphrun/*.yml --format md
+      # With `-- <name>` run a single spec (bare name or path); otherwise the suite.
+      - |
+        arg='{{.CLI_ARGS}}'
+        if [ -n "$arg" ]; then
+          case "$arg" in
+            */* | *.yml) target="$arg" ;;
+            *)           target="e2e/specs/glyphrun/$arg.yml" ;;
+          esac
+        else
+          target="e2e/specs/glyphrun/*.yml"
+        fi
+        glyph run $target --format md
     preconditions:
       - sh: command -v glyph
         msg: "glyph (glyphrun) is not installed — see https://github.com/abdul-hamid-achik/glyphrun"
