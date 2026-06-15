@@ -1,0 +1,70 @@
+version: 1
+name: studio_focus_cycle
+
+intent: |
+  tab cycles focus across the workspace panes (files → requests → source →
+  response), and the status-bar hints update to the actions for the focused
+  pane.
+
+imports:
+  - ../actions/open_workspace.yml
+  - ../actions/quit_clean.yml
+
+target:
+  cmd: ["${vars.bin}", "studio", "${vars.workspace}"]
+  cwd: "."
+  timeoutMs: 15000
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+
+steps:
+  - use: open_workspace
+  # files focus shows the file actions
+  - wait:
+      screen:
+        contains: "n new"
+      timeoutMs: 5000
+  - press: "tab"
+  # requests focus
+  - wait:
+      screen:
+        contains: "rows"
+      timeoutMs: 5000
+  - press: "tab"
+  # source focus
+  - wait:
+      screen:
+        contains: "ctrl+s"
+      timeoutMs: 5000
+  - press: "tab"
+  # response focus
+  - wait:
+      screen:
+        contains: "tabs"
+      timeoutMs: 5000
+  - snapshot: response_focus
+  - use: quit_clean
+
+outcomes:
+  # The intermediate focuses (requests "rows", source "ctrl+s") are asserted by
+  # the wait steps above; reaching the response step proves the full cycle. The
+  # outcome can only check the final screen, which rests on the response pane.
+  - id: response_focus_hint
+    description: cycling with tab lands on the response pane (tab-navigation hints)
+    verify:
+      screen:
+        contains: "tabs"
+  - id: clean_exit
+    description: q exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0

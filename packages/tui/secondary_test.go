@@ -45,6 +45,41 @@ func TestHandleEventStressAndMock(t *testing.T) {
 	m.handleEvent(clientmgr.Event{Type: "mock_request"})
 }
 
+// TestHandleSecondaryKeyFormArms covers the form-active control keys:
+// FormNext/FormPrev move field focus, Cancel leaves the form, and Confirm
+// submits.
+func TestHandleSecondaryKeyFormArms(t *testing.T) {
+	m := newModel(context.Background(), newTestManager(t), Options{})
+	m.workspace = clientmgr.WorkspaceDTO{Environment: "dev"}
+	m.setScreen(screenStress)
+	m.focusForm(true)
+	if m.formFocus != 0 {
+		t.Fatalf("focusForm should start at field 0, got %d", m.formFocus)
+	}
+
+	// down → next field, up → previous field.
+	m.handleSecondaryKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
+	if m.formFocus != 1 {
+		t.Fatalf("FormNext should advance to field 1, got %d", m.formFocus)
+	}
+	m.handleSecondaryKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyUp}))
+	if m.formFocus != 0 {
+		t.Fatalf("FormPrev should return to field 0, got %d", m.formFocus)
+	}
+
+	// enter (Confirm) submits the form and returns a command.
+	if cmd := m.handleSecondaryKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter})); cmd == nil {
+		t.Fatal("Confirm on an active form should return a submit command")
+	}
+
+	// esc (Cancel) leaves form-edit mode.
+	m.focusForm(true)
+	m.handleSecondaryKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape}))
+	if m.formActive {
+		t.Fatal("Cancel should leave form-edit mode")
+	}
+}
+
 // TestFormEditCapturesGlobalKeys guards the bug where typing into a focused
 // secondary-screen form field still triggered global key bindings — e.g. a "9"
 // jumped to the settings screen instead of landing in the field, making numeric

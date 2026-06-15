@@ -1,0 +1,11 @@
+version: 1
+name: open_workspace
+
+# Reusable head: wait until the studio has launched on a populated workspace
+# (the WORKSPACE tab is active in the top bar). Imported by specs that then drive
+# overlays or pane navigation from the workspace screen.
+steps:
+  - wait:
+      screen:
+        contains: "WORKSPACE"
+      timeoutMs: 8000

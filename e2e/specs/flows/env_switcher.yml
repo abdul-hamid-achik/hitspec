@@ -5,6 +5,9 @@ intent: |
   ctrl+e opens the environment switcher overlay populated from the workspace
   config; ctrl+c closes it and exits cleanly.
 
+imports:
+  - ../actions/open_workspace.yml
+
 target:
   cmd: ["${vars.bin}", "studio", "${vars.workspace}"]
   cwd: "."
@@ -22,10 +25,7 @@ preconditions:
       timeoutMs: 120000
 
 steps:
-  - wait:
-      screen:
-        contains: "WORKSPACE"
-      timeoutMs: 8000
+  - use: open_workspace
   - press: "ctrl+e"
   - wait:
       screen:

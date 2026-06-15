@@ -1,0 +1,70 @@
+version: 1
+name: studio_run_request
+
+intent: |
+  running a file (R) executes its requests and reports the result in the status
+  bar, and the response pane is reachable by tabbing to it. The request targets a
+  closed local port so the run fails deterministically with no external network.
+
+imports:
+  - ../actions/quit_clean.yml
+
+target:
+  cmd: ["${vars.bin}", "studio", "/tmp/hitspec-studio-e2e/run"]
+  cwd: "."
+  timeoutMs: 15000
+
+terminal:
+  cols: 130
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+    - run: "rm -rf /tmp/hitspec-studio-e2e/run && mkdir -p /tmp/hitspec-studio-e2e/run"
+      timeoutMs: 10000
+    - run: "printf '### Ping closed port\\n# @name ping\\nGET http://localhost:1/health\\n\\n>>>\\nexpect status 200\\n<<<\\n' > /tmp/hitspec-studio-e2e/run/ping.http"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "ping"
+      timeoutMs: 8000
+  - press: "R"
+  - wait:
+      screen:
+        contains: "run complete"
+      timeoutMs: 8000
+  # On a wide terminal the response pane is shown alongside source; tab focus to
+  # it and cycle its tabs to prove the response viewer is driven by the result.
+  - press: "tab"
+  - press: "tab"
+  - press: "tab"
+  - wait:
+      screen:
+        contains: "Body"
+      timeoutMs: 5000
+  - press: "]"
+  - snapshot: response
+  - use: quit_clean
+
+outcomes:
+  - id: run_failed_deterministically
+    description: the run completes and reports one failed request
+    verify:
+      screen:
+        contains: "1 failed"
+  - id: response_tabs_present
+    description: the response viewer tab bar is reachable after a run
+    verify:
+      screen:
+        contains: "Body"
+  - id: clean_exit
+    description: q exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0
