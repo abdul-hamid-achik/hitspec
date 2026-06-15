@@ -6,6 +6,9 @@ intent: |
   closes it and exits cleanly (the picker is otherwise esc/enter-gated, which
   don't bind over a PTY).
 
+imports:
+  - ../actions/open_workspace.yml
+
 target:
   cmd: ["${vars.bin}", "studio", "${vars.workspace}"]
   cwd: "."
@@ -23,10 +26,7 @@ preconditions:
       timeoutMs: 120000
 
 steps:
-  - wait:
-      screen:
-        contains: "WORKSPACE"
-      timeoutMs: 8000
+  - use: open_workspace
   - press: "ctrl+t"
   - wait:
       screen:

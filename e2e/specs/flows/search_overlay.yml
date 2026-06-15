@@ -6,6 +6,9 @@ intent: |
   methods, URLs and tags, and the matching request appears. ctrl+c closes the
   overlay and exits (proving the hard-interrupt works from this modal too).
 
+imports:
+  - ../actions/open_workspace.yml
+
 target:
   cmd: ["${vars.bin}", "studio", "${vars.workspace}"]
   cwd: "."
@@ -23,10 +26,7 @@ preconditions:
       timeoutMs: 120000
 
 steps:
-  - wait:
-      screen:
-        contains: "WORKSPACE"
-      timeoutMs: 8000
+  - use: open_workspace
   - press: "ctrl+f"
   - wait:
       screen:

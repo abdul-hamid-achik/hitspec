@@ -64,6 +64,13 @@ config and build/artifact dirs at the `e2e/` root:
 | `all_modules.yml` | every numbered screen (stress/mock/contract/record/import/cookies) renders its module |
 | `theme_picker.yml` | `ctrl+t` opens the theme picker overlay; `ctrl+c` closes and exits |
 | `env_switcher.yml` | `ctrl+e` opens the environment switcher overlay; `ctrl+c` closes and exits |
+| `run_request.yml` | `R` runs a file (closed local port → deterministic fail); response pane + tabs reachable |
+| `edit_save.yml` | `e` edits the source, text marks it modified, `ctrl+s` saves and reloads |
+| `focus_cycle.yml` | `tab` cycles files → requests → source → response; hints update per pane |
+| `history_after_run.yml` | a run is persisted and appears on the history screen (`6`) |
+
+Reusable actions live in `specs/actions/` (`quit_clean`, `open_workspace`) and
+are pulled in with `imports:` + `use:`.
 
 ## Note on key encoding
 

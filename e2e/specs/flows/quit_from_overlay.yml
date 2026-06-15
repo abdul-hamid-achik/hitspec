@@ -6,6 +6,9 @@ intent: |
   modal that otherwise consumes every key — ctrl+c must still quit cleanly. (It
   used to be swallowed, leaving no way out over a PTY where esc doesn't bind.)
 
+imports:
+  - ../actions/open_workspace.yml
+
 target:
   cmd: ["${vars.bin}", "studio", "${vars.workspace}"]
   cwd: "."
@@ -23,10 +26,7 @@ preconditions:
       timeoutMs: 120000
 
 steps:
-  - wait:
-      screen:
-        contains: "WORKSPACE"
-      timeoutMs: 8000
+  - use: open_workspace
   - press: "ctrl+p"
   - wait:
       screen:
