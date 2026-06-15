@@ -1,0 +1,94 @@
+version: 1
+name: studio_clear_history
+
+intent: |
+  the palette clears run history behind a confirm dialog: after a run shows on
+  the history screen, "Clear history" prompts for confirmation and y empties the
+  list. Runs in a scratch workspace; the run targets a closed local port.
+
+imports:
+  - ../actions/quit_clean.yml
+
+target:
+  cmd: ["${vars.bin}", "studio", "/tmp/hitspec-studio-e2e/clearhist"]
+  cwd: "."
+  timeoutMs: 15000
+  # Isolate the global history/cookie store (~/.hitspec) to a throwaway HOME so
+  # the test neither reads nor wipes the user's real run history. target.env
+  # applies to the studio process only — preconditions still build with the real
+  # HOME. This also makes the cleared state deterministic (1 run → 0).
+  env:
+    HOME: /tmp/hitspec-studio-e2e/home
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+    - run: "rm -rf /tmp/hitspec-studio-e2e/clearhist && mkdir -p /tmp/hitspec-studio-e2e/clearhist"
+      timeoutMs: 10000
+    - run: "rm -rf /tmp/hitspec-studio-e2e/home"
+      timeoutMs: 10000
+    - run: "printf '### Clp\\n# @name clp\\nGET http://localhost:1/health\\n\\n>>>\\nexpect status 200\\n<<<\\n' > /tmp/hitspec-studio-e2e/clearhist/clp.http"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "clp.http"
+      timeoutMs: 8000
+  - press: "R"
+  - wait:
+      screen:
+        contains: "run complete"
+      timeoutMs: 8000
+  - press: "6"
+  - wait:
+      screen:
+        contains: "clp.http"
+      timeoutMs: 5000
+  - press: "ctrl+p"
+  - wait:
+      screen:
+        contains: "Command Palette"
+      timeoutMs: 5000
+  - press: "/"
+  - type: "Clear history"
+  - wait:
+      screen:
+        contains: "1 item"
+      timeoutMs: 5000
+  - press: "enter"
+  - wait:
+      screen:
+        contains: "Delete all run history"
+      timeoutMs: 5000
+  - press: "y"
+  # once the async clear completes the list is empty (the run row, incl its
+  # pass/fail counts, is gone — "clp.http" also lives in the top bar, so assert
+  # the empty-list state instead).
+  - wait:
+      screen:
+        contains: "No items."
+      timeoutMs: 8000
+  - snapshot: cleared
+  - use: quit_clean
+
+outcomes:
+  # The confirm dialog is asserted by the wait step above; the outcome checks the
+  # final, cleared state — the history list is empty.
+  - id: history_cleared
+    description: confirming empties the history list
+    verify:
+      screen:
+        contains: "No items."
+  - id: clean_exit
+    description: q exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0

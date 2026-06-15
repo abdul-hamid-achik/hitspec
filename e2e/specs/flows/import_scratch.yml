@@ -1,0 +1,56 @@
+version: 1
+name: studio_import_scratch
+
+intent: |
+  the import screen converts input into a scratch .http file: submit the
+  pre-filled curl form and the imported request opens in the workspace. Runs in
+  a scratch workspace so the generated file is throwaway.
+
+imports:
+  - ../actions/quit_clean.yml
+
+target:
+  cmd: ["${vars.bin}", "studio", "/tmp/hitspec-studio-e2e/import"]
+  cwd: "."
+  timeoutMs: 15000
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+    - run: "rm -rf /tmp/hitspec-studio-e2e/import && mkdir -p /tmp/hitspec-studio-e2e/import"
+      timeoutMs: 10000
+
+steps:
+  - press: "7"
+  - wait:
+      screen:
+        contains: "IMPORT"
+      timeoutMs: 8000
+  # the form is pre-filled (format curl, input "curl https://example.com"); submit it
+  - press: "e"
+  - press: "enter"
+  - wait:
+      screen:
+        contains: "imported"
+      timeoutMs: 8000
+  - snapshot: imported
+  - use: quit_clean
+
+outcomes:
+  - id: import_created_file
+    description: importing opens a generated scratch file (status reports it)
+    verify:
+      screen:
+        contains: "imported"
+  - id: clean_exit
+    description: q exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0
