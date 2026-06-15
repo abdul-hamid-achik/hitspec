@@ -1,0 +1,75 @@
+version: 1
+name: studio_response_tabs
+
+intent: |
+  after a run, the response viewer cycles through its tabs with ] — Body,
+  Headers, Assertions, Timing, Captures — and each shows its own content. The
+  run targets a closed local port so it resolves deterministically.
+
+imports:
+  - ../actions/quit_clean.yml
+
+target:
+  cmd: ["${vars.bin}", "studio", "/tmp/hitspec-studio-e2e/tabs"]
+  cwd: "."
+  timeoutMs: 15000
+
+terminal:
+  cols: 130
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+    - run: "rm -rf /tmp/hitspec-studio-e2e/tabs && mkdir -p /tmp/hitspec-studio-e2e/tabs"
+      timeoutMs: 10000
+    - run: "printf '### Tabping\\n# @name tabping\\nGET http://localhost:1/health\\n\\n>>>\\nexpect status 200\\n<<<\\n' > /tmp/hitspec-studio-e2e/tabs/tabping.http"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "tabping"
+      timeoutMs: 8000
+  - press: "R"
+  - wait:
+      screen:
+        contains: "run complete"
+      timeoutMs: 8000
+  # focus the response pane (files → requests → source → response)
+  - press: "tab"
+  - press: "tab"
+  - press: "tab"
+  # Body → Headers → Assertions → Timing
+  - press: "]"
+  - press: "]"
+  - press: "]"
+  - wait:
+      screen:
+        contains: "Total"
+      timeoutMs: 5000
+  # Timing → Captures
+  - press: "]"
+  - wait:
+      screen:
+        contains: "No captured variables"
+      timeoutMs: 5000
+  - snapshot: captures_tab
+  - use: quit_clean
+
+outcomes:
+  # The Timing tab ("Total") is asserted by the wait step mid-cycle; the outcome
+  # can only check the final screen, which rests on the Captures tab.
+  - id: captures_tab
+    description: cycling tabs with ] reaches the Captures tab and its empty state
+    verify:
+      screen:
+        contains: "No captured variables"
+  - id: clean_exit
+    description: q exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0
