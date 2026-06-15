@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/abdul-hamid-achik/hitspec/packages/clientmgr"
 )
 
@@ -48,6 +50,61 @@ func TestHistoryDeleteOpensConfirm(t *testing.T) {
 	}
 	if !strings.Contains(m.confirm.title, "Delete run") {
 		t.Fatalf("unexpected confirm title: %q", m.confirm.title)
+	}
+}
+
+func TestHistoryContentPopulated(t *testing.T) {
+	m := newModel(context.Background(), newTestManager(t), Options{})
+	m.history = sampleHistory()
+	out := m.historyContent()
+	for _, want := range []string{"Runs: 2", "api.http", "auth.http", "pass:3"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("historyContent missing %q in:\n%s", want, out)
+		}
+	}
+	// Empty history shows the refresh hint instead.
+	m.history = clientmgr.HistoryListDTO{}
+	if !strings.Contains(m.historyContent(), "No persistent history") {
+		t.Fatalf("empty historyContent should show the refresh hint, got:\n%s", m.historyContent())
+	}
+}
+
+func TestHistoryEnterOpensDetail(t *testing.T) {
+	m := newModel(context.Background(), newTestManager(t), Options{})
+	m.setScreen(screenHistory)
+	m.history = sampleHistory()
+	m.refreshHistoryList()
+
+	cmd := m.handleHistoryKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+	if cmd == nil {
+		t.Fatal("enter on a history row should load that run's detail")
+	}
+	if !m.transitioned {
+		t.Fatal("enter should mark the key consumed so it doesn't leak to the list")
+	}
+}
+
+func TestHistoryEscLeavesDetailMode(t *testing.T) {
+	m := newModel(context.Background(), newTestManager(t), Options{})
+	m.setScreen(screenHistory)
+	m.historyDetailMode = true
+
+	m.handleHistoryKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape}))
+	if m.historyDetailMode {
+		t.Fatal("esc should return from the detail view to the run list")
+	}
+}
+
+func TestHistoryRefreshReloads(t *testing.T) {
+	m := newModel(context.Background(), newTestManager(t), Options{})
+	m.setScreen(screenHistory)
+	// ctrl+r refreshes from both the list and the detail view.
+	if m.handleHistoryKey(tea.KeyPressMsg(tea.Key{Code: 'r', Mod: tea.ModCtrl})) == nil {
+		t.Fatal("ctrl+r on the list should issue a reload command")
+	}
+	m.historyDetailMode = true
+	if m.handleHistoryKey(tea.KeyPressMsg(tea.Key{Code: 'r', Mod: tea.ModCtrl})) == nil {
+		t.Fatal("ctrl+r in detail mode should issue a reload command")
 	}
 }
 

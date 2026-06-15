@@ -77,6 +77,81 @@ func TestExecuteCommandEnvSwitch(t *testing.T) {
 	}
 }
 
+// TestSubmitFormCmdSafeScreens executes the submit closures that don't bind
+// ports or hit the network (cookies → local store, import → curl parse) and
+// asserts the rest are at least wired up (the closures would start real
+// servers, so they're only checked for non-nil).
+func TestSubmitFormCmdSafeScreens(t *testing.T) {
+	t.Run("cookies", func(t *testing.T) {
+		m := newModel(context.Background(), newTestManager(t), Options{})
+		m.setScreen(screenCookies)
+		m.formInputs[3].SetValue("tok") // value
+		msg := m.submitFormCmd()()
+		cm, ok := msg.(cookiesMsg)
+		if !ok {
+			t.Fatalf("cookies submit -> %T, want cookiesMsg", msg)
+		}
+		if cm.err != nil {
+			t.Fatalf("cookies submit errored: %v", cm.err)
+		}
+	})
+
+	t.Run("import", func(t *testing.T) {
+		m := newModel(context.Background(), newTestManager(t), Options{})
+		m.setScreen(screenImport)
+		msg := m.submitFormCmd()() // defaults: curl, "curl https://example.com"
+		im, ok := msg.(importMsg)
+		if !ok {
+			t.Fatalf("import submit -> %T, want importMsg", msg)
+		}
+		if im.err != nil {
+			t.Fatalf("import submit errored: %v", im.err)
+		}
+	})
+
+	// Server/network submits: assert wiring only.
+	for _, s := range []screen{screenStress, screenMock, screenContract, screenRecord} {
+		m := newModel(context.Background(), newTestManager(t), Options{})
+		m.selected = "api.http"
+		m.setScreen(s)
+		if m.submitFormCmd() == nil {
+			t.Fatalf("submitFormCmd for screen %v returned nil", s)
+		}
+	}
+}
+
+// TestExecuteCommandOpenAndSwitch covers the palette command ids that open an
+// overlay, switch a screen, or build an export command — the cheap, side-effect-
+// free branches of executeCommand.
+func TestExecuteCommandOpenAndSwitch(t *testing.T) {
+	screenSwitch := map[string]screen{
+		"history":  screenHistory,
+		"cookies":  screenCookies,
+		"settings": screenSettings,
+	}
+	for id, want := range screenSwitch {
+		m := newModel(context.Background(), newTestManager(t), Options{})
+		m.executeCommand(id)
+		if m.screen != want {
+			t.Fatalf("executeCommand(%q) -> screen %v, want %v", id, m.screen, want)
+		}
+	}
+
+	m := newModel(context.Background(), newTestManager(t), Options{})
+	if m.executeCommand("theme"); !m.themeOpen {
+		t.Fatal("theme should open the theme picker")
+	}
+	m = newModel(context.Background(), newTestManager(t), Options{})
+	if m.executeCommand("search"); !m.searchOpen {
+		t.Fatal("search should open the search overlay")
+	}
+	m = newModel(context.Background(), newTestManager(t), Options{})
+	m.selected = "api.http"
+	if m.executeCommand("duplicate-file"); m.prompt == nil {
+		t.Fatal("duplicate-file should open a path prompt")
+	}
+}
+
 func TestExecuteCommandStartActionsReturnCommands(t *testing.T) {
 	m := newModel(context.Background(), newTestManager(t), Options{})
 	// Don't invoke the closures (they'd start real servers) — just assert wiring.
@@ -97,6 +172,37 @@ func TestStopScreenCmdStress(t *testing.T) {
 	}
 	if cm.kind != "stress stopping" {
 		t.Fatalf("kind = %q, want 'stress stopping'", cm.kind)
+	}
+}
+
+func TestStopScreenCmdMockAndRecord(t *testing.T) {
+	t.Run("mock", func(t *testing.T) {
+		m := newModel(context.Background(), newTestManager(t), Options{})
+		m.screen = screenMock
+		cmd := m.stopScreenCmd()
+		if cmd == nil {
+			t.Fatal("stopScreenCmd(mock) returned nil")
+		}
+		if _, ok := cmd().(simpleMsg); !ok {
+			t.Fatalf("stopScreenCmd(mock) -> %T, want simpleMsg", cmd())
+		}
+	})
+	t.Run("record", func(t *testing.T) {
+		m := newModel(context.Background(), newTestManager(t), Options{})
+		m.screen = screenRecord
+		cm, ok := m.stopScreenCmd()().(simpleMsg)
+		if !ok {
+			t.Fatalf("stopScreenCmd(record) did not emit simpleMsg")
+		}
+		if cm.kind != "recording proxy stopping" {
+			t.Fatalf("record stop kind = %q", cm.kind)
+		}
+	})
+	// A screen with no stoppable action returns nil.
+	m := newModel(context.Background(), newTestManager(t), Options{})
+	m.screen = screenWorkspace
+	if m.stopScreenCmd() != nil {
+		t.Fatal("stopScreenCmd(workspace) should be nil")
 	}
 }
 

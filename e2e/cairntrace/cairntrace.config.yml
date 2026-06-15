@@ -1,0 +1,25 @@
+# Cairntrace config for hitspec's REST API (packages/serve).
+#
+# cairntrace drives a browser, so these flows exercise the HTTP API surface that
+# the studio TUI and editor integrations consume — every /api/v1 module — via
+# httpJson/network verifiers and request steps. The glyphrun suite
+# (e2e/specs/glyphrun) covers the terminal UI itself.
+#
+# The server is started out of band before a run (the Taskfile `e2e-cairn`
+# target wires this up):
+#   hitspec serve --api-only --cors --port 4517 <workspace-dir>
+# Port 4517 is fixed so baseUrl is stable; pass --var apiBase=... is not needed.
+version: 1
+
+defaultEnvironment: local
+workflowRoots:
+  - ./flows
+
+retention:
+  keepRuns: 5
+
+environments:
+  local:
+    baseUrl: http://localhost:4517
+    vars:
+      apiBase: /api/v1

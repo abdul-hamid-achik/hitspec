@@ -1,0 +1,76 @@
+version: 1
+name: studio_workspace_layout
+
+intent: |
+  the workspace lays out as bordered panels — a bounded files sidebar plus the
+  requests / source / headers / assertions panels — instead of letting the file
+  list spill past its box and shove the other panels out of alignment.
+
+target:
+  cmd: ["${vars.bin}", "studio", "${vars.workspace}"]
+  cwd: "."
+  timeoutMs: 15000
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+
+steps:
+  - wait:
+      screen:
+        contains: "WORKSPACE"
+      timeoutMs: 8000
+  - wait:
+      screen:
+        contains: "sample.http"
+      timeoutMs: 5000
+  - snapshot: workspace
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  # The "files" panel header sits on the first body row, which glyph's vterm
+  # corrupts with its last-column autowrap of the full-width border line (a
+  # harness quirk — real terminals render the border cleanly). Assert instead on
+  # the list's item-count status, which only appears when the file list is bounded
+  # *inside* its panel rather than spilling past it — exactly the bug being fixed.
+  - id: files_sidebar_bounded
+    description: the files sidebar shows its bounded list item count
+    verify:
+      screen:
+        contains: "item"
+  - id: requests_panel
+    description: the requests panel renders next to the sidebar
+    verify:
+      screen:
+        contains: "requests"
+  - id: headers_panel
+    description: the headers metadata panel renders below the main panel
+    verify:
+      screen:
+        contains: "headers"
+  - id: assertions_panel
+    description: the assertions metadata panel renders below the main panel
+    verify:
+      screen:
+        contains: "assertions"
+  - id: bordered_layout
+    description: panels are drawn with box-drawing borders
+    verify:
+      screen:
+        contains: "─"
+  - id: clean_exit
+    description: q exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0

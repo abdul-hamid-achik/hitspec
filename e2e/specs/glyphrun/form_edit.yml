@@ -1,0 +1,66 @@
+version: 1
+name: studio_form_edit
+
+intent: |
+  the secondary screens expose an editable form: pressing `e` focuses the first
+  field and typed characters land in it. This drives the stress form to prove the
+  edit path works end-to-end through a real PTY.
+
+target:
+  cmd: ["${vars.bin}", "studio", "${vars.workspace}"]
+  cwd: "."
+  timeoutMs: 15000
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+
+steps:
+  - wait:
+      screen:
+        contains: "WORKSPACE"
+      timeoutMs: 8000
+  - press: "2"
+  - wait:
+      screen:
+        contains: "STRESS"
+      timeoutMs: 5000
+  # The stress form seeds duration with "30s".
+  - wait:
+      screen:
+        contains: "duration: 30s"
+      timeoutMs: 5000
+  - press: "e"
+  # `e` focuses the first field; the typed digit appends to "30s".
+  - type: "9"
+  - wait:
+      screen:
+        contains: "duration: 30s9"
+      timeoutMs: 5000
+  - snapshot: editing
+  # esc bindings don't arrive over the PTY, but ctrl+c is a hard interrupt that
+  # quits even from form-edit mode.
+  - press: "ctrl+c"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  - id: typed_into_field
+    description: characters typed after `e` land in the focused form field
+    verify:
+      screen:
+        contains: "duration: 30s9"
+  - id: clean_exit
+    description: ctrl+c exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0

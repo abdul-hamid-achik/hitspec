@@ -1,0 +1,30 @@
+ hitspec studio   STRESS                                                              dev  api.http 
+ 1 workspace   2 stress   3 mock  4 contract  5 record  6 history  7 import  8 cookies  9 settings  
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ stress                                                                                           │
+│ duration: 30s                                                                                    │
+│ rate: 5                                                                                          │
+│ vus: 0                                                                                           │
+│ max vus: 0                                                                                       │
+│                                                                                                  │
+│ Running: true                                                                                    │
+│ Elapsed: 15.0s                                                                                   │
+│                                                                                                  │
+│ ▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌░░░░░░░░░░░░░░░░░  50%                                                         │
+│                                                                                                  │
+│ Requests: 450                                                                                    │
+│ Success: 442                                                                                     │
+│ Errors: 8                                                                                        │
+│ RPS: 30.50                                                                                       │
+│ P50/P95/P99: 12.0 / 48.0 / 90.0 ms                                                               │
+│ Error rate: 1.80%                                                                                │
+│ Active VUs: 5                                                                                    │
+│                                                                                                  │
+│                                                                                                  │
+│ e edit fields   enter/s start stress   x stop   esc cancel                                       │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ ready                                    e fields · enter run · esc back · ? help · ctrl+p palette 

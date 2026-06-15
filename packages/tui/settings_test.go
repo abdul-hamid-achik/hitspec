@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/abdul-hamid-achik/hitspec/packages/clientmgr"
@@ -35,6 +36,30 @@ func TestSetEnvVarReadModifyWrite(t *testing.T) {
 func TestSetEnvVarRequiresName(t *testing.T) {
 	if err := setEnvVar(context.Background(), newTestManager(t), "  ", "k", "v"); err == nil {
 		t.Fatal("expected an error when the environment name is blank")
+	}
+}
+
+// TestSettingsConfigMsgKeepsForm guards the regression where loading the config
+// (configMsg) on the settings screen overwrote the preview with the form-less
+// settingsContent, making the editable fields vanish after entry.
+func TestSettingsConfigMsgKeepsForm(t *testing.T) {
+	mgr := newTestManager(t)
+	ctx := context.Background()
+	m := newModel(ctx, mgr, Options{})
+	m.width, m.height = 100, 30
+	m.resize()
+	m.workspace = clientmgr.WorkspaceDTO{Environment: "dev"}
+	m.setScreen(screenSettings)
+
+	updated, _ := m.Update(configMsg{
+		config: clientmgr.ConfigDTO{DefaultEnvironment: "dev", Timeout: 30000},
+		envs:   []clientmgr.EnvironmentDTO{{Name: "dev"}},
+	})
+	view := plain(updated.(model).preview.View())
+	for _, label := range []string{"default env:", "timeout ms:", "set var key:"} {
+		if !strings.Contains(view, label) {
+			t.Fatalf("settings preview dropped form field %q after configMsg:\n%s", label, view)
+		}
 	}
 }
 

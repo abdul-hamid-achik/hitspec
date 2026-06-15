@@ -1,0 +1,30 @@
+ hitspec studio   IMPORT                                                                      dev   
+ 1 workspace  2 stress  3 mock  4 contract  5 record  6 history   7 import   8 cookies  9 settings  
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ import                                                                                           │
+│ format: curl                                                                                     │
+│ input: curl https://example.com                                                                  │
+│ base URL:                                                                                        │
+│                                                                                                  │
+│ Import supports cURL, Insomnia, OpenAPI, and Postman through the manager.                        │
+│                                                                                                  │
+│ The command palette provides quick import actions;                                               │
+│ imported content opens in a scratch file for review before saving.                               │
+│                                                                                                  │
+│ e edit fields   enter/s import into scratch file   esc cancel                                    │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ ready                                    e fields · enter run · esc back · ? help · ctrl+p palette 

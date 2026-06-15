@@ -108,6 +108,32 @@ func TestCtrlCAlwaysQuits(t *testing.T) {
 	}
 }
 
+// TestCtrlCQuitsFromAnyState proves ctrl+c is a true hard interrupt: it must
+// quit even when a modal overlay is open or the source editor is focused —
+// states whose key blocks otherwise return early and would swallow it.
+func TestCtrlCQuitsFromAnyState(t *testing.T) {
+	ctrlC := tea.KeyPressMsg(tea.Key{Code: 'c', Mod: tea.ModCtrl})
+	cases := map[string]func(m *model){
+		"command palette": func(m *model) { m.commandOpen = true },
+		"search overlay":  func(m *model) { m.searchOpen = true },
+		"theme picker":    func(m *model) { m.themeOpen = true },
+		"help overlay":    func(m *model) { m.showHelp = true },
+		"editing source":  func(m *model) { m.editing = true; m.focus = focusSource },
+		"form active":     func(m *model) { m.setScreen(screenStress); m.focusForm(true) },
+	}
+	for name, setup := range cases {
+		m := goldenModel(t, 100, 30)
+		setup(&m)
+		cmd := m.handleKey(ctrlC)
+		if cmd == nil {
+			t.Fatalf("%s: ctrl+c returned no command", name)
+		}
+		if _, ok := cmd().(tea.QuitMsg); !ok {
+			t.Fatalf("%s: ctrl+c did not produce a QuitMsg", name)
+		}
+	}
+}
+
 func TestQuitWhileEditingDoesNotQuit(t *testing.T) {
 	// While editing source, q is a literal character (e.g. typing "query"), not a
 	// quit. The editing key block swallows it before the Quit case, and Update

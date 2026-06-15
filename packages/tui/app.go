@@ -249,7 +249,11 @@ func newModel(ctx context.Context, mgr *clientmgr.Manager, opts Options) model {
 	filesList.Title = "Files"
 	filesList.DisableQuitKeybindings()
 	filesList.SetShowHelp(false)
-	filesList.SetShowPagination(false)
+	// The enclosing panel already renders a "files" header, so the list's own
+	// title badge would be a redundant second heading; hide it. Pagination is
+	// kept on so an overflowing list pages within its fixed height instead of
+	// spilling past the panel border.
+	filesList.SetShowTitle(false)
 
 	cmdPalette := list.New(buildCommandItems(), list.NewDefaultDelegate(), 48, 16)
 	cmdPalette.Title = "Command Palette"
@@ -279,6 +283,9 @@ func newModel(ctx context.Context, mgr *clientmgr.Manager, opts Options) model {
 	historyList.Title = "Run History"
 	historyList.DisableQuitKeybindings()
 	historyList.SetShowHelp(false)
+	// The "history" panel header already labels this list, so its own title
+	// badge would be a redundant second heading (matches the files sidebar).
+	historyList.SetShowTitle(false)
 
 	requests := table.New(
 		table.WithColumns([]table.Column{
@@ -492,8 +499,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.refreshEnvList()
 			if m.screen == screenSettings {
 				m.initFormForScreen(screenSettings)
+				// secondaryContent keeps the editable form above the config dump;
+				// settingsContent alone would silently drop the form fields.
+				m.preview.SetContent(m.secondaryContent())
+			} else {
+				m.preview.SetContent(m.settingsContent())
 			}
-			m.preview.SetContent(m.settingsContent())
 		}
 	case envSelectedMsg:
 		if msg.err != nil {
@@ -507,7 +518,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.workspace = msg.workspace
 		m.refreshEnvList()
 		if m.screen == screenSettings {
-			m.preview.SetContent(m.settingsContent())
+			m.preview.SetContent(m.secondaryContent())
 		}
 		m.status = "environment: " + msg.name
 		cmds = append(cmds, m.notify(toastSuccess, "environment → "+msg.name), loadFilesCmd(m.ctx, m.mgr))
@@ -709,6 +720,12 @@ func (m model) View() tea.View {
 }
 
 func (m *model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
+	// ctrl+c is a hard interrupt: it must quit from ANY state. Handled first so it
+	// can't be swallowed by a modal overlay, source editing, or a focused form
+	// field — every one of those blocks below returns early for unmatched keys.
+	if msg.String() == "ctrl+c" {
+		return func() tea.Msg { return tea.Quit() }
+	}
 	// m.err is intentionally NOT cleared here: the status bar is the only
 	// persistent view of an error, so wiping it on every keypress (including ?
 	// for help or pane navigation) hid errors instantly. It is cleared instead
@@ -834,16 +851,22 @@ func (m *model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		return nil
 	}
+	// While a secondary-screen form field is focused, typed keys must land in the
+	// field — not trigger global navigation (digits would jump screens, letters
+	// would fire shortcuts, making numeric fields like rate/port impossible to
+	// fill). Route only the form's own control keys; ctrl+c still hard-quits, and
+	// everything else falls through to the field forwarder in Update.
+	if m.formActive && m.screen != screenWorkspace {
+		// ctrl+c already hard-quit at the top; only the form's own control keys
+		// act here, everything else falls through to the field forwarder.
+		return m.handleSecondaryKey(msg)
+	}
 	switch {
 	case key.Matches(msg, m.keys.Quit):
-		// While editing source, this case is unreachable — the editing block
-		// above forwards every non-save/cancel key (including q) to the textarea,
-		// so q is typed into the file rather than quitting.
+		// Only "q" reaches here — ctrl+c is hard-quit at the top of handleKey, and
+		// while editing source the editing block above swallows "q" (typed into the
+		// file) before this case.
 		//
-		// ctrl+c is a hard interrupt — always exit immediately.
-		if msg.String() == "ctrl+c" {
-			return func() tea.Msg { return tea.Quit() }
-		}
 		// Unsaved changes: confirm before discarding them.
 		if m.dirty {
 			m.transitioned = true
@@ -1554,29 +1577,89 @@ func (m *model) syncFocus() {
 	}
 }
 
-func (m *model) resize() {
+// wsGeom is the shared workspace geometry. resize() (which sizes the inner
+// widgets) and the view builders (which draw the boxes) both derive their
+// dimensions from geom() so a panel's box and the widget inside it always agree
+// — the mismatch between the two was what let content overflow and break the
+// borders.
+type wsGeom struct {
+	bodyH    int // height available below the topbar/navstrip and above the statusbar
+	sidebarW int
+	mainW    int
+	leftW    int
+	rightW   int
+	reqH     int // requests panel
+	midH     int // source/response panel
+	tblH     int // headers/assertions panels
+}
+
+func (m model) geom() wsGeom {
 	w, h := max(40, m.width), max(12, m.height)
-	sidebar := clamp(w/4, 24, 36)
-	mainW := max(20, w-sidebar-4)
-	bodyH := max(6, h-4)
-	m.filesList.SetSize(sidebar-2, bodyH-2)
+	g := wsGeom{}
+	g.bodyH = max(6, h-3) // topbar + navstrip + statusbar = 3 chrome rows
+	g.sidebarW = clamp(w/4, 24, 36)
+	g.mainW = max(30, w-g.sidebarW)
+	g.leftW = g.mainW / 2
+	g.rightW = g.mainW - g.leftW
+	g.reqH = clamp(g.bodyH/4, 5, 9)
+	g.tblH = clamp(g.bodyH/4, 5, 9)
+	g.midH = max(4, g.bodyH-g.reqH-g.tblH)
+	return g
+}
+
+// A panel's inner content area is (width-4) wide (2 border + 2 padding cells)
+// and (height-3) tall (2 border + 1 header row). Widgets are sized to those
+// inner dimensions so their output fills the box exactly without overflowing.
+func (m *model) resize() {
+	g := m.geom()
+	w, h := max(40, m.width), max(12, m.height)
+
+	// Overlays float over the frame and are sized independently of the layout.
 	m.palette.SetSize(clamp(w-8, 32, 70), clamp(h-8, 10, 24))
 	m.envList.SetSize(clamp(w/3, 28, 50), clamp(h-8, 8, 18))
 	m.themeList.SetSize(clamp(w/3, 28, 50), clamp(h-8, 8, 18))
-	m.historyList.SetSize(max(20, w-6), max(6, bodyH-3))
 	m.searchInput.SetWidth(clamp(w-12, 30, 70))
 	m.searchList.SetSize(clamp(w-10, 32, 72), clamp(h-10, 6, 18))
-	m.source.SetWidth(mainW/2 - 4)
-	m.source.SetHeight(max(1, bodyH-10))
-	m.respView.setSize(mainW/2-4, max(1, bodyH-10))
+
+	// Secondary screens are a single full-width panel; history reserves one
+	// extra row inside it for the action hint line.
 	m.preview.SetWidth(w - 4)
-	m.preview.SetHeight(max(1, bodyH-2))
-	m.requests.SetWidth(mainW - 2)
-	m.requests.SetHeight(8)
-	m.headers.SetWidth(mainW/2 - 4)
-	m.headers.SetHeight(7)
-	m.assertions.SetWidth(mainW/2 - 4)
-	m.assertions.SetHeight(7)
+	m.preview.SetHeight(max(1, g.bodyH-3))
+	m.historyList.SetSize(w-4, max(3, g.bodyH-5))
+
+	switch {
+	case m.width < 78: // narrow: one full-width panel, a single widget at a time
+		innerW := max(8, m.width-4)
+		innerH := max(1, g.bodyH-3)
+		m.filesList.SetSize(innerW, innerH)
+		m.requests.SetWidth(innerW)
+		m.requests.SetHeight(max(1, innerH-1))
+		m.source.SetWidth(innerW)
+		m.source.SetHeight(innerH)
+		m.respView.setSize(innerW, innerH)
+	case m.width < 120: // medium: stacked main column, full width
+		m.filesList.SetSize(g.sidebarW-4, g.bodyH-3)
+		m.requests.SetWidth(g.mainW - 4)
+		m.requests.SetHeight(max(1, g.reqH-4))
+		m.source.SetWidth(g.mainW - 4)
+		m.source.SetHeight(max(1, g.midH-3))
+		m.respView.setSize(g.mainW-4, max(1, g.midH-3))
+		m.headers.SetWidth(g.leftW - 4)
+		m.headers.SetHeight(max(1, g.tblH-4))
+		m.assertions.SetWidth(g.rightW - 4)
+		m.assertions.SetHeight(max(1, g.tblH-4))
+	default: // wide: source and response side by side
+		m.filesList.SetSize(g.sidebarW-4, g.bodyH-3)
+		m.requests.SetWidth(g.mainW - 4)
+		m.requests.SetHeight(max(1, g.reqH-4))
+		m.source.SetWidth(g.leftW - 4)
+		m.source.SetHeight(max(1, g.midH-3))
+		m.respView.setSize(g.rightW-4, max(1, g.midH-3))
+		m.headers.SetWidth(g.leftW - 4)
+		m.headers.SetHeight(max(1, g.tblH-4))
+		m.assertions.SetWidth(g.rightW - 4)
+		m.assertions.SetHeight(max(1, g.tblH-4))
+	}
 }
 
 func (m *model) refreshFileList() {
@@ -1791,20 +1874,19 @@ func (m model) workspaceView() string {
 	if m.width < 78 {
 		return m.narrowWorkspace()
 	}
-	sidebarW := clamp(m.width/4, 24, 36)
-	bodyW := max(30, m.width-sidebarW-2)
-	bodyH := max(6, m.height-4)
-	sidebar := m.panel("files", m.filesList.View(), sidebarW, bodyH, m.focus == focusFiles)
+	g := m.geom()
+	sidebar := m.panel("files", m.filesList.View(), g.sidebarW, g.bodyH, m.focus == focusFiles)
 	var main string
 	if m.width < 120 {
-		main = m.mediumMain(bodyW, bodyH)
+		main = m.mediumMain(g)
 	} else {
-		main = m.wideMain(bodyW, bodyH)
+		main = m.wideMain(g)
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, sidebar, main)
 }
 
 func (m model) narrowWorkspace() string {
+	g := m.geom()
 	title := "source"
 	content := m.source.View()
 	if m.focus == focusFiles {
@@ -1817,10 +1899,10 @@ func (m model) narrowWorkspace() string {
 		title = "response"
 		content = m.respView.view()
 	}
-	return m.panel(title, content, m.width, max(6, m.height-4), true)
+	return m.panel(title, content, m.width, g.bodyH, true)
 }
 
-func (m model) mediumMain(w, h int) string {
+func (m model) mediumMain(g wsGeom) string {
 	var content string
 	switch m.focus {
 	case focusRequests:
@@ -1831,31 +1913,30 @@ func (m model) mediumMain(w, h int) string {
 		content = m.source.View()
 	}
 	meta := lipgloss.JoinHorizontal(lipgloss.Top,
-		m.panel("headers", m.headers.View(), w/2, 8, false),
-		m.panel("assertions", m.assertions.View(), w/2, 8, false),
+		m.panel("headers", m.headers.View(), g.leftW, g.tblH, false),
+		m.panel("assertions", m.assertions.View(), g.rightW, g.tblH, false),
 	)
 	return lipgloss.JoinVertical(lipgloss.Left,
-		m.panel("requests", m.requests.View(), w, 9, m.focus == focusRequests),
-		m.panel("main", content, w, h-19, m.focus == focusSource || m.focus == focusResponse),
+		m.panel("requests", m.requests.View(), g.mainW, g.reqH, m.focus == focusRequests),
+		m.panel("main", content, g.mainW, g.midH, m.focus == focusSource || m.focus == focusResponse),
 		meta,
 	)
 }
 
-func (m model) wideMain(w, h int) string {
-	leftW := w / 2
-	rightW := w - leftW
-	requests := m.panel("requests", m.requests.View(), w, 9, m.focus == focusRequests)
-	source := m.panel("source", m.source.View(), leftW, h-18, m.focus == focusSource)
-	response := m.panel("response", m.respView.view(), rightW, h-18, m.focus == focusResponse)
+func (m model) wideMain(g wsGeom) string {
+	requests := m.panel("requests", m.requests.View(), g.mainW, g.reqH, m.focus == focusRequests)
+	source := m.panel("source", m.source.View(), g.leftW, g.midH, m.focus == focusSource)
+	response := m.panel("response", m.respView.view(), g.rightW, g.midH, m.focus == focusResponse)
 	tables := lipgloss.JoinHorizontal(lipgloss.Top,
-		m.panel("headers", m.headers.View(), leftW, 8, false),
-		m.panel("assertions", m.assertions.View(), rightW, 8, false),
+		m.panel("headers", m.headers.View(), g.leftW, g.tblH, false),
+		m.panel("assertions", m.assertions.View(), g.rightW, g.tblH, false),
 	)
 	return lipgloss.JoinVertical(lipgloss.Left, requests, lipgloss.JoinHorizontal(lipgloss.Top, source, response), tables)
 }
 
 func (m model) secondaryView() string {
 	// preview is kept current on the Update path; View must stay pure (no I/O).
+	g := m.geom()
 	if m.screen == screenHistory {
 		var content, hint string
 		if m.historyDetailMode {
@@ -1866,9 +1947,9 @@ func (m model) secondaryView() string {
 			hint = m.styles.help.Render("enter details · D delete · ctrl+r refresh")
 		}
 		body := lipgloss.JoinVertical(lipgloss.Left, content, hint)
-		return m.panel("history", body, m.width, max(6, m.height-4), true)
+		return m.panel("history", body, m.width, g.bodyH, true)
 	}
-	return m.panel(screenNames[m.screen], m.preview.View(), m.width, max(6, m.height-4), true)
+	return m.panel(screenNames[m.screen], m.preview.View(), m.width, g.bodyH, true)
 }
 
 func (m model) secondaryContent() string {
@@ -1932,13 +2013,20 @@ func (m model) secondaryHelp() string {
 	return m.styles.help.Render("e edit fields   " + action + "   esc cancel")
 }
 
+// panel draws a bordered box of exactly width×height cells (border included)
+// with a bold title row. Content is clipped to the inner area first so an
+// oversized widget can never grow the box and break the border or shove a
+// neighbouring panel out of alignment; correct sizing in resize() means the
+// clip is a safety net rather than the common path.
 func (m model) panel(title, content string, width, height int, active bool) string {
 	style := m.styles.panel
 	if active {
 		style = m.styles.panelHot
 	}
 	header := m.styles.title.Render(title)
-	return style.Width(max(8, width-2)).Height(max(3, height-2)).Render(lipgloss.JoinVertical(lipgloss.Left, header, content))
+	clip := lipgloss.NewStyle().MaxWidth(max(1, width-4)).MaxHeight(max(1, height-3)).Render(content)
+	inner := lipgloss.JoinVertical(lipgloss.Left, header, clip)
+	return style.Width(max(8, width)).Height(max(3, height)).Render(inner)
 }
 
 func (m model) fileSummary() string {
@@ -2101,7 +2189,12 @@ func (m model) historyContent() string {
 }
 
 func (m model) importContent() string {
-	return "Import supports cURL, Insomnia, OpenAPI, and Postman through the manager.\n\nThe command palette provides quick import actions; imported content opens in a scratch file for review before saving."
+	// Pre-wrapped to keep each line within a typical pane width — the preview
+	// viewport clips rather than soft-wraps, so a single long sentence would lose
+	// its tail at the right border.
+	return "Import supports cURL, Insomnia, OpenAPI, and Postman through the manager.\n\n" +
+		"The command palette provides quick import actions;\n" +
+		"imported content opens in a scratch file for review before saving."
 }
 
 func (m model) cookiesContent() string {

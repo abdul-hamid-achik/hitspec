@@ -53,6 +53,21 @@ func TestGoldenWorkspaceNarrow(t *testing.T) {
 	golden.RequireEqual(t, plain(m.View().Content))
 }
 
+// TestGoldenWorkspaceNarrowResponse exercises the narrow single-panel layout
+// with the response pane focused (and a result loaded), covering the focus-
+// switched content branch and the tab bar inside a narrow panel.
+func TestGoldenWorkspaceNarrowResponse(t *testing.T) {
+	m := goldenModel(t, 60, 24)
+	m.workspace = clientmgr.WorkspaceDTO{Environment: "dev"}
+	m.files = []clientmgr.FileInfoDTO{{RelativePath: "api.http", Name: "api.http", RequestCount: 1}}
+	m.selected = "api.http"
+	m.refreshFileList()
+	m.lastResult = sampleResult()
+	m.refreshResultViews()
+	m.focus = focusResponse
+	golden.RequireEqual(t, plain(m.View().Content))
+}
+
 func TestGoldenWelcomeFresh(t *testing.T) {
 	m := goldenModel(t, 100, 30)
 	m.workspace = clientmgr.WorkspaceDTO{Environment: "dev", HasConfig: false}
@@ -155,6 +170,131 @@ func TestGoldenSettingsContent(t *testing.T) {
 		{Name: "prod", Variables: map[string]any{"baseUrl": "https://api.example.com"}},
 	}
 	golden.RequireEqual(t, plain(m.settingsContent()))
+}
+
+// TestGoldenSettingsScreen renders the whole settings screen (form + config
+// dump) so the editable form fields can never silently disappear again — the
+// configMsg handler used to overwrite the preview with the form-less content.
+func TestGoldenSettingsScreen(t *testing.T) {
+	m := goldenModel(t, 100, 30)
+	m.config = clientmgr.ConfigDTO{DefaultEnvironment: "dev", Timeout: 30000, Retries: 2, Concurrency: 4}
+	m.workspace = clientmgr.WorkspaceDTO{Environment: "dev"}
+	m.envs = []clientmgr.EnvironmentDTO{
+		{Name: "dev", Variables: map[string]any{"baseUrl": "http://localhost:3000"}},
+	}
+	m.setScreen(screenSettings)
+	golden.RequireEqual(t, plain(m.View().Content))
+}
+
+// TestGoldenStressScreen renders the full stress screen so its bordered panel,
+// form, and footer hint stay aligned within the body.
+func TestGoldenStressScreen(t *testing.T) {
+	m := goldenModel(t, 100, 30)
+	m.workspace = clientmgr.WorkspaceDTO{Environment: "dev"}
+	m.selected = "api.http"
+	m.setScreen(screenStress)
+	golden.RequireEqual(t, plain(m.View().Content))
+}
+
+// TestGoldenStressRunning renders the live metrics view shown mid-test (the
+// progress bar + RPS/percentile readout), covering stressContent's running arm.
+func TestGoldenStressRunning(t *testing.T) {
+	m := goldenModel(t, 100, 30)
+	m.workspace = clientmgr.WorkspaceDTO{Environment: "dev"}
+	m.selected = "api.http"
+	m.setScreen(screenStress)
+	stats := clientmgr.StressStatsDTO{
+		Total: 450, Success: 442, Errors: 8, RPS: 30.5,
+		P50Ms: 12, P95Ms: 48, P99Ms: 90, ErrorRate: 0.018, ActiveVUs: 5,
+	}
+	m.stress = clientmgr.StressStatusDTO{Running: true, Elapsed: 15.0, Stats: &stats}
+	m.preview.SetContent(m.secondaryContent())
+	golden.RequireEqual(t, plain(m.View().Content))
+}
+
+// TestGoldenImportScreen and TestGoldenCookiesScreen render the remaining
+// form-backed secondary screens through the full View so their panel, form, and
+// footer stay aligned under the shared workspace geometry.
+func TestGoldenImportScreen(t *testing.T) {
+	m := goldenModel(t, 100, 30)
+	m.workspace = clientmgr.WorkspaceDTO{Environment: "dev"}
+	m.setScreen(screenImport)
+	golden.RequireEqual(t, plain(m.View().Content))
+}
+
+func TestGoldenCookiesScreen(t *testing.T) {
+	m := goldenModel(t, 100, 30)
+	m.workspace = clientmgr.WorkspaceDTO{Environment: "dev"}
+	m.cookies = []clientmgr.CookieDTO{
+		{Domain: "example.com", Path: "/", Name: "session", Value: "abc123"},
+	}
+	m.setScreen(screenCookies)
+	m.preview.SetContent(m.secondaryContent())
+	golden.RequireEqual(t, plain(m.View().Content))
+}
+
+// TestGoldenMockScreen / RecordScreen / ContractScreen / HistoryScreen render
+// the populated state of each remaining secondary screen so the content
+// renderers (mockContent, recordContent, contractContent) and the history list
+// stay aligned within the bordered panel and keep their layout under test.
+func TestGoldenMockScreen(t *testing.T) {
+	m := goldenModel(t, 100, 30)
+	m.workspace = clientmgr.WorkspaceDTO{Environment: "dev"}
+	m.setScreen(screenMock)
+	m.mock = clientmgr.MockStatusDTO{
+		Running: true, Port: 3000,
+		Routes: []clientmgr.MockRouteDTO{
+			{Method: "GET", Path: "/health", StatusCode: 200, ContentType: "application/json"},
+			{Method: "POST", Path: "/users", StatusCode: 201, ContentType: "application/json"},
+		},
+	}
+	m.preview.SetContent(m.secondaryContent())
+	golden.RequireEqual(t, plain(m.View().Content))
+}
+
+func TestGoldenRecordScreen(t *testing.T) {
+	m := goldenModel(t, 100, 30)
+	m.workspace = clientmgr.WorkspaceDTO{Environment: "dev"}
+	m.setScreen(screenRecord)
+	m.record = clientmgr.RecordStatusDTO{
+		Running: true, TargetURL: "http://localhost:3000", Port: 8081, Count: 2,
+		Recordings: []clientmgr.RecordingDTO{
+			{Method: "GET", Path: "/health", StatusCode: 200, Duration: 12},
+			{Method: "POST", Path: "/users", StatusCode: 201, Duration: 34},
+		},
+	}
+	m.preview.SetContent(m.secondaryContent())
+	golden.RequireEqual(t, plain(m.View().Content))
+}
+
+func TestGoldenContractScreen(t *testing.T) {
+	m := goldenModel(t, 100, 30)
+	m.workspace = clientmgr.WorkspaceDTO{Environment: "dev"}
+	m.setScreen(screenContract)
+	m.contracts = []clientmgr.ContractResultDTO{{
+		File: "api.http", Passed: 1, Failed: 1, Skipped: 0, Duration: 120,
+		Results: []clientmgr.ContractInteractionDTO{
+			{Name: "health", Passed: true, Duration: 40},
+			{Name: "createUser", Passed: false, Duration: 80, State: "seeded", Error: "status 500"},
+		},
+	}}
+	m.preview.SetContent(m.secondaryContent())
+	golden.RequireEqual(t, plain(m.View().Content))
+}
+
+func TestGoldenHistoryScreen(t *testing.T) {
+	m := goldenModel(t, 100, 30)
+	m.workspace = clientmgr.WorkspaceDTO{Environment: "dev"}
+	m.history = clientmgr.HistoryListDTO{
+		Total: 2,
+		Runs: []clientmgr.HistoryRunDTO{
+			{ID: 2, FilePath: "api.http", StartedAt: "2026-06-14T10:00:00Z", Passed: 3, Failed: 0, Skipped: 0, DurationMs: 1200},
+			{ID: 1, FilePath: "auth.http", StartedAt: "2026-06-14T09:00:00Z", Passed: 1, Failed: 2, Skipped: 1, DurationMs: 800},
+		},
+	}
+	m.refreshHistoryList()
+	m.screen = screenHistory
+	golden.RequireEqual(t, plain(m.View().Content))
 }
 
 func TestGoldenHistoryDetail(t *testing.T) {

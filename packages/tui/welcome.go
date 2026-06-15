@@ -14,7 +14,7 @@ import (
 // keyed next steps so a fresh directory is never a dead end.
 func (m model) welcomeView() string {
 	s := m.styles
-	w, h := m.width, max(6, m.height-4)
+	w, h := m.width, max(6, m.height-3)
 
 	title := s.accent.Render("hitspec studio")
 	tagline := s.muted.Render("Plain text API tests. No magic.")
