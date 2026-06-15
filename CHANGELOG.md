@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.0.0] - 2026-06-14
 
 ### Changed
 
@@ -32,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Pure render path**: the stress/mock/record screens no longer perform manager I/O during `View()` (status is cached on the update path).
 - **Errors persist until resolved**: a status-bar error no longer vanishes on the next keypress — it stays until you navigate or the next operation succeeds, and is truncated to fit instead of overflowing.
 - **Quit protects unsaved work**: pressing `q` with unsaved edits now asks for confirmation (`ctrl+c` still hard-quits); the command palette and overlays render consistently over the workspace; mock/record screens and the search overlay show actionable guidance and result counts; secondary form fields and viewports adapt to small terminals.
+- **Cookie capture**: `Set-Cookie` headers from responses are now stored correctly (capture previously read redacted headers and never recorded a cookie).
+- **Stale selection**: deleting the selected file no longer leaves its name in the top bar/source pane.
+- **History database**: enabled `busy_timeout` and a single connection to avoid `SQLITE_BUSY` when run recording overlaps reads/deletes.
+- **Stress metrics**: fixed a data race between `StressStatus` and a running test.
 
 ## [2.13.0] - 2026-02-27
 
