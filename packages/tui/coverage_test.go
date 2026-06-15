@@ -193,7 +193,7 @@ func TestMediumMainRenders(t *testing.T) {
 	m := newModel(context.Background(), newTestManager(t), Options{})
 	m.width, m.height = 100, 30
 	m.resize()
-	if strings.TrimSpace(m.mediumMain(90, 26)) == "" {
+	if strings.TrimSpace(m.mediumMain(m.geom())) == "" {
 		t.Fatal("mediumMain rendered empty")
 	}
 }

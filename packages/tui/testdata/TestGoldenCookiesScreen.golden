@@ -1,0 +1,30 @@
+ hitspec studio   COOKIES                                                                     dev   
+ 1 workspace  2 stress  3 mock  4 contract  5 record  6 history  7 import   8 cookies   9 settings  
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ cookies                                                                                          │
+│ domain: example.com                                                                              │
+│ path: /                                                                                          │
+│ name: session                                                                                    │
+│ value:                                                                                           │
+│                                                                                                  │
+│ example.com    /    session=abc123                                                               │
+│                                                                                                  │
+│                                                                                                  │
+│ e edit fields   enter/s add cookie   D delete matching cookie   esc cancel                       │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ ready                                    e fields · enter run · esc back · ? help · ctrl+p palette 

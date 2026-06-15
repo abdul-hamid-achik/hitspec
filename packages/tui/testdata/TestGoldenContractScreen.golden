@@ -1,0 +1,30 @@
+ hitspec studio   CONTRACT                                                                    dev   
+ 1 workspace  2 stress  3 mock   4 contract   5 record  6 history  7 import  8 cookies  9 settings  
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ contract                                                                                         │
+│ provider URL: http://localhost:3000                                                              │
+│ state handler:                                                                                   │
+│                                                                                                  │
+│ api.http  pass:1 fail:1 skip:0 120ms                                                             │
+│   PASS health 40ms                                                                               │
+│   FAIL createUser 80ms  state=seeded  status 500                                                 │
+│                                                                                                  │
+│                                                                                                  │
+│ e edit fields   enter/s verify selected file   esc cancel                                        │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ ready                                    e fields · enter run · esc back · ? help · ctrl+p palette 

@@ -1,0 +1,74 @@
+version: 1
+name: studio_settings
+
+intent: |
+  the settings screen shows BOTH the editable configuration form and the
+  read-only configuration dump. A regression once let loading the config
+  overwrite the preview with the form-less content, so the editable fields
+  vanished — this spec pins them in place.
+
+target:
+  cmd: ["${vars.bin}", "studio", "${vars.workspace}"]
+  cwd: "."
+  timeoutMs: 15000
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+
+steps:
+  - wait:
+      screen:
+        contains: "WORKSPACE"
+      timeoutMs: 8000
+  - press: "9"
+  - wait:
+      screen:
+        contains: "SETTINGS"
+      timeoutMs: 5000
+  # The config dump loads asynchronously (loadConfigCmd); wait for it so the
+  # assertion below proves the form survives the configMsg update.
+  - wait:
+      screen:
+        contains: "Configuration"
+      timeoutMs: 5000
+  - snapshot: settings
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  - id: form_fields_present
+    description: the editable form fields render on the settings screen
+    verify:
+      screen:
+        contains: "default env"
+  - id: timeout_field_present
+    description: the timeout form field renders alongside the config dump
+    verify:
+      screen:
+        contains: "timeout ms"
+  - id: config_dump_present
+    description: the read-only configuration dump renders too (form did not replace it)
+    verify:
+      screen:
+        contains: "Default environment"
+  - id: footer_hint_present
+    description: the settings footer hint is visible inside the panel
+    verify:
+      screen:
+        contains: "edit fields"
+  - id: clean_exit
+    description: q exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0

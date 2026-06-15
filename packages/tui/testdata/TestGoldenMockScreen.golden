@@ -1,0 +1,30 @@
+ hitspec studio   MOCK                                                                        dev   
+ 1 workspace  2 stress   3 mock   4 contract  5 record  6 history  7 import  8 cookies  9 settings  
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ mock                                                                                             │
+│ port: 3000                                                                                       │
+│ delay:                                                                                           │
+│                                                                                                  │
+│ Running: true                                                                                    │
+│ Port: 3000                                                                                       │
+│ Routes: 2                                                                                        │
+│                                                                                                  │
+│ GET     /health                                  200 application/json                            │
+│ POST    /users                                   201 application/json                            │
+│                                                                                                  │
+│                                                                                                  │
+│ e edit fields   enter/s start mock   x stop   esc cancel                                         │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ ready                                    e fields · enter run · esc back · ? help · ctrl+p palette 

@@ -35,6 +35,7 @@ type responseViewer struct {
 	placeholder string
 	styles      styles
 	color       bool
+	width       int // pane width, so the tab bar can collapse when it won't fit
 }
 
 func newResponseViewer(s styles, color bool) responseViewer {
@@ -46,6 +47,7 @@ func newResponseViewer(s styles, color bool) responseViewer {
 }
 
 func (r *responseViewer) setSize(w, h int) {
+	r.width = max(4, w)
 	r.vp.SetWidth(max(4, w))
 	r.vp.SetHeight(max(1, h-1)) // reserve one row for the tab bar
 }
@@ -110,12 +112,21 @@ func (r responseViewer) tabBar() string {
 	parts := make([]string, 0, len(responseTabNames))
 	for i, name := range responseTabNames {
 		if responseTab(i) == r.tab {
-			parts = append(parts, r.styles.tag.Render(name))
+			parts = append(parts, r.styles.tag.Render(name)) // tag carries its own padding
 		} else {
-			parts = append(parts, r.styles.muted.Render(" "+name+" "))
+			parts = append(parts, r.styles.muted.Render(name))
 		}
 	}
-	return strings.Join(parts, " ")
+	full := strings.Join(parts, " ")
+	// When the pane is too narrow for the whole strip, collapse to just the
+	// active tab plus a position indicator (←→/[] cycle the tabs) so the label is
+	// never sliced mid-word by the panel's clip.
+	if r.width > 0 && lipgloss.Width(full) > r.width {
+		active := r.styles.tag.Render(responseTabNames[r.tab])
+		pos := r.styles.muted.Render(fmt.Sprintf(" %d/%d", int(r.tab)+1, len(responseTabNames)))
+		return active + pos
+	}
+	return full
 }
 
 func (r responseViewer) tabContent() string {

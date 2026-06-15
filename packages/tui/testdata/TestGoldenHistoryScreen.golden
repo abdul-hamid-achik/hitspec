@@ -1,0 +1,30 @@
+ hitspec studio   HISTORY                                                                     dev   
+ 1 workspace  2 stress  3 mock  4 contract  5 record   6 history   7 import  8 cookies  9 settings  
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ history                                                                                          │
+│                                                                                                  │
+│   2 items                                                                                        │
+│                                                                                                  │
+│ │ #2  api.http                                                                                   │
+│ │ 2026-06-14T10:00:00Z   pass:3 fail:0 skip:0   1.2s                                             │
+│                                                                                                  │
+│   #1  auth.http                                                                                  │
+│   2026-06-14T09:00:00Z   pass:1 fail:2 skip:1   0.8s                                             │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│ enter details · D delete · ctrl+r refresh                                                        │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ ready                          enter details · D delete · ctrl+r refresh · ? help · ctrl+p palette 

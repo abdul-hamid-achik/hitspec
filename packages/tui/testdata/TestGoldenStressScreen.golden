@@ -1,0 +1,30 @@
+ hitspec studio   STRESS                                                              dev  api.http 
+ 1 workspace   2 stress   3 mock  4 contract  5 record  6 history  7 import  8 cookies  9 settings  
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ stress                                                                                           │
+│ duration: 30s                                                                                    │
+│ rate: 5                                                                                          │
+│ vus: 0                                                                                           │
+│ max vus: 0                                                                                       │
+│                                                                                                  │
+│ No stress test running.                                                                          │
+│                                                                                                  │
+│ Use the form (e edit) or the command palette to start a load test.                               │
+│ Quick start: 30s at 5 RPS on the selected file.                                                  │
+│                                                                                                  │
+│ e edit fields   enter/s start stress   x stop   esc cancel                                       │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ ready                                    e fields · enter run · esc back · ? help · ctrl+p palette 

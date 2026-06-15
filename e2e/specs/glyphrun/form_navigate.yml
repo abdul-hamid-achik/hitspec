@@ -1,0 +1,65 @@
+version: 1
+name: studio_form_navigate
+
+intent: |
+  within a secondary-screen form, the down arrow moves focus to the next field
+  and typing lands in whichever field is focused — so a multi-field form can be
+  filled out entirely from the keyboard.
+
+target:
+  cmd: ["${vars.bin}", "studio", "${vars.workspace}"]
+  cwd: "."
+  timeoutMs: 15000
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+
+steps:
+  - wait:
+      screen:
+        contains: "WORKSPACE"
+      timeoutMs: 8000
+  - press: "2"
+  - wait:
+      screen:
+        contains: "rate: 5"
+      timeoutMs: 5000
+  - press: "e"
+  # `e` focuses field 0 (duration); down moves to field 1 (rate), seeded "5".
+  - press: "down"
+  - type: "7"
+  - wait:
+      screen:
+        contains: "rate: 57"
+      timeoutMs: 5000
+  - snapshot: navigated
+  - press: "ctrl+c"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  - id: typed_into_second_field
+    description: down moves focus to the rate field and the typed digit lands there
+    verify:
+      screen:
+        contains: "rate: 57"
+  - id: duration_unchanged
+    description: the first field is untouched by editing the second
+    verify:
+      screen:
+        contains: "duration: 30s"
+  - id: clean_exit
+    description: ctrl+c exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0

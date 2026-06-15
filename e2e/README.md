@@ -44,6 +44,12 @@ a precondition, so the specs are self-contained.
 | `help_overlay.yml` | `?` opens the keyboard help overlay; any key dismisses it |
 | `navigation.yml` | number keys switch screens (workspace → stress → history → workspace) |
 | `theme_flag.yml` | `--theme` launches with an alternate color theme without error |
+| `workspace_layout.yml` | workspace renders bordered panels with a bounded files sidebar (no spill) |
+| `settings.yml` | settings shows the editable form **and** the config dump together |
+| `form_edit.yml` | `e` focuses a secondary-screen form field; typed digits land in it (no screen jump) |
+| `form_navigate.yml` | `down` moves focus to the next form field; typing fills whichever field is focused |
+| `quit_from_overlay.yml` | `ctrl+c` quits cleanly even with the command palette open (hard interrupt) |
+| `search_overlay.yml` | `ctrl+f` opens search; typing filters requests; `ctrl+c` closes and exits |
 
 ## Note on key encoding
 

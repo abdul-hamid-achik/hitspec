@@ -1,0 +1,66 @@
+version: 1
+name: studio_search_overlay
+
+intent: |
+  ctrl+f opens the request search overlay; typing filters across request names,
+  methods, URLs and tags, and the matching request appears. ctrl+c closes the
+  overlay and exits (proving the hard-interrupt works from this modal too).
+
+target:
+  cmd: ["${vars.bin}", "studio", "${vars.workspace}"]
+  cwd: "."
+  timeoutMs: 15000
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+
+steps:
+  - wait:
+      screen:
+        contains: "WORKSPACE"
+      timeoutMs: 8000
+  - press: "ctrl+f"
+  - wait:
+      screen:
+        contains: "Search Requests"
+      timeoutMs: 5000
+  - type: "health"
+  - wait:
+      screen:
+        contains: "results"
+      timeoutMs: 5000
+  - wait:
+      screen:
+        contains: "health"
+      timeoutMs: 5000
+  - snapshot: search_results
+  - press: "ctrl+c"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  - id: overlay_opened
+    description: ctrl+f opens the search overlay
+    verify:
+      screen:
+        contains: "Search Requests"
+  - id: query_matches
+    description: typing a query surfaces the matching request and a results count
+    verify:
+      screen:
+        contains: "results"
+  - id: ctrl_c_quits
+    description: ctrl+c closes the overlay and exits cleanly
+    verify:
+      process:
+        exitCode: 0

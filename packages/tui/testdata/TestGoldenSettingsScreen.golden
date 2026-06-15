@@ -1,0 +1,30 @@
+ hitspec studio   SETTINGS                                                                    dev   
+ 1 workspace  2 stress  3 mock  4 contract  5 record  6 history  7 import  8 cookies   9 settings   
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ settings                                                                                         │
+│ default env: dev                                                                                 │
+│ timeout ms: 30000                                                                                │
+│ retries: 2                                                                                       │
+│ concurrency: 4                                                                                   │
+│ set var env: dev                                                                                 │
+│ set var key:                                                                                     │
+│ set var value:                                                                                   │
+│                                                                                                  │
+│ Configuration                                                                                    │
+│                                                                                                  │
+│ Default environment: dev                                                                         │
+│ Timeout: 30000                                                                                   │
+│ Retries: 2                                                                                       │
+│ Proxy:                                                                                           │
+│ Concurrency: 4                                                                                   │
+│                                                                                                  │
+│ Environments                                                                                     │
+│                                                                                                  │
+│ ● dev  (1 variables)                                                                             │
+│     baseUrl = http://localhost:3000                                                              │
+│                                                                                                  │
+│                                                                                                  │
+│ e edit fields   enter/s save config & set var   esc cancel                                       │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ ready                                    e fields · enter run · esc back · ? help · ctrl+p palette 

@@ -1,0 +1,52 @@
+version: 1
+name: studio_quit_from_overlay
+
+intent: |
+  ctrl+c is a hard interrupt from any state. With the command palette open — a
+  modal that otherwise consumes every key — ctrl+c must still quit cleanly. (It
+  used to be swallowed, leaving no way out over a PTY where esc doesn't bind.)
+
+target:
+  cmd: ["${vars.bin}", "studio", "${vars.workspace}"]
+  cwd: "."
+  timeoutMs: 15000
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+
+steps:
+  - wait:
+      screen:
+        contains: "WORKSPACE"
+      timeoutMs: 8000
+  - press: "ctrl+p"
+  - wait:
+      screen:
+        contains: "Command Palette"
+      timeoutMs: 5000
+  - snapshot: palette_open
+  - press: "ctrl+c"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  - id: palette_opened
+    description: ctrl+p opens the command palette
+    verify:
+      screen:
+        contains: "Command Palette"
+  - id: ctrl_c_quits_from_modal
+    description: ctrl+c quits cleanly even with the palette open
+    verify:
+      process:
+        exitCode: 0

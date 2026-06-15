@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/abdul-hamid-achik/hitspec/packages/clientmgr"
 )
@@ -75,6 +76,36 @@ func TestResponseViewerTabsCycle(t *testing.T) {
 	rv.prevTab()
 	if rv.tab != respCaptures {
 		t.Errorf("prevTab from Body should wrap to Captures, got %v", rv.tab)
+	}
+}
+
+// TestResponseViewerTabBarFits proves the tab bar adapts to the pane width: it
+// shows every label when there's room, and collapses to the active tab plus a
+// position indicator (never sliced mid-word) when the pane is too narrow.
+func TestResponseViewerTabBarFits(t *testing.T) {
+	rv := newResponseViewer(newStyles(defaultPalette()), false)
+	rv.setResult(sampleResult())
+
+	rv.setSize(80, 20) // wide: full strip fits
+	wide := plain(rv.tabBar())
+	for _, name := range responseTabNames {
+		if !strings.Contains(wide, name) {
+			t.Fatalf("wide tab bar dropped %q:\n%s", name, wide)
+		}
+	}
+	if lipgloss.Width(rv.tabBar()) > rv.width {
+		t.Fatalf("wide tab bar overflows pane width %d:\n%s", rv.width, wide)
+	}
+
+	rv.tab = respCaptures
+	rv.setSize(16, 20) // narrow: must collapse and stay within the pane
+	narrow := rv.tabBar()
+	if lipgloss.Width(narrow) > rv.width {
+		t.Fatalf("narrow tab bar overflows pane width %d: %q", rv.width, plain(narrow))
+	}
+	plainNarrow := plain(narrow)
+	if !strings.Contains(plainNarrow, "Captures") || !strings.Contains(plainNarrow, "5/5") {
+		t.Fatalf("collapsed tab bar should show the active tab and position, got %q", plainNarrow)
 	}
 }
 

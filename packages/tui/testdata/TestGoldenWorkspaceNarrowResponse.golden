@@ -1,13 +1,13 @@
  hitspec studio   WORKSPACE                   dev  api.http 
   1/9 workspace    1-9 switch                               
 ┌──────────────────────────────────────────────────────────┐
-│ files                                                    │
+│ response                                                 │
+│  Body  Headers Assertions Timing Captures                │
+│ 200 200 OK  0ms  17 B                                    │
 │                                                          │
-│   1 item                                                 │
-│                                                          │
-│ │ api.http                                               │
-│ │ api.http  1 requests                                   │
-│                                                          │
+│ {                                                        │
+│   "hello": "world"                                       │
+│ }                                                        │
 │                                                          │
 │                                                          │
 │                                                          │
@@ -21,5 +21,5 @@
 │                                                          │
 │                                                          │
 └──────────────────────────────────────────────────────────┘
- ready enter open · e edit · n new · D delete · ? help ·    
- ctrl+p palette                                             
+ ready ←→/[] tabs · r run · R run file · ? help · ctrl+p    
+ palette                                                    
