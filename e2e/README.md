@@ -1,23 +1,50 @@
 # Studio end-to-end tests
 
-Black-box behavior tests for `hitspec studio`, driven through a real pseudo-terminal
-by [glyphrun](https://github.com/abdul-hamid-achik/glyphrun) (the `glyph` binary).
+Two complementary black-box suites:
 
-Each spec launches the studio binary in a PTY, drives it with keystrokes, and
-asserts against the rendered virtual-terminal screen and the process exit code —
-no coupling to studio's internals.
+- **glyphrun** (`specs/glyphrun/`) — drives `hitspec studio` (the terminal UI)
+  through a real pseudo-terminal, asserting against the rendered virtual-terminal
+  screen and the process exit code. This is the UI suite.
+- **cairntrace** (`cairntrace/`) — drives the `hitspec serve` REST API
+  (`/api/v1/*`, the same functional layer the TUI consumes) through a browser
+  backend, asserting JSON responses and request health. This is the API suite.
+
+Each glyphrun spec launches the studio binary in a PTY, drives it with
+keystrokes, and asserts against the screen — no coupling to studio's internals.
 
 ## Running
 
 ```bash
-task e2e                                   # build + run the whole suite
+task e2e            # glyphrun TUI suite (build + run)
+task e2e-cairn      # cairntrace serve-API suite (starts/stops the server for you)
+task e2e-all        # both suites
+
 # or directly (from the repo root):
 go build -o ./e2e/bin/hitspec ./apps/cli
 glyph run e2e/specs/glyphrun/*.yml --format md
 ```
 
 Requires `glyph` on PATH (`brew install abdul-hamid-achik/tap/glyph` or
-`go install github.com/abdul-hamid-achik/glyphrun/cmd/glyph@latest`).
+`go install github.com/abdul-hamid-achik/glyphrun/cmd/glyph@latest`) for the TUI
+suite, and `cairn` (cairntrace) + `agent-browser` for the API suite.
+
+### cairntrace serve-API suite
+
+`task e2e-cairn` builds the binary, starts `hitspec serve --api-only` on port
+4517 against a scratch workspace, waits for readiness, runs the flows in
+`cairntrace/flows/`, and always stops the server. Run flows manually with the
+server already up:
+
+```bash
+hitspec serve --api-only --cors --port 4517 /tmp/hitspec-cairn-ws &
+cairn run e2e/cairntrace/flows --format md
+```
+
+Flows cover system info, workspace + file CRUD, environments + config, run
+execution, curl import, and the stress/mock/record status endpoints. They use
+`httpJson`/`noFailedRequests` verifiers and a `script` escape hatch; the
+`execute_run` flow targets the server's own endpoint so it needs no external
+network. Run artifacts land in `~/.cairntrace/runs` (outside the repo).
 
 Glyphrun discovers `glyphrun.config.yml` by walking up from each spec, and
 resolves spec paths (`cwd`, preconditions, `artifactRoot`, `vars`) **relative to
@@ -32,7 +59,9 @@ a precondition, so the specs are self-contained.
 | `specs/glyphrun/*.yml` | the behavior specs |
 | `fixtures/workspace/` | a sample `.http` workspace |
 | `fixtures/empty/` | an empty workspace (triggers the welcome card) |
-| `.glyphrun/runs/` | artifact packs per run (gitignored) |
+| `.glyphrun/runs/` | glyphrun artifact packs per run (gitignored) |
+| `cairntrace/cairntrace.config.yml` | cairntrace config (baseUrl → the serve API) |
+| `cairntrace/flows/*.yml` | serve-API behavior flows |
 
 ## Specs
 
@@ -50,6 +79,9 @@ a precondition, so the specs are self-contained.
 | `form_navigate.yml` | `down` moves focus to the next form field; typing fills whichever field is focused |
 | `quit_from_overlay.yml` | `ctrl+c` quits cleanly even with the command palette open (hard interrupt) |
 | `search_overlay.yml` | `ctrl+f` opens search; typing filters requests; `ctrl+c` closes and exits |
+| `all_modules.yml` | every numbered screen (stress/mock/contract/record/import/cookies) renders its module |
+| `theme_picker.yml` | `ctrl+t` opens the theme picker overlay; `ctrl+c` closes and exits |
+| `env_switcher.yml` | `ctrl+e` opens the environment switcher overlay; `ctrl+c` closes and exits |
 
 ## Note on key encoding
 

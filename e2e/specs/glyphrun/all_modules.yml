@@ -1,0 +1,78 @@
+version: 1
+name: studio_all_modules
+
+intent: |
+  every numbered screen reachable from the studio renders its module: each
+  shows its title in the top bar and its distinctive empty-state content. This
+  exercises the mock, contract, record, import, and cookies modules that the
+  other specs don't visit individually.
+
+target:
+  cmd: ["${vars.bin}", "studio", "${vars.workspace}"]
+  cwd: "."
+  timeoutMs: 15000
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+
+steps:
+  - wait:
+      screen:
+        contains: "WORKSPACE"
+      timeoutMs: 8000
+  - press: "2"
+  - wait:
+      screen:
+        contains: "stress test running"
+      timeoutMs: 5000
+  - press: "3"
+  - wait:
+      screen:
+        contains: "mock server running"
+      timeoutMs: 5000
+  - press: "4"
+  - wait:
+      screen:
+        contains: "verification result loaded"
+      timeoutMs: 5000
+  - press: "5"
+  - wait:
+      screen:
+        contains: "recording proxy running"
+      timeoutMs: 5000
+  - press: "7"
+  - wait:
+      screen:
+        contains: "Import supports"
+      timeoutMs: 5000
+  - press: "8"
+  - wait:
+      screen:
+        contains: "COOKIES"
+      timeoutMs: 5000
+  - snapshot: cookies
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  - id: cookies_module
+    description: the cookies module renders (topbar title present)
+    verify:
+      screen:
+        contains: "COOKIES"
+  - id: clean_exit
+    description: q exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0

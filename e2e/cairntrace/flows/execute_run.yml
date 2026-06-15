@@ -1,0 +1,45 @@
+version: 1
+name: serve_execute_run
+intent: The serve API runs a .http file and reports passing assertions.
+mode: normal
+outcomes:
+  - id: run_reports_a_pass
+    description: running a self-targeting file returns at least one passing request
+    verify:
+      script:
+        runtime: node
+        run: |
+          const res = await fetch('http://localhost:4517/api/v1/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file: 'cairn-run.http' }),
+          });
+          const j = await res.json();
+          return {
+            ok: res.status === 200 && j.passed >= 1 && j.failed === 0,
+            evidence: `status=${res.status} passed=${j.passed} failed=${j.failed}`,
+          };
+  - id: create_no_server_errors
+    description: staging the run file does not 4xx/5xx
+    verify:
+      noFailedRequests:
+        urlContains: /api/v1/files
+steps:
+  - open: ${vars.apiBase}/system/info
+  - request:
+      method: POST
+      url: ${vars.apiBase}/files
+      body:
+        path: cairn-run.http
+        content: |
+          ### Self info
+          # @name selfInfo
+          GET http://localhost:4517/api/v1/system/info
+
+          >>>
+          expect status 200
+          expect body.goVersion exists
+          <<<
+      expectStatus: 201
+      assign: created
+contractHash: sha256:9fabc2d294e16a18449348473fc4e4f19c8ad3a9165658c62fea6f38e421d00b

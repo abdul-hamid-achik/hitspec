@@ -54,6 +54,36 @@ tasks:
       - sh: command -v glyph
         msg: "glyph (glyphrun) is not installed — see https://github.com/abdul-hamid-achik/glyphrun"
 
+  e2e-cairn:
+    desc: Run serve-API end-to-end tests (cairntrace flows against `hitspec serve`)
+    vars:
+      PORT: '{{.HITSPEC_API_PORT | default "4517"}}'
+      WS: /tmp/hitspec-cairn-ws
+    cmds:
+      - go build -o ./e2e/bin/hitspec ./apps/cli
+      - rm -rf {{.WS}} && mkdir -p {{.WS}} && cp e2e/fixtures/workspace/sample.http {{.WS}}/
+      # Start the API server, wait for readiness, run the flows, always stop it.
+      - |
+        ./e2e/bin/hitspec serve --api-only --cors --port {{.PORT}} {{.WS}} >/tmp/hitspec-cairn-serve.log 2>&1 &
+        SVPID=$!
+        trap "kill $SVPID 2>/dev/null" EXIT
+        for i in $(seq 1 30); do
+          curl -fs -o /dev/null "http://localhost:{{.PORT}}/api/v1/system/info" && break
+          sleep 0.3
+        done
+        cairn run e2e/cairntrace/flows --format md
+    preconditions:
+      - sh: command -v cairn
+        msg: "cairn (cairntrace) is not installed"
+      - sh: command -v curl
+        msg: "curl is required to probe server readiness"
+
+  e2e-all:
+    desc: Run both end-to-end suites (glyphrun TUI + cairntrace serve API)
+    cmds:
+      - task: e2e
+      - task: e2e-cairn
+
   lint:
     desc: Run Go format, vet, and golangci-lint
     cmds:
