@@ -13,6 +13,10 @@ target:
   cmd: ["${vars.bin}", "studio", "/tmp/hitspec-studio-e2e/tabs"]
   cwd: "."
   timeoutMs: 15000
+  # isolate ~/.hitspec (history/cookies) to a throwaway HOME — no reading
+  # or polluting the user's real run history; preconditions keep real HOME
+  env:
+    HOME: /tmp/hitspec-studio-e2e/home
 
 terminal:
   cols: 130

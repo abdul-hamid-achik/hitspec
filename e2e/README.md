@@ -74,6 +74,14 @@ config and build/artifact dirs at the `e2e/` root:
 | `rename_file.yml` | palette → filter "Rename" → clear + retype the path → file renamed (scratch ws) |
 | `settings_save.yml` | settings form: `e` edit → set retries → submit → config dump updates (scratch ws) |
 | `response_tabs.yml` | after a run, `]` cycles the response viewer tabs (Body…Captures) |
+| `import_scratch.yml` | import screen submits the curl form → generated request opens (scratch ws) |
+| `clear_history.yml` | palette → "Clear history" → confirm `y` → history list empties (isolated HOME) |
+| `mock_start_stop.yml` | mock screen: `s` starts the server (custom port), `x` stops it (scratch ws) |
+
+Specs that run requests or touch cookies set `target.env.HOME` to a throwaway dir
+so they never read or pollute the user's real `~/.hitspec` history/cookie store
+(`target.env` applies to the studio process only — preconditions still build with
+the real `HOME`).
 
 Reusable actions live in `specs/actions/` (`quit_clean`, `open_workspace`) and
 are pulled in with `imports:` + `use:`.

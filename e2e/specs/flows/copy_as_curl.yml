@@ -34,7 +34,8 @@ steps:
         contains: "Command Palette"
       timeoutMs: 5000
   - press: "/"
-  # a short, unique token: only "Copy request as curl" contains "as curl"
+  # single-word unique token (only the curl command contains "curl"); wait for
+  # the filtered command to render before enter so the keystrokes have settled
   - type: "as curl"
   - wait:
       screen:
@@ -44,7 +45,7 @@ steps:
   - wait:
       screen:
         contains: "as curl"
-      timeoutMs: 5000
+      timeoutMs: 8000
   - snapshot: exported
   - use: quit_clean
 

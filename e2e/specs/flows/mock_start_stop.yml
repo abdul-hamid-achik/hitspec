@@ -1,0 +1,67 @@
+version: 1
+name: studio_mock_start_stop
+
+intent: |
+  the mock screen starts and stops a mock server from the selected file's
+  requests: `s` starts it (reporting running + routes), `x` stops it. Uses an
+  uncommon port to avoid collisions and a scratch workspace.
+
+imports:
+  - ../actions/quit_clean.yml
+
+target:
+  cmd: ["${vars.bin}", "studio", "/tmp/hitspec-studio-e2e/mock"]
+  cwd: "."
+  timeoutMs: 15000
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+    - run: "rm -rf /tmp/hitspec-studio-e2e/mock && mkdir -p /tmp/hitspec-studio-e2e/mock"
+      timeoutMs: 10000
+    - run: "printf '### Mocked\\n# @name mocked\\nGET https://example.com/widgets\\n\\n>>>\\nexpect status 200\\n<<<\\n' > /tmp/hitspec-studio-e2e/mock/m.http"
+      timeoutMs: 10000
+
+steps:
+  - press: "3"
+  - wait:
+      screen:
+        contains: "mock server running"
+      timeoutMs: 8000
+  # edit the port to an uncommon one, then submit to start
+  - press: "e"
+  - press: "ctrl+u"
+  - type: "39711"
+  - press: "enter"
+  - wait:
+      screen:
+        contains: "Running: true"
+      timeoutMs: 8000
+  - snapshot: running
+  - press: "x"
+  - wait:
+      screen:
+        contains: "No mock server running"
+      timeoutMs: 8000
+  - use: quit_clean
+
+outcomes:
+  # "Running: true" is asserted by the wait step mid-cycle; the final screen
+  # rests on the stopped state after x.
+  - id: mock_start_then_stop
+    description: the mock server starts then stops cleanly
+    verify:
+      screen:
+        contains: "No mock server running"
+  - id: clean_exit
+    description: q exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0
