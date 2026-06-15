@@ -2,13 +2,13 @@ version: 1
 
 # Glyphrun resolves spec paths (cwd ".", preconditions, artifactRoot, vars)
 # relative to THIS config's directory (the e2e/ folder). Run from anywhere:
-#   glyph run e2e/specs/flows/*.yml --format md
+#   glyph run e2e/flows/*.yml --format md
 # or use `task e2e` from the repo root.
 #
-# Layout (graphite-style): authored content lives under specs/ —
-#   specs/flows/      the behavior specs
-#   specs/actions/    reusable action snippets (imported, used via `use:`)
-#   specs/fixtures/   sample workspaces
+# Layout (graphite-style): flows / actions / fixtures live directly under e2e/ —
+#   flows/      the behavior specs
+#   actions/    reusable action snippets (imported, used via `use:`)
+#   fixtures/   sample workspaces
 
 defaultEnvironment: local
 
@@ -21,8 +21,8 @@ environments:
       # paths are relative to e2e/
       bin: ./bin/hitspec
       pkg: ../apps/cli
-      workspace: ./specs/fixtures/workspace
-      empty: ./specs/fixtures/empty
+      workspace: ./fixtures/workspace
+      empty: ./fixtures/empty
       # absolute so the file verifier and the target agree regardless of cwd
       gendir: /tmp/hitspec-studio-e2e/gen
     env:

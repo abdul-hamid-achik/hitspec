@@ -54,9 +54,9 @@ tasks:
       - apps/cli/**/*.go
       - packages/tui/**/*.go
       - packages/clientmgr/**/*.go
-      - e2e/specs/flows/*.yml
-      - e2e/specs/actions/*.yml
-      - e2e/specs/fixtures/**/*
+      - e2e/flows/*.yml
+      - e2e/actions/*.yml
+      - e2e/fixtures/**/*
     cmds:
       - go build -o ./e2e/bin/hitspec ./apps/cli
       # With `-- <name>` run a single spec (bare name or path); otherwise the suite.
@@ -65,10 +65,10 @@ tasks:
         if [ -n "$arg" ]; then
           case "$arg" in
             */* | *.yml) target="$arg" ;;
-            *)           target="e2e/specs/flows/$arg.yml" ;;
+            *)           target="e2e/flows/$arg.yml" ;;
           esac
         else
-          target="e2e/specs/flows/*.yml"
+          target="e2e/flows/*.yml"
         fi
         glyph run $target --format md
     preconditions:
