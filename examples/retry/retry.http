@@ -1,5 +1,8 @@
 # Retry and Resilience Examples
 # Demonstrates @retry, @retryDelay, and @retryOn for handling flaky endpoints
+#
+# Requires the public httpbin.org test service. If requests return 503, the
+# service is temporarily down (not a hitspec issue) -- retry later.
 
 @baseUrl = https://httpbin.org
 

@@ -65,7 +65,7 @@ query GetCountry($code: ID!) {
 expect status 200
 expect body.data.country.code == "US"
 expect body.data.country.name == "United States"
-expect body.data.country.capital == "Washington, D.C."
+expect body.data.country.capital == "Washington D.C."
 expect body.data.country.languages type array
 expect body.data.country.languages length > 0
 expect body.data.country.continent.name == "North America"

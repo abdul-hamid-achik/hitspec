@@ -1,17 +1,22 @@
 # Authentication Flow Examples
 # Demonstrates Bearer, Basic, API Key, and OAuth2 auth types
+#
+# Requires the public httpbin.org test service. If requests return 503, the
+# service is temporarily down (not a hitspec issue) -- retry later.
 
 @baseUrl = https://httpbin.org
+@token = my-secret-token-123
+@username = testuser
+@password = testpass
+@apiKey = sk-test-key-abc123
 
 ### Bearer Token Authentication
 # @name bearerAuth
 # @description Authenticate with a Bearer token
 # @tags auth, bearer
-
-@token = my-secret-token-123
+# @auth bearer {{token}}
 
 GET {{baseUrl}}/bearer
-# @auth bearer {{token}}
 
 >>>
 expect status 200
@@ -23,12 +28,9 @@ expect body.token == "my-secret-token-123"
 # @name basicAuth
 # @description Authenticate with username and password
 # @tags auth, basic
-
-@username = testuser
-@password = testpass
+# @auth basic {{username}}, {{password}}
 
 GET {{baseUrl}}/basic-auth/testuser/testpass
-# @auth basic {{username}}, {{password}}
 
 >>>
 expect status 200
@@ -40,11 +42,9 @@ expect body.user == "testuser"
 # @name apiKeyHeader
 # @description Send API key via custom header
 # @tags auth, apikey
-
-@apiKey = sk-test-key-abc123
+# @auth apiKey X-API-Key, {{apiKey}}
 
 GET {{baseUrl}}/headers
-# @auth apiKey X-API-Key, {{apiKey}}
 
 >>>
 expect status 200
@@ -56,9 +56,9 @@ expect body.headers.X-Api-Key == "sk-test-key-abc123"
 # @name apiKeyQuery
 # @description Send API key as query parameter
 # @tags auth, apikey
+# @auth apiKeyQuery api_key, {{apiKey}}
 
 GET {{baseUrl}}/get
-# @auth apiKeyQuery api_key, {{apiKey}}
 
 >>>
 expect status 200
@@ -69,9 +69,9 @@ expect body.args.api_key == "sk-test-key-abc123"
 # @name digestAuth
 # @description Authenticate with HTTP Digest auth
 # @tags auth, digest
+# @auth digest user, passwd
 
 GET {{baseUrl}}/digest-auth/auth/user/passwd
-# @auth digest user, passwd
 
 >>>
 expect status 200
