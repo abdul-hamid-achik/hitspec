@@ -174,6 +174,7 @@ func (p *Parser) parseRequest() (*Request, error) {
 		p.curToken.Type != TokenCaptureStart &&
 		p.curToken.Type != TokenDBStart &&
 		p.curToken.Type != TokenShellStart &&
+		p.curToken.Type != TokenMockStart &&
 		p.curToken.Type != TokenRequestSeparator &&
 		p.curToken.Type != TokenEOF {
 		body, err := p.parseBody()
@@ -215,6 +216,13 @@ func (p *Parser) parseRequest() (*Request, error) {
 				return nil, err
 			}
 			req.Captures = captures
+
+		case p.curToken.Type == TokenMockStart:
+			mockBody, err := p.parseMockBlock()
+			if err != nil {
+				return nil, err
+			}
+			req.MockBody = mockBody
 
 		default:
 			return req, nil

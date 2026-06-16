@@ -73,6 +73,7 @@ syn match hitspecBlockType /^>>>capture$/
 syn match hitspecBlockType /^>>>graphql$/
 syn match hitspecBlockType /^>>>db$/
 syn match hitspecBlockType /^>>>shell$/
+syn match hitspecBlockType /^>>>mock$/
 syn match hitspecBlockType /^>>>multipart$/
 syn match hitspecBlockType /^>>>variables$/
 

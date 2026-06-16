@@ -20,6 +20,9 @@ func (p *Parser) parseBody() (*Body, error) {
 	var builder strings.Builder
 	for p.curToken.Type != TokenAssertionStart &&
 		p.curToken.Type != TokenCaptureStart &&
+		p.curToken.Type != TokenMockStart &&
+		p.curToken.Type != TokenDBStart &&
+		p.curToken.Type != TokenShellStart &&
 		p.curToken.Type != TokenRequestSeparator &&
 		p.curToken.Type != TokenEOF {
 
@@ -193,9 +196,17 @@ func (p *Parser) parseGraphQLBody() (*Body, error) {
 	query := p.lexer.ReadRawUntilBlockEnd()
 	body.GraphQL.Query = query
 
-	// Re-sync token stream after raw read (lexer is at >>> or <<<)
+	// Re-sync token stream after raw read (lexer is at >>>, <<<, or EOF)
 	p.curToken = p.lexer.NextToken()
 
+	if p.curToken.Type == TokenEOF {
+		return nil, &ParseError{
+			File:    p.file,
+			Line:    line,
+			Message: "unclosed >>>graphql block (missing closing <<<)",
+			Snippet: p.getSnippet(),
+		}
+	}
 	if p.curToken.Type == TokenAssertionEnd {
 		p.nextToken()
 	}

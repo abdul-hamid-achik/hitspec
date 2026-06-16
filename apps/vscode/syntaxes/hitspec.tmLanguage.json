@@ -121,7 +121,7 @@
       "patterns": [
         {
           "name": "meta.block.typed.hitspec",
-          "begin": "^>>>(capture|graphql|db|shell|multipart|variables)",
+          "begin": "^>>>(capture|graphql|db|shell|mock|multipart|variables)",
           "end": "^<<<",
           "beginCaptures": {
             "0": { "name": "punctuation.definition.block.begin.hitspec" },

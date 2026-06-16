@@ -43,6 +43,7 @@ const (
 	TokenVariablesStart
 	TokenDBStart
 	TokenShellStart
+	TokenMockStart
 	TokenIdentifier
 	TokenLeftBracket
 	TokenRightBracket
@@ -392,6 +393,8 @@ func (l *Lexer) readBlockStart() Token {
 		return Token{Type: TokenDBStart, Value: blockType, Line: line, Column: col}
 	case "shell":
 		return Token{Type: TokenShellStart, Value: blockType, Line: line, Column: col}
+	case "mock":
+		return Token{Type: TokenMockStart, Value: blockType, Line: line, Column: col}
 	default:
 		return Token{Type: TokenAssertionStart, Value: blockType, Line: line, Column: col}
 	}
@@ -587,17 +590,36 @@ func (l *Lexer) skipWhitespaceInLine() {
 
 func (l *Lexer) ReadRawUntilBlockEnd() string {
 	var builder strings.Builder
+	atLineStart := true
 	for l.ch != 0 {
-		if l.ch == '<' && l.peekChars(3) == "<<<" {
+		// Only treat >>> / <<< as a block delimiter when it begins a line
+		// (after optional indentation). This keeps delimiters that appear
+		// inside raw content — e.g. a JSON string "a <<< b" in a >>>mock body —
+		// from prematurely ending the block.
+		if atLineStart && l.lineStartsWithBlockDelim() {
+			// Consume any indentation so the delimiter is the next token the
+			// caller reads via NextToken().
+			for l.ch == ' ' || l.ch == '\t' {
+				l.readChar()
+			}
 			break
 		}
-		if l.ch == '>' && l.peekChars(3) == ">>>" {
-			break
-		}
+		atLineStart = l.ch == '\n'
 		builder.WriteRune(l.ch)
 		l.readChar()
 	}
 	return strings.TrimSpace(builder.String())
+}
+
+// lineStartsWithBlockDelim reports whether the current line — ignoring leading
+// spaces and tabs — begins with a >>> or <<< block delimiter.
+func (l *Lexer) lineStartsWithBlockDelim() bool {
+	i := l.pos
+	for i < len(l.input) && (l.input[i] == ' ' || l.input[i] == '\t') {
+		i++
+	}
+	rest := l.input[i:]
+	return strings.HasPrefix(rest, "<<<") || strings.HasPrefix(rest, ">>>")
 }
 
 func (l *Lexer) ReadRestOfLine() string {

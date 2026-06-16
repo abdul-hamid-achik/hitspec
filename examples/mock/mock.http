@@ -1,0 +1,63 @@
+# Mock Server Examples
+# Demonstrates the >>>mock block — the mock server returns the block body verbatim.
+#
+# Run it:
+#   hitspec mock examples/mock/mock.http --port 3000
+# Then, in another shell:
+#   curl http://localhost:3000/users/1
+#   curl http://localhost:3000/users
+
+@baseUrl = http://localhost:3000
+
+### Get a single user
+# @name getUser
+# @tags mock, read
+
+GET {{baseUrl}}/users/1
+
+>>>mock
+{
+  "id": 1,
+  "name": "Ada Lovelace",
+  "email": "ada@example.com",
+  "roles": ["admin", "user"]
+}
+<<<
+
+>>>
+expect status 200
+<<<
+
+### List users (mock returns an array)
+# @name listUsers
+# @tags mock, read
+
+GET {{baseUrl}}/users
+
+>>>mock
+[
+  { "id": 1, "name": "Ada Lovelace" },
+  { "id": 2, "name": "Alan Turing" }
+]
+<<<
+
+>>>
+expect status 200
+<<<
+
+### Create a user (inferred response, no mock block)
+# @name createUser
+# @tags mock, write
+
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{
+  "name": "Grace Hopper"
+}
+
+>>>
+expect status 201
+expect body.id == 3
+expect body.name == "Grace Hopper"
+<<<

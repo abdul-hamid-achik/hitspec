@@ -209,9 +209,12 @@ func (s *Server) createMockResponse(req *parser.Request) *MockResponse {
 		Headers:     make(map[string]string),
 	}
 
-	// Check for mock block in the request (>>>mock ... <<<)
-	// For now, generate from assertions
-	if len(req.Assertions) > 0 {
+	// An explicit >>>mock block wins; otherwise infer the body from assertions.
+	if strings.TrimSpace(req.MockBody) != "" {
+		resp.Body = req.MockBody
+		// A verbatim mock body may be JSON, XML, HTML, or plain text.
+		resp.ContentType = inferContentType(req.MockBody)
+	} else if len(req.Assertions) > 0 {
 		resp.Body = s.generateBodyFromAssertions(req.Assertions)
 	} else {
 		// Default response
@@ -228,6 +231,22 @@ func (s *Server) createMockResponse(req *parser.Request) *MockResponse {
 	}
 
 	return resp
+}
+
+// inferContentType guesses a Content-Type from a raw mock response body so a
+// >>>mock block holding XML, HTML, or plain text isn't mislabeled as JSON.
+func inferContentType(body string) string {
+	t := strings.TrimSpace(body)
+	switch {
+	case strings.HasPrefix(t, "{") || strings.HasPrefix(t, "["):
+		return "application/json"
+	case strings.HasPrefix(t, "<?xml"):
+		return "application/xml"
+	case strings.HasPrefix(t, "<"):
+		return "text/html; charset=utf-8"
+	default:
+		return "text/plain; charset=utf-8"
+	}
 }
 
 func (s *Server) generateBodyFromAssertions(assertions []*parser.Assertion) string {

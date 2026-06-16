@@ -26,6 +26,7 @@ type Request struct {
 	Headers       []*Header
 	QueryParams   []*QueryParam
 	Body          *Body
+	MockBody      string // Raw response body from a >>>mock block (used by the mock server)
 	Assertions    []*Assertion
 	DBAssertions  []*DBAssertion
 	ShellCommands []*ShellCommand

@@ -149,6 +149,30 @@ func parseValue(s string) interface{} {
 }
 
 // parseShellBlock parses a >>>shell ... <<< block into a slice of ShellCommand.
+// parseMockBlock parses a >>>mock ... <<< block, capturing the raw response body
+// the mock server should return for this request. Mirrors the GraphQL block's
+// raw-read so multi-line JSON is preserved verbatim.
+func (p *Parser) parseMockBlock() (string, error) {
+	startLine := p.curToken.Line
+	// Advance past >>>mock; lexer is at the newline after the block type.
+	p.nextToken()
+	body := p.lexer.ReadRawUntilBlockEnd()
+	// Re-sync the token stream after the raw read (lexer is at <<< or EOF).
+	p.curToken = p.lexer.NextToken()
+	if p.curToken.Type == TokenEOF {
+		return "", &ParseError{
+			File:    p.file,
+			Line:    startLine,
+			Message: "unclosed >>>mock block (missing closing <<<)",
+			Snippet: p.getSnippet(),
+		}
+	}
+	if p.curToken.Type == TokenAssertionEnd {
+		p.nextToken()
+	}
+	return strings.TrimSpace(body), nil
+}
+
 func (p *Parser) parseShellBlock() ([]*ShellCommand, error) {
 	p.nextToken()
 	p.skipNewlines()
