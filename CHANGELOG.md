@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.1] - 2026-06-15
+
+### Fixed
+
+- **`studio` TUI layout and input**: bounded the workspace layout so panes no longer overflow on small terminals, fixed form-field input handling, and made `ctrl+c` quit reliably.
+
+### Changed
+
+- Hardened the end-to-end suite: reorganized glyphrun specs into `flows`/`actions`/`fixtures`, isolated `HOME` from real user data, fixed file-watcher status-clobber flakes, and added stress/record/import/clear-history flows. Dropped the redundant cairntrace browser suite. Raised TUI unit coverage to ~85%.
+
 ## [2.14.0] - 2026-06-14
 
 ### Changed
