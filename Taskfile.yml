@@ -204,6 +204,12 @@ tasks:
     cmds:
       - npx mintlify dev
 
+  docs:check:
+    desc: Check the Mintlify docs for broken links and MDX syntax errors
+    dir: apps/docs
+    cmds:
+      - npx mintlify broken-links
+
   # ---------------------------------------------------------------------------
   # Benchmarks
   # ---------------------------------------------------------------------------

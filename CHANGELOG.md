@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`>>>mock` response blocks**: a request can define an exact mock-server response body in a `>>>mock ... <<<` block, returned verbatim with a `Content-Type` inferred from the body (JSON / XML / HTML / text). Without a `>>>mock` block, the mock server still infers the response from assertions. Added `>>>mock` syntax highlighting in the VSCode and Neovim grammars, plus an `examples/mock/` example.
+- **Full code export**: copying a request as HTTPie, Python, fetch, Go, Ruby, or wget (command palette) now emits a complete snippet including the method, URL, headers, and body — previously only the method and URL.
+
+### Fixed
+
+- **Request body no longer swallows a trailing `>>>db` / `>>>shell` block**: a `>>>db` or `>>>shell` block placed directly after a request body (with no intervening assertion block) was consumed into the body, silently dropping its assertions. The body parser now stops at those block delimiters.
+- **Unclosed `>>>mock` / `>>>graphql` blocks now report a parse error** with line info (`unclosed >>>mock block (missing closing <<<)`) instead of silently consuming the rest of the file.
+- **Raw block content may contain `>>>` / `<<<` mid-line** (e.g. inside a JSON string in a `>>>mock` body); only a delimiter at the start of a line ends the block.
+
+### Documentation
+
+- Added a dedicated **Studio (terminal UI)** page, a **Build from Source** section in installation, and `completion` / `version` CLI reference pages; wired the orphaned REST API reference into the navigation.
+- Corrected inaccuracies verified against the code and by running the examples: removed the never-loaded `.hitspec.env.json` environment model (environments come from `hitspec.yaml`), fixed `@auth` directive placement, made the quickstart example actually pass, corrected the `--timeout` / `--insecure` flags, snapshot file paths, binary-download URLs, the GitHub Action input/env tables, and the assertion-operator count (26). Regenerated `llms.txt` / `hitspec docs` and removed a stale Vue/SPA section.
+- The Mintlify docs now pass `mintlify broken-links` cleanly (fixed an MDX syntax error and a broken navigation link); added a `task docs:check` target to catch these in CI.
+
 ## [2.14.1] - 2026-06-15
 
 ### Fixed
