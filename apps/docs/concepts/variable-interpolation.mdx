@@ -85,11 +85,11 @@ Authorization: Bearer {{login.token}}
 
 When the same variable name exists in multiple sources, hitspec resolves in this order (later sources win):
 
-1. **Built-in functions** -- `$uuid()`, `$now()`, etc.
-2. **Environment file** -- `.hitspec.env.json` values
-3. **Config environments** -- `hitspec.yaml` `environments` section
-4. **Inline variables** -- `@variable = value` in the file
-5. **Captured values** -- `{{requestName.captureName}}`
+1. **Config environments** -- `hitspec.yaml` `environments` section for the active `--env`
+2. **Inline variables** -- `@variable = value` in the file
+3. **Captured values** -- `{{requestName.captureName}}`
+
+Built-in functions (`$uuid()`, `$timestamp()`, `$env()`, …) and system variables (`{{$VAR}}`) are evaluated wherever they appear.
 
 ## Capture Chains
 

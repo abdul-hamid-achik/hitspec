@@ -72,7 +72,7 @@ varName from body.field
 <<<
 ```
 
-## Assertion Operators (24)
+## Assertion Operators (26)
 
 | Operator | Example |
 |----------|---------|
@@ -90,6 +90,10 @@ varName from body.field
 | `exists` | `expect body.id exists` |
 | `!exists` | `expect body.error !exists` |
 | `length` | `expect body.items length 10` |
+| `length >` | `expect body.items length > 0` |
+| `length >=` | `expect body.items length >= 1` |
+| `length <` | `expect body.items length < 100` |
+| `length <=` | `expect body.items length <= 50` |
 | `includes` | `expect body.tags includes "admin"` |
 | `!includes` | `expect body.tags !includes "test"` |
 | `in` | `expect status in [200, 201, 204]` |
@@ -328,39 +332,74 @@ hitspec record --port 8080 -o recorded.http
 # Verify API contracts
 hitspec contract verify <contracts-dir> --provider <url>
 
-# Launch browser-based API Client Manager
-hitspec serve [file|dir] [flags]
+# Open the interactive terminal UI (studio)
+hitspec studio [file|dir] [flags]
 
-# API-only mode (no web UI)
+# Start the REST/WebSocket API server
 hitspec serve --api-only --port 4000
 ```
 
-## Serve Command (API Client Manager)
+## Studio (Interactive Terminal UI)
 
-Launch a browser-based API Client Manager with `hitspec serve`. Serves a Vue.js SPA backed by a REST API, all embedded in a single binary.
+`hitspec studio` opens a keyboard-first terminal workspace for your .http files:
+inline editing, request execution with a tabbed response viewer (body, headers,
+assertions, timing, captures), and screens for stress, mock, contract, record,
+history, import, cookies, and settings. (`hitspec ui` is an alias.)
 
 ```bash
-hitspec serve                         # Open UI at http://localhost:4000
-hitspec serve ./tests/                # Serve specific directory
-hitspec serve --port 8080             # Custom port
-hitspec serve --api-only              # REST API only, no UI
-hitspec serve --read-only --cors      # Safe mode for sharing
+hitspec studio                        # Open the current directory
+hitspec studio ./tests/               # Open a specific workspace
+hitspec studio ./tests/users.http     # Open a file's workspace
+hitspec studio --read-only            # Browse without allowing changes
+hitspec studio --theme "Tokyo Night"  # Launch with a color theme
+```
+
+Key bindings: number keys `1`-`9` switch screens; `ctrl+p` command palette;
+`ctrl+e` environment switcher; `ctrl+t` theme picker; `ctrl+f` search; `?` help;
+`q` quit.
+
+### Studio Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--watch, -w` | true | Watch for file changes |
+| `--read-only` | false | Disallow file mutations |
+| `--env, -e` | dev | Default environment |
+| `--config` | | Path to hitspec.yaml |
+| `--theme` | | Color theme (Nord, Catppuccin Mocha, Dracula, Tokyo Night, Gruvbox Dark) |
+| `--allow-shell` | false | Allow shell command execution |
+| `--allow-db` | false | Allow database assertions |
+| `--verbose, -v` | false | Verbose logging |
+
+## Serve Command (REST/WebSocket API)
+
+`hitspec serve --api-only` starts an HTTP server that exposes the same engine over
+a REST + WebSocket API (used by editor integrations and custom tooling). Run
+without `--api-only` and `serve` opens studio for backward compatibility.
+
+```bash
+hitspec serve --api-only                     # REST/WebSocket API on :4000
+hitspec serve --api-only ./tests/            # Serve a specific directory
+hitspec serve --api-only --port 8080         # Custom port
+hitspec serve --api-only --read-only --cors  # Safe mode for sharing
 ```
 
 ### Serve Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--port, -p` | 4000 | Server port |
-| `--host` | localhost | Bind address |
-| `--open` | true | Auto-open browser |
-| `--watch, -w` | true | Watch for file changes |
+| `--api-only` | false | Start the REST/WebSocket API server |
+| `--port, -p` | 4000 | API server port |
+| `--host` | localhost | API server bind address |
 | `--cors` | false | Enable CORS headers |
-| `--api-only` | false | REST API only, no SPA |
+| `--watch, -w` | true | Watch for file changes |
 | `--read-only` | false | Disallow file mutations |
 | `--env, -e` | dev | Default environment |
+| `--config` | | Path to hitspec.yaml |
 | `--allow-shell` | false | Allow shell command execution |
 | `--allow-db` | false | Allow database assertions |
+| `--log-format` | text | Log format: text or json |
+| `--log-level` | info | Log level: debug, info, warn, error |
 
 ### REST API Endpoints
 
@@ -1153,16 +1192,18 @@ hitspec mock tests/ --port 8080
 hitspec mock api.http --port 3000 --delay 100ms
 ```
 
-Mock responses are generated from assertion expectations. Add a `>>>mock` block for custom responses:
+Mock responses come from a `>>>mock` block if present (returned verbatim),
+otherwise they are inferred from assertion expectations. Status comes from
+`expect status`.
 
 ```http
 ### Get User
 # @name getUser
-GET {{baseUrl}}/users/{{id}}
+GET {{baseUrl}}/users/1
 
 >>>mock
 {
-  "id": {{id}},
+  "id": 1,
   "name": "Mock User"
 }
 <<<

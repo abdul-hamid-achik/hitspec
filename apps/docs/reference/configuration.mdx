@@ -25,7 +25,9 @@ This creates a `hitspec.yaml` and an `example.http` file.
 # Default environment used when --env is not specified
 defaultEnvironment: dev
 
-# Request timeout in milliseconds
+# Request timeout in milliseconds (integer).
+# Note: the --timeout CLI flag / HITSPEC_TIMEOUT env var use a duration
+# string instead (e.g. 30s, 1m, 500ms).
 timeout: 30000
 
 # Number of automatic retries on failure (0 = no retries)

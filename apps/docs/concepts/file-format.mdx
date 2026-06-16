@@ -473,6 +473,18 @@ GET {{baseUrl}}/secure
 
 GET {{baseUrl}}/s3/object
 ```
+
+```http OAuth2 Client Credentials
+# @auth oauth2 client_credentials {{tokenUrl}}, {{clientId}}, {{clientSecret}}, scope1,scope2
+
+GET {{baseUrl}}/protected
+```
+
+```http OAuth2 Password
+# @auth oauth2 password {{tokenUrl}}, {{clientId}}, {{clientSecret}}, {{username}}, {{password}}, scope1,scope2
+
+GET {{baseUrl}}/protected
+```
 </CodeGroup>
 
 ## File Extensions

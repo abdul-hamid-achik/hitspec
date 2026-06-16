@@ -93,7 +93,7 @@ If you see `x509: certificate signed by unknown authority`:
 
 ```bash
 # Option 1: Disable SSL verification for testing
-hitspec run --no-verify-ssl tests.http
+hitspec run --insecure tests.http   # or the short form: -k
 
 # Option 2: Set in hitspec.yaml
 # validateSSL: false
@@ -117,8 +117,14 @@ If requests are timing out:
 
 ```bash
 # Increase timeout (default is 30s)
-hitspec run --timeout 60000 tests.http
+hitspec run --timeout 60s tests.http
 ```
+
+<Note>
+The `--timeout` flag (and `HITSPEC_TIMEOUT`) take a **duration string** like
+`30s`, `1m`, or `500ms`. The `timeout` key in `hitspec.yaml` is an **integer in
+milliseconds** (see below).
+</Note>
 
 Or set it in `hitspec.yaml`:
 

@@ -34,7 +34,7 @@
       "tabs": [
         {
           "tab": "Documentation",
-          "href": "/"
+          "href": "/introduction"
         },
         {
           "tab": "Guides",
@@ -64,6 +64,7 @@
           "introduction",
           "installation",
           "quickstart",
+          "studio",
           "editor-setup"
         ]
       },
@@ -136,6 +137,9 @@
           "reference/mock-record",
           "reference/contract-diff",
           "reference/docs-serve",
+          "reference/rest-api",
+          "reference/completion",
+          "reference/version",
           "reference/exit-codes"
         ]
       },

@@ -1,0 +1,227 @@
+---
+title: "Studio (Terminal UI)"
+description: "A keyboard-first interactive workspace for your .http files, right in the terminal."
+---
+
+`hitspec studio` opens an interactive, keyboard-first workspace for your `.http`
+files without leaving the terminal. It is the fastest way to explore an API: edit
+a request, run it, inspect the tabbed response, and copy it out as curl or code --
+all from one screen.
+
+```bash
+hitspec studio                 # open the current directory
+hitspec studio ./tests/        # open a directory
+hitspec studio ./tests/users.http   # open a single file
+hitspec studio --read-only     # browse without allowing file changes
+```
+
+<Note>
+  `ui` is an alias for `studio`, so `hitspec ui` does the same thing. The older
+  `hitspec serve` command still opens studio for backward compatibility, but
+  `hitspec studio` is the dedicated command. Use `hitspec serve --api-only` when
+  you want the REST/WebSocket API server instead of the UI.
+</Note>
+
+## What you get
+
+- **Inline editing** -- a syntax-highlighted source pane you can edit and save (`ctrl+s`).
+- **Run + tabbed response viewer** -- body, headers, assertions, timing, and captures.
+- **Nine screens** -- workspace, stress, mock, contract, record, history, import, cookies, and settings.
+- **Command palette** (`ctrl+p`) -- every action, searchable.
+- **Copy/export** -- copy a request as curl, HTTPie, Python, JS `fetch`, Go, Ruby, or wget, including method, URL, headers, and body.
+- **Environment + theme switchers** -- change the active environment (`ctrl+e`) or color theme (`ctrl+t`) live.
+- **Workspace search** (`ctrl+f`) and **file watching** -- the file list and runs update as files change on disk.
+
+## Layout
+
+The workspace screen is split into panes you cycle through with `tab` /
+`shift+tab`:
+
+| Pane | What it shows |
+|------|---------------|
+| **Files** | The `.http` / `.hitspec` files in the workspace |
+| **Requests** | The named requests inside the selected file |
+| **Source** | The raw, syntax-highlighted request source (editable) |
+| **Response** | The tabbed response viewer after a run |
+
+A top bar shows the active environment and version; a bottom navigation strip and
+status line show the current screen, contextual key hints, and toasts.
+
+## Screens
+
+Press a number key (or use the palette) to switch screens:
+
+| Key | Screen | Purpose |
+|-----|--------|---------|
+| `1` | Workspace | Browse, edit, and run requests |
+| `2` | Stress | Run a load test and watch live metrics |
+| `3` | Mock | Start/stop a mock server from your files |
+| `4` | Contract | Contract-test against an OpenAPI spec |
+| `5` | Record | Start/stop a recording proxy and export captured traffic |
+| `6` | History | Browse persistent run history with drill-down |
+| `7` | Import | Import from curl, OpenAPI, Postman, or Insomnia |
+| `8` | Cookies | Inspect the local cookie store |
+| `9` | Settings | View/edit config and environments |
+
+## Keyboard shortcuts
+
+Press `?` at any time for the in-app keyboard reference.
+
+### Screens
+
+| Key | Action |
+|-----|--------|
+| `1`-`9` | Jump to workspace, stress, mock, contract, record, history, import, cookies, settings |
+
+### Workspace
+
+| Key | Action |
+|-----|--------|
+| `enter` | Open / select |
+| `e` | Edit source (focus the inline editor) |
+| `ctrl+s` | Save the edited file |
+| `r` | Run the active request |
+| `R` | Run every request in the file |
+| `ctrl+r` | Refresh the workspace (rescan files + config) |
+| `n` | New scratch file |
+| `g` | Generate a sample project (`hitspec.yaml` + `example.http`) |
+| `D` | Delete the selected file |
+
+### Global
+
+| Key | Action |
+|-----|--------|
+| `ctrl+p` | Command palette |
+| `ctrl+e` | Switch environment |
+| `ctrl+t` | Switch theme |
+| `ctrl+f` | Search requests |
+| `tab` / `shift+tab` | Next / previous pane |
+| `esc` | Cancel / close an overlay |
+| `?` | Help overlay |
+| `q` / `ctrl+c` | Quit |
+
+## Command palette
+
+Press `ctrl+p` to open the command palette -- a searchable list of every action.
+Type `/` then a short, unique query to filter, then `enter` to run the highlighted
+command. The palette covers everything in the keymap plus actions that have no
+dedicated key, including:
+
+- **Run** the active request or whole file, **save**, **edit**, **refresh**.
+- **File operations** -- new, rename, duplicate, delete, and generate a sample project.
+- **Copy/export** the selected request as curl, HTTPie, Python, JS `fetch`, or Go, and copy the last response body.
+- **Quick request (ad-hoc)** -- run a one-off request by URL without saving a file.
+- **Stress / mock / record** -- start and stop the load test, mock server, and recording proxy; export or clear recordings.
+- **History / cookies / settings** -- open those screens, or clear run history.
+- **Go to** `<screen>` -- jump to any of the nine screens by name.
+
+## Copy a request as code
+
+Select a request and use the palette (`ctrl+p`) to copy it in the format you need:
+
+| Command | Output |
+|---------|--------|
+| Copy request as curl | A complete `curl` command |
+| Copy request as HTTPie | An `http` (HTTPie) command |
+| Copy request as Python | Python `requests` code |
+| Copy request as fetch | A JavaScript `fetch()` snippet |
+| Copy request as Go | Go `net/http` code |
+| Copy response body | The last response body |
+
+Each snippet includes the request's method, URL, headers, and body, so it is a
+runnable copy you can paste and tweak.
+
+<Note>
+  The **curl** export is the most complete -- it also renders any configured
+  `@auth` (for example, a bearer token). The other languages include the request's
+  explicit headers and body; add auth headers yourself if your request relies on
+  the `@auth` directive.
+</Note>
+
+## Ad-hoc requests
+
+Use **Quick request (ad-hoc)** from the palette to fire a one-off request by URL
+and view the response without creating a file -- handy for a quick probe while you
+work.
+
+## Environments
+
+Press `ctrl+e` to open the environment switcher and pick the active environment.
+The default environment is `dev`; override it at launch with `--env`:
+
+```bash
+hitspec studio ./tests/ --env staging
+```
+
+The top bar always shows which environment is active, and the Settings screen
+(`9`) lets you view and edit environment variables. See
+[Environments](/concepts/environments) for how environments are defined.
+
+## Themes
+
+Press `ctrl+t` to open the theme picker, or set a theme at launch with `--theme`:
+
+```bash
+hitspec studio --theme "Tokyo Night"
+```
+
+Built-in themes:
+
+- Nord
+- Catppuccin Mocha
+- Dracula
+- Tokyo Night
+- Gruvbox Dark
+
+## File watching
+
+Studio watches the workspace by default (`--watch`, on by default) and refreshes
+the file list and live execution progress as files change on disk. Disable it with
+`--watch=false` if you prefer a static view.
+
+## Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--watch` | `-w` | Watch for file changes | `true` |
+| `--read-only` | | Disallow file mutations | `false` |
+| `--env` | `-e` | Default environment | `dev` |
+| `--config` | | Path to `hitspec.yaml` | |
+| `--verbose` | `-v` | Verbose logging | `false` |
+| `--allow-shell` | | Allow shell command execution | `false` |
+| `--allow-db` | | Allow database assertions | `false` |
+| `--log-format` | | Log format: `text` or `json` | `text` |
+| `--log-level` | | Log level: `debug`, `info`, `warn`, `error` | `info` |
+| `--theme` | | Color theme (see [Themes](#themes)) | |
+
+<Warning>
+  Shell commands and database assertions are disabled by default. Pass
+  `--allow-shell` and/or `--allow-db` to enable them in studio, the same as with
+  `hitspec run`.
+</Warning>
+
+## Read-only mode
+
+`--read-only` disables every file mutation (save, new, rename, duplicate, delete,
+generate). Use it to browse or demo a workspace without risking changes:
+
+```bash
+hitspec studio ./tests/ --read-only
+```
+
+## Next steps
+
+<Columns cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Write and run your first test, then open it in studio.
+  </Card>
+  <Card title="Editor Setup" icon="code" href="/editor-setup">
+    Syntax highlighting and completions in VS Code, Neovim, and more.
+  </Card>
+  <Card title="Stress Testing" icon="gauge-high" href="/features/stress-testing">
+    Drive a load test from the stress screen.
+  </Card>
+  <Card title="API Client Manager" icon="layer-group" href="/guides/api-client-manager">
+    How studio and `serve` share one in-process manager.
+  </Card>
+</Columns>

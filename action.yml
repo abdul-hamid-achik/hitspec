@@ -17,7 +17,7 @@ inputs:
     description: 'Path to .env file for variable interpolation'
     required: false
   output:
-    description: 'Output format (console, json, junit, tap)'
+    description: 'Output format (console, json, junit, tap, html)'
     required: false
     default: 'junit'
   output-file:

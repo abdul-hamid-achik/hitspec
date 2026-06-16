@@ -23,36 +23,83 @@ The mock server reads your test files and creates endpoints that return response
 
 ## How It Works
 
-hitspec inspects the requests defined in your `.http` files and creates matching routes. When a request matches a route, the server returns a response based on:
+hitspec inspects the requests defined in your `.http` files and creates one route
+per request, matched by **method** and **path** (path variables like
+`/users/{{id}}` become wildcards that match any value). When an incoming request
+matches a route, the server builds the response from, in order of precedence:
 
-1. **`>>>mock` blocks** -- if present, this is used as the response body
-2. **Assertion expectations** -- if no mock block exists, a response is inferred from your assertions
+1. **A `>>>mock` block** -- if present, its content is returned verbatim as the response body.
+2. **Assertions** -- otherwise the body is inferred from the request's assertions.
+
+In both cases the **status code** comes from `expect status <code>` (default
+`200`) and the **Content-Type** is `application/json`.
 
 ## Custom Mock Responses
 
-Use the `>>>mock` block to define the exact response body:
+Add a `>>>mock` block to define the exact response body the server should return.
+This is the most direct way to mock a response -- including shapes that assertions
+can't express, like arrays:
 
 ```http
 ### Get user by ID
 # @name getUser
 
-GET {{baseUrl}}/users/{{id}}
+GET {{baseUrl}}/users/1
 
 >>>mock
 {
-  "id": {{id}},
-  "name": "Mock User",
-  "email": "mock@example.com"
+  "id": 1,
+  "name": "Ada Lovelace",
+  "roles": ["admin", "user"]
 }
 <<<
 
 >>>
 expect status 200
-expect body.id exists
 <<<
 ```
 
-When a GET request to `/users/123` hits the mock server, it returns the mock body with `{{id}}` resolved to `123`.
+A GET request to `/users/1` returns the `>>>mock` body verbatim with status `200`.
+
+<Note>
+  The mock body is returned **verbatim** -- `{{variable}}` placeholders are not
+  interpolated. The block ends at the first line that begins with `<<<`, so the
+  body can contain `>>>`/`<<<` mid-line (for example inside a JSON string).
+</Note>
+
+## Inferring the Response from Assertions
+
+If a request has no `>>>mock` block, the server builds the body from its assertions:
+
+- `expect body.<field> == <value>` assertions are assembled into a JSON object of those fields.
+- `expect body == <value>` returns that value verbatim as the body.
+- With no body assertions, the server returns `{"status": "ok"}`.
+
+For example:
+
+```http
+### Get a product
+# @name getProduct
+
+GET {{baseUrl}}/products/1
+
+>>>
+expect status 200
+expect body.id == 1
+expect body.name == "Mock User"
+expect body.email == "mock@example.com"
+<<<
+```
+
+A GET request to `/products/1` matches this route and returns:
+
+```json
+{
+  "id": 1,
+  "name": "Mock User",
+  "email": "mock@example.com"
+}
+```
 
 ## Flags
 
@@ -78,38 +125,16 @@ Given this test file:
 ```http
 @baseUrl = http://localhost:3000
 
-### List users
-# @name listUsers
-
-GET {{baseUrl}}/users
-
->>>mock
-[
-  {"id": 1, "name": "Alice"},
-  {"id": 2, "name": "Bob"}
-]
-<<<
-
->>>
-expect status 200
-expect body type array
-<<<
-
 ### Get single user
 # @name getUser
 
 GET {{baseUrl}}/users/1
 
->>>mock
-{
-  "id": 1,
-  "name": "Alice",
-  "email": "alice@example.com"
-}
-<<<
-
 >>>
 expect status 200
+expect body.id == 1
+expect body.name == "Alice"
+expect body.email == "alice@example.com"
 <<<
 
 ### Create user
@@ -122,15 +147,10 @@ Content-Type: application/json
   "name": "Charlie"
 }
 
->>>mock
-{
-  "id": 3,
-  "name": "Charlie"
-}
-<<<
-
 >>>
 expect status 201
+expect body.id == 3
+expect body.name == "Charlie"
 <<<
 ```
 
@@ -143,11 +163,11 @@ hitspec mock api.http --port 3000
 Then test against it:
 
 ```bash
-curl http://localhost:3000/users
-# [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]
-
 curl http://localhost:3000/users/1
 # {"id": 1, "name": "Alice", "email": "alice@example.com"}
+
+curl -X POST http://localhost:3000/users -d '{"name":"Charlie"}'
+# {"id": 3, "name": "Charlie"}
 ```
 
 <Tip>

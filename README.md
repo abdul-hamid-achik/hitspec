@@ -236,7 +236,7 @@ hitspec studio --read-only            # Safe mode for inspection
 - **Inline source editing** with `Ctrl+S` save to disk
 - Tabbed responses (Body / Headers / Assertions / Timing / Captures) with syntax-highlighted JSON
 - Command palette (`Ctrl+P`), fuzzy workspace search (`Ctrl+F`), environment switcher (`Ctrl+E`)
-- Copy/export any request as curl, HTTPie, Python, fetch, or Go
+- Copy a request as curl, HTTPie, Python, fetch, Go, Ruby, or wget (method, URL, headers, and body)
 - Run history with drill-down, rename/duplicate files, quick ad-hoc requests
 - Stress, mock, recording proxy, contract, import, cookies, and settings screens
 - Toast notifications, confirm dialogs, real-time file watching, live execution progress

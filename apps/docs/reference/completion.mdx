@@ -1,0 +1,80 @@
+---
+title: "hitspec completion"
+description: "Generate shell completion scripts for bash, zsh, fish, and PowerShell."
+---
+
+# hitspec completion
+
+Generate a shell completion script so `hitspec` can tab-complete commands, flags,
+and arguments.
+
+```bash
+hitspec completion <shell>
+```
+
+`<shell>` is one of `bash`, `zsh`, `fish`, or `powershell`. The command prints the
+script to stdout; redirect or source it as shown below.
+
+## Setup
+
+<Tabs>
+  <Tab title="Bash">
+    Load completions for the current session:
+
+    ```bash
+    source <(hitspec completion bash)
+    ```
+
+    Load them for every session:
+
+    ```bash
+    # Linux
+    hitspec completion bash > /etc/bash_completion.d/hitspec
+
+    # macOS (Homebrew)
+    hitspec completion bash > $(brew --prefix)/etc/bash_completion.d/hitspec
+    ```
+
+    <Note>Bash completions require the `bash-completion` package to be installed.</Note>
+  </Tab>
+  <Tab title="Zsh">
+    If completion isn't already enabled, add this once to `~/.zshrc`:
+
+    ```bash
+    echo "autoload -U compinit; compinit" >> ~/.zshrc
+    ```
+
+    Then install the completion (start a new shell afterward):
+
+    ```bash
+    hitspec completion zsh > "${fpath[1]}/_hitspec"
+    ```
+  </Tab>
+  <Tab title="Fish">
+    Load completions for the current session:
+
+    ```bash
+    hitspec completion fish | source
+    ```
+
+    Load them for every session:
+
+    ```bash
+    hitspec completion fish > ~/.config/fish/completions/hitspec.fish
+    ```
+  </Tab>
+  <Tab title="PowerShell">
+    Load completions for the current session:
+
+    ```powershell
+    hitspec completion powershell | Out-String | Invoke-Expression
+    ```
+
+    To load them for every session, add the line above to your PowerShell profile.
+  </Tab>
+</Tabs>
+
+<Tip>
+  If you installed hitspec with Homebrew, completions for the shells Homebrew
+  manages are typically wired up automatically.
+</Tip>

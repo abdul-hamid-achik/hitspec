@@ -24,7 +24,7 @@ The TextMate grammar highlights these elements:
 - **Annotations** -- `@name`, `@tags`, `@auth`, `@depends`, `@if`, `@unless`, `@import`, `@stress.*`, `@contract.*`, and others
 - **Headers** -- key-value pairs like `Content-Type: application/json`
 - **Assertion blocks** (`>>>` / `<<<`) -- `expect` keyword, comparison operators (`==`, `!=`, `>`, `<`, `>=`, `<=`), matchers (`contains`, `matches`, `exists`, `type`, `schema`, `snapshot`, etc.), and subjects (`status`, `body`, `header`, `duration`)
-- **Typed blocks** -- `>>>capture`, `>>>graphql`, `>>>db`, `>>>shell`, `>>>multipart`, `>>>variables`
+- **Typed blocks** -- `>>>capture`, `>>>graphql`, `>>>db`, `>>>shell`, `>>>mock`, `>>>multipart`, `>>>variables`
 - **Variable interpolation** -- `{{variable}}`
 - **Built-in functions** -- `$uuid()`, `$timestamp()`, `$env()`, `$random()`, and others
 - **File includes** -- `< ./path/to/file`
@@ -74,6 +74,17 @@ The hitspec Neovim plugin provides syntax highlighting, filetype detection, buff
 {
   "abdul-hamid-achik/hitspec",
   ft = { "http", "hitspec" },
+  config = function()
+    require("hitspec").setup()
+  end,
+}
+```
+</Tab>
+
+<Tab title="packer.nvim">
+```lua
+use {
+  "abdul-hamid-achik/hitspec",
   config = function()
     require("hitspec").setup()
   end,

@@ -32,17 +32,20 @@ The string `"getUserResponse"` is the snapshot name. It must be unique within th
 
 ## Snapshot Files
 
-Snapshots are stored in a `__snapshots__/` directory next to your test file:
+Snapshots are stored in a `__snapshots__/` directory next to your test file. Each
+test file gets a single `<filename>.snap.json` file that holds all of that file's
+named snapshots:
 
 ```
 tests/
   api.http
   __snapshots__/
-    api/
-      getUserResponse.json
+    api.snap.json
 ```
 
-The directory structure mirrors your test file name, and each snapshot is saved as a separate `.json` file.
+So `tests/api.http` stores its snapshots in `tests/__snapshots__/api.snap.json`,
+keyed by the snapshot names you give in `expect body snapshot "..."`. Snapshots
+group by test file, not one file per snapshot.
 
 <Tip>
   Commit your `__snapshots__/` directories to version control. This allows your team to review snapshot changes in pull requests and catch unexpected API changes.

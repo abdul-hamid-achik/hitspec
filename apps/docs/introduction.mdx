@@ -73,6 +73,9 @@ No SDK. No GUI. No JavaScript. Just plain text `.http` files you can read, diff,
   <Card title="CI/CD Ready" icon="circle-check">
     Official GitHub Action, JUnit output, environment variables, and exit codes that just work.
   </Card>
+  <Card title="Interactive Studio" icon="terminal" href="/studio">
+    A keyboard-first terminal UI to edit, run, and inspect requests, with stress, mock, record, and history screens. Run `hitspec studio`.
+  </Card>
 </Columns>
 
 ## What's in a Test File?
@@ -82,35 +85,29 @@ A hitspec test file is a plain text `.http` file containing one or more requests
 ```http
 @baseUrl = https://jsonplaceholder.typicode.com
 
-### Create a post
-# @name createPost
+### Get a post
+# @name getPost
 
-POST {{baseUrl}}/posts
-Content-Type: application/json
-
-{
-  "title": "Hello hitspec",
-  "body": "Testing made simple",
-  "userId": 1
-}
-
->>>
-expect status 201
-expect body.id exists
-<<<
-
->>>capture
-postId from body.id
-<<<
-
-### Verify the post was created
-# @depends createPost
-
-GET {{baseUrl}}/posts/{{createPost.postId}}
+GET {{baseUrl}}/posts/1
 
 >>>
 expect status 200
-expect body.title == "Hello hitspec"
+expect body.id == 1
+expect body.title exists
+<<<
+
+>>>capture
+authorId from body.userId
+<<<
+
+### Get the post's author
+# @depends getPost
+
+GET {{baseUrl}}/users/{{getPost.authorId}}
+
+>>>
+expect status 200
+expect body.name exists
 <<<
 ```
 

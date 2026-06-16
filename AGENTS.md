@@ -4,9 +4,9 @@
 
 hitspec is a file-based HTTP API testing tool written in Go. Users write `.http`
 (or `.hitspec`) files with requests and assertions, and hitspec executes them. It
-also provides a **native terminal API Client Manager (TUI)** via `hitspec serve`
-— a keyboard-first, Postman-like interface that stays true to the plain-text,
-git-friendly file format.
+also provides a **native terminal API Client Manager (TUI)** via `hitspec studio`
+(`hitspec serve` still opens it for backward compatibility) — a keyboard-first,
+Postman-like interface that stays true to the plain-text, git-friendly file format.
 
 > History: the API Client Manager used to be a Vue.js single-page app served over
 > HTTP. That web client was removed and replaced by an in-process facade

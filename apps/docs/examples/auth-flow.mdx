@@ -95,9 +95,9 @@ expect body.json.email endsWith "@example.com"
 ### Basic auth request
 # @name basicAuthRequest
 # @tags auth
+# @auth basic testuser, testpass
 
 GET {{baseUrl}}/basic-auth/testuser/testpass
-# @auth basic testuser, testpass
 
 >>>
 expect status 200
@@ -243,9 +243,9 @@ hitspec supports multiple auth types. Here is Basic auth:
 ### Basic auth request
 # @name basicAuthRequest
 # @tags auth
+# @auth basic testuser, testpass
 
 GET {{baseUrl}}/basic-auth/testuser/testpass
-# @auth basic testuser, testpass
 
 >>>
 expect status 200

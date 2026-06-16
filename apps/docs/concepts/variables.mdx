@@ -151,16 +151,15 @@ Access system environment variables with `$env()`:
 
 The second argument is an optional default value used when the environment variable is not set.
 
-You can also reference system variables in your environment file (`.hitspec.env.json`):
+You can also reference system variables in your `hitspec.yaml` environments using
+shell-style `${VAR}` syntax:
 
-```json
-{
-  "prod": {
-    "baseUrl": "https://api.example.com",
-    "token": "{{$env.API_TOKEN}}",
-    "dbPassword": "{{$env.DB_PASSWORD}}"
-  }
-}
+```yaml
+environments:
+  prod:
+    baseUrl: https://api.example.com
+    token: "${API_TOKEN}"
+    dbPassword: "${DB_PASSWORD}"
 ```
 
 ## Capture References
@@ -203,14 +202,14 @@ See [Captures](/concepts/captures) and [Dependencies](/concepts/dependencies) fo
 
 When the same variable name is defined in multiple places, hitspec resolves it in this order (later sources override earlier ones):
 
-1. **Built-in functions** -- `$uuid()`, `$timestamp()`, etc.
-2. **Environment file** -- values from `.hitspec.env.json` for the active environment
-3. **hitspec.yaml environments** -- values from the `environments` section of config
-4. **Inline variables** -- `@variable = value` in the `.http` file
-5. **Captured values** -- `{{requestName.captureName}}` from prior responses
+1. **hitspec.yaml environments** -- values from the `environments` section for the active `--env`
+2. **Inline variables** -- `@variable = value` in the `.http` file
+3. **Captured values** -- `{{requestName.captureName}}` from prior responses
+
+Built-in functions (`$uuid()`, `$timestamp()`, `$env()`, …) and system variables (`{{$VAR}}`) are evaluated wherever they appear.
 
 <Tip>
-Inline variables (`@var = value`) override environment file values. This is useful for local overrides during development, but be careful not to accidentally shadow environment-specific configuration.
+Inline variables (`@var = value`) override `hitspec.yaml` environment values. This is useful for local overrides during development, but be careful not to accidentally shadow environment-specific configuration.
 </Tip>
 
 ## Variable Scope
@@ -219,4 +218,4 @@ Variables defined with `@variable = value` are scoped to the file in which they 
 
 Captured variables are scoped to the entire test run. Any request in any file can reference a captured value, as long as the capturing request has already executed (enforced by `@depends`).
 
-Environment variables (from `.hitspec.env.json` or `hitspec.yaml`) are global and available to all files in the test run.
+Environment variables (from the `environments` section of `hitspec.yaml`) are global and available to all files in the test run.

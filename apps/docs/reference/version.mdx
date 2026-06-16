@@ -1,0 +1,36 @@
+---
+title: "hitspec version"
+description: "Print the installed hitspec version and build information."
+---
+
+# hitspec version
+
+Print version information for the installed hitspec binary.
+
+```bash
+hitspec version
+```
+
+Output includes the release version and the build time:
+
+```
+hitspec version 2.14.1
+Built: 2026-06-15_19:20:00
+```
+
+<Note>
+  A binary built from source without release metadata reports `dev` for the
+  version and `unknown` for the build time.
+</Note>
+
+## Shortcut flag
+
+The root command also accepts `-v` / `--version` to print the version:
+
+```bash
+hitspec --version
+hitspec -v
+```
+
+Use `hitspec version` when you want the full version-plus-build-time output, or in
+scripts and bug reports.

@@ -60,6 +60,16 @@ You can pass multiple files and directories as arguments.
 | `--proxy` | | Proxy URL for HTTP requests | | `HITSPEC_PROXY` |
 | `--insecure` | `-k` | Disable SSL certificate validation | `false` | `HITSPEC_INSECURE` |
 
+### History Flags
+
+Every run is recorded to a local history database (also browsable in
+[studio](/studio)'s History screen).
+
+| Flag | Description | Default | Env Var |
+|------|-------------|---------|---------|
+| `--history-db` | Path to the run-history database | `~/.hitspec/history.db` | `HITSPEC_HISTORY_DB` |
+| `--no-history` | Disable run-history recording for this run | `false` | `HITSPEC_NO_HISTORY` |
+
 ### Snapshot Flags
 
 | Flag | Description | Default |

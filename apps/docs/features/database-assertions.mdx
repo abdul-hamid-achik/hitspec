@@ -94,6 +94,11 @@ expect active == true
 | `exists` | `expect email exists` | Value is not null |
 | `!exists` | `expect deleted_at !exists` | Value is null |
 
+<Note>
+  If you omit the operator, hitspec defaults to `==` (exact match). So
+  `expect active true` is equivalent to `expect active == true`.
+</Note>
+
 ## Examples
 
 ### Verify Record Creation

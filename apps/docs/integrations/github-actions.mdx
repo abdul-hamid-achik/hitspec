@@ -42,17 +42,39 @@ jobs:
 |-------|-------------|---------|
 | `files` | Files or directories to test | (required) |
 | `env` | Environment name | `dev` |
-| `env-file` | Path to `.env` file | - |
-| `output` | Output format (`console`, `json`, `junit`, `tap`) | `junit` |
+| `env-file` | Path to `.env` file for variable interpolation | - |
+| `output` | Output format (`console`, `json`, `junit`, `tap`, `html`) | `junit` |
 | `output-file` | Write output to file | - |
-| `tags` | Filter by tags | - |
-| `parallel` | Run in parallel | `false` |
+| `tags` | Filter by tags (comma-separated) | - |
+| `name` | Filter by request name pattern | - |
+| `timeout` | Global timeout in milliseconds | - |
+| `parallel` | Run requests in parallel | `false` |
+| `concurrency` | Max concurrent requests when `parallel` is enabled | - |
 | `bail` | Stop on first failure | `false` |
-| `stress` | Enable stress testing | `false` |
-| `duration` | Stress test duration | `30s` |
-| `rate` | Requests per second | `10` |
-| `threshold` | Pass/fail thresholds | - |
-| `version` | hitspec version to install | `latest` |
+| `verbose` | Show detailed output | `false` |
+| `insecure` | Disable SSL certificate validation | `false` |
+| `proxy` | Proxy URL for requests | - |
+| `stress` | Enable stress testing mode | `false` |
+| `duration` | Stress test duration (e.g. `30s`, `1m`) | `30s` |
+| `rate` | Target requests per second for stress testing | `10` |
+| `vus` | Number of virtual users (alternative to `rate`) | - |
+| `max-vus` | Maximum concurrent requests in stress mode | - |
+| `think-time` | Think time between requests per VU | - |
+| `ramp-up` | Ramp-up time to reach target rate/VUs | - |
+| `threshold` | Pass/fail thresholds (e.g. `"p95<200ms,errors<0.1%"`) | - |
+| `profile` | Stress profile name from `hitspec.yaml` | - |
+| `version` | hitspec version to install (e.g. `v0.9.4` or `latest`) | `latest` |
+
+<Note>
+The Action defaults `output` to `junit` (handy for CI test reporting), whereas the
+`hitspec` CLI defaults to `console`.
+</Note>
+
+### Action Outputs
+
+| Output | Description |
+|--------|-------------|
+| `exit-code` | Exit code from hitspec (`0` = success, non-zero = failure) |
 
 ## Using the CLI Directly
 
@@ -159,6 +181,22 @@ If your tests rely on an environment file, generate it from secrets at runtime:
 | `HITSPEC_NO_COLOR` | `--no-color` | Disable colors |
 | `HITSPEC_PROXY` | `--proxy` | Proxy URL |
 | `HITSPEC_INSECURE` | `--insecure` | Skip SSL verification |
+
+### Metrics and Notification Variables
+
+| Environment Variable | CLI Flag | Description |
+|---------------------|----------|-------------|
+| `HITSPEC_METRICS` | `--metrics` | Metrics export format: `prometheus`, `datadog`, `json` |
+| `HITSPEC_METRICS_PORT` | `--metrics-port` | Prometheus metrics port (default `9090`) |
+| `HITSPEC_METRICS_FILE` | `--metrics-file` | Output file for JSON metrics |
+| `DD_API_KEY` | `--datadog-api-key` | DataDog API key |
+| `DD_SITE` | `--datadog-site` | DataDog site (default `datadoghq.com`) |
+| `DD_TAGS` | `--datadog-tags` | Comma-separated DataDog tags |
+| `HITSPEC_NOTIFY` | `--notify` | Notification service: `slack`, `teams` |
+| `HITSPEC_NOTIFY_ON` | `--notify-on` | When to notify: `always`, `failure`, `success`, `recovery` (default `failure`) |
+| `SLACK_WEBHOOK` | `--slack-webhook` | Slack webhook URL |
+| `SLACK_CHANNEL` | `--slack-channel` | Slack channel override |
+| `TEAMS_WEBHOOK` | `--teams-webhook` | Microsoft Teams webhook URL |
 
 ## Caching
 

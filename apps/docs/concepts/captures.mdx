@@ -51,6 +51,21 @@ nestedValue from body.data.items[0].metadata.key
 <<<
 ```
 
+Body paths use [GJSON](https://github.com/tidwall/gjson) syntax, so the full GJSON
+path language is available -- including `.#` for array length and queries:
+
+```http
+>>>capture
+itemCount from body.items.#
+firstAdminName from body.users.#(role=="admin").name
+<<<
+```
+
+<Note>
+The same GJSON path syntax works in `expect body.<path>` assertions, so you can
+assert on `body.items.#` (array length) directly too.
+</Note>
+
 ### Header Captures
 
 ```http

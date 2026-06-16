@@ -12,15 +12,19 @@ Create a file called `api.http`:
 ```http api.http
 @baseUrl = https://jsonplaceholder.typicode.com
 
-### Get all posts
-# @name getPosts
+### Get a post
+# @name getPost
 
-GET {{baseUrl}}/posts
+GET {{baseUrl}}/posts/1
 
 >>>
 expect status 200
-expect body type array
-expect body[0].id exists
+expect body.id == 1
+expect body.title exists
+<<<
+
+>>>capture
+authorId from body.userId
 <<<
 
 ### Create a post
@@ -40,26 +44,23 @@ expect status 201
 expect body.id exists
 <<<
 
->>>capture
-postId from body.id
-<<<
+### Get the post's author
+# @name getAuthor
+# @depends getPost
 
-### Get the created post
-# @name getCreatedPost
-# @depends createPost
-
-GET {{baseUrl}}/posts/{{createPost.postId}}
+GET {{baseUrl}}/users/{{getPost.authorId}}
 
 >>>
 expect status 200
-expect body.title == "Hello hitspec"
+expect body.name exists
+expect body.email exists
 <<<
 ```
 
 This file defines three requests:
-1. **getPosts** -- fetches all posts and checks the response is an array
-2. **createPost** -- creates a new post and captures its ID
-3. **getCreatedPost** -- uses the captured ID to verify the post was created
+1. **getPost** -- fetches a post, checks its fields, and captures the author's ID
+2. **createPost** -- creates a new post and checks the `201` response
+3. **getAuthor** -- runs after `getPost` and uses the captured `authorId` to fetch the author
 
 </Step>
 
@@ -78,27 +79,29 @@ hitspec parses the file, executes each request in order (respecting dependencies
 On success, you see a summary of passing tests:
 
 ```
-✓ getPosts (125ms)
-✓ createPost (89ms)
-✓ getCreatedPost (94ms)
+  ✓ getPost (130ms)
+  ✓ createPost (74ms)
+  ✓ getAuthor (39ms)
 
-3 passed, 0 failed
+Tests: 3 passed, 3 total
+Time:  224ms
 ```
 
 If an assertion fails, hitspec shows exactly what went wrong:
 
 ```
-✓ getPosts (125ms)
-✗ createPost (89ms)
-  → status ==
-    Expected: 200
-    Actual:   201
-✓ getCreatedPost (94ms)
+  ✓ getPost (130ms)
+  ✓ createPost (74ms)
+  ✗ getAuthor (41ms)
+    → status == (line 39)
+      Expected: 200
+      Actual:   404
+      expected 200, got 404
 
-2 passed, 1 failed
+Tests: 2 passed, 1 failed, 3 total
 ```
 
-The output tells you which assertion failed, what value was expected, and what was actually returned.
+The output tells you which assertion failed, on which line, what value was expected, and what was actually returned.
 
 </Step>
 
@@ -116,9 +119,21 @@ Let's break down the key concepts from this example:
 
 **Assertions** -- The `>>> ... <<<` block contains `expect` statements that validate the response.
 
-**Captures** -- The `>>>capture ... <<<` block extracts values from responses for use in later requests.
+**Captures** -- The `>>>capture ... <<<` block extracts values from responses (here, `authorId`) for use in later requests, referenced as `{{getPost.authorId}}`.
 
-**Dependencies** -- `# @depends createPost` ensures a request runs after its dependency.
+**Dependencies** -- `# @depends getPost` ensures `getAuthor` runs after `getPost`, so the captured `authorId` is available.
+
+## Try it in studio
+
+Prefer an interactive workflow? Open the same file in the terminal UI:
+
+```bash
+hitspec studio api.http
+```
+
+Studio lets you edit, run, and inspect requests in a tabbed response viewer, with
+dedicated screens for stress, mock, contract, record, history, and more -- all
+keyboard-first. See the [Studio guide](/studio).
 
 ## Next Steps
 
@@ -126,7 +141,13 @@ Let's break down the key concepts from this example:
   <Card title="Installation" icon="download" href="/installation">
     Install hitspec via Homebrew, Go, or binary download.
   </Card>
+  <Card title="Studio (Terminal UI)" icon="terminal" href="/studio">
+    Edit, run, and inspect requests interactively in the terminal.
+  </Card>
   <Card title="Editor Setup" icon="code" href="/editor-setup">
     Get syntax highlighting and completions in your editor.
+  </Card>
+  <Card title="Core Concepts" icon="book" href="/concepts/file-format">
+    Learn the file format, variables, assertions, and captures.
   </Card>
 </Columns>
