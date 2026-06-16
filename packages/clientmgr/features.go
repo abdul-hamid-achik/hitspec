@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -768,6 +769,9 @@ func convertStressStats(s stress.CurrentStats) StressStatsDTO {
 	}
 }
 
+// exportSnippet renders a request as a runnable snippet in the given language,
+// including method, URL, headers, and body. (curl has its own dedicated exporter
+// in packages/export/curl; this covers the other languages.)
 func exportSnippet(format string, r *parser.Request) string {
 	method := r.Method
 	if method == "" {
@@ -775,20 +779,137 @@ func exportSnippet(format string, r *parser.Request) string {
 	}
 	switch format {
 	case "fetch", "javascript":
-		return fmt.Sprintf("fetch(%q, { method: %q })", r.URL, method)
+		return fetchSnippet(method, r)
 	case "wget":
-		return fmt.Sprintf("wget --method=%s %q", method, r.URL)
+		return wgetSnippet(method, r)
 	case "python":
-		return fmt.Sprintf("requests.request(%q, %q)", method, r.URL)
+		return pythonSnippet(method, r)
 	case "httpie":
-		return fmt.Sprintf("http %s %q", method, r.URL)
+		return httpieSnippet(method, r)
 	case "go":
-		return fmt.Sprintf("http.NewRequest(%q, %q, nil)", method, r.URL)
+		return goSnippet(method, r)
 	case "ruby":
-		return fmt.Sprintf("Net::HTTP::%s.new(URI(%q))", rubyMethodClass(method), r.URL)
+		return rubySnippet(method, r)
 	default:
 		return fmt.Sprintf("%s %s", method, r.URL)
 	}
+}
+
+// snippetBody returns the trimmed raw request body, or "" when there is none.
+func snippetBody(r *parser.Request) string {
+	if r.Body == nil || r.Body.ContentType == parser.BodyNone {
+		return ""
+	}
+	return strings.TrimSpace(r.Body.Raw)
+}
+
+// shellQuote wraps s in single quotes, safely escaping embedded single quotes,
+// for shell-based snippets (httpie, wget).
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+func fetchSnippet(method string, r *parser.Request) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "fetch(%s, {\n  method: %s", strconv.Quote(r.URL), strconv.Quote(method))
+	if len(r.Headers) > 0 {
+		b.WriteString(",\n  headers: {")
+		for i, h := range r.Headers {
+			if i > 0 {
+				b.WriteString(",")
+			}
+			fmt.Fprintf(&b, "\n    %s: %s", strconv.Quote(h.Key), strconv.Quote(h.Value))
+		}
+		b.WriteString("\n  }")
+	}
+	if body := snippetBody(r); body != "" {
+		fmt.Fprintf(&b, ",\n  body: %s", strconv.Quote(body))
+	}
+	b.WriteString("\n})")
+	return b.String()
+}
+
+func pythonSnippet(method string, r *parser.Request) string {
+	var b strings.Builder
+	b.WriteString("import requests\n\n")
+	if len(r.Headers) > 0 {
+		b.WriteString("headers = {\n")
+		for _, h := range r.Headers {
+			fmt.Fprintf(&b, "    %s: %s,\n", strconv.Quote(h.Key), strconv.Quote(h.Value))
+		}
+		b.WriteString("}\n")
+	}
+	body := snippetBody(r)
+	if body != "" {
+		fmt.Fprintf(&b, "data = %s\n", strconv.Quote(body))
+	}
+	fmt.Fprintf(&b, "response = requests.request(%s, %s", strconv.Quote(method), strconv.Quote(r.URL))
+	if len(r.Headers) > 0 {
+		b.WriteString(", headers=headers")
+	}
+	if body != "" {
+		b.WriteString(", data=data")
+	}
+	b.WriteString(")")
+	return b.String()
+}
+
+func httpieSnippet(method string, r *parser.Request) string {
+	var b strings.Builder
+	if body := snippetBody(r); body != "" {
+		fmt.Fprintf(&b, "echo %s | ", shellQuote(body))
+	}
+	fmt.Fprintf(&b, "http %s %s", method, shellQuote(r.URL))
+	for _, h := range r.Headers {
+		fmt.Fprintf(&b, " %s", shellQuote(h.Key+":"+h.Value))
+	}
+	return b.String()
+}
+
+func goSnippet(method string, r *parser.Request) string {
+	var b strings.Builder
+	if body := snippetBody(r); body != "" {
+		bodyLit := "`" + body + "`"
+		if strings.Contains(body, "`") {
+			bodyLit = strconv.Quote(body)
+		}
+		fmt.Fprintf(&b, "req, _ := http.NewRequest(%s, %s, strings.NewReader(%s))\n", strconv.Quote(method), strconv.Quote(r.URL), bodyLit)
+	} else {
+		fmt.Fprintf(&b, "req, _ := http.NewRequest(%s, %s, nil)\n", strconv.Quote(method), strconv.Quote(r.URL))
+	}
+	for _, h := range r.Headers {
+		fmt.Fprintf(&b, "req.Header.Set(%s, %s)\n", strconv.Quote(h.Key), strconv.Quote(h.Value))
+	}
+	b.WriteString("resp, _ := http.DefaultClient.Do(req)\ndefer resp.Body.Close()")
+	return b.String()
+}
+
+func rubySnippet(method string, r *parser.Request) string {
+	var b strings.Builder
+	b.WriteString("require 'net/http'\nrequire 'uri'\n\n")
+	fmt.Fprintf(&b, "uri = URI(%s)\n", strconv.Quote(r.URL))
+	fmt.Fprintf(&b, "req = Net::HTTP::%s.new(uri)\n", rubyMethodClass(method))
+	for _, h := range r.Headers {
+		fmt.Fprintf(&b, "req[%s] = %s\n", strconv.Quote(h.Key), strconv.Quote(h.Value))
+	}
+	if body := snippetBody(r); body != "" {
+		fmt.Fprintf(&b, "req.body = %s\n", strconv.Quote(body))
+	}
+	b.WriteString("res = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == 'https') { |http| http.request(req) }")
+	return b.String()
+}
+
+func wgetSnippet(method string, r *parser.Request) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "wget --method=%s", method)
+	for _, h := range r.Headers {
+		fmt.Fprintf(&b, " --header=%s", shellQuote(h.Key+": "+h.Value))
+	}
+	if body := snippetBody(r); body != "" {
+		fmt.Fprintf(&b, " --body-data=%s", shellQuote(body))
+	}
+	fmt.Fprintf(&b, " %s", shellQuote(r.URL))
+	return b.String()
 }
 
 // rubyMethodClass title-cases an HTTP method for Ruby's Net::HTTP class names
