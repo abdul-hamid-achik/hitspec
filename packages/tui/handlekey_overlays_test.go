@@ -55,9 +55,6 @@ func TestHandleKeyOverlayControls(t *testing.T) {
 		}
 		m.envOpen = true
 		m.handleKey(enter()) // selects (or no-op if empty); must not panic
-		if m.envOpen {
-			// ok: closed on confirm
-		}
 	})
 
 	t.Run("theme picker confirm applies", func(t *testing.T) {
