@@ -12,6 +12,12 @@ import (
 	"time"
 )
 
+// maxSSELineSize is the maximum byte length of a single SSE line the scanner
+// will accept. bufio.Scanner's default token limit is 64KB, which silently
+// dropped longer lines (a large JSON `data:` payload, base64 blobs). 1MB covers
+// realistic event payloads while bounding memory.
+const maxSSELineSize = 1 << 20 // 1 MiB
+
 // Event represents a single SSE event.
 type Event struct {
 	ID    string
@@ -141,13 +147,13 @@ func (c *Client) Stream(ctx context.Context, maxEvents int) *StreamResult {
 	}
 	result.Events = events
 	result.Duration = time.Since(start)
-
 	return result
 }
 
 // parseEvents reads and parses SSE events from a reader.
 func (c *Client) parseEvents(reader io.Reader, maxEvents int) ([]Event, error) {
 	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxSSELineSize)
 	var events []Event
 	var currentEvent Event
 	var dataLines []string
@@ -256,6 +262,7 @@ func (c *Client) StreamWithHandler(ctx context.Context, handler EventHandler) er
 	}
 
 	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxSSELineSize)
 	var currentEvent Event
 	var dataLines []string
 

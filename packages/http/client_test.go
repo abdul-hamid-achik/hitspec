@@ -1,6 +1,7 @@
 package http
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -61,6 +62,98 @@ func TestClient_WithTimeout(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "context deadline exceeded")
+}
+
+// TestClient_PerRequestTimeoutOverridesClient guards the regression where a
+// per-request timeout longer than the client default was silently capped at
+// the client default (http.Client.Timeout always won over the context
+// deadline). With a 50ms client timeout and a 500ms per-request timeout, a
+// 200ms response must succeed — under the old cap it timed out at 50ms.
+func TestClient_PerRequestTimeoutOverridesClient(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewClient(WithTimeout(50 * time.Millisecond))
+	req := &Request{
+		Method:  "GET",
+		URL:     server.URL,
+		Timeout: 500 * time.Millisecond,
+	}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+}
+
+// TestClient_DurationIncludesBodyDownload guards the regression where
+// Response.Duration was measured right after the headers arrived, excluding
+// body download — a slow/large body reported an artificially short duration.
+func TestClient_DurationIncludesBodyDownload(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		flusher, _ := w.(http.Flusher)
+		// Flush headers immediately, then trickle the body so download time
+		// is clearly measurable and distinct from the header round-trip.
+		if flusher != nil {
+			flusher.Flush()
+		}
+		for i := 0; i < 5; i++ {
+			_, _ = w.Write([]byte("aaaaaaaaaaaaaaaaaaaa"))
+			if flusher != nil {
+				flusher.Flush()
+			}
+			time.Sleep(40 * time.Millisecond)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient()
+	resp, err := client.Get(server.URL, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+	// 5 writes * 40ms = ~200ms of body download; duration must include it
+	// (the old code measured before reading the body, so it was ~0).
+	assert.Greater(t, resp.Duration, 150*time.Millisecond, "Duration should include body download time")
+}
+
+// TestClient_SSEPartialBodyOnTimeout guards the regression where an SSE stream
+// read with a @timeout context deadline discarded the partial body and failed
+// the request with zero events captured. The deadline is the expected
+// termination for a time-bounded stream, so the partial body must be returned.
+func TestClient_SSEPartialBodyOnTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher, _ := w.(http.Flusher)
+		// Send two events, then block forever so the context deadline fires mid-stream.
+		fmt.Fprint(w, "data: event-one\n\n")
+		if flusher != nil {
+			flusher.Flush()
+		}
+		time.Sleep(50 * time.Millisecond)
+		fmt.Fprint(w, "data: event-two\n\n")
+		if flusher != nil {
+			flusher.Flush()
+		}
+		// Hold the connection open until the caller's deadline elapses.
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+
+	client := NewClient()
+	req := &Request{
+		Method:  "GET",
+		URL:     server.URL,
+		Timeout: 300 * time.Millisecond,
+	}
+	resp, err := client.Do(req)
+	require.NoError(t, err, "deadline-terminated stream must not be a hard error")
+	assert.Equal(t, 200, resp.StatusCode)
+	// The two events sent before the deadline must be present in the partial body.
+	assert.Contains(t, resp.BodyString(), "event-one")
+	assert.Contains(t, resp.BodyString(), "event-two")
 }
 
 func TestClient_WithDefaultHeader(t *testing.T) {
@@ -288,4 +381,36 @@ func TestResponse_IsJSON(t *testing.T) {
 		resp := &Response{Headers: map[string]string{"Content-Type": tt.contentType}}
 		assert.Equal(t, tt.expected, resp.IsJSON(), "Content-Type: %s", tt.contentType)
 	}
+}
+
+// TestClient_MultiValueSetCookieHeaders guards the regression where a
+// response with multiple Set-Cookie headers was collapsed to only the first
+// value, because doRequest used httpResp.Header.Get(k) which returns a single
+// value. The fix joins all values via httpResp.Header.Values(k) with "; " for
+// Set-Cookie, so both cookies must survive in Response.Headers["Set-Cookie"].
+func TestClient_MultiValueSetCookieHeaders(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Two Set-Cookie headers must both be preserved.
+		http.SetCookie(w, &http.Cookie{Name: "session", Value: "abc123"})
+		http.SetCookie(w, &http.Cookie{Name: "csrf", Value: "xyz789"})
+		// A second multi-value header to confirm the ", " join path for
+		// non-cookie headers.
+		w.Header().Add("X-Multi", "one")
+		w.Header().Add("X-Multi", "two")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewClient()
+	resp, err := client.Get(server.URL, nil)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	cookies := resp.Headers["Set-Cookie"]
+	assert.Contains(t, cookies, "session=abc123", "first Set-Cookie must be preserved")
+	assert.Contains(t, cookies, "csrf=xyz789", "second Set-Cookie must be preserved")
+	assert.Contains(t, cookies, "; ", "Set-Cookie values must be joined with \"; \"")
+
+	multi := resp.Headers["X-Multi"]
+	assert.Equal(t, "one, two", multi, "non-cookie multi-value headers join with \", \"")
 }

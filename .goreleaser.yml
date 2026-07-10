@@ -25,16 +25,15 @@ builds:
 
 archives:
   - id: hitspec
-    builds:
-      - hitspec
     name_template: >-
       {{ .ProjectName }}_
       {{- .Version }}_
       {{- .Os }}_
       {{- .Arch }}
+    formats: [tar.gz]
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
 
 checksum:
   name_template: 'checksums.txt'
@@ -61,18 +60,12 @@ release:
   prerelease: auto
   name_template: "v{{.Version}}"
 
-brews:
+homebrew_casks:
   - name: hitspec
     repository:
       owner: abdul-hamid-achik
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    directory: Formula
     homepage: "https://github.com/abdul-hamid-achik/hitspec"
     description: "Plain text API tests. No magic."
-    license: "MIT"
-    install: |
-      bin.install "hitspec"
-    test: |
-      system "#{bin}/hitspec", "version"
     skip_upload: "{{ if .Env.HOMEBREW_TAP_TOKEN }}false{{ else }}true{{ end }}"

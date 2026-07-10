@@ -17,13 +17,13 @@ const SampleRequestFile = "example.http"
 // `hitspec init` and the in-app "generate sample project" action, so the two
 // stay in lockstep.
 const SampleConfigYAML = `defaultEnvironment: dev
-timeout: 30s
+timeout: 30000
 retries: 0
 followRedirects: true
 maxRedirects: 10
 validateSSL: true
 headers:
-  User-Agent: hitspec/1.0
+  User-Agent: hitspec
 environments:
   dev:
     baseUrl: http://localhost:3000

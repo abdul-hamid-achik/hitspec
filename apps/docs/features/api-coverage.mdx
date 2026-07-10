@@ -3,31 +3,20 @@ title: "API Coverage"
 description: "Measure how much of your API is covered by tests using OpenAPI spec comparison and coverage reports."
 ---
 
-<Warning>
-  API coverage is a planned feature. The coverage analysis package exists but the `--coverage`, `--openapi`, and `--coverage-output` CLI flags are not yet wired into the `hitspec run` command. This page describes the intended behavior.
-</Warning>
+API coverage tracking compares your test files against an OpenAPI specification
+to show which endpoints have tests and which do not. This helps identify gaps in
+your test suite.
 
-API coverage tracking will compare your test files against an OpenAPI specification to show which endpoints have tests and which do not. This helps identify gaps in your test suite.
+## Usage
 
-## Planned Usage
-
-Once wired up, enable coverage with the `--coverage` flag and point to your OpenAPI spec:
+Enable coverage with the `--coverage` flag and point to your OpenAPI spec:
 
 ```bash
 hitspec run tests/ --coverage --openapi api-spec.yaml
 ```
 
-## Coverage Output
-
-By default, coverage results are printed to the console. You can also generate HTML or JSON reports:
-
-```bash
-# HTML report
-hitspec run tests/ --coverage --openapi api-spec.yaml --coverage-output coverage.html
-
-# JSON report
-hitspec run tests/ --coverage --openapi api-spec.yaml --coverage-output coverage.json
-```
+The `--openapi` flag is required when `--coverage` is set. Coverage runs after
+your tests complete and the report is printed to the console.
 
 ## What Coverage Tracks
 
@@ -42,9 +31,8 @@ The coverage report shows:
 
 | Flag | Description |
 |------|-------------|
-| `--coverage` | Enable API coverage tracking |
+| `--coverage` | Enable API coverage tracking (requires `--openapi`) |
 | `--openapi` | Path to the OpenAPI/Swagger specification file (YAML or JSON) |
-| `--coverage-output` | Output file path. File extension determines format (`.html` or `.json`) |
 
 ## Example
 
@@ -74,16 +62,12 @@ Use coverage reporting in your CI pipeline to track coverage over time:
     hitspec run tests/ \
       --coverage \
       --openapi api-spec.yaml \
-      --coverage-output coverage.html \
       --output junit \
       --output-file results.xml
-
-- uses: actions/upload-artifact@v4
-  with:
-    name: api-coverage
-    path: coverage.html
 ```
 
 <Tip>
-  Run coverage checks locally before pushing to catch missing tests early. Pair coverage with the [OpenAPI import command](/reference/import-export) to generate test stubs for uncovered endpoints.
+  Run coverage checks locally before pushing to catch missing tests early. Pair
+  coverage with the [OpenAPI import command](/reference/import-export) to
+  generate test stubs for uncovered endpoints.
 </Tip>

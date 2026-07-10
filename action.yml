@@ -165,100 +165,76 @@ runs:
     - name: Run hitspec tests
       id: run-tests
       shell: bash
+      # Pass inputs through the environment instead of interpolating them into
+      # the bash string. Interpolating ${{ inputs.* }} directly into CMD and
+      # `eval`-ing it was a shell-injection vector (e.g. a `files` value of
+      # `x.http; rm -rf /` would have executed). Env passing + a bash array for
+      # argv keeps every value a single literal argument.
+      env:
+        HITSPEC_FILES: ${{ inputs.files }}
+        HITSPEC_ENV: ${{ inputs.env }}
+        HITSPEC_ENV_FILE: ${{ inputs.env-file }}
+        HITSPEC_OUTPUT: ${{ inputs.output }}
+        HITSPEC_OUTPUT_FILE: ${{ inputs.output-file }}
+        HITSPEC_TAGS: ${{ inputs.tags }}
+        HITSPEC_NAME: ${{ inputs.name }}
+        HITSPEC_TIMEOUT: ${{ inputs.timeout }}
+        HITSPEC_PARALLEL: ${{ inputs.parallel }}
+        HITSPEC_CONCURRENCY: ${{ inputs.concurrency }}
+        HITSPEC_BAIL: ${{ inputs.bail }}
+        HITSPEC_VERBOSE: ${{ inputs.verbose }}
+        HITSPEC_INSECURE: ${{ inputs.insecure }}
+        HITSPEC_PROXY: ${{ inputs.proxy }}
+        HITSPEC_STRESS: ${{ inputs.stress }}
+        HITSPEC_DURATION: ${{ inputs.duration }}
+        HITSPEC_RATE: ${{ inputs.rate }}
+        HITSPEC_VUS: ${{ inputs.vus }}
+        HITSPEC_MAX_VUS: ${{ inputs.max-vus }}
+        HITSPEC_THINK_TIME: ${{ inputs.think-time }}
+        HITSPEC_RAMP_UP: ${{ inputs.ramp-up }}
+        HITSPEC_THRESHOLD: ${{ inputs.threshold }}
+        HITSPEC_PROFILE: ${{ inputs.profile }}
       run: |
         set -e
 
-        # Build command
-        CMD="hitspec run ${{ inputs.files }}"
+        # Build argv as a bash array so every value is a single literal argument
+        # (no eval, no word-splitting, no injection).
+        args=(hitspec run "$HITSPEC_FILES" --env "$HITSPEC_ENV" --output "$HITSPEC_OUTPUT" --no-color)
 
-        # Add standard options
-        CMD="$CMD --env ${{ inputs.env }}"
-        CMD="$CMD --output ${{ inputs.output }}"
-        CMD="$CMD --no-color"
+        [ -n "$HITSPEC_ENV_FILE" ]      && args+=(--env-file "$HITSPEC_ENV_FILE")
+        [ -n "$HITSPEC_OUTPUT_FILE" ]   && args+=(--output-file "$HITSPEC_OUTPUT_FILE")
+        [ -n "$HITSPEC_TAGS" ]          && args+=(--tags "$HITSPEC_TAGS")
+        [ -n "$HITSPEC_NAME" ]          && args+=(--name "$HITSPEC_NAME")
+        [ -n "$HITSPEC_TIMEOUT" ]       && args+=(--timeout "$HITSPEC_TIMEOUT")
 
-        # Add optional flags
-        if [ -n "${{ inputs.env-file }}" ]; then
-          CMD="$CMD --env-file ${{ inputs.env-file }}"
+        if [ "$HITSPEC_PARALLEL" = "true" ]; then
+          args+=(--parallel)
+          [ -n "$HITSPEC_CONCURRENCY" ] && args+=(--concurrency "$HITSPEC_CONCURRENCY")
         fi
 
-        if [ -n "${{ inputs.output-file }}" ]; then
-          CMD="$CMD --output-file ${{ inputs.output-file }}"
+        [ "$HITSPEC_BAIL" = "true" ]    && args+=(--bail)
+        [ "$HITSPEC_VERBOSE" = "true" ] && args+=(--verbose)
+        [ "$HITSPEC_INSECURE" = "true" ] && args+=(--insecure)
+        [ -n "$HITSPEC_PROXY" ]         && args+=(--proxy "$HITSPEC_PROXY")
+
+        if [ "$HITSPEC_STRESS" = "true" ]; then
+          args+=(--stress --duration "$HITSPEC_DURATION" --rate "$HITSPEC_RATE" --no-progress)
+          [ -n "$HITSPEC_VUS" ]        && args+=(--vus "$HITSPEC_VUS")
+          [ -n "$HITSPEC_MAX_VUS" ]    && args+=(--max-vus "$HITSPEC_MAX_VUS")
+          [ -n "$HITSPEC_THINK_TIME" ] && args+=(--think-time "$HITSPEC_THINK_TIME")
+          [ -n "$HITSPEC_RAMP_UP" ]   && args+=(--ramp-up "$HITSPEC_RAMP_UP")
+          [ -n "$HITSPEC_THRESHOLD" ] && args+=(--threshold "$HITSPEC_THRESHOLD")
+          [ -n "$HITSPEC_PROFILE" ]   && args+=(--profile "$HITSPEC_PROFILE")
         fi
 
-        if [ -n "${{ inputs.tags }}" ]; then
-          CMD="$CMD --tags ${{ inputs.tags }}"
-        fi
+        printf 'Running:'
+        printf ' %q' "${args[@]}"
+        printf '\n'
 
-        if [ -n "${{ inputs.name }}" ]; then
-          CMD="$CMD --name ${{ inputs.name }}"
-        fi
-
-        if [ -n "${{ inputs.timeout }}" ]; then
-          CMD="$CMD --timeout ${{ inputs.timeout }}"
-        fi
-
-        if [ "${{ inputs.parallel }}" = "true" ]; then
-          CMD="$CMD --parallel"
-          if [ -n "${{ inputs.concurrency }}" ]; then
-            CMD="$CMD --concurrency ${{ inputs.concurrency }}"
-          fi
-        fi
-
-        if [ "${{ inputs.bail }}" = "true" ]; then
-          CMD="$CMD --bail"
-        fi
-
-        if [ "${{ inputs.verbose }}" = "true" ]; then
-          CMD="$CMD --verbose"
-        fi
-
-        if [ "${{ inputs.insecure }}" = "true" ]; then
-          CMD="$CMD --insecure"
-        fi
-
-        if [ -n "${{ inputs.proxy }}" ]; then
-          CMD="$CMD --proxy ${{ inputs.proxy }}"
-        fi
-
-        # Stress testing options
-        if [ "${{ inputs.stress }}" = "true" ]; then
-          CMD="$CMD --stress"
-          CMD="$CMD --duration ${{ inputs.duration }}"
-          CMD="$CMD --rate ${{ inputs.rate }}"
-          CMD="$CMD --no-progress"
-
-          if [ -n "${{ inputs.vus }}" ]; then
-            CMD="$CMD --vus ${{ inputs.vus }}"
-          fi
-
-          if [ -n "${{ inputs.max-vus }}" ]; then
-            CMD="$CMD --max-vus ${{ inputs.max-vus }}"
-          fi
-
-          if [ -n "${{ inputs.think-time }}" ]; then
-            CMD="$CMD --think-time ${{ inputs.think-time }}"
-          fi
-
-          if [ -n "${{ inputs.ramp-up }}" ]; then
-            CMD="$CMD --ramp-up ${{ inputs.ramp-up }}"
-          fi
-
-          if [ -n "${{ inputs.threshold }}" ]; then
-            CMD="$CMD --threshold '${{ inputs.threshold }}'"
-          fi
-
-          if [ -n "${{ inputs.profile }}" ]; then
-            CMD="$CMD --profile ${{ inputs.profile }}"
-          fi
-        fi
-
-        echo "Running: $CMD"
-
-        # Execute and capture exit code
+        # Execute directly (no eval). Capture the exit code without `set -e`
+        # aborting before we record it.
         EXIT_CODE=0
-        eval $CMD || EXIT_CODE=$?
+        "${args[@]}" || EXIT_CODE=$?
 
-        echo "exit-code=$EXIT_CODE" >> $GITHUB_OUTPUT
-
-        # Exit with the same code to fail the step if tests fail
-        exit $EXIT_CODE
+        echo "exit-code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+        exit "$EXIT_CODE"

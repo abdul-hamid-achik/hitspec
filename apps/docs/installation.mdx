@@ -5,10 +5,10 @@ description: "Install hitspec via Homebrew, Go, or binary download."
 
 ## Homebrew (macOS / Linux)
 
-The recommended way to install hitspec:
+hitspec is published as a Homebrew cask in the `abdul-hamid-achik/tap` tap:
 
 ```bash
-brew install abdul-hamid-achik/tap/hitspec
+brew install --cask abdul-hamid-achik/tap/hitspec
 ```
 
 This installs the latest release and makes the `hitspec` command available in your shell.
@@ -61,7 +61,7 @@ where `<os>` is `darwin`, `linux`, or `windows` and `<arch>` is `amd64` or `arm6
 </Tabs>
 
 <Tip>
-  Homebrew (`brew install abdul-hamid-achik/tap/hitspec`) and `go install` keep
+  Homebrew (`brew install --cask abdul-hamid-achik/tap/hitspec`) and `go install` keep
   hitspec up to date automatically -- prefer them over manual downloads unless you
   need a specific archived version.
 </Tip>
@@ -142,8 +142,9 @@ You should see the installed version number. If the command is not found, make s
 
 <CodeGroup>
 ```bash Homebrew
-brew upgrade hitspec
+brew upgrade --cask hitspec
 ```
+
 
 ```bash Go
 go install github.com/abdul-hamid-achik/hitspec/apps/cli@latest

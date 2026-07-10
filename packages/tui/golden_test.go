@@ -9,9 +9,12 @@ import (
 	"github.com/charmbracelet/x/exp/golden"
 
 	"github.com/abdul-hamid-achik/hitspec/packages/clientmgr"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // plain strips ANSI so golden files capture layout + text deterministically,
+
 // independent of color (lipgloss v2 emits truecolor at Render; chroma adds 256
 // color — both are stripped here).
 func plain(s string) string { return ansi.Strip(s) }
@@ -210,6 +213,21 @@ func TestGoldenStressRunning(t *testing.T) {
 	m.stress = clientmgr.StressStatusDTO{Running: true, Elapsed: 15.0, Stats: &stats}
 	m.preview.SetContent(m.secondaryContent())
 	golden.RequireEqual(t, plain(m.View().Content))
+}
+
+// TestStressProgressBarUsesConfiguredDuration guards the regression where the
+// stress progress bar hardcoded a 30s total: at 30s elapsed with a 60s
+// configured duration it showed 100% (capped at 30s); it must show ~50%.
+func TestStressProgressBarUsesConfiguredDuration(t *testing.T) {
+	m := goldenModel(t, 100, 30)
+	m.setScreen(screenStress)
+	// Configure a 60s stress duration in the form's duration field (index 0).
+	require.NotEmpty(t, m.formInputs)
+	m.formInputs[0].SetValue("60s")
+	stats := clientmgr.StressStatsDTO{Total: 100, Success: 100, RPS: 3.3, ActiveVUs: 1}
+	m.stress = clientmgr.StressStatusDTO{Running: true, Elapsed: 30.0, Stats: &stats}
+	out := plain(m.stressContent())
+	assert.Contains(t, out, "50%", "30s/60s should be 50%%, not capped at 100%%; got: %s", out)
 }
 
 // TestGoldenImportScreen and TestGoldenCookiesScreen render the remaining

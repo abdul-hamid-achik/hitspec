@@ -105,8 +105,19 @@ No web SPA is served; non-API browser routes are not part of `serve`.
 | `--verbose` | `-v` | Verbose logging | `false` |
 | `--allow-shell` | | Allow shell command execution | `false` |
 | `--allow-db` | | Allow database assertions | `false` |
-| `--log-format` | | Log format: `text` or `json` | `text` |
 | `--log-level` | | Log level: `debug`, `info`, `warn`, `error` | `info` |
+| `--api-token` | | Require a bearer token for all REST/WebSocket requests (env: `HITSPEC_API_TOKEN`) | |
+
+## Security
+
+The REST/WebSocket API can read/write and delete files, execute arbitrary
+requests (SSRF), and run shell commands when `--allow-shell` is set. By default it
+binds to `localhost` only, which limits exposure to your machine. If you bind to a
+network address (`--host 0.0.0.0`) or expose the port, **set `--api-token`** (or
+the `HITSPEC_API_TOKEN` env var) to require a shared secret. Clients must then send
+`Authorization: Bearer <token>` (REST) or `?token=<token>` (WebSocket, which cannot
+set headers on the upgrade request). Requests with a missing or mismatched token
+get `401 Unauthorized`.
 
 ## Examples
 
@@ -116,4 +127,8 @@ hitspec serve --api-only --port 8080 --cors
 
 # API server bound to localhost
 hitspec serve --api-only --host localhost --port 4000
+
+# Require a token before exposing the API on the network
+HITSPEC_API_TOKEN=$SECRET hitspec serve --api-only --host 0.0.0.0 --port 4000
+# clients: curl -H "Authorization: Bearer $SECRET" http://host:4000/api/v1/workspace
 ```

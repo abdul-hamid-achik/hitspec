@@ -1,5 +1,7 @@
 package clientmgr
 
+import "io"
+
 // Config holds configuration for the API Client Manager.
 type Config struct {
 	WorkDir       string
@@ -13,6 +15,7 @@ type Config struct {
 	HistoryDBPath string
 	LogFormat     string
 	LogLevel      string
+	LogWriter     io.Writer // destination for slog logs; nil = os.Stderr. The studio TUI passes io.Discard so logs don't corrupt the alt screen.
 }
 
 // Option configures Config.
@@ -77,9 +80,16 @@ func WithLogLevel(level string) Option {
 func DefaultConfig() *Config {
 	return &Config{
 		Watch:     true,
-		Env:       "dev",
+		Env:       "", // empty = unset; New() falls back to defaultEnvironment, else "dev"
 		WorkDir:   ".",
 		LogFormat: "text",
 		LogLevel:  "info",
 	}
+}
+
+// WithLogWriter sets the destination for the manager's slog logs. Pass
+// io.Discard in alt-screen TUI contexts so log output doesn't corrupt the
+// terminal; the default (nil) writes to os.Stderr.
+func WithLogWriter(w io.Writer) Option {
+	return func(c *Config) { c.LogWriter = w }
 }

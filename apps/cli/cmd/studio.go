@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"io"
 
 	"github.com/abdul-hamid-achik/hitspec/packages/clientmgr"
 	"github.com/abdul-hamid-achik/hitspec/packages/tui"
@@ -69,7 +70,7 @@ func init() {
 	f := studioCmd.Flags()
 	f.BoolVarP(&studioWatchFlag, "watch", "w", true, "Watch for file changes")
 	f.BoolVar(&studioReadOnlyFlag, "read-only", false, "Disallow file mutations")
-	f.StringVarP(&studioEnvFlag, "env", "e", "dev", "Default environment")
+	f.StringVarP(&studioEnvFlag, "env", "e", "", "Default environment (default: hitspec.yaml defaultEnvironment, else dev)")
 	f.StringVar(&studioConfigFlag, "config", "", "Path to hitspec.yaml")
 	f.BoolVarP(&studioVerboseFlag, "verbose", "v", false, "Verbose logging")
 	f.BoolVar(&studioAllowShellFlag, "allow-shell", false, "Allow shell command execution")
@@ -91,8 +92,8 @@ func launchStudio(ctx context.Context, workDir string, f studioLaunchFlags) erro
 		clientmgr.WithWorkDir(workDir),
 		clientmgr.WithWatch(f.watch),
 		clientmgr.WithReadOnly(f.readOnly),
-		clientmgr.WithEnv(f.env),
-		clientmgr.WithConfigPath(f.config),
+		clientmgr.WithLogLevel(f.logLevel),
+		clientmgr.WithLogWriter(io.Discard),
 		clientmgr.WithVerbose(f.verbose),
 		clientmgr.WithAllowShell(f.allowShell),
 		clientmgr.WithAllowDB(f.allowDB),

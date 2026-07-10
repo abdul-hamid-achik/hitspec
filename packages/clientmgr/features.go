@@ -347,7 +347,7 @@ func (m *Manager) StartRecord(ctx context.Context, req RecordStartReq) error {
 		return fmt.Errorf("targetUrl is required")
 	}
 	m.mu.Lock()
-	if m.recorder != nil {
+	if m.recorderRunning {
 		m.mu.Unlock()
 		return fmt.Errorf("recording proxy already running")
 	}
@@ -375,13 +375,17 @@ func (m *Manager) StartRecord(ctx context.Context, req RecordStartReq) error {
 	runCtx, cancel := context.WithCancel(baseCtx)
 	m.recorder = recorder
 	m.recorderCancel = cancel
+	m.recorderRunning = true
 	m.recorderPort = port
 	m.recorderTarget = req.TargetURL
 	m.mu.Unlock()
 	go func() {
 		_ = recorder.StartWithContext(runCtx)
 		m.mu.Lock()
-		m.recorder = nil
+		// Keep the recorder reference so recordings remain available for
+		// export/status after the proxy stops; only ClearRecordings drops
+		// them. Track the live state separately from the recorder instance.
+		m.recorderRunning = false
 		m.recorderCancel = nil
 		m.mu.Unlock()
 	}()
@@ -408,6 +412,7 @@ func (m *Manager) RecordStatus(ctx context.Context) RecordStatusDTO {
 	_ = ctx
 	m.mu.Lock()
 	recorder := m.recorder
+	running := m.recorderRunning
 	port := m.recorderPort
 	target := m.recorderTarget
 	m.mu.Unlock()
@@ -429,7 +434,7 @@ func (m *Manager) RecordStatus(ctx context.Context) RecordStatusDTO {
 		}
 		dtos = append(dtos, dto)
 	}
-	return RecordStatusDTO{Running: true, TargetURL: target, Port: port, Count: len(recordings), Recordings: dtos}
+	return RecordStatusDTO{Running: running, TargetURL: target, Port: port, Count: len(recordings), Recordings: dtos}
 }
 
 // ExportRecordings returns recorded requests as hitspec content.
@@ -439,7 +444,7 @@ func (m *Manager) ExportRecordings(ctx context.Context) (string, error) {
 	recorder := m.recorder
 	m.mu.Unlock()
 	if recorder == nil {
-		return "", fmt.Errorf("no recording proxy running")
+		return "", fmt.Errorf("no recordings available")
 	}
 	return recorder.Export(), nil
 }
@@ -454,7 +459,7 @@ func (m *Manager) ClearRecordings(ctx context.Context) error {
 	recorder := m.recorder
 	m.mu.Unlock()
 	if recorder == nil {
-		return fmt.Errorf("no recording proxy running")
+		return fmt.Errorf("no recordings to clear")
 	}
 	recorder.Clear()
 	return nil

@@ -185,3 +185,68 @@ func TestClearCommandsOpenConfirm(t *testing.T) {
 		t.Fatal("history-clear confirm action should emit a historyMsg")
 	}
 }
+
+// TestFormTypingDoesNotScrollPreview guards the double-delivery bug: while a
+// secondary-screen form field is focused, a typed key was forwarded to BOTH the
+// form input AND the preview viewport. The viewport's DefaultKeyMap binds plain
+// letters as scroll shortcuts (j/k=h/l=down/up/left/right, d/u=half page,
+// b/f/space=page), so typing a URL like "http://localhost" scrolled the preview
+// out from under the form the user was filling in. The preview update must be
+// skipped while a form field owns the input.
+func TestFormTypingDoesNotScrollPreview(t *testing.T) {
+	mk := func(t *testing.T) model {
+		m := newModel(context.Background(), newTestManager(t), Options{})
+		// A short window keeps the preview viewport small (height ~6) so the
+		// record screen's secondary content (~10 lines) is taller than it and
+		// scrolling is observable (maxYOffset >= 1).
+		m.width, m.height = 100, 12
+		m.resize()
+		m.setScreen(screenRecord)
+		return m
+	}
+	scrollKey := tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}) // viewport binds "j" to ScrollDown
+
+	t.Run("form focused: key reaches field, preview does not scroll", func(t *testing.T) {
+		m := mk(t)
+		m.focusForm(true) // focus the "target URL" field
+		if m.formActive != true || len(m.formInputs) == 0 {
+			t.Fatalf("form not armed: formActive=%v inputs=%d", m.formActive, len(m.formInputs))
+		}
+		beforeField := m.formInputs[0].Value()
+		beforeY := m.preview.YOffset()
+
+		next, _ := m.Update(scrollKey)
+		nm := next.(model)
+
+		// The typed letter landed in the form field.
+		if nm.formInputs[0].Value() == beforeField {
+			t.Fatalf("typed 'j' did not reach the focused form field (still %q)", beforeField)
+		}
+		if !strings.Contains(nm.formInputs[0].Value(), "j") {
+			t.Fatalf("focused field did not receive 'j': %q", nm.formInputs[0].Value())
+		}
+		// The preview viewport did NOT also consume the key as a scroll.
+		if nm.preview.YOffset() != beforeY {
+			t.Fatalf("preview scrolled while form field was focused: YOffset %d -> %d (double-delivery)",
+				beforeY, nm.preview.YOffset())
+		}
+	})
+
+	t.Run("form blurred: preview still scrolls (gate is scoped)", func(t *testing.T) {
+		m := mk(t)
+		if m.formActive {
+			t.Fatal("form should not be active on screen entry")
+		}
+		beforeY := m.preview.YOffset()
+
+		next, _ := m.Update(scrollKey)
+		nm := next.(model)
+
+		// With the form not focused, the preview must keep receiving keys and
+		// scrolling — proving the gate only applies while a field is focused.
+		if nm.preview.YOffset() <= beforeY {
+			t.Fatalf("preview did not scroll when form inactive: YOffset %d -> %d",
+				beforeY, nm.preview.YOffset())
+		}
+	})
+}

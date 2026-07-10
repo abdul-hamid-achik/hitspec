@@ -1,13 +1,17 @@
 package runner
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
+	"github.com/abdul-hamid-achik/hitspec/packages/history"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -147,6 +151,86 @@ GET ` + server.URL + `/b`
 	assert.Contains(t, err.Error(), "circular dependency")
 }
 
+// TestRunner_TopologicalSort_DuplicateNames guards the regression where two
+// requests sharing an @name collided in the name-keyed graph maps, producing
+// either a bogus "circular dependency detected involving requests: []" abort
+// or silently dropping one of the requests. Duplicate names must be reported
+// clearly so captures and @depends resolve deterministically.
+func TestRunner_TopologicalSort_DuplicateNames(t *testing.T) {
+	content := `### First
+# @name getUser
+
+GET http://example.com/first
+
+### Second
+# @name getUser
+
+GET http://example.com/second
+`
+	file, err := parser.Parse(content, "dup.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 2)
+
+	r := NewRunner(&Config{})
+	_, err = r.topologicalSort(file.Requests)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate request name")
+	assert.Contains(t, err.Error(), "getUser")
+}
+
+// TestRunner_TopologicalSort_AnonymousCoexist ensures unnamed requests (which
+// get synthetic names) still sort without being mistaken for duplicates.
+func TestRunner_TopologicalSort_AnonymousCoexist(t *testing.T) {
+	content := `### First
+GET http://example.com/first
+
+### Second
+GET http://example.com/second
+`
+	file, err := parser.Parse(content, "anon.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 2)
+
+	r := NewRunner(&Config{})
+	sorted, err := r.topologicalSort(file.Requests)
+	require.NoError(t, err)
+	require.Len(t, sorted, 2)
+}
+
+// TestRunner_IndexFilter_Untitled guards the regression where the studio TUI
+// had no way to run a single untitled request: passing the synthesized "line N"
+// display name as NameFilter matched nothing (req.Name is "" for untitled
+// requests) and the run was a silent no-op. IndexFilter selects the request by
+// its source position instead.
+func TestRunner_IndexFilter_Untitled(t *testing.T) {
+	var hit []string
+	var mu sync.Mutex
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		hit = append(hit, r.URL.Path)
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	// Two untitled requests to distinct paths; the NameFilter ("") would run
+	// both, IndexFilter must run only the second.
+	content := fmt.Sprintf("### First\nGET %s/first\n\n### Second\nGET %s/second\n", server.URL, server.URL)
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "t.http")
+	require.NoError(t, os.WriteFile(testFile, []byte(content), 0o644))
+
+	idx := 1
+	r := NewRunner(&Config{IndexFilter: &idx})
+	result, err := r.RunFile(testFile)
+	require.NoError(t, err)
+	require.Len(t, result.Results, 1)
+	assert.True(t, result.Results[0].Passed)
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Equal(t, []string{"/second"}, hit, "IndexFilter must run only the selected request")
+}
+
 func TestRunner_DependencyOrder(t *testing.T) {
 	executionOrder := []string{}
 
@@ -181,6 +265,187 @@ GET ` + server.URL + `/a`
 	assert.Equal(t, 2, result.Passed)
 	// Request A should be executed before Request B due to dependency
 	assert.Equal(t, []string{"/a", "/b"}, executionOrder)
+}
+
+// TestRunner_DependencyOnFilteredRequestSkips guards the regression where a
+// request whose @depends target was filtered out (or skipped/nonexistent) ran
+// anyway because the dependency check only flagged deps that ran and failed.
+// The dependent must be skipped when its dependency didn't run.
+func TestRunner_DependencyOnFilteredRequestSkipsDependent(t *testing.T) {
+	var hit []string
+	var mu sync.Mutex
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		hit = append(hit, r.URL.Path)
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	// A (name a) -> B (name b, depends on a). Run with --name b so a is filtered
+	// out; B must be skipped because its dependency didn't run.
+	content := "### A\n# @name a\nGET " + server.URL + "/a\n\n### B\n# @name b\n# @depends a\nGET " + server.URL + "/b\n"
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.http")
+	require.NoError(t, os.WriteFile(testFile, []byte(content), 0o644))
+
+	r := NewRunner(&Config{NameFilter: "b"})
+	result, err := r.RunFile(testFile)
+	require.NoError(t, err)
+	// A is filtered out ("filtered out" stub) and B is skipped because its
+	// dependency a didn't run; nothing executes against the server.
+	assert.Equal(t, 0, result.Passed)
+	assert.Equal(t, 2, result.Skipped)
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Empty(t, hit, "dependent must not run when its dependency was filtered out")
+}
+
+// TestRunner_WaitHistoryFlushesBeforeClose guards the close/write race that
+// lost history rows: recordHistory runs in a goroutine, and the caller's
+// deferred store.Close() used to fire while it was still writing. WaitHistory
+// must block until the row is persisted, so a subsequent Close is safe.
+func TestRunner_WaitHistoryFlushesBeforeClose(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	dir := t.TempDir()
+	store, err := history.NewStore(filepath.Join(dir, "history.db"))
+	require.NoError(t, err)
+
+	httpFile := filepath.Join(dir, "ok.http")
+	require.NoError(t, os.WriteFile(httpFile, []byte("### ok\nGET "+server.URL+"/ok\n"), 0o644))
+
+	r := NewRunner(&Config{HistoryStore: store})
+	_, err = r.RunFile(httpFile)
+	require.NoError(t, err)
+
+	// Flush the background history writer before closing the store.
+	r.WaitHistory()
+	require.NoError(t, store.Close())
+
+	// Reopen and confirm the run was persisted (not lost to the close race).
+	store2, err := history.NewStore(filepath.Join(dir, "history.db"))
+	require.NoError(t, err)
+	defer store2.Close()
+	count, err := store2.Queries().CountRuns(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), count, "history run row must be persisted after WaitHistory+Close")
+}
+
+// TestRunner_RunParallel exercises the runParallel concurrency path (0%
+// coverage) under the race detector. Multiple independent requests run
+// concurrently with a bounded concurrency; all should pass and the OnProgress
+// callback must be safe to invoke from concurrent goroutines.
+func TestRunner_RunParallel(t *testing.T) {
+	var mu sync.Mutex
+	var progressCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	// 6 independent requests to the same server.
+	content := ""
+	for i := 0; i < 6; i++ {
+		content += fmt.Sprintf("### req%d\nGET %s/%d\n\n", i, server.URL, i)
+	}
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "par.http")
+	require.NoError(t, os.WriteFile(testFile, []byte(content), 0o644))
+
+	r := NewRunner(&Config{
+		Parallel:    true,
+		Concurrency: 3,
+		OnProgress: func(event ProgressEvent) {
+			mu.Lock()
+			progressCount++
+			mu.Unlock()
+		},
+	})
+	result, err := r.RunFile(testFile)
+	require.NoError(t, err)
+	assert.Equal(t, 6, result.Passed, "all parallel requests should pass")
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Equal(t, 12, progressCount, "OnProgress should fire started+completed per request")
+}
+
+// TestRunner_DBAssertionsRequireAllowDB covers the --allow-db gate (0%
+// coverage): executeDBAssertions must refuse to run without AllowDB set, even
+// when a connection string and assertions are present.
+func TestRunner_DBAssertionsRequireAllowDB(t *testing.T) {
+	r := NewRunner(&Config{AllowDB: false})
+	_, err := r.executeDBAssertions(
+		[]*parser.DBAssertion{{Query: "SELECT 1", Column: "1", Operator: parser.OpEquals, Expected: 1}},
+		"sqlite3://"+filepath.Join(t.TempDir(), "x.db"),
+		func(s string) string { return s },
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "allow-db")
+
+	// With AllowDB true against a fresh sqlite DB, a trivial assertion runs.
+	r2 := NewRunner(&Config{AllowDB: true})
+	dbPath := filepath.Join(t.TempDir(), "gate.db")
+	// Initialize the sqlite file so the connection succeeds.
+	store, serr := history.NewStore(dbPath)
+	require.NoError(t, serr)
+	store.Close()
+	results, err := r2.executeDBAssertions(
+		[]*parser.DBAssertion{{Query: "SELECT 1 AS one", Column: "one", Operator: parser.OpEquals, Expected: 1}},
+		"sqlite://"+dbPath,
+		func(s string) string { return s },
+	)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.True(t, results[0].Passed, "SELECT 1 AS one == 1 should pass; message: %s", results[0].Message)
+}
+
+// TestRunner_TopologicalSort_SourceOrder guards the regression where
+// topologicalSort seeded Kahn's ready queue from Go map iteration (randomised
+// order), so requests without @depends ran in nondeterministic order. The
+// quickstart promises "executes each request in order"; independent requests
+// must therefore preserve source (file) order. Run many iterations to catch
+// the map-iteration nondeterminism the old code relied on.
+func TestRunner_TopologicalSort_SourceOrder(t *testing.T) {
+	content := `### First
+# @name first
+
+GET http://example.com/first
+
+### Second
+# @name second
+
+GET http://example.com/second
+
+### Third
+# @name third
+
+GET http://example.com/third
+
+### Fourth
+# @name fourth
+
+GET http://example.com/fourth
+`
+	file, err := parser.Parse(content, "order.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 4)
+
+	r := NewRunner(&Config{})
+	want := []string{"first", "second", "third", "fourth"}
+	for i := 0; i < 100; i++ {
+		sorted, err := r.topologicalSort(file.Requests)
+		require.NoError(t, err)
+		require.Len(t, sorted, 4)
+		var got []string
+		for _, req := range sorted {
+			got = append(got, req.Name)
+		}
+		assert.Equal(t, want, got, "iteration %d: independent requests must run in source order", i)
+	}
 }
 
 func TestRunner_NameFilter(t *testing.T) {

@@ -260,11 +260,22 @@ func (s *Server) handleRunFile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, dto)
 }
 
-// getConfigEnvsLocked returns fileConfig environments.
-// Caller must hold s.configMu (at least RLock).
+// getConfigEnvsLocked returns a deep copy of fileConfig environments. The caller
+// holds s.configMu (at least RLock), but the runner consumes the map AFTER the
+// lock is released while PUT /environments mutates s.fileConfig.Environments
+// under the write lock — handing out the live map caused a concurrent map
+// read/write that crashed the process. A snapshot copy breaks that race.
 func (s *Server) getConfigEnvsLocked() map[string]map[string]any {
-	if s.fileConfig != nil {
-		return s.fileConfig.Environments
+	if s.fileConfig == nil || s.fileConfig.Environments == nil {
+		return nil
 	}
-	return nil
+	snapshot := make(map[string]map[string]any, len(s.fileConfig.Environments))
+	for name, vars := range s.fileConfig.Environments {
+		copied := make(map[string]any, len(vars))
+		for k, v := range vars {
+			copied[k] = v
+		}
+		snapshot[name] = copied
+	}
+	return snapshot
 }

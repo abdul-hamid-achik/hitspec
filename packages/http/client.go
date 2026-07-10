@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -96,7 +97,7 @@ func NewClient(opts ...ClientOption) *Client {
 
 	c.httpClient = &http.Client{
 		Transport:     transport,
-		Timeout:       c.timeout,
+		Timeout:       0, // no client-level cap; the per-request context deadline in Do() is the single source of truth
 		CheckRedirect: redirectPolicy,
 	}
 
@@ -151,10 +152,24 @@ func WithProxy(proxyURL string) ClientOption {
 }
 
 func (c *Client) Do(req *Request) (*Response, error) {
-	ctx := context.Background()
-	if req.Timeout > 0 {
+	return c.DoWithContext(context.Background(), req)
+}
+
+// DoWithContext executes the request bound to the caller's context so that
+// cancellation or a deadline from the caller (e.g. a stress run's duration
+// timeout) stops in-flight requests instead of running to completion.
+func (c *Client) DoWithContext(ctx context.Context, req *Request) (*Response, error) {
+	// The effective timeout is the per-request @timeout when set, otherwise the
+	// client-level timeout. A per-request timeout longer than the client default
+	// (e.g. @timeout 60000 with a 30s default) must not be silently capped, so the
+	// deadline is enforced only via this context (http.Client.Timeout is 0).
+	timeout := req.Timeout
+	if timeout <= 0 {
+		timeout = c.timeout
+	}
+	if timeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, req.Timeout)
+		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
 
@@ -222,21 +237,46 @@ func (c *Client) doRequest(ctx context.Context, req *Request, authHeader string)
 
 	start := time.Now()
 	httpResp, err := c.httpClient.Do(httpReq)
-	duration := time.Since(start)
 
 	if err != nil {
 		return nil, err
 	}
 	defer httpResp.Body.Close()
-
 	respBody, err := io.ReadAll(httpResp.Body)
 	if err != nil {
-		return nil, err
+		// A context deadline while reading the body is the expected termination
+		// for a time-bounded SSE/event stream: the caller set @timeout to bound
+		// how long to listen, so the partial body collected so far is the result,
+		// not an error. Discarding it returned zero events and failed the request.
+		if errors.Is(err, context.DeadlineExceeded) {
+			// keep the partial body already read; fall through to build the response
+		} else {
+			return nil, err
+		}
 	}
+
+	// Duration covers the full request including body download (previously it was
+	// measured right after the headers arrived, so slow/large bodies reported an
+	// artificially short duration).
+	duration := time.Since(start)
 
 	headers := make(map[string]string)
 	for k := range httpResp.Header {
-		headers[k] = httpResp.Header.Get(k)
+		values := httpResp.Header.Values(k)
+		switch {
+		case len(values) == 0:
+			headers[k] = ""
+		case len(values) == 1:
+			headers[k] = values[0]
+		case k == "Set-Cookie":
+			// Cookies are semicolon-separated per RFC 6265; joining with
+			// "; " keeps each cookie distinguishable in a single string.
+			headers[k] = strings.Join(values, "; ")
+		default:
+			// Other multi-value headers (e.g. Accept-Ranges, Vary) collapse
+			// with ", " per RFC 7230 §3.2.2.
+			headers[k] = strings.Join(values, ", ")
+		}
 	}
 
 	return &Response{

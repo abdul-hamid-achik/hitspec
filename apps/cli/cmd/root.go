@@ -36,6 +36,12 @@ func Execute(v, bt string) {
 	rootCmd.Version = version
 	rootCmd.SetVersionTemplate("hitspec version {{.Version}}\n")
 	if err := rootCmd.Execute(); err != nil {
+		// An ExitCoder carries a semantically distinct exit code (parse,
+		// config, ...); emit it directly without the generic "Error:" line,
+		// since the command already printed its own diagnostics.
+		if coder, ok := err.(ExitCoder); ok {
+			os.Exit(coder.ExitCode())
+		}
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}

@@ -3,10 +3,12 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -212,6 +214,17 @@ func getEnvInt(key string, defaultVal int) int {
 	return defaultVal
 }
 
+// joinEnvNames returns a sorted, comma-separated list of defined
+// environment names for use in warning messages.
+func joinEnvNames(envs map[string]map[string]any) string {
+	names := make([]string, 0, len(envs))
+	for name := range envs {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return strings.Join(names, ", ")
+}
+
 // Formatter interface for all output formatters
 type Formatter interface {
 	FormatResult(result *runner.RunResult)
@@ -243,44 +256,11 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create formatter based on output flag
-	var formatter Formatter
-	switch strings.ToLower(outputFlag) {
-	case "json":
-		opts := []output.JSONOption{}
-		if outWriter != nil {
-			opts = append(opts, output.JSONWithWriter(outWriter))
-		}
-		formatter = output.NewJSONFormatter(opts...)
-	case "junit":
-		opts := []output.JUnitOption{}
-		if outWriter != nil {
-			opts = append(opts, output.JUnitWithWriter(outWriter))
-		}
-		formatter = output.NewJUnitFormatter(opts...)
-	case "tap":
-		opts := []output.TAPOption{}
-		if outWriter != nil {
-			opts = append(opts, output.TAPWithWriter(outWriter))
-		}
-		formatter = output.NewTAPFormatter(opts...)
-	case "html":
-		opts := []output.HTMLOption{}
-		if outWriter != nil {
-			opts = append(opts, output.HTMLWithWriter(outWriter))
-		}
-		formatter = output.NewHTMLFormatter(opts...)
-	default: // "console"
-		consoleOpts := []output.ConsoleOption{
-			output.WithVerbose(verboseFlag > 0),
-			output.WithNoColor(noColorFlag || quietFlag),
-		}
-		if outWriter != nil {
-			consoleOpts = append(consoleOpts, output.WithWriter(outWriter))
-		}
-		formatter = output.NewConsoleFormatter(consoleOpts...)
-	}
+	formatter := newFormatter(outputFlag, outWriter, verboseFlag, noColorFlag, quietFlag)
 
-	formatter.FormatHeader(version)
+	if !quietFlag {
+		formatter.FormatHeader(version)
+	}
 
 	// Set up notification manager
 	var notifyManager *notify.Manager
@@ -316,14 +296,13 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 	files, err := collectFiles(args)
 	if err != nil {
-		formatter.FormatError(err)
+		// Root's Execute wrapper prints this to stderr once; avoid the
+		// double "Error:" line that formatter.FormatError + return caused.
 		return err
 	}
 
 	if len(files) == 0 {
-		err := fmt.Errorf("no .http or .hitspec files found in %v", args)
-		formatter.FormatError(err)
-		return err
+		return fmt.Errorf("no .http or .hitspec files found in %v", args)
 	}
 
 	var tagsFilter []string
@@ -337,7 +316,21 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load config from file (if present) and apply CLI overrides
-	fileConfig, _ := config.LoadConfig(configFlag)
+	fileConfig, err := config.LoadConfig(configFlag)
+	if err != nil {
+		formatter.FormatError(err)
+		os.Exit(ExitConfigError)
+	}
+	// Warn if --env names an environment that isn't defined in the config.
+	// Only check when the env flag was explicitly set, so the implicit
+	// default ("dev") doesn't trigger a warning on every run. Backward
+	// compatible: this is only a stderr warning, never a hard failure.
+	if cmd.Flags().Changed("env") && len(fileConfig.Environments) > 0 {
+		if _, ok := fileConfig.Environments[envFlag]; !ok {
+			fmt.Fprintf(os.Stderr, "Warning: environment %q is not defined in hitspec.yaml (defined: %s)\n",
+				envFlag, joinEnvNames(fileConfig.Environments))
+		}
+	}
 
 	// If stress mode is enabled, delegate to stress runner
 	if stressFlag {
@@ -406,6 +399,9 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	r := runner.NewRunner(cfg)
+	// Flush any in-flight history writes before the deferred store.Close() runs.
+	// (defers are LIFO, so this runs before the store.Close registered above.)
+	defer r.WaitHistory()
 
 	// Create a function to run all tests
 	var allRunResults []*runner.RunResult
@@ -432,7 +428,9 @@ func runCommand(cmd *cobra.Command, args []string) error {
 			}
 
 			allRunResults = append(allRunResults, result)
-			formatter.FormatResult(result)
+			if !quietFlag {
+				formatter.FormatResult(result)
+			}
 			totalPassed += result.Passed
 			totalFailed += result.Failed
 			totalSkipped += result.Skipped
@@ -449,9 +447,11 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	totalPassed, totalFailed, totalSkipped, totalDuration := runTests()
 
 	// Flush output for formatters that accumulate results
-	if flushable, ok := formatter.(Flushable); ok {
-		if err := flushable.Flush(totalDuration); err != nil {
-			return fmt.Errorf("error writing output: %w", err)
+	if !quietFlag {
+		if flushable, ok := formatter.(Flushable); ok {
+			if err := flushable.Flush(totalDuration); err != nil {
+				return fmt.Errorf("error writing output: %w", err)
+			}
 		}
 	}
 
@@ -569,22 +569,9 @@ func runCommand(cmd *cobra.Command, args []string) error {
 				debounceTimer = time.AfterFunc(WatchDebounceDelay, func() {
 					fmt.Fprintf(cmd.OutOrStdout(), "\n\nFile changed: %s\nRe-running tests...\n\n", event.Name)
 
-					// Re-create formatter for new output (for JSON/JUnit, need fresh state)
-					switch strings.ToLower(outputFlag) {
-					case "json":
-						formatter = output.NewJSONFormatter()
-					case "junit":
-						formatter = output.NewJUnitFormatter()
-					case "tap":
-						formatter = output.NewTAPFormatter()
-					case "html":
-						formatter = output.NewHTMLFormatter()
-					default:
-						formatter = output.NewConsoleFormatter(
-							output.WithVerbose(verboseFlag > 0),
-							output.WithNoColor(noColorFlag),
-						)
-					}
+					// Re-create formatter for new output (for JSON/JUnit, need fresh state).
+					// Wire --output-file so it isn't dropped on watch re-runs.
+					formatter = newFormatter(outputFlag, outWriter, verboseFlag, noColorFlag, quietFlag)
 
 					// Re-run tests
 					_, _, _, duration := runTests()
@@ -646,6 +633,47 @@ func collectFiles(args []string) ([]string, error) {
 func isHitspecFile(path string) bool {
 	ext := filepath.Ext(path)
 	return ext == ".http" || ext == ".hitspec"
+}
+
+// newFormatter builds the output formatter for the given format, wiring the
+// --output-file writer (outWriter) when set. Shared by the initial run and the
+// watch-mode re-run so --output-file isn't dropped on re-runs.
+func newFormatter(format string, outWriter io.Writer, verbose int, noColor, quiet bool) Formatter {
+	switch strings.ToLower(format) {
+	case "json":
+		opts := []output.JSONOption{}
+		if outWriter != nil {
+			opts = append(opts, output.JSONWithWriter(outWriter))
+		}
+		return output.NewJSONFormatter(opts...)
+	case "junit":
+		opts := []output.JUnitOption{}
+		if outWriter != nil {
+			opts = append(opts, output.JUnitWithWriter(outWriter))
+		}
+		return output.NewJUnitFormatter(opts...)
+	case "tap":
+		opts := []output.TAPOption{}
+		if outWriter != nil {
+			opts = append(opts, output.TAPWithWriter(outWriter))
+		}
+		return output.NewTAPFormatter(opts...)
+	case "html":
+		opts := []output.HTMLOption{}
+		if outWriter != nil {
+			opts = append(opts, output.HTMLWithWriter(outWriter))
+		}
+		return output.NewHTMLFormatter(opts...)
+	default: // "console"
+		consoleOpts := []output.ConsoleOption{
+			output.WithVerbose(verbose > 0),
+			output.WithNoColor(noColor || quiet),
+		}
+		if outWriter != nil {
+			consoleOpts = append(consoleOpts, output.WithWriter(outWriter))
+		}
+		return output.NewConsoleFormatter(consoleOpts...)
+	}
 }
 
 // runStressMode executes stress tests using the stress runner

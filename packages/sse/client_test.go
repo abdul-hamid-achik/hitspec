@@ -280,3 +280,24 @@ func TestClient_ParseBody_WithID(t *testing.T) {
 		t.Errorf("expected JSON data, got %q", events[0].Data)
 	}
 }
+
+// TestClient_ParseBody_LargeLine guards the regression where bufio.Scanner's
+// default 64KB token limit silently dropped a single SSE data line longer
+// than 64KB. The scanner is now buffered to 1MB.
+func TestClient_ParseBody_LargeLine(t *testing.T) {
+	client := NewClient("")
+	// 200KB single data line — well above the old 64KB limit.
+	big := strings.Repeat("x", 200*1024)
+	body := []byte("event: bulk\ndata: " + big + "\n\n")
+
+	events, err := client.ParseBody(body)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if len(events[0].Data) != len(big) {
+		t.Fatalf("data length = %d, want %d (line was truncated by the 64KB scanner limit)", len(events[0].Data), len(big))
+	}
+}

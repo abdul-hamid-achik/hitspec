@@ -61,6 +61,22 @@ func matchesPattern(name, pattern string) bool {
 
 // topologicalSort returns requests in dependency-respecting order using Kahn's algorithm.
 func (r *Runner) topologicalSort(requests []*parser.Request) ([]*parser.Request, error) {
+	// Detect duplicate request names up front. Two requests sharing an
+	// @name collide in the name-keyed maps below, which previously produced
+	// either a bogus "circular dependency detected involving requests: []"
+	// abort or silently dropped one of the requests. A name is required to be
+	// unique so captures and @depends resolve deterministically.
+	seen := make(map[string]int) // name -> first line (0 if unknown)
+	for _, req := range requests {
+		if req.Name == "" {
+			continue
+		}
+		if _, dup := seen[req.Name]; dup {
+			return nil, fmt.Errorf("duplicate request name %q (defined more than once); request names must be unique", req.Name)
+		}
+		seen[req.Name] = req.Line
+	}
+
 	// Build adjacency list and in-degree count
 	inDegree := make(map[string]int)
 	adjacency := make(map[string][]string)
@@ -95,10 +111,18 @@ func (r *Runner) topologicalSort(requests []*parser.Request) ([]*parser.Request,
 		}
 	}
 
-	// Kahn's algorithm for topological sort
+	// Kahn's algorithm for topological sort. Seed the ready queue in source
+	// (file) order so requests without dependencies execute in the order they
+	// appear, matching the documented "executes each request in order" promise.
+	// Seeding from map iteration (Go map order is randomised) made the no-dependency
+	// run order nondeterministic, breaking capture-based flows.
 	var queue []string
-	for name, degree := range inDegree {
-		if degree == 0 {
+	for _, req := range requests {
+		name := req.Name
+		if name == "" {
+			name = fmt.Sprintf("__anon_%p", req)
+		}
+		if inDegree[name] == 0 {
 			queue = append(queue, name)
 		}
 	}

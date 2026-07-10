@@ -24,6 +24,20 @@ func (r *Runner) runRequests(file *parser.File) (*RunResult, error) {
 	// Get base directory for file path resolution (multipart files)
 	baseDir := filepath.Dir(file.Path)
 
+	// IndexFilter: run a single request by its source index. The studio TUI uses
+	// this to run an untitled request (which has no @name for the NameFilter to
+	// match); without it, passing the synthesized "line N" display name as a name
+	// filter matched nothing and the run was a silent no-op.
+	if r.config.IndexFilter != nil {
+		idx := *r.config.IndexFilter
+		if idx < 0 || idx >= len(file.Requests) {
+			return result, nil
+		}
+		single := *file
+		single.Requests = []*parser.Request{file.Requests[idx]}
+		file = &single
+	}
+
 	hasOnly := false
 	for _, req := range file.Requests {
 		if req.Metadata != nil && req.Metadata.Only {
@@ -93,15 +107,16 @@ func (r *Runner) runRequests(file *parser.File) (*RunResult, error) {
 		executed := make(map[string]*RequestResult)
 
 		for i, req := range filteredRequests {
-			// Check dependencies - if any dependency failed, skip this request
+			// Check dependencies - if any dependency failed OR didn't run (filtered
+			// out, skipped, or nonexistent), skip this request. Previously a missing
+			// dependency was ignored and the dependent ran anyway.
 			if req.Metadata != nil && len(req.Metadata.Depends) > 0 {
 				dependencyFailed := false
 				for _, depName := range req.Metadata.Depends {
-					if depResult, exists := executed[depName]; exists {
-						if !depResult.Passed {
-							dependencyFailed = true
-							break
-						}
+					depResult, exists := executed[depName]
+					if !exists || !depResult.Passed {
+						dependencyFailed = true
+						break
 					}
 				}
 				if dependencyFailed {

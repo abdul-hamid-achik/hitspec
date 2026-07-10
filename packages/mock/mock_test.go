@@ -316,6 +316,96 @@ func TestCreatePathRegex(t *testing.T) {
 	}
 }
 
+// TestCreatePathRegex_EscapesMetacharacters ensures a literal "." (and other
+// regex metacharacters) in a route path is not treated as a wildcard. A route
+// "/v1/users.json" must match "/v1/users.json" but NOT "/v1/usersXjson".
+func TestCreatePathRegex_EscapesMetacharacters(t *testing.T) {
+	r := NewRouter()
+	r.AddRoute(&Route{
+		Method:      "GET",
+		PathPattern: "/v1/users.json",
+		PathRegex:   createPathRegex("/v1/users.json"),
+		Response:    &MockResponse{StatusCode: 200},
+	})
+
+	if route, _ := r.Match("GET", "/v1/users.json"); route == nil {
+		t.Error("expected /v1/users.json to match route /v1/users.json, got nil")
+	}
+	if route, _ := r.Match("GET", "/v1/usersXjson"); route != nil {
+		t.Errorf("expected /v1/usersXjson NOT to match route /v1/users.json, got %+v", route)
+	}
+	// Other metacharacters must also be escaped.
+	r2 := NewRouter()
+	r2.AddRoute(&Route{
+		Method:      "GET",
+		PathPattern: "/q/a+b?c",
+		PathRegex:   createPathRegex("/q/a+b?c"),
+		Response:    &MockResponse{StatusCode: 200},
+	})
+	if route, _ := r2.Match("GET", "/q/a+b?c"); route == nil {
+		t.Error("expected /q/a+b?c to match its literal route, got nil")
+	}
+	if route, _ := r2.Match("GET", "/q/axbc"); route != nil {
+		t.Errorf("expected /q/axbc NOT to match route /q/a+b?c, got %+v", route)
+	}
+}
+
+// TestCreatePathRegex_ParamStillMatches ensures the {{param}} placeholder
+// remains a wildcard after the escaping fix.
+func TestCreatePathRegex_ParamStillMatches(t *testing.T) {
+	r := NewRouter()
+	r.AddRoute(&Route{
+		Method:      "GET",
+		PathPattern: "/users/{{id}}.json",
+		PathRegex:   createPathRegex("/users/{{id}}.json"),
+		Response:    &MockResponse{StatusCode: 200},
+	})
+
+	route, params := r.Match("GET", "/users/42.json")
+	if route == nil {
+		t.Fatal("expected /users/42.json to match, got nil")
+	}
+	if params["id"] != "42" {
+		t.Errorf("expected id=42, got %q", params["id"])
+	}
+	// The literal ".json" must still be enforced.
+	if route, _ := r.Match("GET", "/users/42Xjson"); route != nil {
+		t.Errorf("expected /users/42Xjson NOT to match, got %+v", route)
+	}
+}
+
+// TestRouter_Match_TrailingSlashRouteMatchesBareRequest ensures a route
+// registered with a trailing slash matches a request without one, and vice
+// versa.
+func TestRouter_Match_TrailingSlashRouteMatchesBareRequest(t *testing.T) {
+	r := NewRouter()
+	r.AddRoute(&Route{
+		Method:      "GET",
+		PathPattern: "/api/users/",
+		PathRegex:   createPathRegex("/api/users/"),
+		Response:    &MockResponse{StatusCode: 200},
+	})
+
+	if route, _ := r.Match("GET", "/api/users"); route == nil {
+		t.Error("expected request /api/users to match route /api/users/, got nil")
+	}
+	if route, _ := r.Match("GET", "/api/users/"); route == nil {
+		t.Error("expected request /api/users/ to match route /api/users/, got nil")
+	}
+
+	// And the inverse: bare route, trailing-slash request.
+	r2 := NewRouter()
+	r2.AddRoute(&Route{
+		Method:      "GET",
+		PathPattern: "/api/items",
+		PathRegex:   createPathRegex("/api/items"),
+		Response:    &MockResponse{StatusCode: 200},
+	})
+	if route, _ := r2.Match("GET", "/api/items/"); route == nil {
+		t.Error("expected request /api/items/ to match route /api/items, got nil")
+	}
+}
+
 // --- Server tests ---
 
 func TestNewServer_Defaults(t *testing.T) {
@@ -953,11 +1043,12 @@ func TestServer_StartWithContext_StartsAndShutdownsGracefully(t *testing.T) {
 	// Cancel context to trigger shutdown
 	cancel()
 
-	// Server should return http.ErrServerClosed
+	// Graceful shutdown must return nil (not http.ErrServerClosed), so the CLI
+	// exits 0 on Ctrl+C instead of 1.
 	select {
 	case srvErr := <-errCh:
-		if srvErr != nil && srvErr != http.ErrServerClosed {
-			t.Errorf("unexpected server error: %v", srvErr)
+		if srvErr != nil {
+			t.Errorf("graceful shutdown returned %v, want nil (CLI must exit 0)", srvErr)
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("server did not shut down in time")

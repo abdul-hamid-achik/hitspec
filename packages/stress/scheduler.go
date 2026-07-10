@@ -134,7 +134,11 @@ func (s *Scheduler) GetCurrentRate(elapsed time.Duration) float64 {
 	return s.config.Rate * progress
 }
 
-// GetCurrentVUs returns the current target VUs based on ramp-up
+// GetCurrentVUs returns the current target VUs based on ramp-up. During
+// ramp-up the linear interpolation can round down to 0 for any elapsed value
+// smaller than RampUp/VUs, which would scale the running VU pool to zero at
+// the first tick and start the test with no load. Clamp to at least 1 VU
+// whenever a non-zero target is configured so the pool always keeps running.
 func (s *Scheduler) GetCurrentVUs(elapsed time.Duration) int {
 	if s.config.RampUp <= 0 || elapsed >= s.config.RampUp {
 		return s.config.VUs
@@ -142,7 +146,12 @@ func (s *Scheduler) GetCurrentVUs(elapsed time.Duration) int {
 
 	// Linear ramp-up
 	progress := float64(elapsed) / float64(s.config.RampUp)
-	return int(float64(s.config.VUs) * progress)
+	vus := int(float64(s.config.VUs) * progress)
+	// During ramp-up, never scale below 1 VU once a target > 0 is configured.
+	if vus < 1 && s.config.VUs > 0 {
+		vus = 1
+	}
+	return vus
 }
 
 // UpdateRate updates the rate limiter's rate

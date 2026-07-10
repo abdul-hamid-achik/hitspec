@@ -511,3 +511,58 @@ expect status 200
 
 	t.Logf("Skipped %d requests with unresolved variables", result.Summary.ErrorCount)
 }
+
+// TestRunnerRequestRespectsContext verifies that the run context is threaded
+// into request execution so that in-flight requests are aborted when the
+// duration/context deadline elapses. Before the fix, requests used
+// context.Background() and ignored the run context, so a slow in-flight
+// request kept the run alive (and past the configured Duration) until the
+// client's own 30s default timeout fired.
+func TestRunnerRequestRespectsContext(t *testing.T) {
+	// Handler sleeps much longer than the run Duration and the test bound,
+	// so the only way the run finishes quickly is if the request is aborted
+	// via the run context.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-time.After(10 * time.Second):
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	httpFile := filepath.Join(tmpDir, "test.http")
+	content := `@baseUrl = ` + server.URL + `
+
+### Slow Request
+GET {{baseUrl}}/slow
+`
+	require.NoError(t, os.WriteFile(httpFile, []byte(content), 0644))
+
+	cfg := &Config{
+		Mode:     RateMode,
+		Duration: 150 * time.Millisecond,
+		Rate:     20, // high enough to ensure an in-flight request when ctx cancels
+		MaxVUs:   5,
+	}
+
+	reporter := NewReporter(WithNoProgress(true), WithNoColor(true))
+	runner := NewRunner(cfg, WithReporter(reporter))
+	require.NoError(t, runner.LoadFile(httpFile))
+
+	start := time.Now()
+	result, err := runner.Run(context.Background())
+	elapsed := time.Since(start)
+
+	require.NoError(t, err)
+	// The run must honor the run context: an in-flight request that ignores
+	// the context would block for the handler's 10s sleep (or the client's 30s
+	// default timeout). With the fix the request is cancelled at ~150ms.
+	assert.Less(t, elapsed, 2*time.Second,
+		"run should stop shortly after duration once ctx cancellation propagates to requests, took %v", elapsed)
+	// Timeouts are recorded rather than bogus generic errors.
+	assert.True(t, result.Summary.TotalRequests > 0, "should have attempted requests")
+	t.Logf("Run stopped after %v with %d requests (%d timeouts)",
+		elapsed, result.Summary.TotalRequests, result.Summary.TimeoutCount)
+}

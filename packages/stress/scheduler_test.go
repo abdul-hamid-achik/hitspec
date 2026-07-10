@@ -172,9 +172,14 @@ func TestSchedulerGetCurrentVUs(t *testing.T) {
 	}
 	s := NewScheduler(cfg)
 
-	// At start
+	// At start of ramp-up, the count is clamped to >= 1 so the pool never
+	// scales to zero at the first tick.
 	vus := s.GetCurrentVUs(0)
-	assert.Equal(t, 0, vus)
+	assert.Equal(t, 1, vus)
+
+	// Small elapsed values that would otherwise round down to 0 stay >= 1.
+	vus = s.GetCurrentVUs(100 * time.Millisecond)
+	assert.GreaterOrEqual(t, vus, 1)
 
 	// At half ramp-up
 	vus = s.GetCurrentVUs(5 * time.Second)
@@ -218,4 +223,50 @@ func TestSchedulerGetRequests(t *testing.T) {
 	_ = requests[:1] // Modify to truncate
 	allRequests := s.GetRequests()
 	assert.Len(t, allRequests, 2) // Internal state unchanged
+}
+
+// TestSchedulerRampUpNeverZeroVUs ensures the ramp-up formula never scales the
+// VU pool to zero at the first tick (or any early tick) when a non-zero target
+// is configured. The linear interpolation int(VUs * elapsed/RampUp) rounds down
+// to 0 for any elapsed < RampUp/VUs, which previously scaled the pool to zero.
+func TestSchedulerRampUpNeverZeroVUs(t *testing.T) {
+	cases := []struct {
+		name      string
+		vus       int
+		rampUp    time.Duration
+		elapsed   time.Duration
+		tickEvery time.Duration
+	}{
+		{"small vus long ramp", 10, 30 * time.Second, 100 * time.Millisecond, 100 * time.Millisecond},
+		{"first tick", 5, 10 * time.Second, 100 * time.Millisecond, 100 * time.Millisecond},
+		{"tiny elapsed", 100, 60 * time.Second, 10 * time.Millisecond, 100 * time.Millisecond},
+		{"single vu", 1, 10 * time.Second, 100 * time.Millisecond, 100 * time.Millisecond},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &Config{VUs: tc.vus, RampUp: tc.rampUp}
+			s := NewScheduler(cfg)
+
+			// Simulate the first several ramp-up ticks.
+			for tick := 0; tick < 5; tick++ {
+				elapsed := tc.elapsed + time.Duration(tick)*tc.tickEvery
+				if elapsed >= tc.rampUp {
+					break
+				}
+				vus := s.GetCurrentVUs(elapsed)
+				assert.GreaterOrEqual(t, vus, 1,
+					"ramp-up must keep >=1 VU at tick %d (elapsed=%v, vus=%d, rampUp=%v)",
+					tick, elapsed, vus, tc.rampUp)
+			}
+		})
+	}
+}
+
+// TestSchedulerRampUpZeroVUTarget verifies that a zero-VU target still reports
+// zero (the clamp only applies when a non-zero target is configured).
+func TestSchedulerRampUpZeroVUTarget(t *testing.T) {
+	cfg := &Config{VUs: 0, RampUp: 10 * time.Second}
+	s := NewScheduler(cfg)
+	assert.Equal(t, 0, s.GetCurrentVUs(100*time.Millisecond))
 }

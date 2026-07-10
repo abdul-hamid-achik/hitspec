@@ -445,7 +445,7 @@ func (r *Runner) executeScheduledRequest(ctx context.Context, sched *ScheduledRe
 	httpReq := http.BuildRequestFromASTWithBaseDir(reqWithDir.request, r.resolver.Resolve, reqWithDir.baseDir)
 
 	// Execute request
-	resp, err := r.client.Do(httpReq)
+	resp, err := r.client.DoWithContext(ctx, httpReq)
 	duration := time.Since(start)
 
 	// Record metrics

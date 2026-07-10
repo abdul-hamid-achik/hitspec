@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"os"
 	"time"
 
 	// SQLite driver (pure Go, no CGo required)
@@ -21,7 +22,17 @@ type Store struct {
 }
 
 // NewStore opens (or creates) a SQLite database at dbPath and applies the schema.
+// The database may hold request URLs/bodies (potentially sensitive), so a newly
+// created file is opened with 0600 permissions — the default 0644 left it
+// world-readable.
 func NewStore(dbPath string) (*Store, error) {
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		if f, err := os.OpenFile(dbPath, os.O_CREATE|os.O_RDWR, 0o600); err == nil {
+			_ = f.Close()
+		} else {
+			return nil, fmt.Errorf("history: create database: %w", err)
+		}
+	}
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("history: open database: %w", err)

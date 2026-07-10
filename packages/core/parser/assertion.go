@@ -7,12 +7,19 @@ import (
 
 // parseAssertions parses a >>> ... <<< assertion block into a slice of Assertion.
 func (p *Parser) parseAssertions() ([]*Assertion, error) {
+	startLine := p.curToken.Line
 	p.nextToken()
 	p.skipNewlines()
 
 	var assertions []*Assertion
 
-	for p.curToken.Type != TokenAssertionEnd && p.curToken.Type != TokenEOF {
+	// Stop at the closing <<<, end of file, or a new request separator (###).
+	// A bare >>> that runs into the next request means the closing <<< was
+	// forgotten; without this guard the block silently swallowed every
+	// subsequent request and merged their expects into the first one.
+	for p.curToken.Type != TokenAssertionEnd &&
+		p.curToken.Type != TokenEOF &&
+		p.curToken.Type != TokenRequestSeparator {
 		if p.curToken.Type == TokenExpect {
 			assertion, err := p.parseAssertion()
 			if err != nil {
@@ -25,9 +32,18 @@ func (p *Parser) parseAssertions() ([]*Assertion, error) {
 		p.skipNewlines()
 	}
 
-	if p.curToken.Type == TokenAssertionEnd {
-		p.nextToken()
+	if p.curToken.Type != TokenAssertionEnd {
+		// Reached EOF or a new request without a closing <<< — the block is
+		// unclosed. Report it (mirrors >>>mock/>>>graphql) instead of silently
+		// consuming the rest of the file.
+		return nil, &ParseError{
+			File:    p.file,
+			Line:    startLine,
+			Message: "unclosed >>> assertion block (missing closing <<<)",
+			Snippet: p.getSnippet(),
+		}
 	}
+	p.nextToken()
 
 	return assertions, nil
 }
@@ -61,7 +77,11 @@ func (p *Parser) parseAssertion() (*Assertion, error) {
 	}, nil
 }
 
-// parseAssertionSubject reads the assertion subject (e.g., "status", "body.name").
+// parseAssertionSubject reads the assertion subject (e.g., "status", "body.name",
+// "header Content-Type"). The "header <name>" subject carries a space-separated
+// header name; without consuming it the operator that follows (contains, >,
+// exists, ...) would be dropped and the assertion silently became
+// "header == <name>".
 func (p *Parser) parseAssertionSubject() string {
 	var builder strings.Builder
 	for p.curToken.Type != TokenWhitespace &&
@@ -77,6 +97,18 @@ func (p *Parser) parseAssertionSubject() string {
 			builder.WriteString(p.curToken.Value)
 		}
 		p.nextTokenRaw()
+	}
+	subject := builder.String()
+	// "header <name>": consume the space-separated header name when it is an
+	// identifier. Operator keywords (exists/contains/...) are TokenOperator, so
+	// "expect header exists" still leaves the subject as "header".
+	if strings.EqualFold(subject, "header") && p.curToken.Type == TokenWhitespace {
+		p.nextTokenRaw() // advance past the whitespace
+		if p.curToken.Type == TokenIdentifier {
+			builder.WriteRune(' ')
+			builder.WriteString(p.curToken.Value)
+			p.nextTokenRaw() // advance past the header name
+		}
 	}
 	return builder.String()
 }
@@ -192,6 +224,13 @@ func (p *Parser) parseAssertionExpected() any {
 		return nil
 	case TokenLeftBracket:
 		return p.parseArray()
+	case TokenVariableRef:
+		// Unquoted {{var}} expected value: keep the {{var}} form so the runner's
+		// env resolver interpolates it. Without this it fell to the default branch
+		// and was dropped (expected became "").
+		v := "{{" + p.curToken.Value + "}}"
+		p.nextToken()
+		return v
 	case TokenIdentifier:
 		v := p.curToken.Value
 		p.nextToken()

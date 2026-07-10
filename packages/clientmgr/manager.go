@@ -47,6 +47,7 @@ type Manager struct {
 	mockPort         int
 	recorder         *proxy.Recorder
 	recorderCancel   context.CancelFunc
+	recorderRunning  bool
 	recorderPort     int
 	recorderTarget   string
 
@@ -84,8 +85,17 @@ func New(opts ...Option) *Manager {
 		configPath = config.FindConfigPath(cfg.WorkDir)
 		fileConfig, _ = config.FindAndLoadConfig(cfg.WorkDir)
 	}
-	if fileConfig != nil && fileConfig.DefaultEnvironment != "" && cfg.Env == "dev" {
-		cfg.Env = fileConfig.DefaultEnvironment
+	// An explicit --env (cfg.Env != "") is honored as-is. Only when the caller
+	// didn't specify one (cfg.Env == "") do we fall back to the config's
+	// defaultEnvironment, then to "dev". Previously the default flag value "dev"
+	// was indistinguishable from an explicit `--env dev`, so the config's
+	// defaultEnvironment silently overrode an explicit choice.
+	if cfg.Env == "" {
+		if fileConfig != nil && fileConfig.DefaultEnvironment != "" {
+			cfg.Env = fileConfig.DefaultEnvironment
+		} else {
+			cfg.Env = "dev"
+		}
 	}
 
 	m := &Manager{
@@ -361,10 +371,16 @@ func newLogger(cfg *Config) *slog.Logger {
 		level = slog.LevelError
 	}
 	opts := &slog.HandlerOptions{Level: level}
-	if strings.ToLower(cfg.LogFormat) == "json" {
-		return slog.New(slog.NewJSONHandler(os.Stderr, opts))
+	// Default to stderr; the studio TUI passes io.Discard so log lines don't
+	// corrupt the alt-screen terminal.
+	out := cfg.LogWriter
+	if out == nil {
+		out = os.Stderr
 	}
-	return slog.New(slog.NewTextHandler(os.Stderr, opts))
+	if strings.ToLower(cfg.LogFormat) == "json" {
+		return slog.New(slog.NewJSONHandler(out, opts))
+	}
+	return slog.New(slog.NewTextHandler(out, opts))
 }
 
 var sensitiveHeaders = map[string]bool{

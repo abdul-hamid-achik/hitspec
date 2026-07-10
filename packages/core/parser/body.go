@@ -24,23 +24,28 @@ func (p *Parser) parseBody() (*Body, error) {
 		p.curToken.Type != TokenDBStart &&
 		p.curToken.Type != TokenShellStart &&
 		p.curToken.Type != TokenRequestSeparator &&
+		p.curToken.Type != TokenVariable &&
 		p.curToken.Type != TokenEOF {
 
-		if p.curToken.Type == TokenVariableRef {
+		switch p.curToken.Type {
+		case TokenVariableRef:
 			builder.WriteString("{{")
 			builder.WriteString(p.curToken.Value)
 			builder.WriteString("}}")
-		} else if p.curToken.Type == TokenNewline {
+		case TokenNewline:
 			builder.WriteString("\n")
-		} else if p.curToken.Type == TokenString {
+		case TokenString:
 			// Preserve quotes for string tokens in body
 			builder.WriteString("\"")
 			builder.WriteString(p.curToken.Value)
 			builder.WriteString("\"")
-		} else {
+		default:
+			// Includes TokenWhitespace: write its literal value so spaces in a
+			// plain-text body aren't lost. nextToken() (which skipped whitespace)
+			// turned "Hello World" into "HelloWorld".
 			builder.WriteString(p.curToken.Value)
 		}
-		p.nextToken()
+		p.nextTokenRaw()
 	}
 
 	raw := strings.TrimSpace(builder.String())

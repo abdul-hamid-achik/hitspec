@@ -97,7 +97,18 @@ func (r *Resolver) GetCapture(name string) (any, bool) {
 	return v, ok
 }
 
+// Resolve expands {{variable}}, {{$function()}}, {{capture}}, and ${VAR}
+// references in input. Resolution is recursive: a variable's value may itself
+// contain {{...}} references (e.g. @apiUrl = {{base}}/v1 where @base =
+// {{scheme}}://api.example.com). A single pass left nested references literal,
+// so {{apiUrl}} resolved to "{{base}}/v1" instead of "https://api.example.com/v1".
+// Self-referential loops (e.g. @baseUrl = {{baseUrl}}) are broken by a visited
+// set so they resolve to a stable literal instead of recursing forever.
 func (r *Resolver) Resolve(input string) string {
+	return r.resolve(input, map[string]bool{})
+}
+
+func (r *Resolver) resolve(input string, seen map[string]bool) string {
 	return variablePattern.ReplaceAllStringFunc(input, func(match string) string {
 		expr := match[2 : len(match)-2]
 		expr = strings.TrimSpace(expr)
@@ -136,23 +147,37 @@ func (r *Resolver) Resolve(input string) string {
 			return match
 		}
 
+		// Cycle guard: a variable that (transitively) references itself must not
+		// recurse forever. Leave the literal {{expr}} in place for this branch.
+		if seen[expr] {
+			r.warn("circular variable reference: %s", expr)
+			return match
+		}
+
 		r.mu.RLock()
-		if val, ok := r.captures[expr]; ok {
-			r.mu.RUnlock()
-			return fmt.Sprintf("%v", val)
-		}
-
-		if val, ok := r.variables[expr]; ok {
-			r.mu.RUnlock()
-			return fmt.Sprintf("%v", val)
-		}
-
-		// Check dotenv file
-		if val, ok := r.dotenv[expr]; ok {
-			r.mu.RUnlock()
-			return val
+		var sub any
+		var ok bool
+		if val, cok := r.captures[expr]; cok {
+			sub, ok = val, true
+		} else if val, vok := r.variables[expr]; vok {
+			sub, ok = val, true
+		} else if val, dok := r.dotenv[expr]; dok {
+			sub, ok = val, true
 		}
 		r.mu.RUnlock()
+
+		if ok {
+			replaced := fmt.Sprintf("%v", sub)
+			// If the value itself contains {{...}}, resolve it recursively so
+			// nested variable references expand.
+			if variablePattern.MatchString(replaced) {
+				seen[expr] = true
+				resolved := r.resolve(replaced, seen)
+				delete(seen, expr)
+				return resolved
+			}
+			return replaced
+		}
 
 		// Fallback to OS environment variable
 		if val := os.Getenv(expr); val != "" {

@@ -23,6 +23,7 @@ var (
 	serveAllowDBFlag    bool
 	serveLogFormatFlag  string
 	serveLogLevelFlag   string
+	serveAPITokenFlag   string
 )
 
 var serveCmd = &cobra.Command{
@@ -56,13 +57,14 @@ func init() {
 	serveCmd.Flags().BoolVar(&serveCORSFlag, "cors", false, "Enable CORS headers (API server)")
 	serveCmd.Flags().BoolVar(&serveAPIOnlyFlag, "api-only", false, "Start the REST/WebSocket API server")
 	serveCmd.Flags().BoolVar(&serveReadOnlyFlag, "read-only", false, "Disallow file mutations")
-	serveCmd.Flags().StringVarP(&serveEnvFlag, "env", "e", "dev", "Default environment")
+	serveCmd.Flags().StringVarP(&serveEnvFlag, "env", "e", "", "Default environment (default: hitspec.yaml defaultEnvironment, else dev)")
 	serveCmd.Flags().StringVar(&serveConfigFlag, "config", "", "Path to hitspec.yaml")
 	serveCmd.Flags().BoolVarP(&serveVerboseFlag, "verbose", "v", false, "Verbose logging")
 	serveCmd.Flags().BoolVar(&serveAllowShellFlag, "allow-shell", false, "Allow shell command execution")
 	serveCmd.Flags().BoolVar(&serveAllowDBFlag, "allow-db", false, "Allow database assertions")
 	serveCmd.Flags().StringVar(&serveLogFormatFlag, "log-format", "text", "Log format: text or json")
 	serveCmd.Flags().StringVar(&serveLogLevelFlag, "log-level", "info", "Log level: debug, info, warn, error")
+	serveCmd.Flags().StringVar(&serveAPITokenFlag, "api-token", getEnvString("HITSPEC_API_TOKEN", ""), "Require a bearer token for all REST/WebSocket requests (env: HITSPEC_API_TOKEN). When set, requests must send Authorization: Bearer <token> or ?token=<token>")
 }
 
 func serveCommand(cmd *cobra.Command, args []string) error {
@@ -108,6 +110,7 @@ func serveCommand(cmd *cobra.Command, args []string) error {
 		serve.WithVerbose(serveVerboseFlag),
 		serve.WithAllowShell(serveAllowShellFlag),
 		serve.WithAllowDB(serveAllowDBFlag),
+		serve.WithAPIToken(serveAPITokenFlag),
 		serve.WithLogFormat(serveLogFormatFlag),
 		serve.WithLogLevel(serveLogLevelFlag),
 	)

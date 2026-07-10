@@ -81,9 +81,16 @@ func NewServer(opts ...Option) *Server {
 		fileConfig, _ = config.FindAndLoadConfig(cfg.WorkDir)
 	}
 
-	// Use defaultEnvironment from config if user didn't explicitly set --env
-	if fileConfig != nil && fileConfig.DefaultEnvironment != "" && cfg.Env == "dev" {
-		cfg.Env = fileConfig.DefaultEnvironment
+	// An explicit --env (cfg.Env != "") is honored; only when unset do we fall
+	// back to the config's defaultEnvironment, then "dev". The old `cfg.Env ==
+	// "dev"` check treated an explicit `--env dev` the same as the default and
+	// silently overrode it with defaultEnvironment.
+	if cfg.Env == "" {
+		if fileConfig != nil && fileConfig.DefaultEnvironment != "" {
+			cfg.Env = fileConfig.DefaultEnvironment
+		} else {
+			cfg.Env = "dev"
+		}
 	}
 
 	s := &Server{
@@ -146,6 +153,7 @@ func (s *Server) Start(ctx context.Context) error {
 	s.registerRoutes(mux)
 
 	handler := chain(mux,
+		authTokenMiddleware(s.config.APIToken),
 		recoveryMiddleware(s.logger),
 		corsMiddleware(s.config.CORS),
 		loggingMiddleware(s.logger),

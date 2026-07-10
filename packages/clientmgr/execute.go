@@ -12,7 +12,9 @@ import (
 	"github.com/abdul-hamid-achik/hitspec/packages/history"
 )
 
-// Execute runs one request from a file.
+// Execute runs one request from a file. RequestName selects by @name;
+// RequestIndex selects by source position (used by the studio TUI to run an
+// untitled request that has no @name for the name filter to match).
 func (m *Manager) Execute(ctx context.Context, req ExecuteReq) (*RunResultDTO, error) {
 	if err := m.requireWritable(); err != nil {
 		return nil, err
@@ -20,7 +22,7 @@ func (m *Manager) Execute(ctx context.Context, req ExecuteReq) (*RunResultDTO, e
 	if req.File == "" {
 		return nil, fmt.Errorf("file is required")
 	}
-	return m.run(ctx, req.File, req.RequestName, req.Environment)
+	return m.run(ctx, req.File, req.RequestName, req.RequestIndex, req.Environment)
 }
 
 // RunFile runs all requests in a file.
@@ -31,7 +33,7 @@ func (m *Manager) RunFile(ctx context.Context, req RunReq) (*RunResultDTO, error
 	if req.File == "" {
 		return nil, fmt.Errorf("file is required")
 	}
-	return m.run(ctx, req.File, "", req.Environment)
+	return m.run(ctx, req.File, "", nil, req.Environment)
 }
 
 // ExecuteAdHoc runs a one-off request that is not saved to the workspace. It
@@ -119,7 +121,7 @@ func buildAdHocContent(method, url string, headers map[string]string, body strin
 	return sb.String()
 }
 
-func (m *Manager) run(ctx context.Context, file, requestName, environment string) (*RunResultDTO, error) {
+func (m *Manager) run(ctx context.Context, file, requestName string, requestIndex *int, environment string) (*RunResultDTO, error) {
 	absPath, err := m.absPath(file)
 	if err != nil {
 		return nil, err
@@ -136,12 +138,19 @@ func (m *Manager) run(ctx context.Context, file, requestName, environment string
 	execID := generateID()
 	m.publish("execution_start", ExecEvent{ID: execID, File: file, Status: "started", Timestamp: nowISO()})
 
+	// Index mode (untitled request) takes precedence over an empty name filter so
+	// the runner selects the request by position instead of matching nothing.
+	indexFilter := requestIndex
+	if requestName != "" {
+		indexFilter = nil
+	}
 	cfg := &runner.Config{
 		Environment:        env,
 		Timeout:            30 * time.Second,
 		FollowRedirect:     true,
 		ValidateSSL:        true,
 		NameFilter:         requestName,
+		IndexFilter:        indexFilter,
 		ConfigEnvironments: configEnvs,
 		AllowShell:         m.config.AllowShell,
 		AllowDB:            m.config.AllowDB,

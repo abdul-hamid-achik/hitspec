@@ -325,3 +325,30 @@ func TestParseArgs(t *testing.T) {
 		})
 	}
 }
+
+func TestRandomMinGreaterThanMax(t *testing.T) {
+	// $random(10,5) used to panic because rand.Intn(max-min+1) got a
+	// non-positive argument. It must now return a value within the
+	// swapped [5,10] range instead of crashing the run.
+	val := funcRandom([]string{"10", "5"}).(int)
+	if val < 5 || val > 10 {
+		t.Errorf("random(10,5) = %d, want value in swapped range [5,10]", val)
+	}
+}
+
+func TestRandomStringNegativeLength(t *testing.T) {
+	// $randomString(-5) used to panic on make([]byte, -5). It must now
+	// return an empty string instead of crashing the run.
+	val := funcRandomString([]string{"-5"}).(string)
+	if val != "" {
+		t.Errorf("randomString(-5) = %q, want empty string", val)
+	}
+}
+
+func TestRandomStringZero(t *testing.T) {
+	// $randomString(0) must return an empty string, not panic.
+	val := funcRandomString([]string{"0"}).(string)
+	if val != "" {
+		t.Errorf("randomString(0) = %q, want empty string", val)
+	}
+}

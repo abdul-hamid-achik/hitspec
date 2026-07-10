@@ -160,6 +160,122 @@ func TestHandleEventProgress(t *testing.T) {
 	m.handleEvent(clientmgr.Event{Type: "file_changed"}) // must not panic
 }
 
+func TestFileChangedEventReloadsSelectedFile(t *testing.T) {
+	ctx := context.Background()
+	mgr := newTestManager(t)
+	if _, err := mgr.CreateFile(ctx, "live.http", "### One\nGET https://a.example\n"); err != nil {
+		t.Fatalf("CreateFile: %v", err)
+	}
+	m := newModel(ctx, mgr, Options{})
+
+	// Seed the model with the file list + open the file, mirroring the Update
+	// path (filesLoadedMsg -> fileLoadedMsg).
+	fm := loadFilesCmd(ctx, mgr)().(filesLoadedMsg)
+	if fm.err != nil {
+		t.Fatalf("loadFiles: %v", fm.err)
+	}
+	m.workspace, m.files = fm.workspace, fm.files
+	m.refreshFileList()
+	if m.selected == "" && len(m.files) > 0 {
+		m.selected = m.files[0].RelativePath
+	}
+	if m.selected != "live.http" {
+		t.Fatalf("selected = %q, want live.http", m.selected)
+	}
+	lm := loadFileCmd(ctx, mgr, m.selected)().(fileLoadedMsg)
+	if lm.err != nil {
+		t.Fatalf("loadFile: %v", lm.err)
+	}
+	m.raw, m.parsed = lm.raw, lm.parsed
+	m.source.SetValue(lm.raw)
+	m.refreshRequestTables()
+	if m.raw != "### One\nGET https://a.example\n" {
+		t.Fatalf("initial raw = %q", m.raw)
+	}
+
+	// External edit on disk (the manager writes + republishes; the model is
+	// not updated by this call, so m.raw stays stale).
+	if _, err := mgr.SaveFile(ctx, "live.http", "### Two\nGET https://b.example\n"); err != nil {
+		t.Fatalf("SaveFile: %v", err)
+	}
+	if m.raw == "### Two\nGET https://b.example\n" {
+		t.Fatal("model should still hold stale content before the event")
+	}
+
+	// Fire the file_changed event for the selected file. handleEvent must
+	// return a reload command (loadFilesCmd + loadFileCmd).
+	cmds := m.handleEvent(clientmgr.Event{
+		Type:    "file_changed",
+		Payload: clientmgr.FileEvent{Path: "live.http", Operation: "changed"},
+	})
+	var reload fileLoadedMsg
+	found := false
+	for _, c := range cmds {
+		if c == nil {
+			continue
+		}
+		if fl, ok := c().(fileLoadedMsg); ok {
+			reload = fl
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("handleEvent(file_changed) did not return a loadFileCmd; got %d cmds", len(cmds))
+	}
+	if reload.err != nil {
+		t.Fatalf("reload fileLoadedMsg err: %v", reload.err)
+	}
+
+	// Apply the reload (mirrors the fileLoadedMsg handler in Update).
+	m.raw, m.parsed = reload.raw, reload.parsed
+	m.source.SetValue(reload.raw)
+	m.refreshRequestTables()
+	if m.raw != "### Two\nGET https://b.example\n" {
+		t.Fatalf("after event raw = %q, want updated content", m.raw)
+	}
+	if m.parsed == nil || len(m.parsed.Requests) != 1 || m.parsed.Requests[0].URL != "https://b.example" {
+		t.Fatalf("parsed not refreshed: %+v", m.parsed)
+	}
+}
+
+// TestFileChangedEventSkipsDirtyFile ensures an external file_changed event
+// does not clobber the user's unsaved in-progress edits: no loadFileCmd is
+// returned for a dirty selected file.
+func TestFileChangedEventSkipsDirtyFile(t *testing.T) {
+	ctx := context.Background()
+	mgr := newTestManager(t)
+	if _, err := mgr.CreateFile(ctx, "live.http", "### One\nGET https://a.example\n"); err != nil {
+		t.Fatalf("CreateFile: %v", err)
+	}
+	m := newModel(ctx, mgr, Options{})
+	lm := loadFileCmd(ctx, mgr, "live.http")().(fileLoadedMsg)
+	if lm.err != nil {
+		t.Fatalf("loadFile: %v", lm.err)
+	}
+	m.selected, m.raw, m.parsed = lm.path, lm.raw, lm.parsed
+	m.dirty = true // user has unsaved edits
+
+	if _, err := mgr.SaveFile(ctx, "live.http", "### Two\nGET https://b.example\n"); err != nil {
+		t.Fatalf("SaveFile: %v", err)
+	}
+
+	cmds := m.handleEvent(clientmgr.Event{
+		Type:    "file_changed",
+		Payload: clientmgr.FileEvent{Path: "live.http", Operation: "changed"},
+	})
+	for _, c := range cmds {
+		if c == nil {
+			continue
+		}
+		if _, ok := c().(fileLoadedMsg); ok {
+			t.Fatal("dirty file must not be reloaded by a file_changed event")
+		}
+	}
+	if m.raw != "### One\nGET https://a.example\n" {
+		t.Fatalf("unsaved edits clobbered: raw = %q", m.raw)
+	}
+}
+
 func TestFileSummary(t *testing.T) {
 	m := newModel(context.Background(), newTestManager(t), Options{})
 	m.selected = "api.http"

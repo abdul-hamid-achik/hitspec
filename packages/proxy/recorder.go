@@ -3,6 +3,7 @@ package proxy
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -210,11 +211,14 @@ func (r *Recorder) wrap(next http.Handler) http.Handler {
 			req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 		}
 
-		// Create recording
+		// Create recording. The reverse proxy receives only the request path (no
+		// scheme/host) in req.URL, so reconstruct the full runnable URL from the
+		// configured target. Without this, recorded files emitted path-only URLs
+		// that hitspec's own ValidateURL rejects, making recordings unrunnable.
 		recording := Recording{
 			Timestamp:   start,
 			Method:      req.Method,
-			URL:         req.URL.String(),
+			URL:         r.fullURL(req.URL),
 			Path:        req.URL.Path,
 			Headers:     r.sanitizeHeaders(req.Header),
 			Body:        string(bodyBytes),
@@ -238,7 +242,6 @@ func (r *Recorder) recordResponse(resp *http.Response) error {
 	if !ok {
 		return nil
 	}
-
 	// Read response body
 	var bodyBytes []byte
 	if resp.Body != nil {
@@ -246,12 +249,27 @@ func (r *Recorder) recordResponse(resp *http.Response) error {
 		resp.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 	}
 
+	// Record a readable body: when the upstream response is gzip-encoded, the
+	// raw bytes are binary garbage in the exported .http file. Decode the gzip
+	// stream so the stored body is plain text, and drop the Content-Encoding
+	// header so the recorded response is self-consistent (the stored body is no
+	// longer encoded). The original encoded bytes are still forwarded to the
+	// client via resp.Body above.
+	recordedBody := bodyBytes
+	respHeaders := r.sanitizeHeaders(resp.Header)
+	if strings.EqualFold(resp.Header.Get("Content-Encoding"), "gzip") {
+		if decoded, err := decodeGzip(bodyBytes); err == nil {
+			recordedBody = decoded
+			delete(respHeaders, "Content-Encoding")
+		}
+	}
+
 	// Create response recording
 	recording.Response = &RecordedResponse{
 		StatusCode:  resp.StatusCode,
 		Status:      resp.Status,
-		Headers:     r.sanitizeHeaders(resp.Header),
-		Body:        string(bodyBytes),
+		Headers:     respHeaders,
+		Body:        string(recordedBody),
 		ContentType: resp.Header.Get("Content-Type"),
 		Duration:    time.Since(recording.Timestamp),
 	}
@@ -281,6 +299,21 @@ func (r *Recorder) recordResponse(resp *http.Response) error {
 	}
 
 	return nil
+}
+
+// decodeGzip decompresses a gzip-encoded byte slice. It returns an error if the
+// input is not a valid gzip stream so the caller can fall back to the raw bytes.
+func decodeGzip(in []byte) ([]byte, error) {
+	zr, err := gzip.NewReader(bytes.NewReader(in))
+	if err != nil {
+		return nil, err
+	}
+	defer zr.Close()
+	out, err := io.ReadAll(zr)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (r *Recorder) shouldExclude(path string) bool {
@@ -316,6 +349,21 @@ func (r *Recorder) sanitizeHeaders(h http.Header) map[string]string {
 		}
 	}
 	return result
+}
+
+// fullURL reconstructs the full, runnable request URL from the configured
+// target (scheme + host) and the request path + query that the reverse proxy
+// received. Falls back to the raw request URI when no target is configured.
+func (r *Recorder) fullURL(reqURL *url.URL) string {
+	if r.targetURL == "" {
+		return reqURL.String()
+	}
+	base := strings.TrimRight(r.targetURL, "/")
+	uri := reqURL.RequestURI() // path + ?query
+	if uri == "" {
+		uri = "/"
+	}
+	return base + uri
 }
 
 // GetRecordings returns all recorded requests

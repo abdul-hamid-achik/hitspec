@@ -2,10 +2,12 @@ package serve
 
 import (
 	"bufio"
+	"crypto/subtle"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -146,6 +148,41 @@ func readOnlyMiddleware(readOnly bool) Middleware {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodGet && r.Method != http.MethodOptions {
 				writeError(w, http.StatusForbidden, "server is in read-only mode")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// authTokenMiddleware gates all REST and WebSocket requests behind a shared
+// bearer token. The serve API exposes full file read/write/delete, arbitrary
+// request execution (SSRF), and RCE when --allow-shell is set; without auth it is
+// only "protected" by the default localhost bind. When token is empty the
+// middleware is a no-op (backward compatible). The token is accepted via:
+//   - Authorization: Bearer <token> header (REST clients)
+//   - ?token=<token> query parameter (WebSocket/browser clients that cannot set
+//     headers on the upgrade request)
+//
+// The comparison is constant-time to avoid timing side channels.
+func authTokenMiddleware(token string) Middleware {
+	return func(next http.Handler) http.Handler {
+		if token == "" {
+			return next
+		}
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			present := r.Header.Get("Authorization")
+			if strings.HasPrefix(present, "Bearer ") {
+				present = strings.TrimPrefix(present, "Bearer ")
+			} else {
+				present = "" // only the Bearer scheme is accepted
+			}
+			if present == "" {
+				present = r.URL.Query().Get("token")
+			}
+			if subtle.ConstantTimeCompare([]byte(present), []byte(token)) != 1 {
+				w.Header().Set("WWW-Authenticate", `Bearer realm="hitspec"`)
+				writeError(w, http.StatusUnauthorized, "unauthorized: missing or invalid API token")
 				return
 			}
 			next.ServeHTTP(w, r)

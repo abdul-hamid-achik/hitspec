@@ -133,10 +133,13 @@ func (l *Lexer) NextToken() Token {
 	case '\r':
 		l.readChar()
 		if l.ch == '\n' {
-			tok.Type = TokenNewline
-			tok.Value = "\n"
 			l.readChar()
 		}
+		// Treat a lone \r (classic Mac line ending / stray CR) as a newline.
+		// Without this, a lone \r emitted a zero-value token (Type == TokenEOF)
+		// and silently truncated the rest of the file.
+		tok.Type = TokenNewline
+		tok.Value = "\n"
 	case '#':
 		if l.peekChars(3) == "###" {
 			tok = l.readRequestSeparator()
@@ -512,7 +515,7 @@ func (l *Lexer) readIdentifierOrKeyword() Token {
 	case "null":
 		return Token{Type: TokenNull, Value: ident, Line: line, Column: col}
 	case "contains", "startswith", "endswith", "matches", "exists", "length",
-		"includes", "in", "type", "each", "schema":
+		"includes", "in", "type", "each", "schema", "snapshot":
 		return Token{Type: TokenOperator, Value: lower, Line: line, Column: col}
 	}
 

@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/abdul-hamid-achik/hitspec/packages/assertions"
@@ -25,9 +26,10 @@ const (
 )
 
 type Runner struct {
-	client   *http.Client
-	resolver *env.Resolver
-	config   *Config
+	client    *http.Client
+	resolver  *env.Resolver
+	config    *Config
+	historyWG sync.WaitGroup // tracks in-flight history-record goroutines
 }
 
 type Config struct {
@@ -38,6 +40,7 @@ type Config struct {
 	FollowRedirect     bool
 	Bail               bool
 	NameFilter         string
+	IndexFilter        *int // run only the request at this source index; nil = unset (studio TUI runs untitled requests)
 	TagsFilter         []string
 	Parallel           bool
 	Concurrency        int
@@ -155,12 +158,24 @@ func (r *Runner) RunFile(path string) (*RunResult, error) {
 		return nil, err
 	}
 
-	// Record to persistent history in a background goroutine (non-blocking)
+	// Record to persistent history in a background goroutine (non-blocking). The
+	// goroutine is tracked so WaitHistory can flush it before the store is closed
+	// (previously store.Close() raced the writer and lost rows).
 	if r.config.HistoryStore != nil {
-		go r.recordHistory(result)
+		r.historyWG.Add(1)
+		go func() {
+			defer r.historyWG.Done()
+			r.recordHistory(result)
+		}()
 	}
 
 	return result, nil
+}
+
+// WaitHistory blocks until all in-flight history-record goroutines finish. Call
+// before closing the HistoryStore to avoid a close/write race that loses rows.
+func (r *Runner) WaitHistory() {
+	r.historyWG.Wait()
 }
 
 // recordHistory persists the run result to the history store.

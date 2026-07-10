@@ -59,6 +59,91 @@ expect body.id exists
 	require.Len(t, req.Assertions, 2)
 }
 
+// TestParser_PlainTextBody guards the regression where a plain-text body was
+// silently dropped: the header loop's skipNewlines() consumed the blank-line
+// separator and then ate identifier-led body lines as failed headers, and the
+// body builder used nextToken() (which skips whitespace) so even captured bodies
+// lost their spaces ("Hello World" -> "HelloWorld").
+func TestParser_PlainTextBody(t *testing.T) {
+	t.Run("plain text after blank line keeps content and spaces", func(t *testing.T) {
+		input := "### T\nPOST http://example.com\n\nHello World\n"
+		file, err := Parse(input, "test.http")
+		require.NoError(t, err)
+		require.Len(t, file.Requests, 1)
+		require.NotNil(t, file.Requests[0].Body)
+		assert.Equal(t, "Hello World", file.Requests[0].Body.Raw)
+		assert.Equal(t, BodyRaw, file.Requests[0].Body.ContentType)
+	})
+	t.Run("plain text after header+blank line", func(t *testing.T) {
+		input := "### T\nPOST http://example.com\nContent-Type: text/plain\n\nHello World\n"
+		file, err := Parse(input, "test.http")
+		require.NoError(t, err)
+		require.Len(t, file.Requests, 1)
+		require.Len(t, file.Requests[0].Headers, 1)
+		require.NotNil(t, file.Requests[0].Body)
+		assert.Equal(t, "Hello World", file.Requests[0].Body.Raw)
+	})
+}
+
+// TestParser_MidFileVariable guards the regression where a variable definition
+// between requests (@var = value) was swallowed into the previous request's body
+// instead of becoming a file-level variable.
+func TestParser_MidFileVariable(t *testing.T) {
+	input := `### First
+GET http://example.com/a
+
+@newVar = value123
+
+### Second
+GET http://example.com/b
+`
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 2)
+	require.Len(t, file.Variables, 1)
+	assert.Equal(t, "newVar", file.Variables[0].Name)
+	assert.Equal(t, "value123", file.Variables[0].Value)
+	// The mid-file variable must NOT become First's body.
+	assert.Nil(t, file.Requests[0].Body)
+}
+
+// TestParser_AssertionUnquotedVarExpected guards the regression where an
+// unquoted {{var}} assertion expected value was dropped (expected became "").
+// The {{var}} form must be preserved so the runner's env resolver interpolates it.
+func TestParser_AssertionUnquotedVarExpected(t *testing.T) {
+	input := "### T\nGET http://test.com\n\n>>>\nexpect body.name == {{expectedName}}\nexpect body.count == {{n}}\n<<<\n"
+	file, err := Parse(input, "test.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests[0].Assertions, 2)
+	assert.Equal(t, "{{expectedName}}", file.Requests[0].Assertions[0].Expected)
+	assert.Equal(t, "{{n}}", file.Requests[0].Assertions[1].Expected)
+}
+
+// TestParser_URLHttpVersionAndFragment guards two URL-parsing regressions:
+// a trailing "HTTP/1.1" was concatenated into the URL, and a "#" fragment was
+// comment-stripped out of the URL.
+func TestParser_URLHttpVersionAndFragment(t *testing.T) {
+	tests := []struct {
+		name string
+		line string
+		want string
+	}{
+		{"trailing http version", "GET http://example.com/api HTTP/1.1", "http://example.com/api"},
+		{"trailing http/2", "GET http://example.com/api HTTP/2", "http://example.com/api"},
+		{"fragment preserved", "GET http://example.com/api#section", "http://example.com/api#section"},
+		{"query and fragment", "GET http://example.com/search?q=a#b", "http://example.com/search?q=a#b"},
+		{"plain url unchanged", "GET https://api.example.com/users/1", "https://api.example.com/users/1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file, err := Parse(tt.line+"\n", "test.http")
+			require.NoError(t, err)
+			require.Len(t, file.Requests, 1)
+			assert.Equal(t, tt.want, file.Requests[0].URL)
+		})
+	}
+}
+
 func TestParser_Variables(t *testing.T) {
 	input := `@baseUrl = https://api.example.com
 @token = secret123
@@ -152,6 +237,21 @@ DELETE https://api.example.com/third`
 	assert.Equal(t, "DELETE", file.Requests[2].Method)
 }
 
+// TestParser_LoneCRLineEndings guards the regression where a lone \r (classic
+// Mac line ending, not part of \r\n) emitted a zero-value token equal to
+// TokenEOF, silently truncating the rest of the file after the first \r.
+func TestParser_LoneCRLineEndings(t *testing.T) {
+	// Classic Mac line endings: every line terminated by a lone \r.
+	input := "### First\rGET http://example.com/first\r\r### Second\rGET http://example.com/second\r"
+	file, err := Parse(input, "cr.http")
+	require.NoError(t, err)
+	require.Len(t, file.Requests, 2, "lone CR must not truncate the file")
+	assert.Equal(t, "First", file.Requests[0].Name)
+	assert.Equal(t, "GET", file.Requests[0].Method)
+	assert.Equal(t, "Second", file.Requests[1].Name)
+	assert.Equal(t, "GET", file.Requests[1].Method)
+}
+
 func TestParser_AssertionOperators(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -172,6 +272,8 @@ func TestParser_AssertionOperators(t *testing.T) {
 		{"expect body.items length >= 1", OpLengthGte},
 		{"expect body.items length < 100", OpLengthLt},
 		{"expect body.items length <= 50", OpLengthLte},
+		{"expect body snapshot \"baseline\"", OpSnapshot},
+		{"expect body snapshot getUserResponse", OpSnapshot},
 	}
 
 	for _, tt := range tests {
@@ -182,6 +284,40 @@ func TestParser_AssertionOperators(t *testing.T) {
 			require.Len(t, file.Requests, 1)
 			require.Len(t, file.Requests[0].Assertions, 1)
 			assert.Equal(t, tt.expected, file.Requests[0].Assertions[0].Operator)
+		})
+	}
+}
+
+// TestParser_HeaderAssertions guards the regression where "expect header
+// <name> <op> <expected>" silently became "header == <name>", dropping the
+// real operator and expected value because the subject parser stopped at the
+// whitespace before the header name.
+func TestParser_HeaderAssertions(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		subject  string
+		operator AssertionOperator
+		expected any
+	}{
+		{"contains", "expect header Content-Type contains json", "header Content-Type", OpContains, "json"},
+		{"exists", "expect header X-Request-Id exists", "header X-Request-Id", OpExists, nil},
+		{"greater-than", "expect header X-RateLimit-Remaining > 0", "header X-RateLimit-Remaining", OpGreaterThan, 0},
+		{"equals-quoted", `expect header Content-Type == "application/json"`, "header Content-Type", OpEquals, "application/json"},
+		{"header-only-exists", "expect header exists", "header", OpExists, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input := "### Test\nGET http://test.com\n\n>>>\n" + tt.input + "\n<<<"
+			file, err := Parse(input, "test.http")
+			require.NoError(t, err)
+			require.Len(t, file.Requests, 1)
+			require.Len(t, file.Requests[0].Assertions, 1)
+			a := file.Requests[0].Assertions[0]
+			assert.Equal(t, tt.subject, a.Subject, "subject mismatch")
+			assert.Equal(t, tt.operator, a.Operator, "operator mismatch")
+			assert.Equal(t, tt.expected, a.Expected, "expected mismatch")
 		})
 	}
 }
@@ -563,12 +699,27 @@ func TestParser_DBBlockMissingClose(t *testing.T) {
 	require.Len(t, file.Requests[0].DBAssertions, 1)
 }
 
+// TestParser_AssertionBlockMissingClose: an unclosed bare >>> block (no <<<)
+// is a parse error, mirroring >>>mock/>>>graphql. Previously it silently
+// consumed to EOF and, worse, swallowed any subsequent requests and merged
+// their expects into the first one.
 func TestParser_AssertionBlockMissingClose(t *testing.T) {
 	input := "### Test\nGET http://test.com\n\n>>>\nexpect status 200"
-	file, err := Parse(input, "test.http")
-	require.NoError(t, err)
-	require.Len(t, file.Requests, 1)
-	require.Len(t, file.Requests[0].Assertions, 1)
+	_, err := Parse(input, "test.http")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unclosed")
+}
+
+// TestParser_AssertionBlockUnclosedSwallowsNoRequests guards the regression
+// where an unclosed >>> block consumed the following request and merged its
+// assertions into the first request. The second request must survive as its
+// own request (the file still fails to parse because the first block is
+// unclosed, but the error must be about the unclosed block, not a silent merge).
+func TestParser_AssertionBlockUnclosedSwallowsNoRequests(t *testing.T) {
+	input := "### Req A\nGET http://test.com/a\n\n>>>\nexpect status 200\n\n### Req B\nGET http://test.com/b\n\n>>>\nexpect status 201\n<<<\n"
+	_, err := Parse(input, "test.http")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unclosed")
 }
 
 // --- Parse error quality tests ---

@@ -36,6 +36,15 @@ Examples:
   hitspec import postman collection.json -o tests/
   hitspec import curl "curl https://api.example.com/users"
   hitspec import insomnia export.json -o tests/api.http`,
+	// Without a RunE, cobra prints help and exits 0 for an unknown
+	// subcommand (e.g. a typo'd format), silently passing in scripts.
+	// Reject unknown formats with a non-zero exit instead.
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return cmd.Help()
+		}
+		return fmt.Errorf("unknown import format %q; supported formats: openapi, postman, curl, insomnia", args[0])
+	},
 }
 
 var importOpenAPICmd = &cobra.Command{
@@ -292,18 +301,29 @@ func importPostmanCommand(cmd *cobra.Command, args []string) error {
 
 	// Output
 	if importOutputFlag != "" {
-		// Create directory if needed
-		if dir := filepath.Dir(importOutputFlag); dir != "" && dir != "." {
-			if err := os.MkdirAll(dir, 0755); err != nil {
+		outPath := importOutputFlag
+		// -o dir/ writes <dir>/<collection-name>.http inside the directory,
+		// matching the documented usage (`hitspec import postman c.json -o tests/`).
+		if strings.HasSuffix(importOutputFlag, "/") {
+			if err := os.MkdirAll(importOutputFlag, 0o755); err != nil {
+				return fmt.Errorf("failed to create directory: %w", err)
+			}
+			base := strings.TrimSuffix(filepath.Base(collectionPath), filepath.Ext(collectionPath))
+			if base == "" {
+				base = "postman"
+			}
+			outPath = filepath.Join(importOutputFlag, base+".http")
+		} else if dir := filepath.Dir(importOutputFlag); dir != "" && dir != "." {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
 				return fmt.Errorf("failed to create directory: %w", err)
 			}
 		}
 
-		if err := os.WriteFile(importOutputFlag, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(outPath, []byte(content), 0o644); err != nil {
 			return fmt.Errorf("failed to write output file: %w", err)
 		}
 
-		fmt.Printf("Successfully imported to %s\n", importOutputFlag)
+		fmt.Printf("Successfully imported to %s\n", outPath)
 	} else {
 		fmt.Print(content)
 	}

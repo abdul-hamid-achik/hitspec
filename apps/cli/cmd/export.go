@@ -34,6 +34,15 @@ Examples:
   hitspec export curl tests/api.http
   hitspec export curl tests/api.http --name "Login*"
   hitspec export curl tests/api.http --exec`,
+	// Without a RunE, cobra prints help and exits 0 for an unknown
+	// subcommand (e.g. a typo'd format), silently passing in scripts.
+	// Reject unknown formats with a non-zero exit instead.
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return cmd.Help()
+		}
+		return fmt.Errorf("unknown export format %q; supported formats: curl", args[0])
+	},
 }
 
 var exportCurlCmd = &cobra.Command{

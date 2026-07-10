@@ -4,16 +4,16 @@ package mock
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/abdul-hamid-achik/hitspec/packages/builtin"
+	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
 	"log"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
 	"time"
-
-	"github.com/abdul-hamid-achik/hitspec/packages/builtin"
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
 )
 
 // RequestCallback is called after each mock request is served
@@ -117,6 +117,8 @@ func (s *Server) createRoute(req *parser.Request, vars map[string]string) *Route
 
 	// Extract path pattern (strip query params and base URL)
 	pathPattern := extractPathPattern(url)
+	// Normalize so trailing-slash variants match consistently with requests.
+	pathPattern = normalizePath(pathPattern)
 
 	route := &Route{
 		Method:      req.Method,
@@ -189,14 +191,34 @@ func extractPathPattern(url string) string {
 }
 
 func createPathRegex(pattern string) *regexp.Regexp {
-	// Convert {{param}} to named capture groups
-	regexPattern := regexp.MustCompile(`\{\{([^}]+)\}\}`).ReplaceAllString(pattern, `(?P<$1>[^/]+)`)
+	// Normalize trailing slashes so "/api/users/" and "/api/users" match
+	// identically regardless of which form the route or request uses.
+	pattern = normalizePath(pattern)
 
-	// Escape other special chars but preserve capture groups
-	// Simple approach: just compile as-is since we converted params
-	regex, err := regexp.Compile("^" + regexPattern + "$")
+	// Build the regex by escaping literal segments with regexp.QuoteMeta while
+	// converting {{param}} placeholders into named capture groups. Without
+	// escaping, regex metacharacters in literal path segments (e.g. the "." in
+	// "/v1/users.json") would act as wildcards and match unintended paths such
+	// as "/v1/usersXjson". Only the {{param}} placeholder is intentionally
+	// wildcarded.
+	var b strings.Builder
+	b.WriteString("^")
+	paramRe := regexp.MustCompile(`\{\{([^}]+)\}\}`)
+	last := 0
+	for _, m := range paramRe.FindAllStringSubmatchIndex(pattern, -1) {
+		b.WriteString(regexp.QuoteMeta(pattern[last:m[0]]))
+		name := pattern[m[2]:m[3]]
+		b.WriteString("(?P<")
+		b.WriteString(name)
+		b.WriteString(">[^/]+)")
+		last = m[1]
+	}
+	b.WriteString(regexp.QuoteMeta(pattern[last:]))
+	b.WriteString("$")
+
+	regex, err := regexp.Compile(b.String())
 	if err != nil {
-		// Fallback to literal match
+		// Fallback to a fully-quoted literal match.
 		return regexp.MustCompile("^" + regexp.QuoteMeta(pattern) + "$")
 	}
 	return regex
@@ -328,7 +350,10 @@ func (s *Server) StartWithContext(ctx context.Context) error {
 	}()
 
 	log.Printf("Mock server starting on http://localhost:%d", s.port)
-	return server.ListenAndServe()
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
 }
 
 func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {

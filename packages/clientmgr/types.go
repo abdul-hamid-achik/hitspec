@@ -126,11 +126,14 @@ type AuthDTO struct {
 	Params []string `json:"params,omitempty"`
 }
 
-// ExecuteReq is the request body for executing a single request.
+// ExecuteReq is the request body for executing a single request. RequestName
+// selects by @name; RequestIndex selects by source position (used by the
+// studio TUI for untitled requests that have no name to filter on).
 type ExecuteReq struct {
-	File        string `json:"file"`
-	RequestName string `json:"requestName,omitempty"`
-	Environment string `json:"environment,omitempty"`
+	File         string `json:"file"`
+	RequestName  string `json:"requestName,omitempty"`
+	RequestIndex *int   `json:"requestIndex,omitempty"`
+	Environment  string `json:"environment,omitempty"`
 }
 
 // RunReq is the request body for running a full file.

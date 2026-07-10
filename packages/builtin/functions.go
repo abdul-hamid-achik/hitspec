@@ -138,6 +138,11 @@ func funcRandom(args []string) any {
 			fmt.Fprintf(os.Stderr, "warning: random() max argument %q is not a valid integer\n", args[1])
 		}
 	}
+	// Guard against min>max: swap so the range is always non-negative and
+	// rand.Intn never panics with an out-of-range argument.
+	if min > max {
+		min, max = max, min
+	}
 	return rand.Intn(max-min+1) + min
 }
 
@@ -239,8 +244,11 @@ func funcJSON(args []string) any {
 }
 
 func randomString(length int, charset string) string {
+	if length <= 0 || len(charset) == 0 {
+		return ""
+	}
 	result := make([]byte, length)
-	for i := 0; i < length; i++ {
+	for i := range result {
 		result[i] = charset[rand.Intn(len(charset))]
 	}
 	return string(result)

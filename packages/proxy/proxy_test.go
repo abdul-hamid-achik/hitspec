@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,6 +14,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
+	hitspechttp "github.com/abdul-hamid-achik/hitspec/packages/http"
 )
 
 // freePort returns an available TCP port.
@@ -1352,11 +1357,29 @@ func TestRecordingURL(t *testing.T) {
 		t.Fatal("expected 1 recording")
 	}
 
-	if !strings.Contains(recordings[0].URL, "/api/users") {
-		t.Errorf("URL should contain path, got %q", recordings[0].URL)
+	// The recorded URL must be the FULL runnable URL (scheme + host + path +
+	// query), reconstructed from the target — not a path-only URL that
+	// ValidateURL would reject and make the recording unrunnable.
+	got := recordings[0].URL
+	if !strings.HasPrefix(got, backend.URL) {
+		t.Errorf("URL should start with the target %q, got %q", backend.URL, got)
 	}
-	if !strings.Contains(recordings[0].URL, "page=1") {
-		t.Errorf("URL should contain query params, got %q", recordings[0].URL)
+	if !strings.Contains(got, "/api/users") {
+		t.Errorf("URL should contain path, got %q", got)
+	}
+	if !strings.Contains(got, "page=1") || !strings.Contains(got, "limit=10") {
+		t.Errorf("URL should contain query params, got %q", got)
+	}
+
+	// The exported .http file must parse and the request URL must pass the same
+	// ValidateURL the runner uses (guards the "recorded files are unrunnable" bug).
+	exported := ExportRecordings(recordings)
+	f, perr := parser.Parse(exported, "recorded.http")
+	if perr != nil {
+		t.Fatalf("exported file must parse: %v\n%s", perr, exported)
+	}
+	if err := hitspechttp.ValidateURL(f.Requests[0].URL); err != nil {
+		t.Errorf("recorded URL %q must pass ValidateURL: %v", f.Requests[0].URL, err)
 	}
 }
 
@@ -1452,5 +1475,76 @@ func TestResponseHeadersSanitized(t *testing.T) {
 	}
 	if respHeaders["X-Safe"] != "visible" {
 		t.Errorf("response X-Safe should be visible, got %q", respHeaders["X-Safe"])
+	}
+}
+
+// TestRecordGzipResponseDecoded verifies that when the upstream returns a
+// Content-Encoding: gzip response, the recorder stores the DECOMPRESSED body
+// (readable text) rather than the raw gzipped bytes, and drops the
+// Content-Encoding header from the recorded response so the exported .http
+// file is self-consistent. This is a regression test for the bug where gzip
+// bodies were recorded as binary garbage.
+func TestRecordGzipResponseDecoded(t *testing.T) {
+	const wantJSON = `{"id":1,"name":"Alice"}`
+
+	// Build a gzipped JSON body.
+	var gzbuf bytes.Buffer
+	zw := gzip.NewWriter(&gzbuf)
+	if _, err := zw.Write([]byte(wantJSON)); err != nil {
+		t.Fatalf("gzip write: %v", err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatalf("gzip close: %v", err)
+	}
+	gzipped := gzbuf.Bytes()
+
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Encoding", "gzip")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(gzipped)
+	}))
+	t.Cleanup(backend.Close)
+
+	rec, proxyURL, _ := startRecorderProxy(t, backend, WithSanitize(nil))
+
+	resp, err := http.Get(proxyURL + "/api/users/1")
+	if err != nil {
+		t.Fatalf("proxy GET: %v", err)
+	}
+	resp.Body.Close()
+
+	recordings := rec.GetRecordings()
+	if len(recordings) != 1 {
+		t.Fatalf("expected 1 recording, got %d", len(recordings))
+	}
+	rr := recordings[0].Response
+	if rr == nil {
+		t.Fatal("expected non-nil response recording")
+	}
+
+	// The recorded body must be the decompressed JSON, not binary garbage.
+	if rr.Body != wantJSON {
+		t.Errorf("recorded body mismatch:\nwant %q\n got %q", wantJSON, rr.Body)
+	}
+	// Content-Encoding must be dropped since the recorded body is no longer encoded.
+	for k := range rr.Headers {
+		if strings.EqualFold(k, "Content-Encoding") {
+			t.Errorf("Content-Encoding should be dropped from recorded headers, found %q=%q", k, rr.Headers[k])
+		}
+	}
+
+	// The exported .http derives body assertions from the recorded body. With
+	// the bug (binary garbage), generateBodyAssertions would fail to parse JSON
+	// and emit nothing; with the fix the readable JSON yields field assertions.
+	exported := rec.Export()
+	if !strings.Contains(exported, "expect body.id exists") {
+		t.Errorf("exported .http should contain body assertions from readable JSON, got:\n%s", exported)
+	}
+	if !strings.Contains(exported, "expect body.name exists") {
+		t.Errorf("exported .http should contain body.name assertion, got:\n%s", exported)
+	}
+	if strings.Contains(exported, "Content-Encoding") {
+		t.Errorf("exported .http should not contain Content-Encoding header:\n%s", exported)
 	}
 }

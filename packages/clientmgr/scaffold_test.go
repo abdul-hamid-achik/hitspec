@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/abdul-hamid-achik/hitspec/packages/core/config"
 )
 
 func TestScaffoldSampleCreatesProject(t *testing.T) {
@@ -58,5 +60,34 @@ func TestScaffoldSampleRespectsReadOnly(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(m.config.WorkDir, SampleConfigFile)); !os.IsNotExist(err) {
 		t.Fatalf("read-only scaffold must not create files, stat: %v", err)
+	}
+}
+
+// TestSampleConfigYAMLParses guards against the regression where the scaffolded
+// hitspec.yaml used a duration string ("30s") for the int-millisecond Timeout
+// field, which made config.LoadConfig return (nil, err) and panic `hitspec run`
+// on a freshly initialised project.
+func TestSampleConfigYAMLParses(t *testing.T) {
+	// Write the scaffolded YAML to a temp file and load it the same way the
+	// CLI does. It must parse without error and expose the expected defaults.
+	dir := t.TempDir()
+	path := filepath.Join(dir, SampleConfigFile)
+	if err := os.WriteFile(path, []byte(SampleConfigYAML), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		t.Fatalf("scaffolded config must parse cleanly, got: %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("scaffolded config must return a non-nil Config, got nil")
+	}
+	if cfg.Timeout != config.DefaultTimeoutMs {
+		t.Errorf("Timeout = %d, want %d (DefaultTimeoutMs)", cfg.Timeout, config.DefaultTimeoutMs)
+	}
+	// The scaffolded User-Agent must not be a hardcoded stale version
+	// (e.g. "hitspec/1.0") that rots between releases.
+	if ua := cfg.Headers["User-Agent"]; ua != "hitspec" {
+		t.Errorf("scaffolded User-Agent = %q, want non-stale \"hitspec\"", ua)
 	}
 }

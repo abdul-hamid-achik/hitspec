@@ -65,42 +65,48 @@ func (p *Parser) skipNewlines() {
 	}
 }
 
-// parseFile parses the top-level file structure: variables followed by requests.
+// parseFile parses the top-level file structure: variables and requests in any
+// order. Variable definitions (@var = value) are allowed at the top of the file
+// AND between requests; a mid-file variable used to be swallowed into the
+// previous request's body.
 func (p *Parser) parseFile() (*File, error) {
 	file := &File{Path: p.file}
 	p.skipNewlines()
 
 	for p.curToken.Type == TokenVariable {
-		v := &Variable{
-			Name:  p.curToken.Value,
-			Value: p.curToken.Literal.(string),
-			Line:  p.curToken.Line,
-		}
-		file.Variables = append(file.Variables, v)
+		file.Variables = append(file.Variables, p.parseVariable())
 		p.nextToken()
 		p.skipNewlines()
 	}
 
 	for p.curToken.Type != TokenEOF {
-		if p.curToken.Type == TokenRequestSeparator {
+		switch p.curToken.Type {
+		case TokenRequestSeparator, TokenMethod:
 			req, err := p.parseRequest()
 			if err != nil {
 				return nil, err
 			}
 			file.Requests = append(file.Requests, req)
-		} else if p.curToken.Type == TokenMethod {
-			req, err := p.parseRequest()
-			if err != nil {
-				return nil, err
-			}
-			file.Requests = append(file.Requests, req)
-		} else {
+		case TokenVariable:
+			// A variable definition between requests is a file-level variable.
+			file.Variables = append(file.Variables, p.parseVariable())
+			p.nextToken()
+		default:
 			p.nextToken()
 		}
 		p.skipNewlines()
 	}
 
 	return file, nil
+}
+
+// parseVariable reads a @var = value definition from the current TokenVariable.
+func (p *Parser) parseVariable() *Variable {
+	return &Variable{
+		Name:  p.curToken.Value,
+		Value: p.curToken.Literal.(string),
+		Line:  p.curToken.Line,
+	}
 }
 
 // parseRequest parses a single HTTP request including its separator, annotations,
@@ -144,7 +150,12 @@ func (p *Parser) parseRequest() (*Request, error) {
 	url := p.parseURL()
 	req.URL = url
 
-	p.skipNewlines()
+	// Advance past the URL line's terminator only (not skipNewlines): a blank
+	// line here is the header/body separator and must be preserved so the body
+	// isn't eaten by the header loop below.
+	if p.curToken.Type == TokenNewline {
+		p.nextToken()
+	}
 
 	for p.curToken.Type == TokenQueryParam {
 		qp, err := p.parseQueryParam()
@@ -163,7 +174,13 @@ func (p *Parser) parseRequest() (*Request, error) {
 		if header != nil {
 			req.Headers = append(req.Headers, header)
 		}
-		p.skipNewlines()
+		// Advance past only this header's line terminator. skipNewlines() here
+		// consumed the blank line that separates headers from the body, so the
+		// loop then ate plain-text body lines (identifier-led, no colon) as
+		// failed headers and the body was silently dropped.
+		if p.curToken.Type == TokenNewline {
+			p.nextToken()
+		}
 	}
 
 	if p.curToken.Type == TokenNewline {
@@ -230,20 +247,24 @@ func (p *Parser) parseRequest() (*Request, error) {
 	}
 }
 
-// parseURL reads tokens until end-of-line to build the request URL string.
+// parseURL reads the request URL from the current line. It reads the raw line
+// (not the token stream) so a URL fragment (#section) isn't comment-stripped by
+// the lexer's '#' handling, and a trailing " HTTP/x.y" version token is dropped
+// instead of being concatenated into the URL ("http://x/api HTTP/1.1" used to
+// become "http://x/apiHTTP/1.1").
 func (p *Parser) parseURL() string {
-	var builder strings.Builder
-	for p.curToken.Type != TokenNewline && p.curToken.Type != TokenEOF {
-		if p.curToken.Type == TokenVariableRef {
-			builder.WriteString("{{")
-			builder.WriteString(p.curToken.Value)
-			builder.WriteString("}}")
-		} else {
-			builder.WriteString(p.curToken.Value)
-		}
-		p.nextToken()
+	line := p.lexer.GetCurrentLine()
+	// Consume the rest of the request line from the lexer and resync.
+	_ = p.lexer.ReadRestOfLine()
+	p.curToken = p.lexer.NextToken()
+
+	fields := strings.Fields(line)
+	// fields[0] is the method; fields[1] is the URL; an optional fields[2] is
+	// the HTTP version (ignored).
+	if len(fields) >= 2 {
+		return fields[1]
 	}
-	return strings.TrimSpace(builder.String())
+	return ""
 }
 
 // parseQueryParam parses a single "? key = value" query parameter line.

@@ -21,7 +21,7 @@ Write your API tests in plain text files that look like actual HTTP requests.
 ### Homebrew (macOS/Linux)
 
 ```bash
-brew install abdul-hamid-achik/tap/hitspec
+brew install --cask abdul-hamid-achik/tap/hitspec
 ```
 
 ### Go Install
@@ -41,15 +41,19 @@ Create a test file `api.http`:
 ```http
 @baseUrl = https://jsonplaceholder.typicode.com
 
-### Get all posts
-# @name getPosts
+### Get a post
+# @name getPost
 
-GET {{baseUrl}}/posts
+GET {{baseUrl}}/posts/1
 
 >>>
 expect status 200
-expect body type array
-expect body[0].id exists
+expect body.id == 1
+expect body.title exists
+<<<
+
+>>>capture
+authorId from body.userId
 <<<
 
 ### Create a post
@@ -69,19 +73,16 @@ expect status 201
 expect body.id exists
 <<<
 
->>>capture
-postId from body.id
-<<<
+### Get the post's author
+# @name getAuthor
+# @depends getPost
 
-### Get the created post
-# @name getCreatedPost
-# @depends createPost
-
-GET {{baseUrl}}/posts/{{createPost.postId}}
+GET {{baseUrl}}/users/{{getPost.authorId}}
 
 >>>
 expect status 200
-expect body.title == "Hello hitspec"
+expect body.name exists
+expect body.email exists
 <<<
 ```
 

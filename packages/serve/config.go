@@ -18,6 +18,7 @@ type ServeConfig struct {
 	HistoryDBPath string // Path to persistent history SQLite database
 	LogFormat     string // "json" or "text" (default: "text")
 	LogLevel      string // "debug", "info", "warn", "error" (default: "info")
+	APIToken      string // if set, all REST/WS requests must present this bearer token
 }
 
 // Option configures ServeConfig.
@@ -101,6 +102,13 @@ func WithLogFormat(format string) Option {
 // WithLogLevel sets the minimum log level ("debug", "info", "warn", "error").
 func WithLogLevel(level string) Option {
 	return func(c *ServeConfig) { c.LogLevel = level }
+}
+
+// WithAPIToken requires all REST/WebSocket requests to present this bearer
+// token (Authorization: Bearer <token> or ?token=<token>). Empty = no auth
+// (localhost-only default, backward compatible).
+func WithAPIToken(token string) Option {
+	return func(c *ServeConfig) { c.APIToken = token }
 }
 
 // DefaultConfig returns a ServeConfig with default values.

@@ -51,6 +51,28 @@ func TestNewStore_CreatesDatabase(t *testing.T) {
 	}
 }
 
+// TestNewStore_FilePermissionsOwnerOnly guards the regression where the SQLite
+// history database (which may hold request URLs/bodies) was created
+// world-readable (0644). It must be owner-only (0600).
+func TestNewStore_FilePermissionsOwnerOnly(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "history.db")
+	s, err := NewStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer s.Close()
+
+	info, err := os.Stat(dbPath)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	mode := info.Mode().Perm()
+	if mode&0o077 != 0 {
+		t.Fatalf("history db perms = %o, want 0600 (no group/other access)", mode)
+	}
+}
+
 func TestNewStore_SchemaApplied(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()

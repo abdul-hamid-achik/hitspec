@@ -597,7 +597,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case managerEventMsg:
 		ev := clientmgr.Event(msg)
-		m.handleEvent(ev)
+		cmds = append(cmds, m.handleEvent(ev)...)
 		cmds = append(cmds, waitEventCmd(m.events))
 	case toastExpiredMsg:
 		m.toasts = m.toasts.expire(msg.id)
@@ -700,7 +700,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmds = append(cmds, m.respView.update(msg))
 	}
-	if m.screen != screenWorkspace {
+	// While a secondary-screen form field is focused, typed keys must land only
+	// in the field. The viewport's DefaultKeyMap binds plain letters as scroll
+	// shortcuts (h/l/d/u/b/f/j/k/space), so delivering the same key here too would
+	// scroll the preview out from under the form the user is filling in. Skip the
+	// preview update while a form field owns the input; it resumes when the form
+	// is blurred/submitted (focusForm(false)).
+	if m.screen != screenWorkspace && !(m.formActive && len(m.formInputs) > 0) {
 		var cmd tea.Cmd
 		m.preview, cmd = m.preview.Update(msg)
 		cmds = append(cmds, cmd)
@@ -860,6 +866,15 @@ func (m *model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		// ctrl+c already hard-quit at the top; only the form's own control keys
 		// act here, everything else falls through to the field forwarder.
 		return m.handleSecondaryKey(msg)
+	}
+	// While the files list is actively filtering, typed keys must go to the
+	// filter input — not global hotkeys. Without this guard, "q" quit the app, "D"
+	// deleted a file, and digits 1-9 switched screens while you were typing a
+	// filter. Only ctrl+c (handled at the top) still hard-quits.
+	if m.screen == screenWorkspace && m.focus == focusFiles && m.filesList.SettingFilter() {
+		var cmd tea.Cmd
+		m.filesList, cmd = m.filesList.Update(msg)
+		return cmd
 	}
 	switch {
 	case key.Matches(msg, m.keys.Quit):
@@ -1181,13 +1196,27 @@ func (m *model) saveCmd() tea.Cmd {
 	}
 }
 
-// currentRequestName returns the name of the request highlighted in the request
-// table, or "" which means "every request in the file".
+// currentRequestName returns the @name of the request highlighted in the
+// request table, or "" for an untitled request. Callers that need to act on the
+// selected request regardless of whether it has a name should use
+// currentRequestSelection (running an untitled request by name is a no-op).
 func (m model) currentRequestName() string {
 	if row := m.requests.SelectedRow(); len(row) > 0 {
 		return row[0]
 	}
 	return ""
+}
+
+// currentRequestSelection returns the real @name of the selected request (""
+// when untitled) and its source index in the parsed file. The index lets the
+// manager run an untitled request by position instead of by a name it doesn't
+// have.
+func (m model) currentRequestSelection() (name string, index int) {
+	index = m.requests.Cursor()
+	if m.parsed != nil && index >= 0 && index < len(m.parsed.Requests) {
+		return m.parsed.Requests[index].Name, index
+	}
+	return "", index
 }
 
 // lastResponseBody returns the body of the most recent response, searching from
@@ -1209,10 +1238,19 @@ func (m *model) runRequestCmd() tea.Cmd {
 		m.err = "no file selected"
 		return nil
 	}
-	requestName := m.currentRequestName()
+	name, index := m.currentRequestSelection()
+	execReq := clientmgr.ExecuteReq{File: m.selected}
+	if name != "" {
+		execReq.RequestName = name
+	} else {
+		// Untitled request: filter by source position (a "line N" display name
+		// can never match the runner's name filter and silently ran nothing).
+		idx := index
+		execReq.RequestIndex = &idx
+	}
 	m.loading = true
 	return tea.Batch(m.progressBar.SetPercent(0), func() tea.Msg {
-		result, err := m.mgr.Execute(m.ctx, clientmgr.ExecuteReq{File: m.selected, RequestName: requestName})
+		result, err := m.mgr.Execute(m.ctx, execReq)
 		return runDoneMsg{result: result, err: err}
 	})
 }
@@ -1751,10 +1789,33 @@ func (m *model) refreshResultViews() {
 	m.assertions.SetRows(assertionRows)
 }
 
-func (m *model) handleEvent(ev clientmgr.Event) {
+// handleEvent dispatches a manager event to the model. It returns commands to
+// run in response (e.g. a file reload on file_changed); nil/empty for events
+// that only mutate in-memory state.
+func (m *model) handleEvent(ev clientmgr.Event) []tea.Cmd {
 	switch ev.Type {
 	case "file_changed":
+		// Refresh the file list so new/deleted/changed files (counts, names)
+		// are reflected. Watch-event suppression for the manager's own writes
+		// is applied at the manager's watcher (see clientmgr/watcher.go), so
+		// events that reach here are either external edits or explicit
+		// publishes from manager write ops. Either way the reload below is
+		// idempotent (re-reads the same bytes); the dirty guard keeps us from
+		// clobbering the user's unsaved in-progress edits.
 		m.status = "file event received"
+		cmds := []tea.Cmd{loadFilesCmd(m.ctx, m.mgr)}
+		if fe, ok := ev.Payload.(clientmgr.FileEvent); ok {
+			// Only reload the open file's source on a content change of the
+			// currently-selected file, and only when there are no unsaved
+			// edits. A "deleted" event is handled by the file-list refresh
+			// above (it clears a stale selection); don't try to read a gone
+			// file.
+			if fe.Operation != "deleted" && fe.Path != "" && fe.Path == m.selected && !m.dirty {
+				cmds = append(cmds, loadFileCmd(m.ctx, m.mgr, m.selected))
+				m.status = "reloaded " + fe.Path
+			}
+		}
+		return cmds
 	case "request_progress":
 		if p, ok := ev.Payload.(clientmgr.RequestProgress); ok {
 			m.progress = p
@@ -1779,6 +1840,7 @@ func (m *model) handleEvent(ev clientmgr.Event) {
 			m.preview.SetContent(m.mockContent())
 		}
 	}
+	return nil
 }
 
 func (m model) render() string {
@@ -2076,11 +2138,19 @@ func (m model) stressContent() string {
 		return "No stress test running.\n\nUse the form (e edit) or the command palette to start a load test.\nQuick start: 30s at 5 RPS on the selected file."
 	}
 	stats := status.Stats
+	// Progress is elapsed/configured-duration, not the hardcoded 30s. Read the
+	// duration from the stress form field; fall back to 30s if unset/invalid.
+	total := 30.0
+	if len(m.formInputs) > 0 {
+		if d, err := time.ParseDuration(m.formInputs[0].Value()); err == nil && d > 0 {
+			total = d.Seconds()
+		}
+	}
 	live := fmt.Sprintf(
 		"Running: %v\nElapsed: %.1fs\n\n%s\n\nRequests: %d\nSuccess: %d\nErrors: %d\nRPS: %.2f\nP50/P95/P99: %.1f / %.1f / %.1f ms\nError rate: %.2f%%\nActive VUs: %d\n",
 		status.Running,
 		status.Elapsed,
-		m.progressBar.ViewAs(min(1, status.Elapsed/30.0)),
+		m.progressBar.ViewAs(min(1, status.Elapsed/total)),
 		stats.Total,
 		stats.Success,
 		stats.Errors,

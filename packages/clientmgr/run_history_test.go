@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 )
@@ -65,6 +66,43 @@ func TestExecuteAndRunFile(t *testing.T) {
 	}
 	if full.Passed != 1 {
 		t.Fatalf("runfile passed = %d, want 1", full.Passed)
+	}
+}
+
+// TestExecuteByIndex guards the regression where running a single untitled
+// request from the studio TUI was a silent no-op (the "line N" display name
+// can't match the runner's name filter). Execute must run the request at the
+// given source index and only that one.
+func TestExecuteByIndex(t *testing.T) {
+	ctx := context.Background()
+	var hit []string
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		hit = append(hit, r.URL.Path)
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	m := newTestManager(t)
+	content := fmt.Sprintf("### First\nGET %s/first\n\n### Second\nGET %s/second\n", srv.URL, srv.URL)
+	if _, err := m.CreateFile(ctx, "api.http", content); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	idx := 1
+	res, err := m.Execute(ctx, ExecuteReq{File: "api.http", RequestIndex: &idx})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if res.Passed != 1 || len(res.Results) != 1 {
+		t.Fatalf("execute result = %+v, want exactly 1 passed", res)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(hit) != 1 || hit[0] != "/second" {
+		t.Fatalf("hits = %v, want only [/second]", hit)
 	}
 }
 
