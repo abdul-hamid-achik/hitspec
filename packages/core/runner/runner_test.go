@@ -392,7 +392,7 @@ func TestRunner_DBAssertionsRequireAllowDB(t *testing.T) {
 	// Initialize the sqlite file so the connection succeeds.
 	store, serr := history.NewStore(dbPath)
 	require.NoError(t, serr)
-	store.Close()
+	require.NoError(t, store.Close())
 	results, err := r2.executeDBAssertions(
 		[]*parser.DBAssertion{{Query: "SELECT 1 AS one", Column: "one", Operator: parser.OpEquals, Expected: 1}},
 		"sqlite://"+dbPath,
