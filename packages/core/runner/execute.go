@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -15,7 +16,7 @@ import (
 
 // runRequests orchestrates execution of all requests in a parsed file,
 // handling filtering, dependency ordering, parallel execution, and bail-on-failure.
-func (r *Runner) runRequests(file *parser.File) (*RunResult, error) {
+func (r *Runner) runRequests(ctx context.Context, file *parser.File) (*RunResult, error) {
 	start := time.Now()
 	result := &RunResult{
 		File: file.Path,
@@ -91,7 +92,7 @@ func (r *Runner) runRequests(file *parser.File) (*RunResult, error) {
 
 	// Run in parallel if configured and no dependencies
 	if r.config.Parallel && !hasDependencies {
-		results := r.runParallel(filteredRequests, baseDir, file.Path)
+		results := r.runParallel(ctx, filteredRequests, baseDir, file.Path)
 		for _, reqResult := range results {
 			result.Results = append(result.Results, reqResult)
 			if reqResult.Passed {
@@ -141,7 +142,7 @@ func (r *Runner) runRequests(file *parser.File) (*RunResult, error) {
 				})
 			}
 
-			reqResult := r.runRequest(req, baseDir, file.Path)
+			reqResult := r.runRequest(ctx, req, baseDir, file.Path)
 			result.Results = append(result.Results, reqResult)
 
 			// Track executed request
@@ -178,7 +179,7 @@ func (r *Runner) runRequests(file *parser.File) (*RunResult, error) {
 }
 
 // runParallel executes requests concurrently with a semaphore-based concurrency limit.
-func (r *Runner) runParallel(requests []*parser.Request, baseDir string, filePath string) []*RequestResult {
+func (r *Runner) runParallel(ctx context.Context, requests []*parser.Request, baseDir string, filePath string) []*RequestResult {
 	concurrency := r.config.Concurrency
 	if concurrency <= 0 {
 		concurrency = DefaultConcurrency
@@ -206,7 +207,7 @@ func (r *Runner) runParallel(requests []*parser.Request, baseDir string, filePat
 				})
 			}
 
-			results[idx] = r.runRequestWithRetry(request, baseDir, filePath, true)
+			results[idx] = r.runRequestWithRetry(ctx, request, baseDir, filePath, true)
 
 			if r.config.OnProgress != nil {
 				r.config.OnProgress(ProgressEvent{
@@ -224,13 +225,13 @@ func (r *Runner) runParallel(requests []*parser.Request, baseDir string, filePat
 	return results
 }
 
-func (r *Runner) runRequest(req *parser.Request, baseDir string, filePath string) *RequestResult {
-	return r.runRequestWithRetry(req, baseDir, filePath, false)
+func (r *Runner) runRequest(ctx context.Context, req *parser.Request, baseDir string, filePath string) *RequestResult {
+	return r.runRequestWithRetry(ctx, req, baseDir, filePath, false)
 }
 
 // runRequestWithRetry executes a request with retry logic based on @retry,
 // @retryDelay, and @retryOn annotations.
-func (r *Runner) runRequestWithRetry(req *parser.Request, baseDir string, filePath string, parallel bool) *RequestResult {
+func (r *Runner) runRequestWithRetry(ctx context.Context, req *parser.Request, baseDir string, filePath string, parallel bool) *RequestResult {
 	maxRetries := 0
 	retryDelay := DefaultRetryDelayMs
 	var retryOnStatuses []int
@@ -249,7 +250,7 @@ func (r *Runner) runRequestWithRetry(req *parser.Request, baseDir string, filePa
 
 	var result *RequestResult
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		result = r.executeRequest(req, baseDir, filePath, parallel)
+		result = r.executeRequest(ctx, req, baseDir, filePath, parallel)
 
 		if result.Passed || result.Skipped {
 			return result
@@ -269,7 +270,16 @@ func (r *Runner) runRequestWithRetry(req *parser.Request, baseDir string, filePa
 		}
 
 		if attempt < maxRetries {
-			time.Sleep(time.Duration(retryDelay) * time.Millisecond)
+			timer := time.NewTimer(time.Duration(retryDelay) * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				if !timer.Stop() {
+					<-timer.C
+				}
+				result.Error = ctx.Err()
+				return result
+			case <-timer.C:
+			}
 		}
 	}
 
@@ -278,7 +288,7 @@ func (r *Runner) runRequestWithRetry(req *parser.Request, baseDir string, filePa
 
 // executeRequest performs a single HTTP request execution including condition checks,
 // waitFor, hooks, assertions, DB assertions, shell commands, and captures.
-func (r *Runner) executeRequest(req *parser.Request, baseDir string, filePath string, parallel bool) *RequestResult {
+func (r *Runner) executeRequest(ctx context.Context, req *parser.Request, baseDir string, filePath string, parallel bool) *RequestResult {
 	result := &RequestResult{
 		Name:        req.Name,
 		Description: req.Description,
@@ -328,7 +338,7 @@ func (r *Runner) executeRequest(req *parser.Request, baseDir string, filePath st
 	httpReq := http.BuildRequestFromASTWithBaseDir(req, r.resolver.Resolve, baseDir)
 	result.Request = httpReq
 
-	resp, err := r.client.Do(httpReq)
+	resp, err := r.client.DoWithContext(ctx, httpReq)
 	result.Duration = time.Since(start)
 
 	if err != nil {

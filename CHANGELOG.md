@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.17.0] - 2026-07-13
+
+### Added
+
+- **Single-response fetching**: added `hitspec fetch <url|file>` for executing one ad-hoc URL or one saved request and emitting `raw`, readable `text`, self-contained `markdown`, or a machine-safe `json` envelope. The command supports bounded response sizes, timeouts, redirects, TLS and proxy options, environment selection, HTTP failure semantics, and atomic mode-`0600` file output.
+- **Model Context Protocol server**: added `hitspec mcp serve` with `hitspec_fetch`, `hitspec_list_requests`, and `hitspec_validate` tools over stdio. The server is compatible with MCPHub namespacing and Local Agent text-content handling.
+
+### Changed
+
+- HTTP responses can now enforce a maximum body size and expose their final URL. Runner execution accepts a context so cancellation reaches in-flight requests and retry waits.
+
+### Security
+
+- MCP file access is confined to a fixed workspace after symlink resolution. Network requests allow only public destinations by default, including DNS, redirects, and dial targets; private or loopback access requires the server operator to pass `--allow-private-network`.
+- URLs with embedded credentials are rejected, response provenance omits query strings, sensitive response headers are omitted from JSON output, and raw MCP payloads use base64 envelopes.
+
+### Documentation
+
+- Added CLI and MCP references, an agent-artifact workflow for file.cheap, MCPHub, and Local Agent, and an architecture decision record. TinyVault integration is explicitly deferred pending a separate secret-reference and redaction contract.
+
 ## [2.15.0] - 2026-06-16
 
 ### Added

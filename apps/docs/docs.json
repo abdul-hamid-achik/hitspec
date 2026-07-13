@@ -158,6 +158,8 @@
           "reference/mock-record",
           "reference/contract-diff",
           "reference/docs-serve",
+          "reference/fetch",
+          "reference/mcp",
           "reference/rest-api",
           "reference/completion",
           "reference/version",
@@ -203,7 +205,8 @@
           "integrations/output-formats",
           "integrations/prometheus",
           "integrations/datadog",
-          "integrations/slack-teams"
+          "integrations/slack-teams",
+          "integrations/agent-artifacts"
         ]
       }
     ]

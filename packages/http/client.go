@@ -41,6 +41,7 @@ type Client struct {
 	validateSSL    bool
 	proxyURL       string
 	defaultHeaders map[string]string
+	maxBodyBytes   int64
 }
 
 // DigestAuthCredentials holds credentials for digest auth
@@ -151,6 +152,12 @@ func WithProxy(proxyURL string) ClientOption {
 	}
 }
 
+// WithMaxBodyBytes bounds response bodies. Non-positive values preserve the
+// existing unbounded behavior.
+func WithMaxBodyBytes(maxBytes int64) ClientOption {
+	return func(c *Client) { c.maxBodyBytes = maxBytes }
+}
+
 func (c *Client) Do(req *Request) (*Response, error) {
 	return c.DoWithContext(context.Background(), req)
 }
@@ -242,7 +249,11 @@ func (c *Client) doRequest(ctx context.Context, req *Request, authHeader string)
 		return nil, err
 	}
 	defer httpResp.Body.Close()
-	respBody, err := io.ReadAll(httpResp.Body)
+	var responseReader io.Reader = httpResp.Body
+	if c.maxBodyBytes > 0 {
+		responseReader = io.LimitReader(httpResp.Body, c.maxBodyBytes+1)
+	}
+	respBody, err := io.ReadAll(responseReader)
 	if err != nil {
 		// A context deadline while reading the body is the expected termination
 		// for a time-bounded SSE/event stream: the caller set @timeout to bound
@@ -253,6 +264,9 @@ func (c *Client) doRequest(ctx context.Context, req *Request, authHeader string)
 		} else {
 			return nil, err
 		}
+	}
+	if c.maxBodyBytes > 0 && int64(len(respBody)) > c.maxBodyBytes {
+		return nil, &ResponseTooLargeError{Limit: c.maxBodyBytes}
 	}
 
 	// Duration covers the full request including body download (previously it was
@@ -285,6 +299,7 @@ func (c *Client) doRequest(ctx context.Context, req *Request, authHeader string)
 		Headers:    headers,
 		Body:       respBody,
 		Duration:   duration,
+		FinalURL:   httpResp.Request.URL.String(),
 	}, nil
 }
 
@@ -484,6 +499,9 @@ func ValidateURL(rawURL string) error {
 	// Check for valid host
 	if u.Host == "" {
 		return fmt.Errorf("URL must have a host")
+	}
+	if u.User != nil {
+		return fmt.Errorf("URL must not contain embedded credentials; use an Authorization header")
 	}
 
 	return nil

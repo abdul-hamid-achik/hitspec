@@ -1,0 +1,123 @@
+---
+title: "MCP server"
+description: "Expose bounded Hitspec fetch, discovery, and validation tools over stdio"
+---
+
+Run Hitspec as a workspace-scoped Model Context Protocol server:
+
+```bash
+hitspec mcp serve --workspace /absolute/path/to/api-workspace
+```
+
+stdout is reserved exclusively for MCP JSON-RPC. The server does not start run
+history or a file watcher, execute shell hooks or database assertions, or write
+response files.
+
+## Tools
+
+| Tool | Purpose |
+| --- | --- |
+| `hitspec_fetch` | Fetch one direct URL or one saved request as `raw`, `text`, `markdown`, or `json`. |
+| `hitspec_list_requests` | List names, methods, source lines, and tags in workspace Hitspec files. |
+| `hitspec_validate` | Parse and structurally validate one workspace file without executing it. |
+
+### `hitspec_fetch` input
+
+| Field | Type | Applies to | Default and behavior |
+| --- | --- | --- | --- |
+| `url` | string | Direct URL | HTTP(S) URL. Supply exactly one of `url` or `file`. |
+| `file` | string | Saved request | Workspace-relative `.http` or `.hitspec` file. Supply exactly one of `file` or `url`. |
+| `name` | string | Saved request | Selects a uniquely named request. Mutually exclusive with `index`. |
+| `index` | integer | Saved request | Selects a request by its one-based position. Mutually exclusive with `name`. |
+| `environment` | string | Saved request | Environment name. Defaults to the config's default environment, then `dev`. |
+| `env_file` | string | Saved request | Workspace-relative dotenv file. |
+| `config_file` | string | Saved request | Workspace-relative Hitspec config file. |
+| `method` | string | Direct URL | HTTP method. Defaults to `GET`, or `POST` when `body` is non-empty. |
+| `headers` | object | Direct URL | Map of request header names to string values. |
+| `body` | string | Direct URL | UTF-8 request body. |
+| `format` | string | Both | `text`. Accepts `raw`, `text`, `markdown`, or `json`. |
+| `no_follow` | boolean | Both | `false`. When true, stops at the first redirect. Redirect chains otherwise have a fixed limit of 10. |
+
+A file containing multiple requests requires `name` or `index`. A saved request
+that declares `@depends` is rejected. Assertions, captures, conditions, hooks,
+shell blocks, database assertions, and `@waitFor` are not executed.
+
+### Discovery and validation input
+
+- `hitspec_list_requests` accepts an optional `path`: a workspace-relative
+  directory or `.http`/`.hitspec` file. It defaults to the workspace root and
+  searches directories recursively. If any discovered Hitspec file is invalid,
+  the tool returns an error instead of an incomplete list.
+- `hitspec_validate` requires `file`, a workspace-relative `.http` or `.hitspec`
+  file. Its result reports the file, validity, request count, and parse or
+  structural errors.
+
+Saved file, dotenv, config, and discovery paths are workspace-relative and are
+checked after symlink resolution.
+
+### Tool result content
+
+Every successful tool call returns exactly one MCP `TextContent` item and does not set
+`StructuredContent`. This preserves results in clients that do not pass through
+structured output for unrecognized tools:
+
+- `hitspec_fetch` with `raw` returns a JSON text envelope containing sanitized
+  source, status, content type, byte size, `encoding: "base64"`, and `data`.
+- `text` and `markdown` return their rendered documents as text content. `json`
+  returns the machine-safe response envelope serialized as text content.
+- Discovery and validation return their JSON documents serialized as text
+  content.
+
+## Server flags
+
+| Flag | Default | Behavior |
+| --- | --- | --- |
+| `--workspace` | `.` | Fixes the filesystem boundary exposed to all tools. Use an absolute path in client configuration. |
+| `--max-body-bytes` | `1048576` (1 MiB) | Maximum fetched response-body size. |
+| `--timeout` | `30s` | Maximum duration of one HTTP request. |
+| `--allow-private-network` | `false` | Allows private, loopback, and other non-public targets; it also enables the standard saved-request modes described below. |
+
+## Limits and network policy
+
+- The default body limit is 1 MiB (`--max-body-bytes`). Crossing it is an error,
+  never a truncated success.
+- The default request timeout is 30 seconds (`--timeout`).
+- Direct URLs and saved requests allow only public HTTP(S) destinations by
+  default. The initial host, redirects, DNS answers, and dial target are checked.
+- URL credentials are rejected and response provenance omits URL query strings.
+- A saved request that uses digest, AWS, or OAuth2 authentication, multipart
+  data, or a configured proxy is rejected under the public-only policy. The
+  proxy is not silently ignored.
+- Redirect chains are limited to 10; callers can set `no_follow` to disable
+  redirects entirely.
+
+To test a local API, the person starting the server must grant that authority:
+
+```bash
+hitspec mcp serve \
+  --workspace "$PWD" \
+  --allow-private-network
+```
+
+This operator grant also switches saved requests to the standard Hitspec HTTP
+client, enabling configured proxies and digest, AWS, OAuth2, and multipart
+request modes. Grant it only to agents and workspaces that need that authority.
+
+Network tools are intentionally not marked read-only because an HTTP request
+can have external side effects.
+
+## Direct MCP client configuration
+
+```json
+{
+  "mcpServers": {
+    "hitspec": {
+      "command": "hitspec",
+      "args": ["mcp", "serve", "--workspace", "/absolute/api-workspace"]
+    }
+  }
+}
+```
+
+See [Agent artifact workflow](/integrations/agent-artifacts) for MCPHub, Local
+Agent, and file.cheap composition.

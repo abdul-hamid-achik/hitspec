@@ -1,0 +1,100 @@
+---
+title: "Fetch responses"
+description: "Fetch one HTTP response as raw bytes, readable text, Markdown, or JSON"
+---
+
+`hitspec fetch` is the response-body counterpart to `hitspec run`. It executes
+exactly one request and writes exactly one payload. `run --output` still controls
+test reports; `fetch --format` controls the representation of one response.
+
+```bash
+# Raw body bytes (the default)
+hitspec fetch https://api.example.com/users
+
+# Readable text or a self-contained Markdown artifact
+hitspec fetch https://example.com/docs --format text
+hitspec fetch https://example.com/docs --format markdown -o docs-response.md
+
+# One saved request
+hitspec fetch api.http --name getUsers --env staging --format json
+hitspec fetch api.http --index 2
+```
+
+## Formats
+
+| Format | Behavior |
+| --- | --- |
+| `raw` | Exact decoded response-body bytes with no metadata or added newline. This is the default. |
+| `text` | UTF-8 text; JSON is pretty-printed and HTML is reduced to visible text. Binary content is rejected. |
+| `markdown` | A response document with sanitized provenance, status, timing, size, and body. HTML links are resolved against the final URL. |
+| `json` | A machine-safe metadata envelope. Binary bodies are base64 encoded and sensitive response headers are omitted. |
+
+URL credentials are rejected. Query strings are used for the HTTP request but
+removed from Markdown and JSON provenance. `raw` is the only byte-exact mode.
+
+## Ad-hoc request flags
+
+```bash
+hitspec fetch https://api.example.com/items \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{"name":"example"}' \
+  --timeout 20s
+```
+
+`-X/--request`, `-H/--header`, and `-d/--data` apply only to URL sources. When
+`--data` is present and no method is supplied, the method defaults to `POST`.
+
+## Flag reference
+
+| Flag | Applies to | Default and behavior |
+| --- | --- | --- |
+| `--request`, `-X` | URL | HTTP method. Defaults to `GET`, or `POST` when `--data` is non-empty. |
+| `--header`, `-H` | URL | Adds one `Name: value` request header. Repeat the flag for multiple headers. |
+| `--data`, `-d` | URL | Sends the supplied string as the request body. |
+| `--format` | Both | `raw`. Accepts `raw`, `text`, `markdown`, or `json`. |
+| `--output-file`, `-o` | Both | Writes the payload to this path instead of stdout. |
+| `--force` | Both | Replaces an existing regular output file. Without it, an existing destination is an error. |
+| `--fail`, `-f` | Both | Returns a non-zero status for a non-2xx response, after writing its payload. |
+| `--timeout` | Both | Positive Go duration such as `30s` or `2m`. Direct URLs default to `30s`; saved-request precedence is this flag, request `@timeout`, config timeout, then `30s`. |
+| `--max-bytes` | Both | `67108864` bytes (64 MiB). The response fails if its body exceeds this limit. |
+| `--max-redirects` | Both | `10`. Must be greater than zero, even when redirects are disabled. |
+| `--no-follow` | Both | Stops at the first redirect. A saved request also honors a config that disables redirects. |
+| `--insecure`, `-k` | Both | Disables TLS certificate verification. A saved request also honors `validateSSL: false` from its config. |
+| `--proxy` | Both | Uses the supplied HTTP proxy URL. For a saved request, it overrides the config proxy. |
+| `--env`, `-e` | Saved file | Selects an environment. Defaults to the config's default environment, then `dev`. |
+| `--env-file` | Saved file | Loads a dotenv file before resolving request variables. |
+| `--config` | Saved file | Uses this Hitspec config instead of config discovery from the request file's directory. |
+| `--name`, `-n` | Saved file | Selects the uniquely named request. Mutually exclusive with `--index`. |
+| `--index` | Saved file | Selects a request by its one-based position. Mutually exclusive with `--name`. |
+
+## Saved request rules
+
+- A file with multiple requests requires `--name` or the one-based `--index`.
+- `--name` and `--index` are mutually exclusive.
+- The file's variables, selected environment, dotenv file, request auth,
+  timeout, proxy, TLS, default headers, and body files are resolved normally.
+- Assertions, captures, conditions, hooks, shell blocks, database assertions,
+  and `@waitFor` are not executed.
+- A request declaring `@depends` is rejected. Use `hitspec run` for a dependent
+  flow rather than fetching an ambiguous partial sequence.
+
+## HTTP and file behavior
+
+HTTP 4xx and 5xx responses still emit their body and exit successfully by
+default. Add `--fail` to return a non-zero status after the payload has been
+written. Transport, timeout, rendering, size-limit, and file errors are always
+failures.
+
+The default response limit is 64 MiB; change it with `--max-bytes`. A response
+that crosses the limit fails explicitly and is never silently truncated.
+
+`--output-file` writes with mode `0600`, refuses to follow a destination
+symlink, and does not replace an existing file unless `--force` is supplied.
+The final placement is atomic within the destination directory.
+
+<Warning>
+`--insecure` disables TLS certificate verification. Use it only for a local or
+otherwise trusted development endpoint.
+</Warning>

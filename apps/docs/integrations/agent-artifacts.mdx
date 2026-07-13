@@ -1,0 +1,96 @@
+---
+title: "Agent artifact workflow"
+description: "Compose Hitspec with file.cheap, MCPHub, Local Agent, and a future TinyVault boundary"
+---
+
+Hitspec owns HTTP execution and response rendering. file.cheap owns durable
+artifact storage and indexing. MCPHub owns lazy tool discovery and oversized
+MCP-result spooling. Local Agent consumes the namespaced tools. The integration
+uses those existing contracts rather than linking one product into another.
+
+## Save a response in file.cheap
+
+Use an explicit file handoff so the artifact is reviewable before persistence:
+
+```bash
+hitspec fetch https://example.com/docs \
+  --format markdown \
+  --output-file response.md
+
+fcheap save response.md \
+  --tool hitspec \
+  --tag hitspec-response \
+  --tag format:markdown \
+  --source https://example.com/docs \
+  --index
+```
+
+Useful tags include `hitspec-response`, `format:raw|text|markdown|json`, a safe
+request name, and `status:<code>`. Do not put credentials, tokens, cookies, or
+URL query parameters in names, tags, or source metadata.
+
+Hitspec does not invoke `fcheap` itself. This keeps a failed artifact save from
+changing HTTP execution semantics and lets each tool evolve independently.
+
+## Register both servers in MCPHub
+
+```yaml
+version: 1
+expose: lazy
+response_budget: 32KB
+
+servers:
+  hitspec:
+    command: hitspec
+    args: [mcp, serve, --workspace, /absolute/api-workspace]
+    enabled: true
+    tags: [http, api, testing]
+
+  fcheap:
+    command: fcheap
+    args: [mcp, serve]
+    enabled: true
+    tags: [artifacts, search]
+
+agents:
+  local-agent:
+    type: local-agent
+    path: ~/.config/local-agent/config.yaml
+    mode: gateway
+    servers: [hitspec, fcheap]
+```
+
+Agents see namespaced tools such as `hitspec__hitspec_fetch` and
+`fcheap__fcheap_save`. Verify the catalog before changing an agent config:
+
+```bash
+mcphub doctor --json --probe
+mcphub sync local-agent
+# Review the dry run, then apply explicitly:
+mcphub sync local-agent --write
+```
+
+MCPHub may spool a large inline result and return a temporary handle. That is a
+transport safeguard, not durable artifact storage. The current file.cheap MCP
+save contract accepts a filesystem path while `hitspec_fetch` returns inline
+content, so the supported durable workflow is CLI → reviewed file → `fcheap
+save`. A future workspace-scoped artifact handle can close that gap without
+accepting arbitrary output paths from MCP.
+
+## TinyVault: deferred boundary
+
+Native TinyVault resolution is intentionally deferred. This release has no
+TinyVault-specific syntax and never writes fetched credentials back to a
+Hitspec environment automatically. Until a separate secret-reference contract
+is defined:
+
+- inject required values into the Hitspec process environment outside the
+  request or tool arguments;
+- do not place secret values in `.http` files, MCPHub YAML, URL query strings,
+  output filenames, tags, logs, or Markdown provenance; and
+- keep MCPHub's future `vault`/`vault_only` process wrapper as the boundary,
+  rather than teaching Hitspec to read a vault ad hoc.
+
+The follow-up design must define reference syntax, precedence, redaction,
+missing-secret errors, and the boundary between Hitspec environments and
+TinyVault before native support is enabled.

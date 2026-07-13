@@ -49,6 +49,7 @@ func Execute(v, bt string) {
 
 func init() {
 	rootCmd.AddCommand(runCmd)
+	rootCmd.AddCommand(fetchCmd)
 	rootCmd.AddCommand(validateCmd)
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(versionCmd)
@@ -62,4 +63,5 @@ func init() {
 	rootCmd.AddCommand(contractCmd)
 	rootCmd.AddCommand(studioCmd)
 	rootCmd.AddCommand(serveCmd)
+	rootCmd.AddCommand(mcpCmd)
 }

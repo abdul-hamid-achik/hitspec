@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -12,6 +13,14 @@ type Response struct {
 	Headers    map[string]string
 	Body       []byte
 	Duration   time.Duration
+	FinalURL   string
+}
+
+// ResponseTooLargeError reports a configured response-body limit violation.
+type ResponseTooLargeError struct{ Limit int64 }
+
+func (e *ResponseTooLargeError) Error() string {
+	return fmt.Sprintf("response body exceeds %d-byte limit", e.Limit)
 }
 
 func (r *Response) BodyString() string {

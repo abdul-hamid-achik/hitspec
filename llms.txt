@@ -1177,6 +1177,137 @@ hitspec import postman collection.json -o tests/
 hitspec import postman collection.json --env environment.json -o tests/
 ```
 
+## Fetch One Response
+
+`hitspec fetch` executes exactly one URL or one saved request. This is separate
+from `run --output`, which still produces test reports.
+
+```bash
+# Byte-exact body (default)
+hitspec fetch https://example.com/data
+
+# Readable or file-ready representations
+hitspec fetch https://example.com/docs --format text
+hitspec fetch https://example.com/docs --format markdown -o response.md
+hitspec fetch api.http --name getUsers --env staging --format json
+```
+
+Formats are `raw`, `text`, `markdown`, and `json`. `raw` adds no metadata or
+newline. `text` pretty-prints JSON and extracts visible HTML text. `markdown`
+includes sanitized provenance/status/timing. `json` base64-encodes binary data.
+The default body limit is 64 MiB (`--max-bytes`). Existing output files require
+`--force`; output writes reject destination symlinks and use mode 0600.
+
+HTTP 4xx/5xx bodies are emitted successfully unless `--fail` is supplied.
+A saved file with multiple requests requires `--name` or one-based `--index`.
+Requests with `@depends` must be executed with `hitspec run` instead.
+
+### Fetch Flags
+
+| Flag | Scope | Default / behavior |
+|------|-------|--------------------|
+| `--request, -X` | URL | HTTP method; `GET`, or `POST` when `--data` is non-empty |
+| `--header, -H` | URL | Repeatable `Name: value` request header |
+| `--data, -d` | URL | Request body string |
+| `--format` | Both | `raw`; one of raw, text, markdown, json |
+| `--output-file, -o` | Both | Write payload to a file instead of stdout |
+| `--force` | Both | Replace an existing regular output file |
+| `--fail, -f` | Both | Exit non-zero for non-2xx after writing the payload |
+| `--timeout` | Both | Positive Go duration; URL default 30s; saved precedence: flag, request `@timeout`, config, 30s |
+| `--max-bytes` | Both | 67108864 bytes (64 MiB) |
+| `--max-redirects` | Both | 10; must be greater than zero |
+| `--no-follow` | Both | Stop at the first redirect |
+| `--insecure, -k` | Both | Disable TLS certificate validation |
+| `--proxy` | Both | Proxy URL; overrides a saved request's config proxy |
+| `--env, -e` | Saved | Config default environment, then `dev` |
+| `--env-file` | Saved | Dotenv file loaded before variable resolution |
+| `--config` | Saved | Config file instead of discovery from the request file directory |
+| `--name, -n` | Saved | Unique request name; mutually exclusive with `--index` |
+| `--index` | Saved | One-based request index; mutually exclusive with `--name` |
+
+Saved requests honor config default headers, proxy, redirect policy, and TLS
+settings. `--timeout`, `--proxy`, `--no-follow`, and `--insecure` apply the
+explicit CLI override described above. Assertions, captures, conditions, hooks,
+shell blocks, database assertions, and `@waitFor` are not executed. URL
+credentials are rejected for both direct and saved requests.
+
+## MCP Server
+
+Run the stdio MCP server:
+
+```bash
+hitspec mcp serve --workspace /absolute/api-workspace
+```
+
+Tools:
+- `hitspec_fetch`: one direct URL or saved request as raw base64, text,
+  Markdown, or JSON.
+- `hitspec_list_requests`: discover request names/methods/lines/tags.
+- `hitspec_validate`: parse and structurally validate one workspace file.
+
+### MCP Server Flags
+
+| Flag | Default | Behavior |
+|------|---------|----------|
+| `--workspace` | `.` | Fixed filesystem boundary; use an absolute path in client config |
+| `--max-body-bytes` | 1048576 (1 MiB) | Maximum fetched response-body size |
+| `--timeout` | 30s | Maximum duration of one HTTP request |
+| `--allow-private-network` | false | Allow private/loopback targets and standard saved-request modes |
+
+### `hitspec_fetch` Input
+
+Supply exactly one of `url` or `file`.
+
+| Field | Type | Scope | Default / behavior |
+|-------|------|-------|--------------------|
+| `url` | string | Direct | HTTP(S) URL |
+| `file` | string | Saved | Workspace-relative `.http` or `.hitspec` file |
+| `name` | string | Saved | Unique request name; mutually exclusive with `index` |
+| `index` | integer | Saved | One-based request index; mutually exclusive with `name` |
+| `environment` | string | Saved | Config default environment, then `dev` |
+| `env_file` | string | Saved | Workspace-relative dotenv file |
+| `config_file` | string | Saved | Workspace-relative config file |
+| `method` | string | Direct | `GET`, or `POST` when `body` is non-empty |
+| `headers` | object<string,string> | Direct | Request headers |
+| `body` | string | Direct | UTF-8 request body |
+| `format` | string | Both | `text`; one of raw, text, markdown, json |
+| `no_follow` | boolean | Both | false; otherwise redirects have a fixed limit of 10 |
+
+A multi-request file requires `name` or `index`; `@depends` is rejected. Saved
+execution skips assertions, captures, conditions, hooks, shell/database blocks,
+and `@waitFor`.
+
+`hitspec_list_requests` accepts optional workspace-relative `path` (directory or
+Hitspec file), defaults to the workspace root, and searches recursively. It
+returns an error if any discovered file is invalid rather than returning an
+incomplete list. `hitspec_validate` requires workspace-relative `file` and
+reports `file`, `valid`, `requests`, and `errors`.
+
+Every successful tool call returns one MCP `TextContent` item and no
+`StructuredContent`. Raw fetch output is a JSON text envelope with base64 data;
+text and Markdown are rendered directly; JSON, discovery, and validation
+documents are serialized into text content.
+
+Paths are fixed to the startup workspace after symlink resolution. Network
+requests are public-only by default. Under that policy, a saved request using
+digest, AWS, or OAuth2 auth, multipart data, or a configured proxy is rejected;
+the proxy is not ignored. `--allow-private-network` is an operator grant for
+private/loopback targets and also enables those standard saved-request modes and
+configured proxies. URL credentials are rejected and provenance drops query
+strings. stdout is JSON-RPC only. The server does not write files or run
+shell/database blocks, history, or watchers.
+
+Hitspec does not invoke file.cheap. Persist a reviewed artifact explicitly:
+
+```bash
+hitspec fetch URL --format markdown -o response.md
+fcheap save response.md --tool hitspec --tag hitspec-response --index
+```
+
+MCPHub can expose both servers to Local Agent with namespaced, lazy tools.
+TinyVault-native references are deferred; do not place secrets in `.http`
+files, command arguments, MCP config, URLs, tags, logs, or provenance.
+
 ## Mock Server
 
 Start a mock server from .http files:

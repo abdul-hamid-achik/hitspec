@@ -53,6 +53,7 @@ type Config struct {
 	AllowDB            bool                      // Allow database assertions (>>>db blocks)
 	HistoryStore       *history.Store            // Optional persistent history store
 	OnProgress         func(event ProgressEvent) // Optional callback for per-request progress
+	MaxResponseBytes   int64                     // Optional response-body bound
 }
 
 func NewRunner(cfg *Config) *Runner {
@@ -75,6 +76,9 @@ func NewRunner(cfg *Config) *Runner {
 
 	if len(cfg.DefaultHeaders) > 0 {
 		clientOpts = append(clientOpts, http.WithDefaultHeaders(cfg.DefaultHeaders))
+	}
+	if cfg.MaxResponseBytes > 0 {
+		clientOpts = append(clientOpts, http.WithMaxBodyBytes(cfg.MaxResponseBytes))
 	}
 
 	resolver := env.NewResolver()
@@ -133,6 +137,14 @@ type ProgressEvent struct {
 }
 
 func (r *Runner) RunFile(path string) (*RunResult, error) {
+	return r.RunFileContext(context.Background(), path)
+}
+
+// RunFileContext executes a file while propagating cancellation to HTTP calls.
+func (r *Runner) RunFileContext(ctx context.Context, path string) (*RunResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	file, err := parser.ParseFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse %s: %w", path, err)
@@ -153,7 +165,7 @@ func (r *Runner) RunFile(path string) (*RunResult, error) {
 	snapshotManager := snapshot.NewManager(filepath.Dir(path), r.config.UpdateSnapshots)
 	snapshot.SetGlobalManager(snapshotManager)
 
-	result, err := r.runRequests(file)
+	result, err := r.runRequests(ctx, file)
 	if err != nil {
 		return nil, err
 	}

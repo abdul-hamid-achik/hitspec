@@ -123,6 +123,7 @@ hitspec run api.http
 - **Export to curl** - Export hitspec tests as executable curl commands
 - **SSE support** - Test Server-Sent Events endpoints
 - **Contract testing** - Verify API contracts against providers
+- **Response fetch + MCP** - Download one response as raw bytes, readable text, Markdown, or JSON from the CLI or a bounded MCP server
 
 ## Editor Support
 
@@ -275,11 +276,25 @@ hitspec import curl "curl ..."        # Import from curl
 hitspec import insomnia export.json   # Import from Insomnia
 hitspec import openapi spec.yaml     # Import from OpenAPI spec
 hitspec export curl tests/api.http   # Export as curl commands
+hitspec fetch https://example.com --format markdown -o response.md
+hitspec fetch tests/api.http --name getUser --format json
 hitspec diff baseline.json current.json  # Compare test results
 hitspec diff baseline.json current.json --threshold 10%
 hitspec studio                        # Open the interactive app
 hitspec serve --api-only --port 8080  # Start the REST/WebSocket API server
+hitspec mcp serve --workspace .       # Start the workspace-scoped MCP server
 ```
+
+### Response fetch and MCP
+
+`hitspec fetch` emits exactly one response body; `raw` is byte-exact while
+`text`, `markdown`, and `json` provide readable or machine-safe representations.
+Register `hitspec` as a stdio MCP server with command `hitspec` and args
+`["mcp", "serve", "--workspace", "/absolute/workspace"]`. It exposes bounded
+fetch, request-discovery, and validation tools. Agent requests are public-network
+only unless the server operator explicitly enables private targets. See the
+[fetch](https://hitspec.dev/reference/fetch) and
+[MCP](https://hitspec.dev/reference/mcp) references.
 
 ## Examples
 

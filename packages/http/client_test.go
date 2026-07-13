@@ -50,6 +50,30 @@ func TestClient_Post(t *testing.T) {
 	assert.Contains(t, resp.BodyString(), "123")
 }
 
+func TestClient_MaxBodyBytesAndFinalURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/start" {
+			http.Redirect(w, r, "/final", http.StatusFound)
+			return
+		}
+		_, _ = w.Write([]byte("four"))
+	}))
+	defer server.Close()
+
+	limited := NewClient(WithFollowRedirects(true), WithMaxBodyBytes(3))
+	response, err := limited.Get(server.URL+"/start", nil)
+	assert.Nil(t, response)
+	var sizeErr *ResponseTooLargeError
+	require.ErrorAs(t, err, &sizeErr)
+	assert.Equal(t, int64(3), sizeErr.Limit)
+
+	client := NewClient(WithFollowRedirects(true), WithMaxBodyBytes(4))
+	response, err = client.Get(server.URL+"/start", nil)
+	require.NoError(t, err)
+	assert.Equal(t, server.URL+"/final", response.FinalURL)
+	assert.Equal(t, "four", response.BodyString())
+}
+
 func TestClient_WithTimeout(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(200 * time.Millisecond)
@@ -282,6 +306,12 @@ func TestValidateURL(t *testing.T) {
 			url:     "http:///path",
 			wantErr: true,
 			errMsg:  "URL must have a host",
+		},
+		{
+			name:    "embedded credentials",
+			url:     "https://user:password@example.com/path",
+			wantErr: true,
+			errMsg:  "must not contain embedded credentials",
 		},
 	}
 
