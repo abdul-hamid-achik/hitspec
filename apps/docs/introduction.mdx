@@ -1,116 +1,490 @@
 ---
-title: "Introduction"
-description: "Plain text API tests. No magic. Write HTTP tests that look like actual HTTP requests."
+title: "hitspec — Plain text API tests. No magic."
+description: "hitspec is a file-based HTTP API testing tool — write .http tests that look like real HTTP requests, assert, capture, chain, and load-test. No SDK, no GUI."
+mode: "custom"
+keywords:
+  - "http api testing tool"
+  - "api testing"
+  - "http file testing"
+  - "rest api testing"
+  - "api test framework"
+  - "postman alternative"
+  - "hurl alternative"
+  - "k6 alternative"
+  - "curl testing"
+  - "stress testing"
+  - "api assertions"
+  - "cli api client"
 ---
 
-hitspec is a file-based HTTP API testing tool that emphasizes simplicity and readability.
-Write your API tests in plain text files that look like actual HTTP requests.
+{/* Reusable feature card for the grid */}
+export const Feature = ({ icon, title, children, href }) => (
+  <a className="hs-feature" href={href || "#"} aria-label={title}>
+    <div className="hs-feature-ico">{icon}</div>
+    <h3 className="hs-feature-title">{title}</h3>
+    <p className="hs-feature-desc">{children}</p>
+  </a>
+);
 
-```http
-GET https://api.example.com/users
+{/* Reusable checkmark row for the comparison table */}
+export const Yes = () => <span className="hs-yes">✓</span>;
+export const No = () => <span className="hs-no">—</span>;
+
+{/* Structured data: FAQPage + SoftwareApplication, for rich results and AI answer engines */}
+export const JsonLd = ({ data }) => (
+  <script
+    type="application/ld+json"
+    dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+  />
+);
+
+<JsonLd data={{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "name": "hitspec",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "macOS, Linux, Windows",
+      "softwareVersion": "2.16.0",
+      "license": "https://github.com/abdul-hamid-achik/hitspec/blob/main/LICENSE",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "installUrl": "https://github.com/abdul-hamid-achik/hitspec/releases/latest",
+      "codeRepository": "https://github.com/abdul-hamid-achik/hitspec",
+      "description": "hitspec is a file-based HTTP API testing tool. Write API tests as plain-text .http files, run them with 26 assertion operators, capture values, chain requests, stress-test, mock, and verify database state.",
+      "featureList": [
+        "Plain-text .http test files",
+        "26 assertion operators",
+        "Variable captures and request dependencies",
+        "Built-in stress testing",
+        "Mock server from test files",
+        "Database assertions",
+        "Interactive terminal client (hitspec studio)",
+        "curl, Insomnia, OpenAPI, and Postman import"
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is hitspec?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "hitspec is an open-source, file-based HTTP API testing tool. You write API tests as plain-text .http files that look like real HTTP requests, and hitspec executes them, evaluates assertions, captures values for chaining, and produces CI-friendly output. There is no SDK, no GUI, and no JavaScript — just text files you can read, diff, and check into git."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is hitspec a good Postman alternative?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. hitspec covers the same ground — requests, environments, auth, assertions, and an interactive client (hitspec studio) — but stores everything in version-controllable plain text. There are no binary collections to export and no GUI-only workflows; tests live next to your code so code review works naturally."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What file format does hitspec use?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "hitspec uses .http (or .hitspec) files. The .http format is compatible with the REST Client VS Code extension and other HTTP file tools, so you get syntax highlighting for free. hitspec adds assertion blocks, captures, request dependencies (@depends), and metadata directives on top."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can hitspec do load and stress testing?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Built-in stress testing is available with the --stress flag and inside the studio stress screen. You can configure request rate, virtual users, ramp-up, and pass/fail thresholds, and export metrics to Prometheus or Datadog. No separate load-testing tool is required."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does hitspec compare to Hurl and k6?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Like Hurl, hitspec uses plain-text, no-JavaScript test files. Unlike Hurl, hitspec adds a built-in mock server, database assertions, an interactive terminal client, and import/export to curl, Postman, Insomnia, and OpenAPI. Like k6, hitspec has built-in load testing — but with a simpler HTTP-file syntax instead of JavaScript scripting."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is hitspec free and open source?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. hitspec is MIT-licensed and developed in the open on GitHub. You can install it via Homebrew, go install, or a pre-built binary from the releases page."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does hitspec work in CI/CD pipelines?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. hitspec has an official GitHub Action, emits JUnit XML, TAP, JSON, and HTML output, respects environment variables, and returns exit codes that map to test outcomes."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I verify database state after an API request?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Use a >>>db block to run SQL against PostgreSQL, MySQL, or SQLite and assert on the results after an HTTP request. This is ideal for verifying side effects."
+          }
+        }
+      ]
+    }
+  ]
+}} />
+
+{/* Hero ---------------------------------------------------------- */}
+<section className="hs-hero">
+  <div className="hs-hero-inner">
+    <span className="hs-badge">
+      <span className="hs-badge-dot" />
+      Open source · Go · single binary · zero dependencies
+    </span>
+
+    <h1 className="hs-headline">
+      Plain text API tests.
+      <br />
+      <span className="hs-gradient-text">No magic.</span>
+    </h1>
+
+    <p className="hs-subhead">
+      hitspec is a file-based HTTP API testing tool. Write tests in plain-text
+      <code>.http</code> files that look like actual HTTP requests. Run them
+      with <strong>26 assertion operators</strong>, capture values, chain
+      requests, stress-test, and mock APIs — all from one binary. No SDK. No
+      GUI. No JavaScript.
+    </p>
+
+    <div className="hs-cta-row">
+      <a className="hs-btn hs-btn-primary" href="/quickstart">
+        ⚡ Get started in 60 seconds
+      </a>
+      <a className="hs-btn hs-btn-ghost" href="/installation">
+        Install hitspec
+      </a>
+      <a className="hs-btn hs-btn-ghost" href="https://github.com/abdul-hamid-achik/hitspec">
+        ★ Star on GitHub
+      </a>
+    </div>
+
+    <div className="hs-install-chip">
+      <span>$</span>
+      <code>brew install --cask abdul-hamid-achik/tap/hitspec</code>
+    </div>
+
+    {/* Code window mockup */}
+    <div className="hs-window">
+      <div className="hs-window-bar">
+        <span className="hs-dot hs-dot-r" />
+        <span className="hs-dot hs-dot-y" />
+        <span className="hs-dot hs-dot-g" />
+        <span className="hs-window-title">api.http</span>
+      </div>
+      <pre>{`@baseUrl = https://api.example.com
+
+### Create a user
+# @name createUser
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{ "name": "Ada", "email": "ada@example.com" }
 
 >>>
-expect status 200
-expect body type array
-expect body[0].id exists
-<<<
-```
-
-No SDK. No GUI. No JavaScript. Just plain text `.http` files you can read, diff, and check into git.
-
-## Why hitspec?
-
-<Columns cols={2}>
-  <Card title="Plain Text" icon="file-lines">
-    Tests are readable `.http` files. No binary formats, no JSON blobs, no GUI-only workflows.
-  </Card>
-  <Card title="Version Control Friendly" icon="code-branch">
-    Every test is a text file. Diffs are meaningful. Code review works naturally.
-  </Card>
-  <Card title="Full Test Framework" icon="flask-vial">
-    26 assertion operators, variable captures, request dependencies, retries, and more.
-  </Card>
-  <Card title="Built-in Load Testing" icon="gauge-high">
-    Stress test your APIs with `--stress`. No separate tool needed.
-  </Card>
-</Columns>
-
-## How hitspec Compares
-
-| Tool | hitspec Advantage |
-|------|-------------------|
-| **Postman** | Plain text files, version-controllable, no GUI needed |
-| **REST Client (VSCode)** | Adds assertions, captures, dependencies, stress testing |
-| **curl** | Full test framework on top of HTTP requests |
-| **k6** | Simpler syntax, no JavaScript required for basic tests |
-| **Hurl** | Built-in stress testing, DB assertions, mock server, import/export |
-| **newman** | Simpler file format, no collection export needed |
-
-## Feature Highlights
-
-<Columns cols={2}>
-  <Card title="Assertions" icon="check">
-    26 operators including `==`, `contains`, `matches`, `exists`, `type`, `schema`, `snapshot`, and more.
-  </Card>
-  <Card title="Captures and Dependencies" icon="link">
-    Chain requests by capturing response values and controlling execution order with `@depends`.
-  </Card>
-  <Card title="Environments" icon="server">
-    Define dev, staging, and prod configurations in a single `hitspec.yaml` file.
-  </Card>
-  <Card title="Multiple Output Formats" icon="table">
-    Console, JSON, JUnit XML, TAP, and HTML output for CI/CD integration.
-  </Card>
-  <Card title="Stress Testing" icon="bolt">
-    Load test with configurable rate, virtual users, ramp-up, and pass/fail thresholds.
-  </Card>
-  <Card title="Mock Server" icon="clone">
-    Start a mock server from your `.http` files for frontend development and testing.
-  </Card>
-  <Card title="Database Assertions" icon="database">
-    Verify database state after requests with `>>>db` blocks. Supports PostgreSQL, MySQL, and SQLite.
-  </Card>
-  <Card title="CI/CD Ready" icon="circle-check">
-    Official GitHub Action, JUnit output, environment variables, and exit codes that just work.
-  </Card>
-  <Card title="Interactive Studio" icon="terminal" href="/studio">
-    A keyboard-first terminal UI to edit, run, and inspect requests, with stress, mock, record, and history screens. Run `hitspec studio`.
-  </Card>
-</Columns>
-
-## What's in a Test File?
-
-A hitspec test file is a plain text `.http` file containing one or more requests with optional assertions and captures:
-
-```http
-@baseUrl = https://jsonplaceholder.typicode.com
-
-### Get a post
-# @name getPost
-
-GET {{baseUrl}}/posts/1
-
->>>
-expect status 200
-expect body.id == 1
-expect body.title exists
+expect status 201
+expect body.id exists
+expect body.email matches /^[^@]+@example\\.com$/
 <<<
 
 >>>capture
-authorId from body.userId
+userId from body.id
 <<<
 
-### Get the post's author
-# @depends getPost
-
-GET {{baseUrl}}/users/{{getPost.authorId}}
+### Fetch the user we just created
+# @depends createUser
+GET {{baseUrl}}/users/{{createUser.userId}}
 
 >>>
 expect status 200
-expect body.name exists
-<<<
-```
+expect body.name == "Ada"
+expect duration < 500
+<<<`}</pre>
+    </div>
+  </div>
+</section>
 
-<Tip>
-  hitspec files use the `.http` or `.hitspec` extension. The `.http` format is compatible with REST Client and other HTTP file tools, so you get syntax highlighting for free.
-</Tip>
+{/* Stats --------------------------------------------------------- */}
+<section className="hs-stats">
+  <div className="hs-stat">
+    <div className="hs-stat-num">26</div>
+    <div className="hs-stat-label">Assertion operators</div>
+  </div>
+  <div className="hs-stat">
+    <div className="hs-stat-num">17</div>
+    <div className="hs-stat-label">Built-in functions</div>
+  </div>
+  <div className="hs-stat">
+    <div className="hs-stat-num">8</div>
+    <div className="hs-stat-label">Auth types</div>
+  </div>
+  <div className="hs-stat">
+    <div className="hs-stat-num">1</div>
+    <div className="hs-stat-label">Binary, zero runtime deps</div>
+  </div>
+</section>
+
+{/* Why hitspec --------------------------------------------------- */}
+<section className="hs-section">
+  <span className="hs-eyebrow">Why hitspec</span>
+  <h2 className="hs-h2">Everything Postman does. In a text file.</h2>
+  <p className="hs-lead">
+    Tests are readable <code>.http</code> files — no binary collections, no JSON
+    blobs, no GUI-only workflows. Diffs are meaningful, code review works
+    naturally, and your whole API test suite lives next to your code in git.
+  </p>
+
+  <div className="hs-grid" style={{ marginTop: "1.5rem" }}>
+    <Feature icon="📝" title="Plain-text .http files" href="/concepts/file-format">
+      Tests look like real HTTP requests. Compatible with the REST Client VS Code
+      format, so you get syntax highlighting for free.
+    </Feature>
+    <Feature icon="🔍" title="26 assertion operators" href="/reference/assertion-operators">
+      <code>==</code>, <code>contains</code>, <code>matches</code>, <code>exists</code>,
+      <code>type</code>, <code>schema</code>, <code>snapshot</code>,
+      <code>length</code>, <code>in</code>, and more.
+    </Feature>
+    <Feature icon="🔗" title="Captures & dependencies" href="/concepts/captures">
+      Chain requests by capturing response values and controlling execution order
+      with <code>@depends</code>.
+    </Feature>
+    <Feature icon="⚡" title="Built-in stress testing" href="/features/stress-testing">
+      Load test with configurable rate, virtual users, ramp-up, and pass/fail
+      thresholds. No separate tool needed.
+    </Feature>
+    <Feature icon="🎭" title="Mock server" href="/features/mock-server">
+      Spin up a mock API from your <code>.http</code> files for frontend
+      development and testing.
+    </Feature>
+    <Feature icon="🗄️" title="Database assertions" href="/features/database-assertions">
+      Verify database state after requests with <code>&gt;&gt;&gt;db</code>
+      blocks. PostgreSQL, MySQL, and SQLite.
+    </Feature>
+    <Feature icon="🔑" title="8 authentication types" href="/features/authentication">
+      Bearer, Basic, API Key, Digest, AWS Signature v4, OAuth2, and more.
+    </Feature>
+    <Feature icon="🔌" title="Import & export" href="/reference/import-export">
+      Import from curl, Insomnia, OpenAPI, and Postman. Export requests as
+      curl, HTTPie, Python, fetch, Go, Ruby, or wget.
+    </Feature>
+    <Feature icon="🖥️" title="Interactive studio (TUI)" href="/studio">
+      A keyboard-first terminal UI to edit, run, and inspect requests — like
+      Postman, but file-backed. Run <code>hitspec studio</code>.
+    </Feature>
+  </div>
+</section>
+
+{/* See it in action --------------------------------------------- */}
+<section className="hs-band">
+  <span className="hs-eyebrow">See it in action</span>
+  <h2 className="hs-h2">A Postman-class client, in your terminal</h2>
+  <p className="hs-lead">
+    <code>hitspec studio</code> opens a keyboard-first workspace: a file tree,
+    a syntax-highlighted source editor you can save inline, a tabbed response
+    viewer (Body / Headers / Assertions / Timing / Captures), a command palette,
+    an environment switcher, and dedicated screens for stress, mock, contract,
+    record, and history. Everything the REST <code>--api-only</code> server does,
+    driven by one in-process manager.
+  </p>
+
+  <div className="hs-cta-row">
+    <a className="hs-btn hs-btn-primary" href="/studio">Explore the studio</a>
+    <a className="hs-btn hs-btn-ghost" href="/guides/api-client-manager">How it works</a>
+  </div>
+</section>
+
+{/* Quick install ------------------------------------------------ */}
+<section className="hs-section">
+  <span className="hs-eyebrow">Install</span>
+  <h2 className="hs-h2">Running in under a minute</h2>
+  <p className="hs-lead">
+    One binary, no runtime dependencies. Pick whichever install path you prefer.
+  </p>
+
+  <Tabs>
+    <Tab title="Homebrew (macOS / Linux)">
+      ```bash
+      brew install --cask abdul-hamid-achik/tap/hitspec
+      ```
+    </Tab>
+    <Tab title="Go">
+      ```bash
+      go install github.com/abdul-hamid-achik/hitspec/apps/cli@latest
+      ```
+    </Tab>
+    <Tab title="Binary download">
+      Grab a pre-built archive from the
+      [Releases page](https://github.com/abdul-hamid-achik/hitspec/releases/latest),
+      extract it, and put it on your <code>PATH</code>. See the
+      [installation guide](/installation) for platform-specific steps.
+    </Tab>
+  </Tabs>
+
+  <p className="hs-lead" style={{ marginTop: "1.5rem" }}>
+    Then write a test and run it:
+  </p>
+
+  ```bash
+  hitspec run api.http
+  ```
+</section>
+
+{/* Comparison table --------------------------------------------- */}
+<section className="hs-section">
+  <span className="hs-eyebrow">How it compares</span>
+  <h2 className="hs-h2">hitspec vs. the usual suspects</h2>
+  <p className="hs-lead">
+    A full test framework on top of plain HTTP requests — without a GUI,
+    collections export, or JavaScript.
+  </p>
+
+  <div style={{ marginTop: "1.5rem", overflowX: "auto" }}>
+    <table className="hs-compare">
+      <thead>
+        <tr>
+          <th>Capability</th>
+          <th>hitspec</th>
+          <th>Postman / newman</th>
+          <th>REST Client</th>
+          <th>Hurl</th>
+          <th>k6</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Plain-text, git-friendly files</td>
+          <td><Yes /></td><td><No /></td><td><Yes /></td><td><Yes /></td><td><No /></td>
+        </tr>
+        <tr>
+          <td>Assertions + captures + dependencies</td>
+          <td><Yes /></td><td><Yes /></td><td><No /></td><td><Yes /></td><td><Yes /></td>
+        </tr>
+        <tr>
+          <td>Built-in stress / load testing</td>
+          <td><Yes /></td><td><No /></td><td><No /></td><td><No /></td><td><Yes /></td>
+        </tr>
+        <tr>
+          <td>Mock server from test files</td>
+          <td><Yes /></td><td><No /></td><td><No /></td><td><No /></td><td><No /></td>
+        </tr>
+        <tr>
+          <td>Database assertions</td>
+          <td><Yes /></td><td><No /></td><td><No /></td><td><No /></td><td><No /></td>
+        </tr>
+        <tr>
+          <td>Interactive terminal client (TUI)</td>
+          <td><Yes /></td><td><Yes /></td><td><Yes /></td><td><No /></td><td><No /></td>
+        </tr>
+        <tr>
+          <td>No JavaScript / SDK required</td>
+          <td><Yes /></td><td><Yes /></td><td><Yes /></td><td><Yes /></td><td><No /></td>
+        </tr>
+        <tr>
+          <td>Single binary, zero runtime deps</td>
+          <td><Yes /></td><td><No /></td><td><No /></td><td><Yes /></td><td><No /></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{/* FAQ (SEO + bottom-of-funnel) ---------------------------------- */}
+<section className="hs-faq">
+  <span className="hs-eyebrow">FAQ</span>
+  <h2 className="hs-h2">Frequently asked questions</h2>
+  <p className="hs-lead">
+    Everything you need to decide whether hitspec is the right API testing tool
+    for your team.
+  </p>
+
+  <AccordionGroup>
+    <Accordion title="What is hitspec?">
+      hitspec is an open-source, file-based HTTP API testing tool. You write API
+      tests as plain-text <code>.http</code> files that look like real HTTP
+      requests, and hitspec executes them, evaluates assertions, captures values
+      for chaining, and produces CI-friendly output. There is no SDK, no GUI, and
+      no JavaScript — just text files you can read, diff, and check into git.
+    </Accordion>
+
+    <Accordion title="Is hitspec a good Postman alternative?">
+      Yes. hitspec covers the same ground — requests, environments, auth,
+      assertions, and an interactive client (<code>hitspec studio</code>) — but
+      stores everything in version-controllable plain text. There are no binary
+      collections to export, no GUI-only workflows, and tests live next to your
+      code so code review works naturally. See the
+      [migrating from Postman guide](/guides/migrating-from-postman).
+    </Accordion>
+
+    <Accordion title="What file format does hitspec use?">
+      hitspec uses <code>.http</code> (or <code>.hitspec</code>) files. The
+      <code>.http</code> format is compatible with the REST Client VS Code
+      extension and other HTTP file tools, so you get syntax highlighting for
+      free. hitspec adds assertion blocks (<code>&gt;&gt;&gt;</code> /
+      <code>&lt;&lt;&lt;</code>), captures (<code>&gt;&gt;&gt;capture</code>),
+      request dependencies (<code>@depends</code>), and metadata directives on
+      top. See the [file format reference](/concepts/file-format).
+    </Accordion>
+
+    <Accordion title="Can hitspec do load and stress testing?">
+      Yes. Built-in stress testing is available with the <code>--stress</code>
+      flag and inside the studio stress screen. You can configure request rate,
+      virtual users, ramp-up, and pass/fail thresholds, and export metrics to
+      Prometheus or Datadog. No separate load-testing tool is required. See the
+      [stress testing guide](/features/stress-testing).
+    </Accordion>
+
+    <Accordion title="How does hitspec compare to Hurl and k6?">
+      Like Hurl, hitspec uses plain-text, no-JavaScript test files. Unlike Hurl,
+      hitspec adds a built-in mock server, database assertions, an interactive
+      terminal client, and import/export to curl, Postman, Insomnia, and
+      OpenAPI. Like k6, hitspec has built-in load testing — but with a simpler,
+      HTTP-file syntax instead of JavaScript scripting. See the comparison
+      table above.
+    </Accordion>
+
+    <Accordion title="Is hitspec free and open source?">
+      Yes. hitspec is MIT-licensed and developed in the open on
+      [GitHub](https://github.com/abdul-hamid-achik/hitspec). You can install it
+      via Homebrew, <code>go install</code>, or a pre-built binary from the
+      [releases page](https://github.com/abdul-hamid-achik/hitspec/releases).
+    </Accordion>
+
+    <Accordion title="Does hitspec work in CI/CD pipelines?">
+      Yes. hitspec has an official GitHub Action, emits JUnit XML, TAP, JSON,
+      and HTML output, respects environment variables, and returns exit codes
+      that map to test outcomes. See the
+      [CI/CD guide](/guides/ci-cd-pipeline) and
+      [GitHub Actions integration](/integrations/github-actions).
+    </Accordion>
+
+    <Accordion title="Can I verify database state after an API request?">
+      Yes. Use a <code>&gt;&gt;&gt;db</code> block to run SQL against PostgreSQL,
+      MySQL, or SQLite and assert on the results after an HTTP request. This is
+      ideal for verifying side effects. See
+      [database assertions](/features/database-assertions).
+    </Accordion>
+  </AccordionGroup>
+</section>
+
+{/* Final CTA ----------------------------------------------------- */}
+<section className="hs-final">
+  <h2>Write your first API test in under a minute</h2>
+  <p>
+    No SDK. No GUI. No JavaScript. Just plain-text <code>.http</code> files you
+    can read, diff, and check into git.
+  </p>
+  <div className="hs-cta-row" style={{ justifyContent: "center" }}>
+    <a className="hs-btn hs-btn-primary" href="/quickstart">Start the quickstart →</a>
+    <a className="hs-btn hs-btn-ghost" href="/installation" style={{ color: "#fff", borderColor: "rgba(255,255,255,0.5)" }}>Install hitspec</a>
+  </div>
+</section>

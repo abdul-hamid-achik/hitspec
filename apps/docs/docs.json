@@ -12,6 +12,27 @@
     "light": "#8FBCBB",
     "dark": "#5E81AC"
   },
+  "description": "hitspec is a file-based HTTP API testing tool. Write API tests as plain-text .http files, run them with 26 assertion operators, capture and chain requests, stress-test, mock, and verify database state — no SDK, no GUI, no JavaScript.",
+  "seo": {
+    "indexing": "navigable",
+    "metatags": {
+      "og:site_name": "hitspec",
+      "og:type": "website",
+      "og:locale": "en_US",
+      "twitter:card": "summary_large_image",
+      "theme-color": "#88C0D0",
+      "canonical": "https://hitspec.dev",
+      "robots": "index, follow",
+      "revisit-after": "7 days",
+      "language": "en"
+    }
+  },
+  "search": {
+    "prompt": "Search the docs, syntax, and CLI…"
+  },
+  "metadata": {
+    "timestamp": true
+  },
   "navbar": {
     "links": [
       {

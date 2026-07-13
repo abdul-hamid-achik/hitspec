@@ -1,6 +1,12 @@
 ---
-title: "Authentication"
-description: "Configure authentication for your API requests using the @auth annotation. hitspec supports 8 authentication methods."
+title: "Authentication for API tests (@auth)"
+description: "Configure authentication for API requests with the @auth directive. hitspec supports 8 auth methods: Bearer, Basic, API Key, Digest, AWS Sig v4, and OAuth2."
+keywords:
+  - "api authentication"
+  - "hitspec auth"
+  - "bearer token"
+  - "oauth2 api testing"
+  - "aws signature v4"
 ---
 
 hitspec supports 8 authentication methods through the `@auth` metadata directive. Instead of manually setting `Authorization` headers, declare your auth strategy once per request and hitspec handles the rest.

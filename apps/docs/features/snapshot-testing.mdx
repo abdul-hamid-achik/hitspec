@@ -1,6 +1,12 @@
 ---
-title: "Snapshot Testing"
-description: "Capture response bodies as baselines and automatically detect regressions with snapshot comparison."
+title: "Snapshot testing for API responses"
+description: "Capture API response bodies as baselines and automatically detect regressions with snapshot comparison. Update baselines on purposeful changes."
+keywords:
+  - "snapshot testing"
+  - "api regression testing"
+  - "response baselines"
+  - "api snapshot"
+  - "hitspec snapshot"
 ---
 
 Snapshot testing captures a response body and saves it to disk. On subsequent runs, hitspec compares the current response against the saved snapshot and reports any differences. This is useful for detecting unexpected changes in API responses.
