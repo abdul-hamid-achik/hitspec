@@ -85,7 +85,7 @@ jobs:
   api-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Run API tests
         uses: abdul-hamid-achik/hitspec@v1
@@ -95,7 +95,7 @@ jobs:
           output-file: test-results.xml
 
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: test-results
@@ -225,18 +225,21 @@ jobs:
   api-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install hitspec
         run: |
-          curl -fsSL https://github.com/abdul-hamid-achik/hitspec/releases/latest/download/hitspec-linux-amd64.tar.gz | tar xz
+          # Choose a published version from the Releases page:
+          # https://github.com/abdul-hamid-achik/hitspec/releases/latest
+          VERSION=2.18.0
+          curl -fsSL "https://github.com/abdul-hamid-achik/hitspec/releases/download/v${VERSION}/hitspec_${VERSION}_linux_amd64.tar.gz" | tar xz
           sudo mv hitspec /usr/local/bin/
 
       - name: Run tests
         run: hitspec run tests/ -o junit --output-file test-results.xml
 
       - name: Upload results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: test-results
@@ -296,7 +299,7 @@ jobs:
     name: Smoke Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: abdul-hamid-achik/hitspec@v1
         with:
           files: tests/
@@ -304,7 +307,7 @@ jobs:
           bail: true
           output: junit
           output-file: smoke-results.xml
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: smoke-results
@@ -316,7 +319,7 @@ jobs:
     if: github.event_name == 'pull_request'
     needs: smoke
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Create env file
         run: |
           echo "API_TOKEN=${{ secrets.API_TOKEN }}" >> .env.ci
@@ -328,7 +331,7 @@ jobs:
           parallel: true
           output: junit
           output-file: full-results.xml
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: full-results
@@ -340,7 +343,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: smoke
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: abdul-hamid-achik/hitspec@v1
         with:
           files: tests/api.http

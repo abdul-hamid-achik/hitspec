@@ -17,7 +17,7 @@ jobs:
     name: API Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Run API tests
         uses: abdul-hamid-achik/hitspec@v1
@@ -28,7 +28,7 @@ jobs:
           output-file: test-results.xml
 
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: test-results
@@ -37,16 +37,17 @@ jobs:
       # Optional: Publish test results with third-party action
       # - name: Publish Test Results
       #   uses: EnricoMi/publish-unit-test-result-action@v2
-      #   if: always()
+      #   if: ${{ !cancelled() }}
       #   with:
       #     files: test-results.xml
+      #     comment_mode: off
 
   # Testing with environment variables and filtering
   filtered-tests:
     name: Smoke Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Run smoke tests only
         uses: abdul-hamid-achik/hitspec@v1
@@ -60,7 +61,7 @@ jobs:
           bail: true
 
       - name: Upload smoke test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: smoke-results
@@ -71,7 +72,7 @@ jobs:
     name: Tests with Environment File
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Create .env file from secrets
         run: |
@@ -93,7 +94,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event.inputs.run_stress_test == 'true' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Run stress test
         uses: abdul-hamid-achik/hitspec@v1
@@ -111,7 +112,7 @@ jobs:
     name: Pinned Version Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Run tests with specific hitspec version
         uses: abdul-hamid-achik/hitspec@v1
@@ -127,7 +128,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Run tests
         uses: abdul-hamid-achik/hitspec@v1

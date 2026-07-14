@@ -86,10 +86,13 @@ Most CI systems can parse JUnit XML natively for test result visualization.
 
 - name: Publish Test Results
   uses: EnricoMi/publish-unit-test-result-action@v2
-  if: always()
+  if: ${{ !cancelled() }}
   with:
     files: results.xml
+    comment_mode: off
 ```
+
+Grant the workflow or job token `checks: write` when publishing check runs.
 
 ---
 

@@ -11,11 +11,15 @@ hitspec integrates with any CI/CD system. This guide covers common patterns for 
 name: API Tests
 on: [push, pull_request]
 
+permissions:
+  contents: read
+  checks: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install hitspec
         run: |
@@ -34,9 +38,10 @@ jobs:
 
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action@v2
-        if: always()
+        if: ${{ !cancelled() }}
         with:
           files: results.xml
+          comment_mode: off
 
       - name: Notify on failure
         if: failure()

@@ -15,21 +15,27 @@ import (
 	"strings"
 	"time"
 
+	"github.com/abdul-hamid-achik/hitspec/packages/artifact"
 	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
 	"github.com/abdul-hamid-achik/hitspec/packages/fetch"
+	"github.com/abdul-hamid-achik/hitspec/packages/search"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-const instructions = `hitspec executes one bounded HTTP request and returns raw, readable text,
-Markdown, or JSON. Use hitspec_list_requests to discover saved requests and hitspec_validate before
-execution when a file may be malformed. hitspec_fetch can use a direct public URL or one request in
-the fixed workspace. It never executes shell hooks or database assertions and never writes files.`
+const instructions = `hitspec discovers and fetches public web content through bounded tools.
+Use hitspec_search_web for live discovery and treat its snippets as candidates, not verified evidence.
+Use hitspec_capture_webpage only when a durable file.cheap artifact is wanted.
+Use hitspec_list_requests to discover saved requests and hitspec_validate before execution when a file
+may be malformed. hitspec_fetch can use a direct public URL or one request in the fixed workspace. It
+never executes shell hooks or database assertions and never persists a hidden artifact.`
 
 // Options configures server-owned limits and network authority.
 type Options struct {
 	MaxBodyBytes        int64
 	Timeout             time.Duration
 	AllowPrivateNetwork bool
+	SearchProvider      search.Provider
+	ArtifactSink        artifact.Sink
 }
 
 // Server wraps the stdio MCP transport and its fixed workspace.
@@ -38,6 +44,9 @@ type Server struct {
 	maxBodyBytes int64
 	timeout      time.Duration
 	allowPrivate bool
+	search       search.Provider
+	artifacts    artifact.Sink
+	webFetcher   webFetcher
 	srv          *sdkmcp.Server
 }
 
@@ -59,6 +68,8 @@ func NewServer(version, workspace string, options Options) (*Server, error) {
 	server := &Server{
 		workspace: root, maxBodyBytes: options.MaxBodyBytes,
 		timeout: options.Timeout, allowPrivate: options.AllowPrivateNetwork,
+		search: options.SearchProvider, artifacts: options.ArtifactSink,
+		webFetcher: fetch.NewService(),
 	}
 	server.srv = sdkmcp.NewServer(
 		&sdkmcp.Implementation{Name: "hitspec", Title: "hitspec HTTP tools", Version: version},
@@ -127,12 +138,14 @@ func (s *Server) register() {
 	destructive, openWorld := false, true
 	sdkmcp.AddTool(s.srv, &sdkmcp.Tool{
 		Name: "hitspec_fetch", Title: "Fetch one HTTP response",
-		Description: "Fetch one direct HTTP(S) URL or one saved Hitspec request and return bounded raw base64, readable text, Markdown, or JSON. Does not write files or execute shell/database blocks.",
+		Description: "Fetch one direct HTTP(S) URL or one saved Hitspec request and return bounded raw base64, readable text, Markdown, or JSON. Does not persist artifacts or execute shell/database blocks.",
 		Annotations: &sdkmcp.ToolAnnotations{
 			Title: "Fetch one HTTP response", ReadOnlyHint: false, DestructiveHint: &destructive,
 			IdempotentHint: false, OpenWorldHint: &openWorld,
 		},
 	}, s.handleFetch)
+
+	s.registerWebTools(destructive, openWorld)
 
 	readOnly, closedWorld, idempotent := true, false, true
 	sdkmcp.AddTool(s.srv, &sdkmcp.Tool{
@@ -222,11 +235,19 @@ func (s *Server) handleFetch(ctx context.Context, _ *sdkmcp.CallToolRequest, inp
 	if err != nil {
 		return nil, nil, err
 	}
-	if int64(len(content)) > s.maxBodyBytes*2+4096 {
+	if int64(len(content)) > expandedBodyLimit(s.maxBodyBytes) {
 		return nil, nil, errors.New("rendered tool result exceeds the server response limit")
 	}
 	callResult := &sdkmcp.CallToolResult{Content: []sdkmcp.Content{&sdkmcp.TextContent{Text: content}}}
 	return callResult, nil, nil
+}
+
+func expandedBodyLimit(maxBodyBytes int64) int64 {
+	const maximumInt64 = int64(1<<63 - 1)
+	if maxBodyBytes > (maximumInt64-4096)/2 {
+		return maximumInt64
+	}
+	return maxBodyBytes*2 + 4096
 }
 
 func renderToolContent(ctx context.Context, result *fetch.Result, format fetch.Format) (string, error) {

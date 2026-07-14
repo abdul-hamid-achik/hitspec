@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [2.18.0] - 2026-07-13
+
+### Added
+
+- Added the provider-neutral `hitspec_search_web` tool with a bounded Tavily
+  adapter. It returns at most 64 KiB of normalized discovery candidates and
+  keeps provider credentials and upstream request details server-side.
+- Added `hitspec_capture_webpage` with the compatibility-preserving
+  `url`/`name`/`tags`/`ttl`/`index` input and compact file.cheap receipt. The
+  tool preserves webpage Markdown and its content hash without returning the
+  full page to the model.
+
+### Changed
+
+- Defined the stable Local Agent web surface as `hitspec_search_web`,
+  `hitspec_fetch`, and `hitspec_capture_webpage`. Tavily is an interchangeable
+  internal provider, and `hitspec_fetch` remains retrieval-only.
+- Updated CI, release, and example workflows to Node.js 24-based action majors:
+  checkout v6, setup-go/setup-node v6, setup-task v3, golangci-lint v9,
+  Codecov v6, upload-artifact v7, and GoReleaser Action v7. This removes the
+  deprecated Node.js runtime alert from current GitHub Actions runs.
+
+### Documentation
+
+- Documented the Local Agent web surface (search, fetch, and webpage capture),
+  provider isolation, tvault secret handling, approval boundaries, capture
+  compatibility, and the canary rollout.
+- Updated copyable GitHub Actions examples to the same Node.js 24-compatible
+  action majors and replaced the Node-based legacy test reporter example with
+  the Docker-based publisher already used elsewhere in the docs.
+
+### Security
+
+- Search provider endpoints, credentials, the file.cheap executable, and stash
+  paths are server-owned. The file.cheap adapter uses a private mode-0700
+  handoff, direct argv execution, sanitized provenance, bounded child output,
+  and an allowlisted child environment that excludes provider credentials.
+- Removed the final direct GitHub Action input interpolation from the install
+  script; the requested Hitspec version now crosses the shell boundary through
+  a quoted environment variable.
+
 ## [2.17.0] - 2026-07-13
 
 ### Added
@@ -23,7 +66,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
-- Added CLI and MCP references, an agent-artifact workflow for file.cheap, MCPHub, and Local Agent, and an architecture decision record. TinyVault integration is explicitly deferred pending a separate secret-reference and redaction contract.
+- Added CLI and MCP references plus an agent-artifact workflow for file.cheap, MCPHub, and Local Agent. TinyVault integration is explicitly deferred pending a separate secret-reference and redaction contract.
+
+## [2.16.0] - 2026-07-10
+
+### Fixed
+
+- Hardened parser, environment, runner, HTTP, stress, serve, mock, proxy, CLI,
+  and terminal-client behavior after a deep correctness audit. Critical fixes
+  include `init`/`run` nil-dereference prevention, correct header parsing, and
+  deterministic request ordering.
+
+### Security
+
+- Prevented GitHub Action input injection, required API authentication where
+  configured, created SQLite files with private permissions, and hardened the
+  GoReleaser workflow.
 
 ## [2.15.0] - 2026-06-16
 
@@ -449,7 +507,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `hitspec init` - Initialize a new project
 - `hitspec version` - Show version information
 
-[Unreleased]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.11.0...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.18.0...HEAD
+[2.18.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.17.0...v2.18.0
+[2.17.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.16.0...v2.17.0
+[2.16.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.15.0...v2.16.0
+[2.15.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.14.1...v2.15.0
+[2.14.1]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.14.0...v2.14.1
+[2.14.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.13.0...v2.14.0
+[2.13.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.12.1...v2.13.0
+[2.12.1]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.12.0...v2.12.1
+[2.12.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.11.3...v2.12.0
+[2.11.3]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.11.2...v2.11.3
+[2.11.2]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.11.1...v2.11.2
+[2.11.1]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.11.0...v2.11.1
 [2.11.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.10.1...v2.11.0
 [2.10.1]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.10.0...v2.10.1
 [2.10.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.9.0...v2.10.0

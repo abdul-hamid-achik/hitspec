@@ -21,7 +21,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: abdul-hamid-achik/hitspec@v1
         with:
@@ -29,7 +29,7 @@ jobs:
           output: junit
           output-file: test-results.xml
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: test-results
@@ -92,11 +92,14 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install hitspec
         run: |
-          curl -fsSL https://github.com/abdul-hamid-achik/hitspec/releases/latest/download/hitspec_linux_amd64.tar.gz | tar xz
+          # Choose a published version from the Releases page:
+          # https://github.com/abdul-hamid-achik/hitspec/releases/latest
+          VERSION=2.18.0
+          curl -fsSL "https://github.com/abdul-hamid-achik/hitspec/releases/download/v${VERSION}/hitspec_${VERSION}_linux_amd64.tar.gz" | tar xz
           sudo mv hitspec /usr/local/bin/
 
       - name: Run API tests
@@ -107,7 +110,7 @@ jobs:
             --output-file test-results.xml \
             --bail
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: test-results
@@ -204,7 +207,7 @@ Cache the hitspec binary to speed up subsequent runs:
 
 ```yaml
 - name: Cache hitspec binary
-  uses: actions/cache@v4
+  uses: actions/cache@v5
   with:
     path: /usr/local/bin/hitspec
     key: hitspec-${{ runner.os }}-${{ hashFiles('.hitspec-version') }}
@@ -212,7 +215,10 @@ Cache the hitspec binary to speed up subsequent runs:
 - name: Install hitspec
   run: |
     if ! command -v hitspec &> /dev/null; then
-      curl -fsSL https://github.com/abdul-hamid-achik/hitspec/releases/latest/download/hitspec_linux_amd64.tar.gz | tar xz
+      # Choose a published version from the Releases page:
+      # https://github.com/abdul-hamid-achik/hitspec/releases/latest
+      VERSION=2.18.0
+      curl -fsSL "https://github.com/abdul-hamid-achik/hitspec/releases/download/v${VERSION}/hitspec_${VERSION}_linux_amd64.tar.gz" | tar xz
       sudo mv hitspec /usr/local/bin/
     fi
 ```
@@ -220,9 +226,9 @@ Cache the hitspec binary to speed up subsequent runs:
 If you install hitspec via Go, you can cache the Go module cache instead:
 
 ```yaml
-- uses: actions/setup-go@v5
+- uses: actions/setup-go@v6
   with:
-    go-version: "1.22"
+    go-version: "1.25.x"
     cache: true
 
 - name: Install hitspec
@@ -249,7 +255,7 @@ jobs:
       matrix:
         environment: [dev, staging, production]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: abdul-hamid-achik/hitspec@v1
         with:
@@ -258,7 +264,7 @@ jobs:
           output: junit
           output-file: test-results-${{ matrix.environment }}.xml
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: test-results-${{ matrix.environment }}
@@ -285,7 +291,7 @@ strategy:
         timeout: 60s
 
 steps:
-  - uses: actions/checkout@v4
+  - uses: actions/checkout@v6
 
   - uses: abdul-hamid-achik/hitspec@v1
     env:
@@ -325,15 +331,15 @@ Most CI reporting tools understand JUnit XML. To publish results in GitHub pull 
     output-file: test-results.xml
 
 - name: Publish Test Results
-  uses: dorny/test-reporter@v1
-  if: always()
+  uses: EnricoMi/publish-unit-test-result-action@v2
+  if: ${{ !cancelled() }}
   with:
-    name: API Test Results
-    path: test-results.xml
-    reporter: java-junit
+    files: test-results.xml
+    comment_mode: off
 ```
 
-This adds a test summary directly to the pull request checks tab.
+This adds a test summary directly to the pull request checks tab. Grant the
+workflow or job token `checks: write` when publishing check runs.
 
 ## Full Example Workflow
 
@@ -351,7 +357,7 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: abdul-hamid-achik/hitspec@v1
         with:
@@ -361,7 +367,7 @@ jobs:
           output-file: smoke-results.xml
           bail: true
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: smoke-results
@@ -372,7 +378,7 @@ jobs:
     needs: smoke
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Create environment file
         run: |
@@ -387,7 +393,7 @@ jobs:
           output: junit
           output-file: full-results.xml
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: full-results

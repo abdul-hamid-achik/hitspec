@@ -38,6 +38,7 @@ Thumbs.db
 
 # Build artifacts (exclude packages/serve/dist which has its own rules below)
 dist/
+.task/
 !packages/serve/dist/
 
 # Generated files

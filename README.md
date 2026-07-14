@@ -291,8 +291,15 @@ hitspec mcp serve --workspace .       # Start the workspace-scoped MCP server
 `text`, `markdown`, and `json` provide readable or machine-safe representations.
 Register `hitspec` as a stdio MCP server with command `hitspec` and args
 `["mcp", "serve", "--workspace", "/absolute/workspace"]`. It exposes bounded
-fetch, request-discovery, and validation tools. Agent requests are public-network
-only unless the server operator explicitly enables private targets. See the
+fetch, request-discovery, and validation tools. In v2.18.0, configure
+`--search-provider tavily` to add bounded `hitspec_search_web` discovery and
+`--fcheap-path /absolute/path/to/fcheap` to add
+`hitspec_capture_webpage`. Tavily stays behind Hitspec as an interchangeable
+server-side provider. Search results are discovery candidates;
+`hitspec_capture_webpage` turns a public webpage into durable file.cheap
+evidence, while `hitspec_fetch` never persists content. Agent requests are
+public-network only unless the server operator explicitly enables private
+targets. See the
 [fetch](https://hitspec.dev/reference/fetch) and
 [MCP](https://hitspec.dev/reference/mcp) references.
 
@@ -586,7 +593,7 @@ Use the official hitspec action to run API tests in your CI pipeline:
     output: junit
     output-file: test-results.xml
 
-- uses: actions/upload-artifact@v4
+- uses: actions/upload-artifact@v7
   with:
     name: test-results
     path: test-results.xml

@@ -125,6 +125,9 @@ func (s *Service) Fetch(ctx context.Context, input Request) (*Result, error) {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	httpRequest.Header = input.Headers.Clone()
+	if httpRequest.Header == nil {
+		httpRequest.Header = make(http.Header)
+	}
 	if input.UserAgent != "" && httpRequest.Header.Get("User-Agent") == "" {
 		httpRequest.Header.Set("User-Agent", input.UserAgent)
 	}

@@ -1239,9 +1239,16 @@ Run the stdio MCP server:
 hitspec mcp serve --workspace /absolute/api-workspace
 ```
 
+Release status: v2.18.0 exposes the stable search, fetch, and webpage-capture
+web surface described below.
+
 Tools:
 - `hitspec_fetch`: one direct URL or saved request as raw base64, text,
   Markdown, or JSON.
+- `hitspec_search_web`: bounded live-public-web discovery with normalized URL
+  candidates and no persistence.
+- `hitspec_capture_webpage`: GET a public webpage, render Markdown, and persist
+  it through the fixed file.cheap adapter.
 - `hitspec_list_requests`: discover request names/methods/lines/tags.
 - `hitspec_validate`: parse and structurally validate one workspace file.
 
@@ -1253,6 +1260,9 @@ Tools:
 | `--max-body-bytes` | 1048576 (1 MiB) | Maximum fetched response-body size |
 | `--timeout` | 30s | Maximum duration of one HTTP request |
 | `--allow-private-network` | false | Allow private/loopback targets and standard saved-request modes |
+| `--search-provider` | none | Live search provider (`none` or `tavily`); defaults from `HITSPEC_SEARCH_PROVIDER` |
+| `--fcheap-path` | unset | Fixed file.cheap executable for durable webpage capture; defaults from `HITSPEC_FCHEAP_PATH` |
+| `--fcheap-stash-dir` | file.cheap default | Optional fixed stash root; defaults from `HITSPEC_FCHEAP_STASH_DIR` |
 
 ### `hitspec_fetch` Input
 
@@ -1275,7 +1285,7 @@ Supply exactly one of `url` or `file`.
 
 A multi-request file requires `name` or `index`; `@depends` is rejected. Saved
 execution skips assertions, captures, conditions, hooks, shell/database blocks,
-and `@waitFor`.
+and `@waitFor`. `hitspec_fetch` never persists the response.
 
 `hitspec_list_requests` accepts optional workspace-relative `path` (directory or
 Hitspec file), defaults to the workspace root, and searches recursively. It
@@ -1283,10 +1293,11 @@ returns an error if any discovered file is invalid rather than returning an
 incomplete list. `hitspec_validate` requires workspace-relative `file` and
 reports `file`, `valid`, `requests`, and `errors`.
 
-Every successful tool call returns one MCP `TextContent` item and no
-`StructuredContent`. Raw fetch output is a JSON text envelope with base64 data;
-text and Markdown are rendered directly; JSON, discovery, and validation
-documents are serialized into text content.
+Every successful tool call includes MCP `TextContent`. Raw fetch output is a
+JSON text envelope with base64 data; text and Markdown are rendered directly;
+JSON, discovery, validation, and search documents are serialized into text
+content. Webpage capture also publishes its typed compact stash receipt as
+structured content when the client supports it.
 
 Paths are fixed to the startup workspace after symlink resolution. Network
 requests are public-only by default. Under that policy, a saved request using
@@ -1294,10 +1305,11 @@ digest, AWS, or OAuth2 auth, multipart data, or a configured proxy is rejected;
 the proxy is not ignored. `--allow-private-network` is an operator grant for
 private/loopback targets and also enables those standard saved-request modes and
 configured proxies. URL credentials are rejected and provenance drops query
-strings. stdout is JSON-RPC only. The server does not write files or run
-shell/database blocks, history, or watchers.
+strings. stdout is JSON-RPC only. The server does not expose arbitrary output
+paths or run shell/database blocks, history, or watchers. Durable writes occur
+only through the explicitly configured file.cheap adapter.
 
-Hitspec does not invoke file.cheap. Persist a reviewed artifact explicitly:
+For a human-reviewed handoff, persist explicitly:
 
 ```bash
 hitspec fetch URL --format markdown -o response.md
@@ -1305,8 +1317,69 @@ fcheap save response.md --tool hitspec --tag hitspec-response --index
 ```
 
 MCPHub can expose both servers to Local Agent with namespaced, lazy tools.
-TinyVault-native references are deferred; do not place secrets in `.http`
+Native tvault references are deferred; do not place secrets in `.http`
 files, command arguments, MCP config, URLs, tags, logs, or provenance.
+
+### Local Agent Web Surface
+
+Configure the optional server-owned provider and artifact sink to expose the
+stable Hitspec discovery/retrieval/evidence path:
+
+```text
+Local Agent -> MCPHub -> Hitspec
+                         |-- hitspec_search_web      (discovery)
+                         |-- hitspec_fetch           (retrieval)
+                         `-- hitspec_capture_webpage (durable evidence -> file.cheap)
+```
+
+Tavily is an internal initial provider, never another model-visible MCP server.
+The normalized search input contains only `query`, `max_results` (1–10),
+`language`, `freshness`, `include_domains`, and `exclude_domains`. It never
+accepts a provider, endpoint, API key, authorization header, or arbitrary
+headers. The response is capped at 64 KiB and contains `kind: "discovery"`,
+normalized `query`, `results`, and `truncated`. Results contain only `title`,
+`url`, `domain`, `snippet`, optional `published_at`, and a response-local
+`citation_id`. Provider-specific metadata, request IDs, scores, generated
+answers, and raw content are never exposed. Discovery results are not verified
+evidence, and `hitspec_search_web` never persists them.
+
+`hitspec_capture_webpage` accepts `url` plus optional `name`, `tags`, `ttl`, and
+`index` (default `true`). It performs a public GET and returns no page content,
+only `url`, `final_url`, `title`, `http_status`, `content_type`,
+`markdown_bytes`, and a compact `stash` receipt. The stash reports its ID,
+name, status, creation/expiry metadata, tags, content hash, file count, total
+size, whether indexing was requested and completed, and any failures.
+`hitspec_fetch` never persists content.
+
+Inject `TAVILY_API_KEY` through the MCPHub/tvault child-process boundary, not
+the parent environment or tool arguments:
+
+```yaml
+vault: tavily
+vault_only: [TAVILY_API_KEY]
+env:
+  HITSPEC_SEARCH_PROVIDER: tavily
+```
+
+`vault_only` limits what tvault adds to the child process; it does not erase a
+`TAVILY_API_KEY` already inherited from MCPHub's parent environment. Do not
+export the key globally.
+
+Search may be explicitly allowlisted for AUTO. Webpage capture may be allowlisted
+only when confined to the configured artifact store. Fetch remains approval-gated
+because it accepts methods, headers, and bodies. AUTO never relaxes network policy.
+
+Capture receipts keep web execution, durable storage, and indexing as separate
+states. A parseable receipt with a stash ID may include post-save failures and
+must not be saved again; an absent stash ID is outcome-unknown and requires
+inspection before retrying.
+
+Before replacing an installed binary, record its tool schemas and preserve the
+`hitspec_capture_webpage` contract. A candidate is eligible for cutover only
+when `mcphub doctor --server hitspec --probe` shows all five tools (search,
+fetch, webpage capture, list, and validate), followed by a successful
+`hitspec_search_web` → `hitspec_capture_webpage` → `fcheap search` canary.
+Retain the previous binary for rollback.
 
 ## Mock Server
 

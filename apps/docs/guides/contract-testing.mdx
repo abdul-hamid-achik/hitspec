@@ -89,7 +89,7 @@ Run contract verification as part of the provider's CI pipeline:
 contract-test:
   runs-on: ubuntu-latest
   steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Start provider
       run: docker compose up -d
     - name: Wait for health

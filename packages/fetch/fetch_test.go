@@ -37,6 +37,22 @@ func TestFetchPreservesBodyFollowsRedirectAndEnforcesLimit(t *testing.T) {
 	}
 }
 
+func TestFetchAddsUserAgentWhenHeadersAreNil(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("User-Agent"); got != "hitspec-web-capture" {
+			t.Errorf("User-Agent = %q", got)
+		}
+		_, _ = io.WriteString(w, "ok")
+	}))
+	defer server.Close()
+	result, err := NewService().Fetch(context.Background(), Request{
+		URL: server.URL, UserAgent: "hitspec-web-capture",
+	})
+	if err != nil || string(result.Body) != "ok" {
+		t.Fatalf("result=%#v err=%v", result, err)
+	}
+}
+
 func TestFetchHonorsCancellationAndPublicPolicy(t *testing.T) {
 	started := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {

@@ -1,6 +1,6 @@
 ---
 title: "MCP server"
-description: "Expose bounded Hitspec fetch, discovery, and validation tools over stdio"
+description: "Expose bounded fetch, live web search, and explicit durable capture over stdio"
 ---
 
 Run Hitspec as a workspace-scoped Model Context Protocol server:
@@ -10,16 +10,24 @@ hitspec mcp serve --workspace /absolute/path/to/api-workspace
 ```
 
 stdout is reserved exclusively for MCP JSON-RPC. The server does not start run
-history or a file watcher, execute shell hooks or database assertions, or write
-response files.
+history or a file watcher or execute shell hooks or database assertions. In
+v2.18.0, web search and durable capture are registered only when their
+operator-owned provider and artifact sink, respectively, are configured at
+startup.
 
 ## Tools
 
-| Tool | Purpose |
-| --- | --- |
-| `hitspec_fetch` | Fetch one direct URL or one saved request as `raw`, `text`, `markdown`, or `json`. |
-| `hitspec_list_requests` | List names, methods, source lines, and tags in workspace Hitspec files. |
-| `hitspec_validate` | Parse and structurally validate one workspace file without executing it. |
+| Tool | Purpose | Registered when |
+| --- | --- | --- |
+| `hitspec_fetch` | Fetch one direct URL or one saved request as `raw`, `text`, `markdown`, or `json`. | Always |
+| `hitspec_search_web` | Search the live public web and return normalized discovery candidates without persistence. | A search provider is configured |
+| `hitspec_capture_webpage` | GET one public webpage, render Markdown, and preserve it in file.cheap. | An artifact sink is configured |
+| `hitspec_list_requests` | List names, methods, source lines, and tags in workspace Hitspec files. | Always |
+| `hitspec_validate` | Parse and structurally validate one workspace file without executing it. | Always |
+
+Hitspec is the only model-visible web surface. Tavily is the initial internal
+search provider and can be replaced without changing these tool names or
+schemas.
 
 ### `hitspec_fetch` input
 
@@ -41,8 +49,78 @@ response files.
 A file containing multiple requests requires `name` or `index`. A saved request
 that declares `@depends` is rejected. Assertions, captures, conditions, hooks,
 shell blocks, database assertions, and `@waitFor` are not executed.
+`hitspec_fetch` never persists the response; use `hitspec_capture_webpage` for a
+durable artifact.
 
-### Discovery and validation input
+### Live web search and capture
+
+`hitspec_search_web` has this provider-neutral tool input:
+
+| Field | Type | Default and behavior |
+| --- | --- | --- |
+| `query` | string | Required; maximum 512 Unicode characters. |
+| `max_results` | integer | `5`; accepts 1–10. |
+| `language` | string | Optional BCP 47 language hint. A provider returns an explicit error when it cannot apply the filter; Tavily does not currently support it. |
+| `freshness` | string | `any`; accepts `any`, `day`, `week`, `month`, or `year`. |
+| `include_domains` | string[] | Optional; at most 20 normalized public domains. |
+| `exclude_domains` | string[] | Optional; at most 20 normalized public domains. A domain cannot appear in both lists. |
+
+The tool does not accept a provider, endpoint, API key, authorization header,
+arbitrary headers, generated-answer switch, or raw-content switch. Tavily is an
+internal adapter selected by the server operator, not a separate model-visible
+tool.
+
+The JSON document is capped at 64 KiB. It contains `kind: "discovery"`,
+normalized `query`, `results`, and `truncated`. Each result contains only
+`title`, `url`, `domain`, `snippet`, optional `published_at`, and a response-local
+`citation_id`. `truncated` is `true` whenever candidates are
+omitted by the result limit or response cap; for the latter, Hitspec removes
+trailing results. Provider-specific request IDs and scores, generated answers,
+raw page content, and credentials are never exposed. Search snippets are
+discovery candidates, not verified or durable evidence.
+
+`hitspec_capture_webpage` has this compatibility-preserving input:
+
+| Field | Type | Default and behavior |
+| --- | --- | --- |
+| `url` | string | Required public HTTP(S) webpage URL. |
+| `name` | string | Optional file.cheap stash name; defaults to the HTML title. |
+| `tags` | string[] | Optional extra tags; `web` and `markdown` are always included. |
+| `ttl` | string | Optional file.cheap retention such as `24h`, `7d`, `30d`, or `2026-12-31`. |
+| `index` | boolean | `true`; index the Markdown immediately for `fcheap search`. |
+
+The tool performs one public-network GET, renders static HTML as Markdown, and
+saves it through the fixed file.cheap adapter. It returns a compact receipt,
+not the page body or rendered Markdown:
+
+```json
+{
+  "url": "https://example.com/docs",
+  "final_url": "https://example.com/docs",
+  "title": "Example documentation",
+  "http_status": 200,
+  "content_type": "text/html",
+  "markdown_bytes": 1842,
+  "stash": {
+    "id": "stash-id",
+    "name": "Example documentation",
+    "status": "saved",
+    "created_at": "2026-07-13T12:00:00Z",
+    "tags": ["web", "markdown"],
+    "content_hash": "e3b0c442...",
+    "file_count": 1,
+    "total_size": 1842,
+    "index_requested": true,
+    "indexed": true
+  }
+}
+```
+
+The stash object includes `file_count` and `total_size` and may also include
+`expires_at`. Inspect `status`, `indexed`, and `failed` when present before
+deciding whether follow-up is needed.
+
+### Request discovery and validation input
 
 - `hitspec_list_requests` accepts an optional `path`: a workspace-relative
   directory or `.http`/`.hitspec` file. It defaults to the workspace root and
@@ -57,9 +135,8 @@ checked after symlink resolution.
 
 ### Tool result content
 
-Every successful tool call returns exactly one MCP `TextContent` item and does not set
-`StructuredContent`. This preserves results in clients that do not pass through
-structured output for unrecognized tools:
+Every successful tool call includes an MCP `TextContent` representation so
+clients that do not pass through structured output can still consume it:
 
 - `hitspec_fetch` with `raw` returns a JSON text envelope containing sanitized
   source, status, content type, byte size, `encoding: "base64"`, and `data`.
@@ -67,6 +144,9 @@ structured output for unrecognized tools:
   returns the machine-safe response envelope serialized as text content.
 - Discovery and validation return their JSON documents serialized as text
   content.
+- Search returns the bounded discovery JSON as text content. Webpage capture
+  also publishes its typed compact receipt as structured content when the client
+  supports it.
 
 ## Server flags
 
@@ -76,6 +156,13 @@ structured output for unrecognized tools:
 | `--max-body-bytes` | `1048576` (1 MiB) | Maximum fetched response-body size. |
 | `--timeout` | `30s` | Maximum duration of one HTTP request. |
 | `--allow-private-network` | `false` | Allows private, loopback, and other non-public targets; it also enables the standard saved-request modes described below. |
+| `--search-provider` | `none` | Live search provider. Currently `none` or `tavily`; may also come from `HITSPEC_SEARCH_PROVIDER`. |
+| `--fcheap-path` | unset | Fixed file.cheap executable for webpage capture; may also come from `HITSPEC_FCHEAP_PATH`. |
+| `--fcheap-stash-dir` | file.cheap default | Optional fixed stash directory; may also come from `HITSPEC_FCHEAP_STASH_DIR`. |
+
+Tavily authentication comes only from the server process's `TAVILY_API_KEY`.
+The key is never accepted as a tool argument or returned in output. The
+file.cheap child receives an allowlisted environment that excludes this key.
 
 ## Limits and network policy
 
@@ -103,8 +190,20 @@ This operator grant also switches saved requests to the standard Hitspec HTTP
 client, enabling configured proxies and digest, AWS, OAuth2, and multipart
 request modes. Grant it only to agents and workspaces that need that authority.
 
-Network tools are intentionally not marked read-only because an HTTP request
-can have external side effects.
+`hitspec_fetch` and durable webpage capture are intentionally not marked
+read-only because HTTP requests and artifact writes can have external effects.
+The discovery-only `hitspec_search_web` tool is marked read-only and open-world.
+
+## Approval boundaries
+
+| Tool | Recommended policy |
+| --- | --- |
+| `hitspec_search_web` | Eligible for AUTO only when this exact bounded tool is explicitly allowlisted. |
+| `hitspec_capture_webpage` | Treat as a public-network read plus durable write; allowlist only when both effects are approved. |
+| `hitspec_fetch` | Keep approval-gated because callers can choose methods, headers, and bodies. It never persists content. |
+
+AUTO never enables private-network access or relaxes URL, redirect, DNS, body,
+or workspace checks.
 
 ## Direct MCP client configuration
 
@@ -113,11 +212,19 @@ can have external side effects.
   "mcpServers": {
     "hitspec": {
       "command": "hitspec",
-      "args": ["mcp", "serve", "--workspace", "/absolute/api-workspace"]
+      "args": [
+        "mcp", "serve",
+        "--workspace", "/absolute/api-workspace",
+        "--search-provider", "tavily",
+        "--fcheap-path", "/absolute/path/to/fcheap"
+      ]
     }
   }
 }
 ```
+
+Inject `TAVILY_API_KEY` into the server process through the MCP host or tvault;
+do not write its value into this configuration.
 
 See [Agent artifact workflow](/integrations/agent-artifacts) for MCPHub, Local
 Agent, and file.cheap composition.

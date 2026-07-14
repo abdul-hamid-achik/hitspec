@@ -1,12 +1,35 @@
 ---
 title: "Agent artifact workflow"
-description: "Compose Hitspec with file.cheap, MCPHub, Local Agent, and a future TinyVault boundary"
+description: "Compose Hitspec with file.cheap, MCPHub, Local Agent, and an external tvault boundary"
 ---
 
-Hitspec owns HTTP execution and response rendering. file.cheap owns durable
-artifact storage and indexing. MCPHub owns lazy tool discovery and oversized
-MCP-result spooling. Local Agent consumes the namespaced tools. The integration
-uses those existing contracts rather than linking one product into another.
+Hitspec owns HTTP execution, live-web discovery, response rendering, and the
+explicit artifact-adapter boundary. file.cheap owns durable artifact storage
+and indexing. MCPHub owns lazy tool discovery and oversized MCP-result spooling.
+Local Agent consumes the namespaced tools.
+
+## Local Agent web surface
+
+Hitspec is the only model-visible web abstraction. Tavily is an internal,
+replaceable provider selected by the server operator; do not register Tavily as
+another MCP server for Local Agent.
+
+```text
+Local Agent
+    └── MCPHub
+          └── Hitspec
+                ├── hitspec_search_web       discovery
+                ├── hitspec_fetch            retrieval
+                └── hitspec_capture_webpage  durable evidence
+                              └── file.cheap  artifact corpus
+```
+
+This is the stable v2.18.0 web surface. `hitspec_search_web` discovers candidate
+sources, `hitspec_fetch` reads without persistence, and
+`hitspec_capture_webpage` creates durable page evidence.
+`hitspec_list_requests` and `hitspec_validate` remain workspace tools. Search
+returns a provider-neutral `kind: "discovery"` document capped at 64 KiB;
+capture returns a compact stash receipt with the durable content hash.
 
 ## Save a response in file.cheap
 
@@ -29,8 +52,11 @@ Useful tags include `hitspec-response`, `format:raw|text|markdown|json`, a safe
 request name, and `status:<code>`. Do not put credentials, tokens, cookies, or
 URL query parameters in names, tags, or source metadata.
 
-Hitspec does not invoke `fcheap` itself. This keeps a failed artifact save from
-changing HTTP execution semantics and lets each tool evolve independently.
+The same reviewable CLI handoff remains useful for humans. For agents, start the
+Hitspec MCP server with a fixed `--fcheap-path`; `hitspec_capture_webpage`
+performs the handoff inside a private temporary directory and returns a compact
+receipt. `hitspec_fetch` never persists. The model cannot choose the executable,
+stash directory, or output path.
 
 ## Register both servers in MCPHub
 
@@ -42,7 +68,17 @@ response_budget: 32KB
 servers:
   hitspec:
     command: hitspec
-    args: [mcp, serve, --workspace, /absolute/api-workspace]
+    args:
+      - mcp
+      - serve
+      - --workspace
+      - /absolute/api-workspace
+      - --fcheap-path
+      - /absolute/path/to/fcheap
+    vault: tavily
+    vault_only: [TAVILY_API_KEY]
+    env:
+      HITSPEC_SEARCH_PROVIDER: tavily
     enabled: true
     tags: [http, api, testing]
 
@@ -60,8 +96,9 @@ agents:
     servers: [hitspec, fcheap]
 ```
 
-Agents see namespaced tools such as `hitspec__hitspec_fetch` and
-`fcheap__fcheap_save`. Verify the catalog before changing an agent config:
+Agents see namespaced tools such as `hitspec__hitspec_search_web`,
+`hitspec__hitspec_fetch`, `hitspec__hitspec_capture_webpage`, and
+`fcheap__fcheap_search`. Verify the catalog before changing an agent config:
 
 ```bash
 mcphub doctor --json --probe
@@ -71,26 +108,63 @@ mcphub sync local-agent --write
 ```
 
 MCPHub may spool a large inline result and return a temporary handle. That is a
-transport safeguard, not durable artifact storage. The current file.cheap MCP
-save contract accepts a filesystem path while `hitspec_fetch` returns inline
-content, so the supported durable workflow is CLI → reviewed file → `fcheap
-save`. A future workspace-scoped artifact handle can close that gap without
-accepting arbitrary output paths from MCP.
+transport safeguard, not durable artifact storage. Hitspec's webpage capture
+invokes the fixed file.cheap CLI with argv (never a shell), parses its
+JSON receipt even after a partial post-save failure, and removes the private
+handoff.
+The file.cheap child receives only basic process settings and `FCHEAP_*`
+configuration; web-provider credentials are not inherited.
 
-## TinyVault: deferred boundary
+`vault_only` limits the values tvault adds to the Hitspec child process. It does
+not remove `TAVILY_API_KEY` if that variable is already exported by MCPHub's
+parent process, so do not export the key globally. The model cannot supply the
+provider, endpoint, API key, authorization header, file.cheap executable, stash
+directory, or output path as tool arguments.
 
-Native TinyVault resolution is intentionally deferred. This release has no
-TinyVault-specific syntax and never writes fetched credentials back to a
-Hitspec environment automatically. Until a separate secret-reference contract
-is defined:
+## Approval policy
+
+| Tool | Recommended policy |
+| --- | --- |
+| `hitspec_search_web` | Eligible for AUTO only when the exact bounded tool is explicitly allowlisted. Results are discovery, not evidence. |
+| `hitspec_capture_webpage` | Public-network read plus durable write; allowlist only after both effects are accepted. |
+| `hitspec_fetch` | Keep approval-gated because it accepts methods, headers, and bodies. It never persists content. |
+
+AUTO does not grant private-network access or weaken SSRF, redirect, body-size,
+or workspace checks.
+
+## Safe rollout
+
+Before replacing a binary already connected to MCPHub, record its executable,
+checksum, and complete tool schemas. If it already exposes
+`hitspec_capture_webpage`, preserve that public name and compatible inputs before
+cutover; rebuilding from a checkout with a smaller catalog is a regression.
+
+Build a candidate without replacing the active binary, then require:
+
+1. `mcphub doctor --server hitspec --probe` shows all five tools: search, fetch,
+   webpage capture, list, and validate.
+2. A canary completes `hitspec_search_web` → `hitspec_capture_webpage` →
+   `fcheap search`, with the expected normalized source and hashes.
+3. AUTO and approval behavior matches the table above and no secret appears in
+   process arguments, logs, results, or file.cheap child environment.
+
+Keep the previous executable and configuration for immediate rollback.
+
+## tvault boundary
+
+The MCPHub/tvault process wrapper above is the external injection boundary.
+Native tvault resolution inside Hitspec remains deferred: Hitspec has no
+vault-specific request syntax and never writes fetched credentials back to an
+environment automatically. Until a separate secret-reference contract is
+defined:
 
 - inject required values into the Hitspec process environment outside the
   request or tool arguments;
 - do not place secret values in `.http` files, MCPHub YAML, URL query strings,
   output filenames, tags, logs, or Markdown provenance; and
-- keep MCPHub's future `vault`/`vault_only` process wrapper as the boundary,
-  rather than teaching Hitspec to read a vault ad hoc.
+- keep MCPHub's `vault`/`vault_only` process wrapper as the boundary rather than
+  teaching Hitspec to read a vault ad hoc.
 
 The follow-up design must define reference syntax, precedence, redaction,
-missing-secret errors, and the boundary between Hitspec environments and
-TinyVault before native support is enabled.
+missing-secret errors, and the boundary between Hitspec environments and tvault
+before native support is enabled.

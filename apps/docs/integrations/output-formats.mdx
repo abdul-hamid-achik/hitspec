@@ -149,13 +149,14 @@ hitspec run tests/ --output junit --output-file test-results.xml
   run: hitspec run tests/ --output junit --output-file test-results.xml
 
 - name: Publish results
-  uses: dorny/test-reporter@v1
-  if: always()
+  uses: EnricoMi/publish-unit-test-result-action@v2
+  if: ${{ !cancelled() }}
   with:
-    name: API Tests
-    path: test-results.xml
-    reporter: java-junit
+    files: test-results.xml
+    comment_mode: off
 ```
+
+Grant the workflow or job token `checks: write` when publishing check runs.
 
 ## TAP (Test Anything Protocol)
 
@@ -218,7 +219,7 @@ The HTML report includes:
 - name: Run API tests
   run: hitspec run tests/ --output html --output-file report.html
 
-- uses: actions/upload-artifact@v4
+- uses: actions/upload-artifact@v7
   if: always()
   with:
     name: api-test-report

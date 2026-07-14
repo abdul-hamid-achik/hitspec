@@ -99,10 +99,14 @@ runs:
   steps:
     - name: Install hitspec
       shell: bash
+      env:
+        HITSPEC_VERSION: ${{ inputs.version }}
       run: |
         set -e
 
-        VERSION="${{ inputs.version }}"
+        # Keep action inputs out of the generated shell source. Quoting the
+        # environment value makes even hostile version text inert data.
+        VERSION="$HITSPEC_VERSION"
 
         # Resolve 'latest' to actual version
         if [ "$VERSION" = "latest" ]; then
