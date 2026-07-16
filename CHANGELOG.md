@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.18.1] - 2026-07-16
+
+### Fixed
+
+- Cleared the macOS Gatekeeper quarantine attribute on the Homebrew cask
+  install so `brew install --cask abdul-hamid-achik/tap/hitspec` binaries run
+  without a manual `xattr` step.
+
 ## [2.18.0] - 2026-07-13
 
 ### Added

@@ -35,7 +35,7 @@ expect status 200
 ## Install
 
 ```bash
-brew install abdul-hamid-achik/tap/hitspec
+brew install --cask abdul-hamid-achik/tap/hitspec
 go install github.com/abdul-hamid-achik/hitspec/apps/cli@latest
 ```
 

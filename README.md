@@ -609,13 +609,26 @@ Use the official hitspec action to run API tests in your CI pipeline:
 | `output` | Output format (console, json, junit, tap, html) | `junit` |
 | `output-file` | Write output to file | - |
 | `tags` | Filter by tags | - |
+| `name` | Filter by request name pattern | - |
+| `timeout` | Global timeout in milliseconds | - |
 | `parallel` | Run in parallel | `false` |
+| `concurrency` | Max concurrent requests when parallel is enabled | - |
 | `bail` | Stop on first failure | `false` |
+| `verbose` | Show detailed output | `false` |
+| `insecure` | Disable SSL certificate validation | `false` |
+| `proxy` | Proxy URL for requests | - |
 | `stress` | Enable stress testing | `false` |
 | `duration` | Stress test duration | `30s` |
 | `rate` | Requests per second | `10` |
+| `vus` | Number of virtual users (alternative to rate) | - |
+| `max-vus` | Maximum concurrent requests in stress mode | - |
+| `think-time` | Think time between requests per VU | - |
+| `ramp-up` | Ramp-up time to reach target rate/VUs | - |
 | `threshold` | Pass/fail thresholds | - |
+| `profile` | Stress profile name from hitspec.yaml | - |
 | `version` | hitspec version | `latest` |
+
+See [action.yml](action.yml) for the authoritative input list.
 
 #### Stress Testing in CI
 
