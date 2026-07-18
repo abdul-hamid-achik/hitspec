@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.19.0] - 2026-07-18
+
+### Added
+
+- Added `hitspec mcp probe` for CI-friendly MCP lifecycle and paginated tool
+  discovery checks over stdio and Streamable HTTP. Required tools can be
+  asserted with repeatable `--require-tool` flags.
+- Added `hitspec mcp call` for explicit tool invocations with inline or
+  file-backed JSON arguments, advertised input/output JSON Schema validation,
+  stable JSON reports, and distinct failures for protocol errors, contract
+  mismatches, and MCP `isError` results.
+
+### Documentation
+
+- Expanded the MCP reference and LLM documentation with client examples,
+  transport flags, exit behavior, and security boundaries.
+
+### Security
+
+- MCP stdio targets execute direct argv without a shell. HTTP client probes
+  reject redirects, URL credentials, and transport-managed header overrides;
+  human output strips terminal control characters.
+
 ## [2.18.1] - 2026-07-16
 
 ### Fixed
@@ -515,7 +538,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `hitspec init` - Initialize a new project
 - `hitspec version` - Show version information
 
-[Unreleased]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.18.0...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.19.0...HEAD
+[2.19.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.18.1...v2.19.0
+[2.18.1]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.18.0...v2.18.1
 [2.18.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.17.0...v2.18.0
 [2.17.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.16.0...v2.17.0
 [2.16.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.15.0...v2.16.0

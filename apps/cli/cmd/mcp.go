@@ -20,6 +20,8 @@ var mcpCmd = newMCPCommand()
 func newMCPCommand() *cobra.Command {
 	command := &cobra.Command{Use: "mcp", Short: "Model Context Protocol commands"}
 	command.AddCommand(newMCPServeCommand())
+	command.AddCommand(newMCPProbeCommand())
+	command.AddCommand(newMCPCallCommand())
 	return command
 }
 

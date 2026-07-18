@@ -16,4 +16,5 @@
 //   - docs:       Output AI-readable documentation
 //   - completion: Generate shell completion scripts
 //   - version:    Show hitspec version information
+//   - mcp:        Serve, probe, and call Model Context Protocol tools
 package cmd

@@ -1,7 +1,93 @@
 ---
-title: "MCP server"
-description: "Expose bounded fetch, live web search, and explicit durable capture over stdio"
+title: "MCP client and server"
+description: "Probe and call MCP servers, or expose Hitspec tools over stdio"
 ---
+
+## Test an MCP server
+
+Hitspec can test local stdio servers and remote Streamable HTTP endpoints from
+the same CLI. `probe` completes protocol negotiation, follows every
+`tools/list` page, resolves each advertised input/output JSON Schema, and
+returns a failed test when a required tool is missing.
+
+<Tabs>
+  <Tab title="stdio">
+    Put the server executable and each argument after `--`. Hitspec executes
+    the argv directly and does not invoke a shell.
+
+    ```bash
+    hitspec mcp probe \
+      --require-tool echo \
+      --require-tool health \
+      -- ./my-mcp-server --config ./server.json
+    ```
+  </Tab>
+  <Tab title="Streamable HTTP">
+    ```bash
+    hitspec mcp probe \
+      --url http://127.0.0.1:3000/mcp \
+      --require-tool echo \
+      --json
+    ```
+  </Tab>
+</Tabs>
+
+The client uses the official Go SDK, whose current release supports stable MCP
+`2025-11-25`, and reports the protocol version actually negotiated with the
+server in both human and JSON output.
+
+### Call a tool
+
+`call` first verifies that the server advertises the exact, case-sensitive tool
+name, then sends one explicit `tools/call` request:
+
+```bash
+# Inline JSON arguments over stdio
+hitspec mcp call echo \
+  --args '{"message":"hello"}' \
+  -- ./my-mcp-server
+
+# Arguments from a bounded JSON file over Streamable HTTP
+hitspec mcp call weather \
+  --args @weather.json \
+  --url https://mcp.example.com/mcp \
+  --json
+```
+
+Arguments must be a JSON object and are limited to 1 MiB when read from a file.
+Before execution, Hitspec validates them against the advertised `inputSchema`;
+successful structured output is validated against `outputSchema` when present.
+Hitspec prints tool content before exiting. A protocol or transport error exits
+with code `4`; a contract mismatch, an advertised tool that returns
+`isError: true`, an unknown tool, or a missing `--require-tool` exits with code
+`1`. This preserves MCP's distinction between a failed tool execution and a
+failed protocol request.
+
+<Warning>
+  `mcp call` executes the selected tool and may cause external changes. Review
+  the tool and arguments before running it. Tool annotations, descriptions, and
+  output are server-provided data, not trusted authorization metadata.
+</Warning>
+
+### Client flags
+
+| Flag | Applies to | Default | Behavior |
+| --- | --- | --- | --- |
+| `--url` | Both | unset | Streamable HTTP endpoint. Mutually exclusive with a stdio argv. |
+| `--timeout` | Both | `30s` | Maximum duration for connect, discovery, and call. |
+| `--json` | Both | `false` | Emit a stable machine-readable report. |
+| `--header` | HTTP | unset | Repeatable `Name: Value` header. Transport-managed MCP headers are rejected. |
+| `--env` | stdio | inherited | Repeatable `KEY=VALUE` child-process override. Hitspec does not echo values; child stderr is forwarded. |
+| `--cwd` | stdio | current directory | Child-process working directory. |
+| `--require-tool` | `probe` | unset | Require a tool name. Repeat the flag or pass comma-separated names. |
+| `--args` | `call` | `{}` | Inline JSON object or `@path` to a JSON file. |
+
+HTTP redirects are rejected so credentials cannot cross endpoint boundaries.
+URLs containing credentials are also rejected; send authorization explicitly
+with `--header`. For repeatable automation, inject sensitive values through the
+calling environment or secret manager and avoid committing them to scripts.
+
+## Run Hitspec as an MCP server
 
 Run Hitspec as a workspace-scoped Model Context Protocol server:
 

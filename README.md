@@ -283,12 +283,19 @@ hitspec diff baseline.json current.json --threshold 10%
 hitspec studio                        # Open the interactive app
 hitspec serve --api-only --port 8080  # Start the REST/WebSocket API server
 hitspec mcp serve --workspace .       # Start the workspace-scoped MCP server
+hitspec mcp probe --require-tool echo -- ./mcp-server
+hitspec mcp call echo --args '{"message":"hi"}' -- ./mcp-server
 ```
 
 ### Response fetch and MCP
 
 `hitspec fetch` emits exactly one response body; `raw` is byte-exact while
 `text`, `markdown`, and `json` provide readable or machine-safe representations.
+Use `hitspec mcp probe` to negotiate with another MCP server and verify its
+advertised tools over stdio or Streamable HTTP. Use `hitspec mcp call` for one
+explicit tool invocation with advertised input/output schema validation;
+`--json` makes both commands CI-friendly, and contract mismatches or tool
+results with `isError: true` exit non-zero.
 Register `hitspec` as a stdio MCP server with command `hitspec` and args
 `["mcp", "serve", "--workspace", "/absolute/workspace"]`. It exposes bounded
 fetch, request-discovery, and validation tools. In v2.18.0, configure

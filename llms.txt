@@ -1231,6 +1231,43 @@ explicit CLI override described above. Assertions, captures, conditions, hooks,
 shell blocks, database assertions, and `@waitFor` are not executed. URL
 credentials are rejected for both direct and saved requests.
 
+## MCP Client Testing
+
+Probe a local stdio server:
+
+```bash
+hitspec mcp probe --require-tool echo -- ./my-mcp-server --config server.json
+```
+
+Probe a Streamable HTTP endpoint:
+
+```bash
+hitspec mcp probe --url http://127.0.0.1:3000/mcp --require-tool echo --json
+```
+
+`probe` negotiates MCP, traverses all `tools/list` pages, resolves advertised
+input/output JSON Schemas, sorts tools for deterministic output, and fails with
+exit code 1 when any `--require-tool` is missing.
+
+Call one advertised tool:
+
+```bash
+hitspec mcp call echo --args '{"message":"hello"}' -- ./my-mcp-server
+hitspec mcp call weather --args @weather.json --url https://example.com/mcp --json
+```
+
+`--args` accepts a JSON object or a file prefixed with `@`; files are limited to
+1 MiB. Arguments are validated against `inputSchema`, and successful
+`structuredContent` is validated against `outputSchema` when advertised.
+Contract mismatches, `isError: true`, and unknown tools are test failures (exit
+1). Connection, protocol, and timeout failures exit 4. `call` may cause
+external changes.
+
+Common flags: `--url`, `--timeout` (30s), `--json`, repeatable HTTP `--header`,
+repeatable stdio `--env KEY=VALUE`, and stdio `--cwd`. Select exactly one
+target: `--url` or an argv after `--`. Stdio uses direct argv execution without
+a shell. HTTP redirects and URL credentials are rejected.
+
 ## MCP Server
 
 Run the stdio MCP server:
