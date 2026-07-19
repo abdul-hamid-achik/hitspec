@@ -1279,6 +1279,12 @@ hitspec mcp serve --workspace /absolute/api-workspace
 Release status: v2.18.0 exposes the stable search, fetch, and webpage-capture
 web surface described below.
 
+MCP initialization instructions name only the tools registered for that server
+process, so clients are not prompted to use unconfigured search or capture
+tools. They also state whether `hitspec_fetch` is public-only or has
+operator-enabled non-public HTTP(S) authority, including private, loopback,
+link-local, and reserved targets; webpage capture remains public-only.
+
 Tools:
 - `hitspec_fetch`: one direct URL or saved request as raw base64, text,
   Markdown, or JSON.
@@ -1296,7 +1302,7 @@ Tools:
 | `--workspace` | `.` | Fixed filesystem boundary; use an absolute path in client config |
 | `--max-body-bytes` | 1048576 (1 MiB) | Maximum fetched response-body size |
 | `--timeout` | 30s | Maximum duration of one HTTP request |
-| `--allow-private-network` | false | Allow private/loopback targets and standard saved-request modes |
+| `--allow-private-network` | false | Allow non-public targets (including private, loopback, link-local, and reserved) and standard saved-request modes |
 | `--search-provider` | none | Live search provider (`none` or `tavily`); defaults from `HITSPEC_SEARCH_PROVIDER` |
 | `--fcheap-path` | unset | Fixed file.cheap executable for durable webpage capture; defaults from `HITSPEC_FCHEAP_PATH` |
 | `--fcheap-stash-dir` | file.cheap default | Optional fixed stash root; defaults from `HITSPEC_FCHEAP_STASH_DIR` |
@@ -1340,9 +1346,10 @@ Paths are fixed to the startup workspace after symlink resolution. Network
 requests are public-only by default. Under that policy, a saved request using
 digest, AWS, or OAuth2 auth, multipart data, or a configured proxy is rejected;
 the proxy is not ignored. `--allow-private-network` is an operator grant for
-private/loopback targets and also enables those standard saved-request modes and
-configured proxies. URL credentials are rejected and provenance drops query
-strings. stdout is JSON-RPC only. The server does not expose arbitrary output
+non-public targets, including private, loopback, link-local, and reserved
+addresses; it also enables those standard saved-request modes and configured
+proxies. URL credentials are rejected and provenance drops query strings.
+stdout is JSON-RPC only. The server does not expose arbitrary output
 paths or run shell/database blocks, history, or watchers. Durable writes occur
 only through the explicitly configured file.cheap adapter.
 

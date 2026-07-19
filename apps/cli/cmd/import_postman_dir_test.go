@@ -14,6 +14,7 @@ import (
 // the command wrote a single file at that path; it now writes
 // <dir>/<collection-name>.http inside the directory.
 func TestImportPostman_OutputDirectory(t *testing.T) {
+	resetRootCommandForTest(t)
 	dir := t.TempDir()
 	collectionPath := filepath.Join(dir, "col.json")
 	// Minimal Postman Collection v2.1 with one GET item.
@@ -23,7 +24,6 @@ func TestImportPostman_OutputDirectory(t *testing.T) {
 }`), 0o644))
 
 	outDir := filepath.Join(dir, "out") + "/"
-	importOutputFlag = ""
 	rootCmd.SetArgs([]string{"import", "postman", collectionPath, "-o", outDir})
 	require.NoError(t, rootCmd.Execute())
 

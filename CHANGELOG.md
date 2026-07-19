@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.19.1] - 2026-07-19
+
+### Fixed
+
+- MCP initialization instructions now match the tools and effective
+  `hitspec_fetch` network authority configured for the server, instead of
+  recommending unavailable capabilities or always describing direct URLs as
+  public-only.
+
+### Security
+
+- When the operator enables `--allow-private-network`, initialization help and
+  public documentation now describe the full non-public destination authority,
+  including private, loopback, link-local, and reserved addresses. The
+  public-only default and webpage-capture policy are unchanged.
+
 ## [2.19.0] - 2026-07-18
 
 ### Added
@@ -538,7 +554,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `hitspec init` - Initialize a new project
 - `hitspec version` - Show version information
 
-[Unreleased]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.19.0...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.19.1...HEAD
+[2.19.1]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.19.0...v2.19.1
 [2.19.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.18.1...v2.19.0
 [2.18.1]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.18.0...v2.18.1
 [2.18.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.17.0...v2.18.0

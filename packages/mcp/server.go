@@ -22,13 +22,6 @@ import (
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-const instructions = `hitspec discovers and fetches public web content through bounded tools.
-Use hitspec_search_web for live discovery and treat its snippets as candidates, not verified evidence.
-Use hitspec_capture_webpage only when a durable file.cheap artifact is wanted.
-Use hitspec_list_requests to discover saved requests and hitspec_validate before execution when a file
-may be malformed. hitspec_fetch can use a direct public URL or one request in the fixed workspace. It
-never executes shell hooks or database assertions and never persists a hidden artifact.`
-
 // Options configures server-owned limits and network authority.
 type Options struct {
 	MaxBodyBytes        int64
@@ -73,10 +66,32 @@ func NewServer(version, workspace string, options Options) (*Server, error) {
 	}
 	server.srv = sdkmcp.NewServer(
 		&sdkmcp.Implementation{Name: "hitspec", Title: "hitspec HTTP tools", Version: version},
-		&sdkmcp.ServerOptions{Instructions: instructions},
+		&sdkmcp.ServerOptions{Instructions: serverInstructions(
+			server.search != nil, server.artifacts != nil, server.allowPrivate,
+		)},
 	)
 	server.register()
 	return server, nil
+}
+
+func serverInstructions(searchEnabled, captureEnabled, allowPrivate bool) string {
+	fetchInstructions := "Use hitspec_fetch for a direct public HTTP(S) URL or one request in the fixed workspace; its HTTP(S) targets are public-only."
+	if allowPrivate {
+		fetchInstructions = "Use hitspec_fetch for a direct HTTP(S) URL or one request in the fixed workspace. The operator enabled non-public network access for hitspec_fetch, so its destination policy permits private, loopback, link-local, reserved, and other HTTP(S) addresses."
+	}
+	fetchInstructions += " It never executes shell hooks or database assertions and never persists a hidden artifact."
+	lines := []string{
+		"hitspec exposes bounded HTTP and fixed-workspace tools.",
+		"Use hitspec_list_requests to discover saved requests and hitspec_validate before execution when a file may be malformed.",
+		fetchInstructions,
+	}
+	if searchEnabled {
+		lines = append(lines, "Use hitspec_search_web for live discovery and treat its snippets as candidates, not verified evidence.")
+	}
+	if captureEnabled {
+		lines = append(lines, "Use hitspec_capture_webpage only when a durable file.cheap artifact is wanted.")
+	}
+	return strings.Join(lines, "\n")
 }
 
 // Run serves MCP JSON-RPC over stdin/stdout until cancellation.

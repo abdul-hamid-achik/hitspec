@@ -17,6 +17,7 @@ import (
 // passing. The command is driven through rootCmd.Execute() so the returned
 // error (an ExitCoder carrying ExitParseError) is observable in-process.
 func TestValidate_RejectsBadFiles(t *testing.T) {
+	resetRootCommandForTest(t)
 	cases := []struct {
 		name    string // test case label
 		content string // file body
@@ -82,6 +83,7 @@ func TestValidate_RejectsBadFiles(t *testing.T) {
 // TestValidate_AcceptsValidFile ensures the rejection logic does not produce
 // false positives: a well-formed file still validates cleanly (OK, exit 0).
 func TestValidate_AcceptsValidFile(t *testing.T) {
+	resetRootCommandForTest(t)
 	dir := t.TempDir()
 	path := filepath.Join(dir, "ok.http")
 	content := "### ok\nGET http://x/a\n\n>>>\nexpect status 200\n<<<\n"

@@ -22,6 +22,7 @@ import (
 // (header + results + summary). Output is captured via --output-file so the
 // formatter writes to a file we control instead of os.Stdout.
 func TestRun_QuietSuppressesOutput(t *testing.T) {
+	resetRootCommandForTest(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -87,13 +88,14 @@ func TestNewFormatter_WiresOutputFile(t *testing.T) {
 // the error itself — root's wrapper is the single printer — so stdout must
 // contain no "Error:" line for a missing-file failure.
 func TestRun_NoDoublePrintedError(t *testing.T) {
+	resetRootCommandForTest(t)
 	// Capture os.Stdout (where the console formatter writes) to prove the
 	// command itself emits no "Error:" line.
 	rOut, wOut, err := os.Pipe()
 	require.NoError(t, err)
 	origStdout := os.Stdout
 	os.Stdout = wOut
-	defer func() { os.Stderr = origStdout; os.Stdout = origStdout }()
+	defer func() { os.Stdout = origStdout }()
 
 	rootCmd.SetArgs([]string{"run", "this-file-does-not-exist.http"})
 	_ = rootCmd.Execute()

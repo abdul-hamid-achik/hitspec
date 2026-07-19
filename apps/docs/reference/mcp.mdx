@@ -99,7 +99,12 @@ stdout is reserved exclusively for MCP JSON-RPC. The server does not start run
 history or a file watcher or execute shell hooks or database assertions. In
 v2.18.0, web search and durable capture are registered only when their
 operator-owned provider and artifact sink, respectively, are configured at
-startup.
+startup. MCP initialization instructions are built from that registered
+surface, so clients are not prompted to use unconfigured search or capture
+tools. They also state whether `hitspec_fetch` is public-only or has
+operator-enabled non-public HTTP(S) authority, including private, loopback,
+link-local, and reserved targets; this does not broaden the public-only capture
+policy.
 
 ## Tools
 

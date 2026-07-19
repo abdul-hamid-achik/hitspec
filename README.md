@@ -302,10 +302,14 @@ fetch, request-discovery, and validation tools. In v2.18.0, configure
 `--search-provider tavily` to add bounded `hitspec_search_web` discovery and
 `--fcheap-path /absolute/path/to/fcheap` to add
 `hitspec_capture_webpage`. Tavily stays behind Hitspec as an interchangeable
-server-side provider. Search results are discovery candidates;
+server-side provider. MCP initialization instructions name only the tools
+registered for that server process and state whether `hitspec_fetch` is
+public-only or has operator-enabled non-public HTTP(S) authority, including
+private, loopback, link-local, and reserved targets. Search
+results are discovery candidates;
 `hitspec_capture_webpage` turns a public webpage into durable file.cheap
 evidence, while `hitspec_fetch` never persists content. Agent requests are
-public-network only unless the server operator explicitly enables private
+public-network only unless the server operator explicitly enables non-public
 targets. See the
 [fetch](https://hitspec.dev/reference/fetch) and
 [MCP](https://hitspec.dev/reference/mcp) references.

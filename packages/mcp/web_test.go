@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -99,6 +100,131 @@ func (f *fakeWebFetcher) Fetch(_ context.Context, request fetch.Request) (*fetch
 	f.calls++
 	f.request = request
 	return f.result, f.err
+}
+
+func TestServerCapabilityContractsMatchInitializeInstructions(t *testing.T) {
+	allTools := []string{
+		"hitspec_capture_webpage",
+		"hitspec_fetch",
+		"hitspec_list_requests",
+		"hitspec_search_web",
+		"hitspec_validate",
+	}
+	tests := []struct {
+		name           string
+		searchEnabled  bool
+		captureEnabled bool
+		wantTools      []string
+	}{
+		{
+			name:      "base",
+			wantTools: []string{"hitspec_fetch", "hitspec_list_requests", "hitspec_validate"},
+		},
+		{
+			name:          "search",
+			searchEnabled: true,
+			wantTools:     []string{"hitspec_fetch", "hitspec_list_requests", "hitspec_search_web", "hitspec_validate"},
+		},
+		{
+			name:           "capture",
+			captureEnabled: true,
+			wantTools:      []string{"hitspec_capture_webpage", "hitspec_fetch", "hitspec_list_requests", "hitspec_validate"},
+		},
+		{
+			name:           "search and capture",
+			searchEnabled:  true,
+			captureEnabled: true,
+			wantTools:      allTools,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			options := Options{}
+			if test.searchEnabled {
+				options.SearchProvider = &fakeSearchProvider{}
+			}
+			if test.captureEnabled {
+				options.ArtifactSink = &fakeArtifactSink{}
+			}
+			server, err := NewServer("test", t.TempDir(), options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			session := connect(t, server)
+			initialization := session.InitializeResult()
+			if initialization == nil {
+				t.Fatal("initialize result is nil")
+			}
+			listed, err := session.ListTools(context.Background(), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			gotTools := make([]string, 0, len(listed.Tools))
+			for _, tool := range listed.Tools {
+				gotTools = append(gotTools, tool.Name)
+			}
+			slices.Sort(gotTools)
+			if !slices.Equal(gotTools, test.wantTools) {
+				t.Fatalf("tools = %v, want %v", gotTools, test.wantTools)
+			}
+			for _, tool := range allTools {
+				gotInstruction := strings.Contains(initialization.Instructions, tool)
+				wantInstruction := slices.Contains(test.wantTools, tool)
+				if gotInstruction != wantInstruction {
+					t.Errorf("instructions mention %q = %t, want %t:\n%s", tool, gotInstruction, wantInstruction, initialization.Instructions)
+				}
+			}
+		})
+	}
+}
+
+func TestServerInitializeInstructionsMatchNetworkAuthority(t *testing.T) {
+	tests := []struct {
+		name    string
+		options Options
+		want    []string
+		absent  []string
+	}{
+		{
+			name: "public only",
+			want: []string{"direct public HTTP(S) URL", "HTTP(S) targets are public-only"},
+			absent: []string{
+				"operator enabled non-public network access",
+				"link-local",
+			},
+		},
+		{
+			name:    "operator enabled private network",
+			options: Options{AllowPrivateNetwork: true},
+			want: []string{
+				"operator enabled non-public network access for hitspec_fetch",
+				"private, loopback, link-local, reserved",
+			},
+			absent: []string{"direct public HTTP(S) URL", "public-only"},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			server, err := NewServer("test", t.TempDir(), test.options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			initialization := connect(t, server).InitializeResult()
+			if initialization == nil {
+				t.Fatal("initialize result is nil")
+			}
+			for _, phrase := range test.want {
+				if !strings.Contains(initialization.Instructions, phrase) {
+					t.Errorf("instructions omitted %q:\n%s", phrase, initialization.Instructions)
+				}
+			}
+			for _, phrase := range test.absent {
+				if strings.Contains(initialization.Instructions, phrase) {
+					t.Errorf("instructions unexpectedly contain %q:\n%s", phrase, initialization.Instructions)
+				}
+			}
+		})
+	}
 }
 
 func TestWebToolsExposeStableSurfaceAndSchemas(t *testing.T) {

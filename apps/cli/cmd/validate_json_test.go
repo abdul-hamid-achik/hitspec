@@ -14,7 +14,7 @@ import (
 // TestValidate_JSON guards the `hitspec validate --json` flag: results are
 // emitted as parseable JSON with ok/errors per file instead of the text format.
 func TestValidate_JSON(t *testing.T) {
-	validateJSONFlag = false // reset (cobra flag values leak across Execute)
+	resetRootCommandForTest(t)
 	dir := t.TempDir()
 	okFile := filepath.Join(dir, "ok.http")
 	require.NoError(t, os.WriteFile(okFile, []byte("### ok\nGET http://x\n"), 0o644))

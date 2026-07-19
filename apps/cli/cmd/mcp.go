@@ -92,7 +92,7 @@ MCP client configuration:
 	command.Flags().StringVar(&workspace, "workspace", ".", "Fixed workspace exposed to MCP tools")
 	command.Flags().Int64Var(&maxBodyBytes, "max-body-bytes", 1<<20, "Maximum fetched response body size in bytes")
 	command.Flags().DurationVar(&timeout, "timeout", 30*time.Second, "Maximum duration of one HTTP request")
-	command.Flags().BoolVar(&allowPrivate, "allow-private-network", false, "Allow loopback and private network targets")
+	command.Flags().BoolVar(&allowPrivate, "allow-private-network", false, "Allow non-public network targets and standard saved-request modes")
 	command.Flags().StringVar(&searchProviderName, "search-provider", os.Getenv("HITSPEC_SEARCH_PROVIDER"), "Live web search provider: none or tavily")
 	command.Flags().StringVar(&fcheapPath, "fcheap-path", os.Getenv("HITSPEC_FCHEAP_PATH"), "Fixed file.cheap executable used by durable webpage capture")
 	command.Flags().StringVar(&fcheapStashDir, "fcheap-stash-dir", os.Getenv("HITSPEC_FCHEAP_STASH_DIR"), "Optional fixed file.cheap stash directory")

@@ -15,7 +15,7 @@ import (
 // the test list is emitted as parseable JSON with per-file requests instead of
 // the human-readable text format.
 func TestList_JSON(t *testing.T) {
-	listJSONFlag = false // reset (cobra flag values leak across Execute calls)
+	resetRootCommandForTest(t)
 	dir := t.TempDir()
 	httpFile := filepath.Join(dir, "api.http")
 	require.NoError(t, os.WriteFile(httpFile, []byte("### login\n# @name login\n# @tags smoke\nGET http://x/login\n\n### B\nGET http://x/b\n"), 0o644))
@@ -36,7 +36,7 @@ func TestList_JSON(t *testing.T) {
 
 // TestList_Text ensures the default (no --json) output is the human-readable form.
 func TestList_Text(t *testing.T) {
-	listJSONFlag = false // reset
+	resetRootCommandForTest(t)
 	dir := t.TempDir()
 	httpFile := filepath.Join(dir, "api.http")
 	require.NoError(t, os.WriteFile(httpFile, []byte("### login\n# @name login\nGET http://x/login\n"), 0o644))

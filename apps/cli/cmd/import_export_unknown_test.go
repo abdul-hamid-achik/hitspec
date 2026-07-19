@@ -12,6 +12,7 @@ import (
 // passing in scripts. An unknown import format must return an error so the CLI
 // exits non-zero.
 func TestImportUnknownTypeErrors(t *testing.T) {
+	resetRootCommandForTest(t)
 	rootCmd.SetArgs([]string{"import", "curlX", "some-source"})
 	err := rootCmd.Execute()
 	require.Error(t, err, "unknown import format must error, not print help and exit 0")
@@ -22,6 +23,7 @@ func TestImportUnknownTypeErrors(t *testing.T) {
 // TestExportUnknownTypeErrors guards the same regression for
 // `hitspec export <badtype>`: an unknown export format must error out.
 func TestExportUnknownTypeErrors(t *testing.T) {
+	resetRootCommandForTest(t)
 	rootCmd.SetArgs([]string{"export", "curlX", "some-file.http"})
 	err := rootCmd.Execute()
 	require.Error(t, err, "unknown export format must error, not print help and exit 0")
