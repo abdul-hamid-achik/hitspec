@@ -17,6 +17,18 @@ func (s *Server) handleStressStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Snapshot the environment before taking s.mu: the runner resolves
+	// {{variables}} from config environments, and without them every request in
+	// a workspace that uses {{baseUrl}} fails with "unsupported URL scheme".
+	// Read here to keep the lock order mu -> configMu out of the picture.
+	s.configMu.RLock()
+	envName := s.config.Env
+	configEnvs := s.getConfigEnvsLocked()
+	s.configMu.RUnlock()
+	if req.Environment != "" {
+		envName = req.Environment
+	}
+
 	s.mu.Lock()
 	if s.stressRunner != nil {
 		s.mu.Unlock()
@@ -56,7 +68,15 @@ func (s *Server) handleStressStart(w http.ResponseWriter, r *http.Request) {
 		absFiles = append(absFiles, absPath)
 	}
 
-	stressRunner := stress.NewRunner(cfg)
+	runnerOpts := make([]stress.RunnerOption, 0, 2)
+	if envName != "" {
+		runnerOpts = append(runnerOpts, stress.WithEnvironment(envName))
+	}
+	if len(configEnvs) > 0 {
+		runnerOpts = append(runnerOpts, stress.WithConfigEnvironments(configEnvs))
+	}
+
+	stressRunner := stress.NewRunner(cfg, runnerOpts...)
 	if err := stressRunner.LoadFiles(absFiles); err != nil {
 		s.mu.Unlock()
 		writeError(w, http.StatusBadRequest, err.Error())

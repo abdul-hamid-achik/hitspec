@@ -305,11 +305,12 @@ type HistoryResultsByRequestDTO struct {
 
 // StressStartReq is the request body for POST /stress/start.
 type StressStartReq struct {
-	Files    []string `json:"files"`
-	Duration string   `json:"duration"`
-	Rate     float64  `json:"rate,omitempty"`
-	VUs      int      `json:"vus,omitempty"`
-	MaxVUs   int      `json:"maxVUs,omitempty"`
+	Files       []string `json:"files"`
+	Duration    string   `json:"duration"`
+	Rate        float64  `json:"rate,omitempty"`
+	VUs         int      `json:"vus,omitempty"`
+	MaxVUs      int      `json:"maxVUs,omitempty"`
+	Environment string   `json:"environment,omitempty"`
 }
 
 // StressStatusDTO is the current stress test status.
