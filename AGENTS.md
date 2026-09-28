@@ -20,6 +20,7 @@ hitspec/
 ├── apps/
 │   ├── cli/                # CLI application (Cobra commands)
 │   │   └── cmd/            # Commands: run, validate, list, init, serve, mock, record, etc.
+│   ├── desktop/            # hitspec Studio — Electron desktop client (see apps/desktop/README.md)
 │   ├── docs/               # Mintlify documentation site
 │   ├── vscode/             # VSCode extension (syntax highlighting + snippets)
 │   └── nvim/               # Neovim plugin (syntax + ftdetect)
@@ -74,6 +75,10 @@ hitspec/
 | Update docs | `apps/docs/` (.mdx files, docs.json) |
 | Add stress feature | `packages/stress/stress.go`, `packages/stress/metrics.go` |
 | Add mock feature | `packages/mock/server.go`, `packages/mock/router.go` |
+| Add a desktop screen/view | `apps/desktop/src/renderer/src/views/<view>.js`, register in `views/index.js` |
+| Add a desktop IPC capability | `apps/desktop/src/main/ipc.js` (handler), `src/preload/preload.cjs` (bridge), renderer `actions.js` |
+| Change desktop backend lifecycle | `apps/desktop/src/main/backend.js` (spawn/readiness/WS), `binary.js` (CLI resolution) |
+| Run desktop tests | `task desktop:test` (unit + smoke + Playwright e2e) |
 
 ## Monorepo Structure
 
@@ -81,6 +86,7 @@ hitspec/
 |-----------|---------|----------|------------|
 | `apps/cli` | CLI binary (entry point) | Go | `go build` |
 | `apps/docs` | Documentation site | MDX | Mintlify |
+| `apps/desktop` | hitspec Studio desktop client | JavaScript (Electron) | `npm start`, electron-builder |
 | `packages/tui` | Native terminal UI (Bubble Tea v2) | Go | `go build` |
 | `packages/clientmgr` | In-process API Client Manager facade | Go | - |
 | `packages/serve` | REST/WebSocket API (`--api-only`) | Go | `go build` |
@@ -97,6 +103,10 @@ hitspec serve [file|dir]
      │
      └── --api-only   packages/serve → net/http server (REST + WebSocket), no UI
                                        wraps the same clientmgr operations
+                    ▲
+                    └── apps/desktop (hitspec Studio) spawns this as a child process:
+                        the Electron main process owns the port + token and proxies
+                        every call over IPC; the renderer never sees the network.
 ```
 
 Both surfaces (TUI and `--api-only` REST) sit on top of the same

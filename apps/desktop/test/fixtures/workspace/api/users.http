@@ -1,0 +1,79 @@
+# CRUD flow used by the desktop app's integration tests:
+# list -> create -> capture -> fetch by captured id -> 404 case.
+
+### List users
+# @name listUsers
+# @tags smoke, users
+
+GET {{baseUrl}}/users
+Accept: application/json
+
+>>>
+expect status 200
+expect body type array
+expect body length >= 2
+expect body[0].name exists
+<<<
+
+>>>capture
+firstUserId from body[0].id
+<<<
+
+### Create user
+# @name createUser
+# @tags users, write
+
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{
+  "name": "Ada Lovelace",
+  "email": "ada@example.com"
+}
+
+>>>
+expect status 201
+expect body.name == "Ada Lovelace"
+expect body.id exists
+expect body.email == "ada@example.com"
+<<<
+
+>>>capture
+createdUserId from body.id
+<<<
+
+### Fetch created user
+# @name getUser
+# @depends createUser
+# @tags users, read
+
+GET {{baseUrl}}/users/{{createdUserId}}
+Accept: application/json
+
+>>>
+expect status 200
+expect body.name == "Ada Lovelace"
+expect body.id exists
+<<<
+
+### Delete created user
+# @name deleteUser
+# @depends createUser
+# @tags users, write
+
+DELETE {{baseUrl}}/users/{{createdUserId}}
+
+>>>
+expect status 204
+<<<
+
+### Missing user
+# @name missingUser
+# @tags users, negative
+
+GET {{baseUrl}}/users/999999
+
+>>>
+expect status 404
+expect body.error exists
+<<<

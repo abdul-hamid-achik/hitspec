@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="nord">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="data:," />
+  <title>hitspec Studio</title>
+  <link rel="stylesheet" href="./styles/theme.css" />
+  <link rel="stylesheet" href="./styles/app.css" />
+</head>
+<body>
+  <div id="app" class="app">
+    <header id="topbar" class="topbar" role="banner"></header>
+    <div class="body">
+      <nav id="rail" class="rail" role="navigation" aria-label="Views"></nav>
+      <aside id="sidebar" class="sidebar" role="navigation" aria-label="Workspace"></aside>
+      <main id="content" class="content" role="main"></main>
+    </div>
+    <footer id="statusbar" class="statusbar" role="contentinfo"></footer>
+  </div>
+
+  <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
+  <div id="overlay" class="overlay" hidden></div>
+
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>

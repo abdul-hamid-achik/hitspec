@@ -1,0 +1,122 @@
+/* Theme registry — mirrors packages/tui/theme.go so the desktop app and the
+   terminal UI share one visual language. */
+
+:root,
+:root[data-theme='nord'] {
+  --bg: #2e3440;
+  --bg-alt: #3b4252;
+  --bg-sel: #434c5e;
+  --border: #4c566a;
+  --fg: #d8dee9;
+  --bright: #eceff4;
+  --accent: #88c0d0;
+  --success: #a3be8c;
+  --warning: #ebcb8b;
+  --danger: #bf616a;
+  --info: #81a1c1;
+  --m-get: #a3be8c;
+  --m-post: #ebcb8b;
+  --m-put: #81a1c1;
+  --m-delete: #bf616a;
+  --m-patch: #b48ead;
+}
+
+:root[data-theme='catppuccin'] {
+  --bg: #1e1e2e;
+  --bg-alt: #313244;
+  --bg-sel: #45475a;
+  --border: #6c7086;
+  --fg: #cdd6f4;
+  --bright: #f5e0dc;
+  --accent: #89b4fa;
+  --success: #a6e3a1;
+  --warning: #f9e2af;
+  --danger: #f38ba8;
+  --info: #89dceb;
+  --m-get: #a6e3a1;
+  --m-post: #f9e2af;
+  --m-put: #89b4fa;
+  --m-delete: #f38ba8;
+  --m-patch: #cba6f7;
+}
+
+:root[data-theme='dracula'] {
+  --bg: #282a36;
+  --bg-alt: #343746;
+  --bg-sel: #44475a;
+  --border: #6272a4;
+  --fg: #f8f8f2;
+  --bright: #ffffff;
+  --accent: #bd93f9;
+  --success: #50fa7b;
+  --warning: #f1fa8c;
+  --danger: #ff5555;
+  --info: #8be9fd;
+  --m-get: #50fa7b;
+  --m-post: #f1fa8c;
+  --m-put: #8be9fd;
+  --m-delete: #ff5555;
+  --m-patch: #ff79c6;
+}
+
+:root[data-theme='tokyonight'] {
+  --bg: #1a1b26;
+  --bg-alt: #24283b;
+  --bg-sel: #2f3549;
+  --border: #565f89;
+  --fg: #c0caf5;
+  --bright: #ffffff;
+  --accent: #7aa2f7;
+  --success: #9ece6a;
+  --warning: #e0af68;
+  --danger: #f7768e;
+  --info: #7dcfff;
+  --m-get: #9ece6a;
+  --m-post: #e0af68;
+  --m-put: #7aa2f7;
+  --m-delete: #f7768e;
+  --m-patch: #bb9af7;
+}
+
+:root[data-theme='gruvbox'] {
+  --bg: #282828;
+  --bg-alt: #3c3836;
+  --bg-sel: #504945;
+  --border: #928374;
+  --fg: #ebdbb2;
+  --bright: #fbf1c7;
+  --accent: #83a598;
+  --success: #b8bb26;
+  --warning: #fabd2f;
+  --danger: #fb4934;
+  --info: #8ec07c;
+  --m-get: #b8bb26;
+  --m-post: #fabd2f;
+  --m-put: #83a598;
+  --m-delete: #fb4934;
+  --m-patch: #d3869b;
+}
+
+:root {
+  /* Derived surfaces. color-mix keeps every theme consistent without
+     hand-tuning a dozen extra slots per palette. */
+  --surface: color-mix(in srgb, var(--bg-alt) 70%, var(--bg));
+  --surface-2: color-mix(in srgb, var(--bg-alt) 45%, var(--bg));
+  --hover: color-mix(in srgb, var(--bg-sel) 55%, transparent);
+  --border-soft: color-mix(in srgb, var(--border) 45%, transparent);
+  --fg-dim: color-mix(in srgb, var(--fg) 62%, var(--bg));
+  --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
+  --danger-soft: color-mix(in srgb, var(--danger) 18%, transparent);
+  --success-soft: color-mix(in srgb, var(--success) 18%, transparent);
+  --warning-soft: color-mix(in srgb, var(--warning) 18%, transparent);
+
+  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  --radius-sm: 4px;
+  --radius: 7px;
+  --radius-lg: 11px;
+  --topbar-h: 46px;
+  --statusbar-h: 26px;
+  --sidebar-w: 306px;
+}

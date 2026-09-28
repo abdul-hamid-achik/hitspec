@@ -211,6 +211,44 @@ tasks:
       - npx mintlify broken-links
 
   # ---------------------------------------------------------------------------
+  # Desktop app (Electron)
+  # ---------------------------------------------------------------------------
+
+  desktop:install:
+    desc: Install desktop app dependencies (and the Electron binary if npm gated it)
+    dir: apps/desktop
+    cmds:
+      - npm install --no-audit --no-fund
+      - test -d node_modules/electron/dist || node node_modules/electron/install.js
+
+  desktop:binary:
+    desc: Build the Go CLI into apps/desktop/build/bin for the desktop app
+    dir: apps/desktop
+    cmds:
+      - node scripts/build-binary.mjs
+
+  desktop:dev:
+    desc: Launch hitspec Studio against the current workspace
+    dir: apps/desktop
+    cmds:
+      - npm start -- {{.CLI_ARGS}}
+
+  desktop:test:
+    desc: Run desktop unit, smoke and e2e suites
+    dir: apps/desktop
+    cmds:
+      - npm run test:syntax
+      - npm test
+      - npm run test:smoke
+      - npm run test:e2e
+
+  desktop:dist:
+    desc: Package the desktop app with electron-builder
+    dir: apps/desktop
+    cmds:
+      - npm run dist
+
+  # ---------------------------------------------------------------------------
   # Benchmarks
   # ---------------------------------------------------------------------------
 

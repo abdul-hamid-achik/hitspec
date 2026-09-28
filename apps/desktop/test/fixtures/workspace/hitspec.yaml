@@ -1,0 +1,20 @@
+defaultEnvironment: dev
+# Config.Timeout is an int of milliseconds (packages/core/config/config.go);
+# a duration string here makes the whole file fail to parse.
+timeout: 10000
+retries: 0
+followRedirects: true
+validateSSL: true
+headers:
+  User-Agent: hitspec-desktop-tests
+environments:
+  dev:
+    baseUrl: http://127.0.0.1:__PORT__
+  staging:
+    baseUrl: http://127.0.0.1:__PORT__
+    tenant: acme
+stress:
+  profiles:
+    quick:
+      duration: 2s
+      rate: 20

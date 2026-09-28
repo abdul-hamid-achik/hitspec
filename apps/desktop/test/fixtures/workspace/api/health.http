@@ -1,0 +1,16 @@
+# Health probe for the desktop app's own integration tests.
+
+### Health check
+# @name health
+# @description Verify the API is up
+# @tags smoke
+
+GET {{baseUrl}}/health
+Accept: application/json
+
+>>>
+expect status 200
+expect body.status == "ok"
+expect body.service == "hitspec-fixture"
+expect body.version exists
+<<<

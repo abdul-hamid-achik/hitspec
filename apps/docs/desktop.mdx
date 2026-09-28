@@ -1,0 +1,107 @@
+---
+title: "hitspec Studio desktop — a native GUI for .http files"
+description: "hitspec Studio is the Electron desktop client for hitspec: file tree, source editor, tabbed response viewer, history, stress, mock, record and imports over your existing .http files."
+keywords:
+  - "hitspec desktop"
+  - "electron api client"
+  - "postman alternative"
+  - "http testing gui"
+---
+
+`hitspec Studio` is the desktop companion to `hitspec studio`: the same
+keyboard-friendly workflow in a native window instead of a terminal. It edits
+and runs the exact same plain-text `.http` files, so what you click in the app
+is what CI executes.
+
+<Note>
+  The desktop app is developed in this repository under `apps/desktop`. It is
+  not bundled with the Go binary yet -- build it from source (below) or grab a
+  packaged build from the releases page.
+</Note>
+
+## Run it from source
+
+<Steps>
+  <Step title="Install dependencies">
+    ```bash
+    task desktop:install        # npm install in apps/desktop (+ Electron binary)
+    ```
+  </Step>
+  <Step title="Build the CLI it drives">
+    ```bash
+    task build                  # produces bin/hitspec
+    ```
+  </Step>
+  <Step title="Launch">
+    ```bash
+    task desktop:dev            # or: task desktop:dev -- ./tests
+    ```
+  </Step>
+</Steps>
+
+Open a workspace with `cmd/ctrl+O`, by dropping a folder on the app icon, or by
+passing a directory on the command line. Recent workspaces are remembered on
+the welcome screen.
+
+## What you get
+
+- **Workspace browser** -- file tree with request counts, fuzzy filter, and a
+  per-file request list with pass/fail dots from the last run.
+- **Request inspector** -- method, URL, headers, query params, body,
+  assertions, captures and metadata (`@timeout`, `@depends`, `@auth`, ...).
+- **Runner** -- run one request (`cmd/ctrl+enter`) or the whole file
+  (`cmd/ctrl+shift+enter`) with live per-request progress, then a tabbed
+  response viewer: pretty-printed JSON body, headers, assertion results,
+  timing, captures and SSE events.
+- **Source editor** -- line numbers plus `.http` syntax highlighting, save
+  (`cmd/ctrl+s`), revert, and automatic reload when the file changes on disk.
+- **Environments** -- switch from the toolbar or edit variables in a grid that
+  writes straight back to `hitspec.yaml`.
+- **History** -- the persistent SQLite run history with per-run drill-down.
+- **Stress, mock, record** -- the same engines as the CLI, with live metrics
+  charts, route tables and recording export to `.http`.
+- **Import** -- curl, OpenAPI and Insomnia sources previewed as `.http` before
+  you save them into the workspace.
+- **Command palette** (`cmd/ctrl+k`) and five themes shared with the terminal UI.
+
+## How it works
+
+The app spawns `hitspec serve --api-only` as a child process on a random
+loopback port with a freshly generated bearer token, then drives the REST and
+WebSocket API from `packages/serve`. The renderer never talks to the network
+and never sees the token: every call crosses a small IPC bridge in the main
+process, and file writes outside the workspace are only allowed for paths you
+picked in a native save dialog.
+
+```
+Electron main ── spawns ─▶ hitspec serve --api-only (127.0.0.1:<random>)
+     ▲                            │ REST + WebSocket
+     └── IPC bridge ◀── renderer ─┘
+```
+
+Because it reuses the API server, every capability added to `packages/serve`
+becomes available to the desktop app without new native code.
+
+## Package it
+
+```bash
+task desktop:dist        # electron-builder: dmg/zip, nsis/zip, AppImage/deb
+```
+
+The Go binary is copied into the bundle as an extra resource, so packaged apps
+are self-contained. macOS builds are unsigned by default; clear the quarantine
+flag after a local install:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/hitspec Studio.app"
+```
+
+## Testing
+
+```bash
+task desktop:test        # unit tests + headless API integration + Playwright e2e
+```
+
+The e2e suite launches the real app with Playwright against a throwaway
+workspace and an in-process HTTP target, so the whole stack -- window, IPC,
+Go server, runner -- is exercised on every run.

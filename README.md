@@ -103,6 +103,7 @@ hitspec run api.http
 
 - **Plain text test files** - `.http` format, readable and version-controllable
 - **Interactive terminal app** - Charm-powered `hitspec studio` (like Postman, but file-backed and keyboard-first)
+- **Desktop app** - `hitspec Studio`, an Electron GUI over the same files (see [apps/desktop](apps/desktop/README.md))
 - **26 assertion operators** - `==`, `!=`, `>`, `<`, `contains`, `matches`, `exists`, `length`, `type`, `schema`, `snapshot`, and more
 - **22 metadata directives** - `@name`, `@tags`, `@depends`, `@timeout`, `@retry`, `@auth`, `@waitFor`, and more
 - **17 built-in functions** - `$uuid()`, `$timestamp()`, `$random()`, `$base64()`, `$sha256()`, `$env()`, and more
@@ -259,6 +260,25 @@ task studio:dev                       # Run the interactive app locally
 task serve:dev                        # Run the REST/WebSocket API server
 task build                            # Build the single Go binary
 ```
+
+## Desktop app (`hitspec Studio`)
+
+A native Electron client with the same feature set as the terminal app — file
+tree, source editor with syntax highlighting, tabbed response viewer, run
+history, stress, mock, recording proxy, imports and contracts — driven over the
+`serve --api-only` REST/WebSocket API that the app spawns itself on a random
+loopback port.
+
+```bash
+task desktop:install                  # npm install (+ Electron binary if gated)
+task desktop:dev                      # launch the app
+task desktop:dev -- ./tests/          # launch with a workspace
+task desktop:test                     # unit + smoke + Playwright e2e
+task desktop:dist                     # package with electron-builder
+```
+
+See [apps/desktop/README.md](apps/desktop/README.md) for the architecture,
+security model and test layout.
 
 ## CLI Usage
 
@@ -704,6 +724,7 @@ See [.github/workflows/example-hitspec.yml](.github/workflows/example-hitspec.ym
 hitspec/
 ├── apps/
 │   ├── cli/              # CLI binary (Go + Cobra)
+│   ├── desktop/          # hitspec Studio — Electron desktop client
 │   ├── docs/             # Mintlify documentation site
 │   ├── vscode/           # VSCode extension
 │   └── nvim/             # Neovim plugin
@@ -736,6 +757,7 @@ task build                            # CLI binary
 
 # Development
 task studio:dev                       # Interactive app
+task desktop:dev                      # Desktop app (Electron)
 task serve:dev                        # REST/WebSocket API server
 task docs:dev                         # Mintlify docs locally
 

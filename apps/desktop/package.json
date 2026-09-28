@@ -1,0 +1,44 @@
+{
+  "name": "hitspec-desktop",
+  "productName": "hitspec Studio",
+  "version": "0.1.0",
+  "description": "Desktop client for hitspec — plain-text HTTP API testing, without the plain text editor",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "src/main/index.js",
+  "author": "hitspec",
+  "homepage": "https://github.com/abdul-hamid-achik/hitspec",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/abdul-hamid-achik/hitspec",
+    "directory": "apps/desktop"
+  },
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "start": "electron .",
+    "dev": "HITSPEC_DESKTOP_DEV=1 electron .",
+    "build:binary": "node scripts/build-binary.mjs",
+    "build:icon": "node scripts/build-icon.mjs",
+    "test": "node --test \"test/unit/*.test.js\"",
+    "test:syntax": "node --experimental-vm-modules --no-warnings scripts/check-syntax.mjs",
+    "test:smoke": "node scripts/smoke.mjs",
+    "test:e2e": "playwright test",
+    "test:packaged": "node scripts/verify-packaged.mjs",
+    "screenshots": "node scripts/screenshots.mjs",
+    "check": "npm run test && npm run test:smoke && npm run test:e2e",
+    "predist": "node scripts/build-binary.mjs",
+    "dist": "electron-builder",
+    "dist:dir": "electron-builder --dir"
+  },
+  "dependencies": {
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3"
+  }
+}

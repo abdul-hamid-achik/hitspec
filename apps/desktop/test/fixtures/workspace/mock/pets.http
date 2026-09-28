@@ -1,0 +1,28 @@
+# Mock-server fixtures. The `>>>mock` block is served verbatim by
+# `hitspec mock` / POST /api/v1/mock/start, so these files never touch the
+# network when the desktop app exercises the mock panel.
+
+@baseUrl = http://localhost:4100
+
+### List pets
+# @name listPets
+# @tags mock
+
+GET {{baseUrl}}/pets
+
+>>>mock
+[
+  { "id": 1, "name": "Rex" },
+  { "id": 2, "name": "Nala" }
+]
+<<<
+
+### Get a pet
+# @name getPet
+# @tags mock
+
+GET {{baseUrl}}/pets/1
+
+>>>mock
+{ "id": 1, "name": "Rex", "species": "dog" }
+<<<

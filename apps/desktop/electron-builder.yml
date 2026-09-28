@@ -1,0 +1,50 @@
+appId: dev.hitspec.studio
+productName: hitspec Studio
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+
+directories:
+  output: release
+  buildResources: build
+
+# The Go CLI is copied next to the binary (outside the asar) so the main process
+# can spawn it. Run `npm run build:binary` (or `npm run dist`, which does it via
+# predist) before packaging.
+files:
+  - src/**/*
+  - package.json
+
+extraResources:
+  - from: build/bin
+    to: .
+    filter:
+      - hitspec
+      - hitspec.exe
+
+asar: true
+
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  # Unsigned local builds need the quarantine flag cleared, mirroring the
+  # homebrew cask hook in .goreleaser.yml.
+  identity: null
+
+win:
+  target:
+    - nsis
+    - zip
+
+linux:
+  category: Development
+  target:
+    - AppImage
+    - deb
+  maintainer: hitspec
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
