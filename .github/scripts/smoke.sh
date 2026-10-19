@@ -82,7 +82,9 @@ echo "== init / validate / mock / run"
 PROJ="$WORK/proj"
 mkdir -p "$PROJ"
 (cd "$PROJ" && "$BIN" init >/dev/null)
-[ -f "$PROJ/hitspec.yaml" ] && [ -f "$PROJ/example.http" ] || fail "init did not create hitspec.yaml and example.http"
+if [ ! -f "$PROJ/hitspec.yaml" ] || [ ! -f "$PROJ/example.http" ]; then
+  fail "init did not create hitspec.yaml and example.http"
+fi
 (cd "$PROJ" && "$BIN" validate example.http) || fail "validate rejected the scaffold"
 # The scaffold points at port 3000; move it to a private port.
 PORT=39100
