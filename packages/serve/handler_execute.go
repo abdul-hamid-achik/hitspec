@@ -8,6 +8,20 @@ import (
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
 )
 
+// runnerConfig is the runner configuration shared by the execute and run
+// handlers; callers add their filters and progress callback.
+func (s *Server) runnerConfig(env string, configEnvs map[string]map[string]any) *runner.Config {
+	return &runner.Config{
+		Environment:        env,
+		Timeout:            30 * time.Second,
+		FollowRedirect:     true,
+		ValidateSSL:        true,
+		ConfigEnvironments: configEnvs,
+		AllowShell:         s.config.AllowShell,
+		AllowDB:            s.config.AllowDB,
+	}
+}
+
 func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 	var req ExecuteReq
 	if err := readJSON(r, &req); err != nil {
@@ -45,16 +59,8 @@ func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 		Timestamp: nowISO(),
 	})
 
-	cfg := &runner.Config{
-		Environment:        env,
-		Timeout:            30 * time.Second,
-		FollowRedirect:     true,
-		ValidateSSL:        true,
-		NameFilter:         req.RequestName,
-		ConfigEnvironments: configEnvs,
-		AllowShell:         s.config.AllowShell,
-		AllowDB:            s.config.AllowDB,
-	}
+	cfg := s.runnerConfig(env, configEnvs)
+	cfg.NameFilter = req.RequestName
 
 	cfg.OnProgress = func(event runner.ProgressEvent) {
 		progress := WSRequestProgress{
@@ -172,15 +178,7 @@ func (s *Server) handleRunFile(w http.ResponseWriter, r *http.Request) {
 
 	execID := generateID()
 
-	cfg := &runner.Config{
-		Environment:        env,
-		Timeout:            30 * time.Second,
-		FollowRedirect:     true,
-		ValidateSSL:        true,
-		ConfigEnvironments: configEnvs,
-		AllowShell:         s.config.AllowShell,
-		AllowDB:            s.config.AllowDB,
-	}
+	cfg := s.runnerConfig(env, configEnvs)
 
 	cfg.OnProgress = func(event runner.ProgressEvent) {
 		progress := WSRequestProgress{

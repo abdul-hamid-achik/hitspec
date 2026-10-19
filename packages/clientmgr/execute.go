@@ -74,15 +74,7 @@ func (m *Manager) ExecuteAdHoc(ctx context.Context, req AdHocReq) (*RunResultDTO
 
 	env, configEnvs := m.envSnapshot(req.Environment)
 
-	cfg := &runner.Config{
-		Environment:        env,
-		Timeout:            30 * time.Second,
-		FollowRedirect:     true,
-		ValidateSSL:        true,
-		ConfigEnvironments: configEnvs,
-		AllowShell:         m.config.AllowShell,
-		AllowDB:            m.config.AllowDB,
-	}
+	cfg := m.runnerConfig(env, configEnvs)
 	result, err := runner.NewRunner(cfg).RunFile(tmpPath)
 	if err != nil {
 		return nil, err
@@ -115,6 +107,20 @@ func buildAdHocContent(method, url string, headers map[string]string, body strin
 	return sb.String()
 }
 
+// runnerConfig is the runner configuration shared by Execute, RunFile and
+// ExecuteAdHoc; callers add their filters and progress callback.
+func (m *Manager) runnerConfig(env string, configEnvs map[string]map[string]any) *runner.Config {
+	return &runner.Config{
+		Environment:        env,
+		Timeout:            30 * time.Second,
+		FollowRedirect:     true,
+		ValidateSSL:        true,
+		ConfigEnvironments: configEnvs,
+		AllowShell:         m.config.AllowShell,
+		AllowDB:            m.config.AllowDB,
+	}
+}
+
 func (m *Manager) run(ctx context.Context, file, requestName string, requestIndex *int, environment string) (*RunResultDTO, error) {
 	absPath, err := m.absPath(file)
 	if err != nil {
@@ -132,17 +138,9 @@ func (m *Manager) run(ctx context.Context, file, requestName string, requestInde
 	if requestName != "" {
 		indexFilter = nil
 	}
-	cfg := &runner.Config{
-		Environment:        env,
-		Timeout:            30 * time.Second,
-		FollowRedirect:     true,
-		ValidateSSL:        true,
-		NameFilter:         requestName,
-		IndexFilter:        indexFilter,
-		ConfigEnvironments: configEnvs,
-		AllowShell:         m.config.AllowShell,
-		AllowDB:            m.config.AllowDB,
-	}
+	cfg := m.runnerConfig(env, configEnvs)
+	cfg.NameFilter = requestName
+	cfg.IndexFilter = indexFilter
 	cfg.OnProgress = func(event runner.ProgressEvent) {
 		progress := RequestProgress{
 			ExecID:      execID,

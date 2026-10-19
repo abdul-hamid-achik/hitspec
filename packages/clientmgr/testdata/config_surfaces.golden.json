@@ -1,0 +1,170 @@
+{
+  "studio.adhoc": {
+    "defaults": {
+      "environment": "dev",
+      "timeout": "30s",
+      "followRedirects": true,
+      "maxRedirects": 10,
+      "validateSSL": true,
+      "retries": 0,
+      "retryDelay": "1s",
+      "parallel": false,
+      "concurrency": 5,
+      "bail": false
+    },
+    "yaml": {
+      "environment": "staging",
+      "timeout": "30s",
+      "followRedirects": true,
+      "maxRedirects": 10,
+      "validateSSL": true,
+      "retries": 0,
+      "retryDelay": "1s",
+      "parallel": false,
+      "concurrency": 5,
+      "bail": false
+    },
+    "yaml+env": {
+      "environment": "staging",
+      "timeout": "30s",
+      "followRedirects": true,
+      "maxRedirects": 10,
+      "validateSSL": true,
+      "retries": 0,
+      "retryDelay": "1s",
+      "parallel": false,
+      "concurrency": 5,
+      "bail": false
+    },
+    "yaml+env+flags": {
+      "environment": "staging",
+      "timeout": "30s",
+      "followRedirects": true,
+      "maxRedirects": 10,
+      "validateSSL": true,
+      "retries": 0,
+      "retryDelay": "1s",
+      "parallel": false,
+      "concurrency": 5,
+      "bail": false
+    }
+  },
+  "studio.contract": {
+    "defaults": {
+      "timeout": "30s",
+      "followRedirects": true,
+      "maxRedirects": 10,
+      "validateSSL": true,
+      "retries": 0,
+      "retryDelay": "1s"
+    },
+    "yaml": {
+      "timeout": "30s",
+      "followRedirects": true,
+      "maxRedirects": 10,
+      "validateSSL": true,
+      "retries": 0,
+      "retryDelay": "1s"
+    },
+    "yaml+env": {
+      "timeout": "30s",
+      "followRedirects": true,
+      "maxRedirects": 10,
+      "validateSSL": true,
+      "retries": 0,
+      "retryDelay": "1s"
+    },
+    "yaml+env+flags": {
+      "timeout": "30s",
+      "followRedirects": true,
+      "maxRedirects": 10,
+      "validateSSL": true,
+      "retries": 0,
+      "retryDelay": "1s"
+    }
+  },
+  "studio.execute": {
+    "defaults": {
+      "environment": "dev",
+      "timeout": "30s",
+      "followRedirects": true,
+      "maxRedirects": 10,
+      "validateSSL": true,
+      "retries": 0,
+      "retryDelay": "1s",
+      "parallel": false,
+      "concurrency": 5,
+      "bail": false
+    },
+    "yaml": {
+      "environment": "staging",
+      "timeout": "30s",
+      "followRedirects": true,
+      "maxRedirects": 10,
+      "validateSSL": true,
+      "retries": 0,
+      "retryDelay": "1s",
+      "parallel": false,
+      "concurrency": 5,
+      "bail": false
+    },
+    "yaml+env": {
+      "environment": "staging",
+      "timeout": "30s",
+      "followRedirects": true,
+      "maxRedirects": 10,
+      "validateSSL": true,
+      "retries": 0,
+      "retryDelay": "1s",
+      "parallel": false,
+      "concurrency": 5,
+      "bail": false
+    },
+    "yaml+env+flags": {
+      "environment": "staging",
+      "timeout": "30s",
+      "followRedirects": true,
+      "maxRedirects": 10,
+      "validateSSL": true,
+      "retries": 0,
+      "retryDelay": "1s",
+      "parallel": false,
+      "concurrency": 5,
+      "bail": false
+    }
+  },
+  "studio.stress": {
+    "defaults": {
+      "timeout": "30s",
+      "followRedirects": true,
+      "maxRedirects": 10,
+      "validateSSL": true,
+      "retries": 0,
+      "retryDelay": "1s"
+    },
+    "yaml": {
+      "timeout": "30s",
+      "followRedirects": true,
+      "maxRedirects": 10,
+      "validateSSL": true,
+      "retries": 0,
+      "retryDelay": "1s"
+    },
+    "yaml+env": {
+      "timeout": "30s",
+      "followRedirects": true,
+      "maxRedirects": 10,
+      "validateSSL": true,
+      "retries": 0,
+      "retryDelay": "1s"
+    },
+    "yaml+env+flags": {
+      "timeout": "30s",
+      "followRedirects": true,
+      "maxRedirects": 10,
+      "validateSSL": true,
+      "retries": 0,
+      "retryDelay": "1s"
+    }
+  }
+}
