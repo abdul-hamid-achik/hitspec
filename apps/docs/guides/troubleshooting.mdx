@@ -227,10 +227,11 @@ hitspec uses these exit codes:
 |------|---------|
 | 0 | All tests passed |
 | 1 | One or more assertions failed |
-| 2 | Parse error (invalid .http file syntax) |
-| 3 | Configuration error (bad `hitspec.yaml`, unknown environment) |
-| 4 | Network error |
-| 64 | Usage error (bad flags, or `--tags`/`--name` matched nothing) |
+| 2 | A file could not be loaded (invalid .http syntax, duplicate `@name`, `@depends` cycle) |
+| 3 | Configuration error (broken `hitspec.yaml`, missing `--env-file`, bad `--cacert`, `--cert`, `--key` or `--proxy`) |
+| 4 | Network error: a request got no response because the connection failed (refused, DNS, TLS, reset, timeout before connecting) |
+| 64 | Usage error (unknown flag or command, bad flag value, missing argument, `-` combined with other files), or `--tags`/`--name` matched nothing |
+| 130 | Interrupted (Ctrl+C or SIGTERM) |
 
 ### GitHub Actions fails but works locally
 

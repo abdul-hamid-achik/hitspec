@@ -22,7 +22,7 @@ hitspec run tests/ -w
 1. hitspec runs all matching tests once
 2. It then watches the directories containing your test files
 3. When a `.http` or `.hitspec` file is modified, tests re-run automatically
-4. Press `Ctrl+C` to stop watching
+4. Press `Ctrl+C` to stop watching (exit code `130`)
 
 ## Combining with Filters
 
@@ -62,6 +62,8 @@ hitspec run tests/ --watch --output json 2>/dev/null
 
 In watch mode, filters that match no request print `no requests matched ...` to stderr on every run, but watch mode keeps running instead of exiting.
 
-<Note>
-Watch mode currently watches directories containing your test files. Changes to environment files (`hitspec.yaml`, `.env`) do not trigger re-runs -- restart the command to pick up config changes.
-</Note>
+## Config and Environment Changes
+
+Watch mode also re-runs when `hitspec.yaml` (or the file given with `--config`) or the file given with `--env-file` changes. The settings are reloaded before the next pass, so a new timeout, proxy or variable takes effect without restarting. A new `.http` file in a watched directory is picked up too. The directories `node_modules`, `vendor` and `.git` are not watched. Editors that save by renaming a temp file over the original are handled.
+
+An edited `.env` file takes effect on the next pass: values it exported are refreshed, or unset when the file no longer defines them. Variables you set in the shell are never overwritten. With `--cookies`, the cookie jar is kept across re-runs. Ctrl+C stops watching and exits with code `130`.

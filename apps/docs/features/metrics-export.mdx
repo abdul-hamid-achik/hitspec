@@ -23,11 +23,12 @@ hitspec run api.http --stress -d 5m -r 100 \
   --metrics-port 9090
 ```
 
-Metrics are available at `http://localhost:9090/metrics` while the test runs.
+Metrics are available at `http://localhost:9090/metrics` while the test runs, and are updated every second, so a scrape during the run sees the current totals. The JSON and DataDog exporters are written once, when the run ends.
 
 | Flag | Env Var | Default | Description |
 |------|---------|---------|-------------|
 | `--metrics-port` | `HITSPEC_METRICS_PORT` | `9090` | Port for the metrics endpoint |
+| `--metrics-host` | `HITSPEC_METRICS_HOST` | `127.0.0.1` | Interface to bind; `0.0.0.0` exposes the endpoint to the network |
 
 ## DataDog
 

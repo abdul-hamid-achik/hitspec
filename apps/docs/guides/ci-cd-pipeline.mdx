@@ -77,8 +77,13 @@ hitspec uses standard exit codes. See [Exit Codes](/reference/exit-codes) for th
 
 - `0` -- all tests passed
 - `1` -- one or more tests failed
-- `2` -- parse error
+- `2` -- a file could not be loaded (parse error)
 - `3` -- config error
+- `4` -- network error: the API could not be reached (a request got no response)
+- `64` -- usage error (unknown flag, bad value, missing argument), or `--name`/`--tags` matched no request
+- `130` -- interrupted (Ctrl+C or SIGTERM)
+
+A step that only expects `0` or `1` must also handle `4`.
 
 ### Recommended Flags
 

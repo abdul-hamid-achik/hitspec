@@ -254,8 +254,11 @@ hitspec uses standard exit codes for CI integration:
 |------|---------|
 | `0` | All tests passed |
 | `1` | One or more tests failed |
+| `2` | A file could not be loaded (syntax error) |
+| `3` | Configuration error |
+| `4` | A request got no response (connection error) |
 
-CI platforms treat any non-zero exit code as a failure, so hitspec works out of the box with GitHub Actions, GitLab CI, CircleCI, Jenkins, and others.
+See [Exit Codes](/reference/exit-codes) for the full list. CI platforms treat any non-zero exit code as a failure, so hitspec works out of the box with GitHub Actions, GitLab CI, CircleCI, Jenkins, and others.
 
 ## Environment Variables
 

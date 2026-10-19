@@ -12,9 +12,9 @@ hitspec uses specific exit codes to indicate the result of a test run. These are
 | `0` | `ExitSuccess` | All tests passed |
 | `1` | `ExitTestFailure` | One or more tests failed or thresholds exceeded |
 | `2` | `ExitParseError` | A file could not be loaded: invalid syntax, a duplicate `@name`, or a circular `@depends` in a `.http` / `.hitspec` file |
-| `3` | `ExitConfigError` | Configuration error (invalid `hitspec.yaml`, missing required flags) |
-| `4` | `ExitNetworkError` | At least one request got no response because the connection failed: connection refused or unreachable, DNS resolution failure, TLS handshake or certificate error, the request timeout expiring before a connection was established, or the connection reset or closed before a response arrived. This includes an unreachable OAuth2 token endpoint |
-| `64` | `ExitUsageError` | Invalid CLI usage (wrong arguments, missing required flags), or `--name` / `--tags` matched no request in any file |
+| `3` | `ExitConfigError` | Configuration error: a `hitspec.yaml` (or `--config` file) that is missing or cannot be parsed, an `--env-file` that does not exist, or a missing or invalid `--cacert`, `--cert`, `--key` or `--proxy`. These stop the command before any request is sent. `validate`, `studio`, `serve` and `contract` also exit `3` on a broken `hitspec.yaml` |
+| `4` | `ExitNetworkError` | At least one request got no response because the connection failed: connection refused or unreachable, DNS resolution failure, TLS handshake or certificate error, the request timeout expiring before a connection was established, or the connection reset or closed before a response arrived. This includes an unreachable OAuth2 token endpoint and an unreachable `@waitFor` target |
+| `64` | `ExitUsageError` | Usage error: an unknown flag or command, a flag value the parser rejects (for example `--concurrency abc`), a missing required flag, the wrong number of arguments, `-` combined with other files, `--watch` or `--stress`, `--dry-run` combined with `--stress`, invalid `hitspec mcp` arguments, or `--name` / `--tags` that matched no request in any file. hitspec prints `Run 'hitspec <cmd> --help' for usage.` for these. Errors a command finds while doing its work keep their own code: a missing file or an unknown export format exits `1` |
 | `130` | `ExitInterrupted` | The run was stopped with Ctrl+C (SIGINT) or SIGTERM. The results of the requests that finished are printed, `--output-file` is written, and requests that had not started are marked as cancelled. A second Ctrl+C exits immediately |
 
 ## Precedence
@@ -45,7 +45,7 @@ esac
 
 ## CI/CD Usage
 
-Most CI systems treat any non-zero exit code as failure. hitspec's exit codes let you distinguish between test failures and infrastructure issues:
+Most CI systems treat any non-zero exit code as failure. hitspec's exit codes let you distinguish between test failures and infrastructure issues. A step that accepts only `0` and `1` must also handle `4` (the API could not be reached) and `130` (interrupted):
 
 ```yaml
 # GitHub Actions

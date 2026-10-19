@@ -303,7 +303,7 @@ hitspec studio --read-only            # Safe mode for inspection
 - Stress, mock, recording proxy, contract, import, cookies, and settings screens
 - Toast notifications, confirm dialogs, real-time file watching, live execution progress
 
-**Flags:** `--read-only`, `--watch/-w`, `--env/-e`, `--config`, `--allow-shell`, `--allow-db`, `--verbose/-v`, `--log-format`, `--log-level`
+**Flags:** `--read-only` (refuses workspace and `hitspec.yaml` writes; running requests still works), `--watch/-w`, `--env/-e`, `--config`, `--allow-shell`, `--allow-db`, `--verbose/-v`, `--log-format`, `--log-level`
 
 **REST/WebSocket API server** — for integrations and editors:
 
@@ -347,6 +347,9 @@ hitspec run tests/ --env prod         # Use production environment
 hitspec run tests/ --tags smoke       # Run only smoke tests
 hitspec run tests/ --parallel         # Run in parallel
 hitspec run tests/ --watch            # Watch mode
+hitspec run 'tests/**/*.http'         # Quoted glob; `-` reads one file from stdin
+hitspec run tests/ --dry-run          # List what would run, send nothing
+hitspec run tests/ -vv                # Request/response headers (-v, -vv, -vvv)
 hitspec run tests/ -o json            # JSON output
 hitspec run tests/ --update-snapshots # Update snapshot files
 hitspec validate tests/               # Validate syntax (--strict: warnings are errors)
@@ -365,6 +368,8 @@ hitspec mcp serve --workspace .       # Start the workspace-scoped MCP server
 hitspec mcp probe --require-tool echo -- ./mcp-server
 hitspec mcp call echo --args '{"message":"hi"}' -- ./mcp-server
 ```
+
+Exit codes of `hitspec run`: `0` passed, `1` a request failed, `2` a file could not be loaded, `3` configuration error, `4` a request got no response (connection error), `64` usage error, `130` interrupted (Ctrl+C).
 
 ### Response fetch and MCP
 
@@ -490,7 +495,7 @@ POST {{baseUrl}}/upload
 
 >>>multipart
 field name = John Doe
-file @./photo.jpg
+file avatar @./photo.jpg   # field name "avatar"; `file @./photo.jpg` uses "file"
 <<<
 ```
 
@@ -624,6 +629,8 @@ query GetUser($id: ID!) {
 
 # AWS Signature v4
 # @auth aws {{accessKey}}, {{secretKey}}, {{region}}, {{service}}
+# AWS with temporary credentials (session token as 5th argument)
+# @auth aws {{accessKey}}, {{secretKey}}, {{region}}, {{service}}, {{sessionToken}}
 
 # OAuth2 Client Credentials
 # @auth oauth2 client_credentials {{tokenUrl}}, {{clientId}}, {{clientSecret}}, scope1,scope2
@@ -765,10 +772,16 @@ All major CLI flags can be set via environment variables with the `HITSPEC_` pre
 | `HITSPEC_BAIL` | `--bail` | Stop on first failure |
 | `HITSPEC_PARALLEL` | `--parallel` | Run in parallel |
 | `HITSPEC_CONCURRENCY` | `--concurrency` | Concurrent requests |
-| `HITSPEC_QUIET` | `--quiet` | Suppress output |
+| `HITSPEC_QUIET` | `--quiet` | Suppress the stdout report (failures still go to stderr) |
 | `HITSPEC_NO_COLOR` | `--no-color` | Disable colors |
 | `HITSPEC_PROXY` | `--proxy` | Proxy URL |
 | `HITSPEC_INSECURE` | `--insecure` | Skip SSL verification |
+| `HITSPEC_CACERT` | `--cacert` | Extra PEM CA bundle |
+| `HITSPEC_CERT` / `HITSPEC_KEY` | `--cert` / `--key` | Client certificate and key (mutual TLS) |
+| `HITSPEC_HTTP1` | `--http1.1` | Disable HTTP/2 |
+| `HITSPEC_COOKIES` | `--cookies` | Keep a cookie jar for the run |
+| `HITSPEC_MAX_RESPONSE_BYTES` | `--max-response-bytes` | Largest response body to read |
+| `HITSPEC_REDIRECT_FORWARD_HEADERS` | `--redirect-forward-headers` | Keep request headers on cross-origin redirects |
 
 Example:
 ```bash

@@ -183,10 +183,11 @@ hitspec uses specific exit codes that GitHub Actions interprets as pass or fail:
 |------|---------|-----------|
 | `0` | All tests passed | Step passes |
 | `1` | One or more tests failed | Step fails |
-| `2` | Parse error (invalid `.http` file syntax) | Step fails |
-| `3` | Configuration error | Step fails |
-| `4` | Network/connection error | Step fails |
-| `64` | Invalid CLI usage | Step fails |
+| `2` | A file could not be loaded (invalid `.http` syntax, duplicate `@name`, `@depends` cycle) | Step fails |
+| `3` | Configuration error (broken `hitspec.yaml`, missing `--env-file`, bad CA, certificate, key or proxy) | Step fails |
+| `4` | Network error: a request got no response because the connection failed | Step fails |
+| `64` | Usage error (unknown flag, bad value, missing argument), or `--name`/`--tags` matched no request | Step fails |
+| `130` | Interrupted (Ctrl+C or SIGTERM) | Step fails |
 
 Any non-zero exit code causes the GitHub Actions step to fail, which blocks the workflow (and any required status checks) from passing.
 
@@ -253,6 +254,7 @@ off a `bail: true` in hitspec.yaml.
 |---------------------|----------|-------------|
 | `HITSPEC_METRICS` | `--metrics` | Metrics export format: `prometheus`, `datadog`, `json` |
 | `HITSPEC_METRICS_PORT` | `--metrics-port` | Prometheus metrics port (default `9090`) |
+| `HITSPEC_METRICS_HOST` | `--metrics-host` | Prometheus bind address (default `127.0.0.1`) |
 | `HITSPEC_METRICS_FILE` | `--metrics-file` | Output file for JSON metrics |
 | `DD_API_KEY` | `--datadog-api-key` | DataDog API key |
 | `DD_SITE` | `--datadog-site` | DataDog site (default `datadoghq.com`) |

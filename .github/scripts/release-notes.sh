@@ -16,7 +16,9 @@ notes=$(awk -v heading="## [$version]" '
     if (found) exit
     if (index($0, heading) == 1) { found = 1; next }
   }
-  found { print }
+  # Skip the blank lines between the heading and the first paragraph.
+  found && !started && /^[[:space:]]*$/ { next }
+  found { started = 1; print }
 ' "$changelog")
 
 if [ -z "$(printf '%s' "$notes" | tr -d '[:space:]')" ]; then

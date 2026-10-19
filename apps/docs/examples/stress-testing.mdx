@@ -138,7 +138,7 @@ Available threshold metrics:
 | `assertions` | `<`, `<=` | `assertions<1%` | Share of checked responses that failed an `expect` assertion |
 | `rps` | `>`, `>=` | `rps>50` | Minimum requests per second |
 
-Combine multiple thresholds with commas.
+Combine multiple thresholds with commas. In a `hitspec.yaml` profile a threshold value may also start with an operator (`p95: "<=250ms"`); `errors: "0%"` means no request may fail. See [Stress Testing](/features/stress-testing#thresholds-in-profiles).
 
 </Step>
 
@@ -206,6 +206,8 @@ stress:
 VU mode is better for simulating real user behavior, where each user thinks between requests. Rate mode is better for measuring raw throughput.
 
 ## Profile Strategies
+
+Each snippet below is one entry under `stress.profiles` in `hitspec.yaml`; the profile name (`smoke`, `load`, ...) is what you pass to `--profile`.
 
 ### Smoke Test
 

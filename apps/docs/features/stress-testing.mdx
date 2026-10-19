@@ -61,8 +61,26 @@ Available threshold metrics:
 | `p50` | `p50<100ms` | Median response time |
 | `p95` | `p95<200ms` | 95th percentile response time |
 | `p99` | `p99<500ms` | 99th percentile response time |
-| `errors` | `errors<0.1%` | Error rate: transport errors and non-2xx responses. Assertion failures are not counted here |
+| `max` | `max<2s` | Slowest response time |
+| `errors` | `errors<0.1%` | Error rate: transport errors and non-2xx responses. Assertion failures are not counted here. `errors<0` (or `0%`) means no request may fail |
 | `assertions` | `assertions<1%` | Share of checked responses that failed an assertion. `assertions<0%` means no assertion may fail |
+| `rps` | `rps>50` | Minimum throughput in completed requests per second (uses `>` or `>=`) |
+
+### Thresholds in profiles
+
+In a `hitspec.yaml` stress profile, a threshold value may start with an operator: `p95: "<=250ms"`, `rps: ">=100"`, `errors: "<=0"`. Without one, latency, error and assertion thresholds mean "less than" and `rps` means "greater than". Quote values that start with an operator.
+
+```yaml
+stress:
+  profiles:
+    gate:
+      duration: 1m
+      rate: 100
+      thresholds:
+        p95: "<=250ms"
+        rps: ">=95"
+        errors: "0%"
+```
 
 ## Assertions, Errors and Incomplete Requests
 

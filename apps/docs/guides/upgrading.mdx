@@ -39,11 +39,11 @@ checking what it says.
     - uses: abdul-hamid-achik/hitspec@v2
       with:
         files: tests/
-        version: v2.21.0
+        version: v2.22.0
     ```
 
     With Go, install an exact version:
-    `go install github.com/abdul-hamid-achik/hitspec/v2/cmd/hitspec@v2.21.0`.
+    `go install github.com/abdul-hamid-achik/hitspec/v2/cmd/hitspec@v2.22.0`.
   </Step>
 </Steps>
 
@@ -51,6 +51,104 @@ Every release lists its changes in the
 [changelog](https://github.com/abdul-hamid-achik/hitspec/blob/main/CHANGELOG.md),
 and from 2.20.0 on the GitHub release page of each version shows the same
 notes.
+
+## 2.22.0
+
+Most of 2.22.0 adds things, but some changes show up as a different exit code,
+a request sent differently, or a check that used to be switched off. None of
+them needs an edit to a `.http` file unless it relied on one of the old
+behaviors below.
+
+### Exit codes
+
+- **Network errors exit 4.** A request that gets no response because the
+  connection failed (refused, DNS, TLS or certificate errors, a reset before
+  any response, a timeout before connecting, an OAuth2 token endpoint or a
+  `@waitFor` target that cannot be reached) used to exit 1. If a CI step
+  accepts only 0 and 1, treat 4 as a failure too. A timeout after connecting
+  and assertion failures are still 1. See [Exit codes](/reference/exit-codes).
+- **Ctrl+C and SIGTERM exit 130**, after printing the finished requests and
+  writing `--output-file`. SIGTERM used to read as 143.
+- **Command-line mistakes exit 64**: an unknown flag or command, a bad flag
+  value, a missing required flag, the wrong number of arguments, and
+  `--dry-run` with `--stress` (which used to run the load test). They exited 1.
+- **More configuration errors exit 3 before any request is sent:** a missing
+  `--env-file`, a CA, certificate, key or proxy that cannot be loaded, and a
+  broken `hitspec.yaml` in `validate`, `studio`, `serve` and `contract` (studio
+  and serve used to fall back to the defaults silently).
+- **`--dry-run` parses.** A file that does not load exits 2, and filters that
+  match exit 0. The plan is always text: `-o` and `--output-file` are ignored.
+
+### Which settings apply
+
+- `hitspec.yaml` is found by walking up from the working directory, stopping
+  after the first directory with `.git`, so a config in a parent directory of
+  your tests now applies. `hitspec run -v` prints the file it used. Unknown
+  keys print a warning; `hitspec validate --strict` turns them into errors.
+- `verbose: true` in `hitspec.yaml` now works (it is `-v`); `--verbose=0`
+  turns it off.
+
+### Requests sent differently
+
+- **Query lines** (`? name = value`) keep their order and duplicates and encode
+  a space as `%20`. They used to be sorted, collapsed and encoded with `+`.
+- **Illegal URL characters** (spaces, quotes, non-ASCII) are percent-encoded
+  instead of being sent raw.
+- **Form blocks** (`& name = value`) keep the spaces in values.
+- **A body file that cannot be read** (`< ./file`, a multipart file) fails the
+  request. The literal text used to be sent.
+- **Unnamed multipart file parts** are sent as field `file`. Name them with
+  `file avatar @./me.png`.
+- **`@waitFor`** uses the run's client: proxy, CA, `--insecure`, default
+  headers and `followRedirects: false` apply to it.
+- **Cookies** are only kept between requests with `--cookies` (or
+  `cookies: true`).
+
+### Reports and file selection
+
+- Failure output shows the request, the response status and a body excerpt.
+  `-v` prints `Response: 200 OK` instead of `Status: 200`; `-vv` adds headers
+  and `-vvv` bodies.
+- More header names are redacted (anything with `token`, `secret`, `password`
+  or `api-key`), in every format including HTML.
+- JSON, JUnit and TAP carry new fields such as `warnings`. JUnit states each
+  failed assertion once, and TAP escapes backslashes and newlines.
+- Directories are searched without `.git`, `node_modules` and `vendor`, and a
+  file reached twice runs once.
+
+### mock, record, stress and metrics
+
+- `mock` and `record` listen on `127.0.0.1`; pass `--host 0.0.0.0` for Docker.
+  A busy port is an error.
+- The Prometheus endpoint listens on `127.0.0.1`; pass `--metrics-host 0.0.0.0`
+  when another machine or container scrapes it.
+- `mock` answers a wrong method with 405 and serves HEAD for GET routes; CORS
+  needs `--cors`.
+- `record` redacts tokens, passwords, secrets, API keys and `Set-Cookie` in
+  recordings (`--no-redact` keeps them).
+- Stress results count requests cut off at the end as incomplete, and
+  assertion failures have their own `assertions<N%` threshold, so `rps` and
+  `errors` thresholds can move.
+- **`errors<0` and `errors: "0%"` are enforced.** They used to switch the
+  check off, so a run with errors passed; now one failed request fails it.
+- With `--profile`, explicit flags win, and profile thresholds keep their
+  operator (`rps: ">=100"`).
+
+### serve, studio and the desktop app
+
+- `--read-only` lets you run requests, stress, mock, record, contract
+  verification and import; it only refuses writes to the workspace and
+  settings.
+- Body files outside the workspace are refused in `serve`, `studio` and the
+  desktop app, including in stress and contract runs.
+- Starting mock or record on a busy port fails (409 from `serve`), and a
+  stress run that cannot start reports `error`.
+- `PUT /api/v1/config` applies a key that is present even when it is `0` or
+  `""`. Clients that sent those to mean "unchanged" must leave the key out.
+- In `hitspec studio`, `enter` no longer submits forms (use `s`, or `ctrl+s`
+  while editing), `r` runs the editor's unsaved text, `ctrl+c` cancels a run
+  and asks before discarding edits, copy-as fills in `{{variables}}`
+  (secrets included), and the mouse is captured only with `--mouse`.
 
 ## 2.21.0
 

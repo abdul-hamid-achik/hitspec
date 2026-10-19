@@ -19,6 +19,15 @@ The API can read, write and delete workspace files and send arbitrary requests, 
 - **Origin.** A request that carries an `Origin` header (browsers always send one cross-site) must come from `http(s)://localhost`, `127.0.0.1` or `[::1]` on the server's own port, or on any port when `--cors` is set; otherwise `403 Forbidden`. This also applies to the WebSocket upgrade. Requests without `Origin` (curl, scripts, server-side code) are not affected.
 - **Token.** If `--api-token` / `HITSPEC_API_TOKEN` is set, every request needs `Authorization: Bearer <token>` (scheme is case-insensitive) or `?token=<token>`, else `401`. If the server binds to a non-loopback address, or `--allow-shell` / `--allow-db` is set, and no token is configured, a random token is generated and printed once to stderr.
 - **CORS preflights.** With `--cors`, `OPTIONS` preflights from an allowed origin are answered with `204` and CORS headers without a token; the actual request still needs it.
+- **Workspace file references.** A `< file` body or a multipart file that points outside the workspace is refused (`file reference ... is outside the workspace`). This applies to run, execute, stress and contract verification. `hitspec run` is not subject to this.
+
+### Read-only mode
+
+With `--read-only`, writes to files, `hitspec.yaml`, environments (switching the active environment is still allowed), stress profiles and history return `403`. Running requests, stress, mock, record start/stop, contract verification, export/curl, import (`POST /import/*`) and `POST /record/export` keep working, because they only return text and write nothing. Runs in read-only mode do not persist cookies.
+
+### Timeouts and shutdown
+
+`/run` and `/execute` are not subject to the 60s response timeout. On shutdown the server lets in-flight requests finish for up to 10s; a second signal exits at once. `--parent-pid <pid>` shuts the server down when that process exits, so a supervisor that dies without cleaning up does not leave it running.
 
 ## Error Format
 
@@ -355,6 +364,8 @@ curl -X POST http://localhost:8080/api/v1/execute \
 }
 ```
 
+A result may also carry `warnings`, an array of strings with non-fatal findings (a capture that matched nothing, a `{{reference}}` sent unresolved). It is omitted when empty.
+
 ---
 
 ### Run File
@@ -542,7 +553,9 @@ curl http://localhost:8080/api/v1/config
   "defaultEnvironment": "dev",
   "timeout": 30000,
   "retries": 0,
+  "retryDelay": 1000,
   "followRedirects": true,
+  "maxRedirects": 10,
   "validateSSL": true,
   "proxy": "",
   "headers": {
@@ -574,7 +587,9 @@ curl -X PUT http://localhost:8080/api/v1/config \
   defaultEnvironment?: string;
   timeout?: number;              // Milliseconds
   retries?: number;
+  retryDelay?: number;           // Milliseconds
   followRedirects?: boolean;
+  maxRedirects?: number;
   validateSSL?: boolean;
   proxy?: string;
   headers?: Record<string, string>;
@@ -584,11 +599,11 @@ curl -X PUT http://localhost:8080/api/v1/config \
 ```
 
 <ParamField body="timeout" type="number">
-  Request timeout in milliseconds. Must be greater than 0.
+  Request timeout in milliseconds. `0` resets it to the default (30000).
 </ParamField>
 
 <ParamField body="retries" type="number">
-  Number of automatic retries on failure. Must be greater than 0.
+  Number of automatic retries on failure. `0` disables retries.
 </ParamField>
 
 <ParamField body="followRedirects" type="boolean">
@@ -608,10 +623,12 @@ curl -X PUT http://localhost:8080/api/v1/config \
 </ParamField>
 
 <ParamField body="concurrency" type="number">
-  Maximum number of concurrent requests in parallel mode. Must be greater than 0.
+  Maximum number of concurrent requests in parallel mode. `0` resets it to the default (5).
 </ParamField>
 
-**Response** `200 OK` -- returns the updated configuration object.
+A key that is present is applied even when it is `0` or `""`: `retries: 0` disables retries and `proxy: ""` clears the proxy. For `timeout`, `retryDelay`, `maxRedirects` and `concurrency`, `0` resets the value to its default. Negative numbers return `400`.
+
+**Response** `200 OK` -- returns the resulting configuration.
 
 ---
 
@@ -964,10 +981,15 @@ curl http://localhost:8080/api/v1/stress/status
     "p99Ms": 120.0,
     "maxMs": 350.0,
     "errorRate": 0.0067,
-    "activeVUs": 10
+    "activeVUs": 10,
+    "incomplete": 3,
+    "assertionChecks": 745,
+    "assertionFailures": 2
   }
 }
 ```
+
+`incomplete` counts requests still in flight, and `assertionChecks` / `assertionFailures` count responses that were checked against `expect` lines and those that failed one. Assertion failures are not part of `errors`. The three fields are omitted when zero, and the same fields appear in `stress_update` messages.
 
 When no stress test is running:
 
@@ -991,40 +1013,50 @@ curl http://localhost:8080/api/v1/stress/result
 
 ```json
 {
-  "duration": 30.0,
-  "totalRequests": 1500,
-  "successCount": 1485,
-  "errorCount": 15,
-  "avgRps": 50.0,
-  "latency": {
-    "min": 2.1,
-    "max": 350.0,
-    "mean": 25.3,
-    "stddev": 18.7,
-    "p50": 12.5,
-    "p95": 45.2,
-    "p99": 120.0
-  },
+  "durationMs": 30000,
+  "total": 1500,
+  "success": 1485,
+  "errors": 15,
+  "timeouts": 0,
+  "rps": 50.0,
+  "successRate": 0.99,
+  "errorRate": 0.01,
+  "p50Ms": 12.5,
+  "p95Ms": 45.2,
+  "p99Ms": 120.0,
+  "minMs": 2.1,
+  "maxMs": 350.0,
+  "meanMs": 25.3,
+  "stdDevMs": 18.7,
+  "incomplete": 4,
+  "assertionChecks": 1485,
+  "assertionFailures": 3,
+  "assertionFailRate": 0.002,
+  "warnings": ["target rate 50/s was not reached (achieved 41/s)"],
   "thresholds": [
-    { "metric": "p95", "threshold": "200ms", "actual": 45.2, "passed": true },
-    { "metric": "errors", "threshold": "1%", "actual": 1.0, "passed": true }
+    { "name": "p95", "passed": true, "expected": "< 200ms", "actual": "45.2ms" }
   ],
-  "perRequest": [
+  "breakdown": [
     {
       "name": "Get Users",
-      "count": 750,
-      "successCount": 745,
-      "errorCount": 5,
-      "avgMs": 22.1,
-      "minMs": 2.1,
-      "maxMs": 200.0,
+      "total": 750,
+      "success": 745,
+      "errors": 5,
       "p50Ms": 11.0,
       "p95Ms": 40.0,
-      "p99Ms": 100.0
+      "p99Ms": 100.0,
+      "meanMs": 22.1,
+      "assertionFailures": 2
     }
-  ]
+  ],
+  "timeSeries": [],
+  "timestamp": "2026-02-10T12:00:30Z"
 }
 ```
+
+`incomplete`, `assertionChecks`, `assertionFailures`, `assertionFailRate`, `warnings`, `thresholds` and `breakdown[].assertionFailures` are omitted when empty or zero. `incomplete` requests were still in flight when the window closed and are not counted in `total` or `errors`. `warnings` describe the run itself, for example a target rate that was not reached.
+
+When the run could not start (invalid settings, a failed setup request), the result has an `error` field saying why and its counters are zero. The final `stress_update` WebSocket event (`"completed": true`) carries the same `error`.
 
 When no result is available:
 
@@ -1238,7 +1270,7 @@ curl -X POST http://localhost:8080/api/v1/mock/start \
 }
 ```
 
-**Error** `409 Conflict` if a mock server is already running.
+**Error** `409 Conflict` if a mock server is already running, or if the port is busy or the address cannot be bound.
 
 ---
 
@@ -1451,7 +1483,7 @@ curl -X POST http://localhost:8080/api/v1/record/start \
 }
 ```
 
-**Error** `409 Conflict` if a recording proxy is already running.
+**Error** `409 Conflict` if a recording proxy is already running, or if the port is busy or the address cannot be bound. `400 Bad Request` if `targetUrl` is missing or is not a valid URL.
 
 ---
 
@@ -1861,7 +1893,7 @@ Sent for each individual request as it starts and completes during an execution.
 }
 ```
 
-The `status` field is either `"started"` or `"completed"`. The `passed` and `duration` fields are only present when status is `"completed"`.
+The `status` field is either `"started"` or `"completed"`. The `passed`, `duration` and `warnings` fields are only present when status is `"completed"`; `warnings` is an array of strings and is omitted when empty.
 
 #### `execution_complete`
 
