@@ -1,0 +1,36 @@
+# A fresh `hitspec init` project works end to end.
+# Regression: the scaffold's `@baseUrl = {{baseUrl}}` was a cycle, localhost:3000
+# has nothing listening, and "Next steps" did not lead to a passing run.
+
+exec hitspec init
+stdout 'Created: .*hitspec.yaml'
+stdout 'Created: .*example.http'
+# Next steps: every printed command is real.
+stdout 'hitspec mock example.http --port 3000'
+stdout 'hitspec run example.http'
+stdout 'hitspec studio'
+exists hitspec.yaml
+exists example.http
+
+exitcode 0 hitspec validate example.http
+stdout '0 error'
+
+# Re-running without --force refuses to clobber.
+! exec hitspec init
+stderr 'already exists'
+
+# Point the dev environment at the offline test server (the scaffold's requests
+# match its /p0b/ routes) and run the generated file untouched.
+cp override.yaml hitspec.yaml
+exitcode 0 hitspec run example.http
+stdout 'healthCheck'
+stdout 'createResource'
+stdout 'getResource'
+stdout 'Tests: 3 passed, 3 total'
+! stderr 'warning'
+
+-- override.yaml --
+defaultEnvironment: dev
+environments:
+  dev:
+    baseUrl: ${SERVER}/p0b

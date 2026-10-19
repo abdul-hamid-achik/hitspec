@@ -35,7 +35,21 @@ environments:
 
 // SampleRequestHTTP is the default example request file. It exercises the most
 // common hitspec features: variables, assertions, captures, and dependencies.
-const SampleRequestHTTP = `@baseUrl = {{baseUrl}}
+//
+// The >>>mock blocks make the file servable as-is by `hitspec mock`, so a new
+// project runs green without any API of its own:
+//
+//	hitspec mock example.http --port 3000    (terminal 1)
+//	hitspec run example.http                 (terminal 2)
+//
+// `hitspec run` ignores the mock blocks, so pointing baseUrl at a real API in
+// hitspec.yaml keeps working.
+const SampleRequestHTTP = `# hitspec example. Serve it with the built-in mock server, then run it:
+#   hitspec mock example.http --port 3000     (terminal 1)
+#   hitspec run example.http                  (terminal 2)
+# To test a real API instead, change baseUrl in hitspec.yaml.
+
+@baseUrl = {{baseUrl}}
 
 ### Get health status
 # @name healthCheck
@@ -46,6 +60,11 @@ GET {{baseUrl}}/health
 
 >>>
 expect status 200
+expect body.status == "ok"
+<<<
+
+>>>mock
+{"status": "ok"}
 <<<
 
 ### Create a resource
@@ -70,6 +89,10 @@ expect body.name == "Test Resource"
 resourceId from body.id
 <<<
 
+>>>mock
+{"id": 1, "name": "Test Resource", "description": "Created by hitspec"}
+<<<
+
 ### Get the created resource
 # @name getResource
 # @tags crud
@@ -80,6 +103,10 @@ GET {{baseUrl}}/resources/{{createResource.resourceId}}
 >>>
 expect status 200
 expect body.id == {{createResource.resourceId}}
+<<<
+
+>>>mock
+{"id": 1, "name": "Test Resource", "description": "Created by hitspec"}
 <<<
 `
 

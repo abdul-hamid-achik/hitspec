@@ -2,11 +2,16 @@ package clientmgr
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/config"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/mock"
 )
 
 func TestScaffoldSampleCreatesProject(t *testing.T) {
@@ -89,5 +94,65 @@ func TestSampleConfigYAMLParses(t *testing.T) {
 	// (e.g. "hitspec/1.0") that rots between releases.
 	if ua := cfg.Headers["User-Agent"]; ua != "hitspec" {
 		t.Errorf("scaffolded User-Agent = %q, want non-stale \"hitspec\"", ua)
+	}
+}
+
+// TestSampleProjectRunsAgainstMock is the `hitspec init` acceptance test: the
+// scaffolded example.http, served by `hitspec mock`, must pass `hitspec run`
+// with the scaffolded hitspec.yaml (only the port differs, to avoid clashes).
+func TestSampleProjectRunsAgainstMock(t *testing.T) {
+	dir := t.TempDir()
+	examplePath := filepath.Join(dir, SampleRequestFile)
+	if err := os.WriteFile(examplePath, []byte(SampleRequestHTTP), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	_ = ln.Close()
+
+	srv := mock.NewServer(mock.WithPort(port))
+	if err := srv.LoadFiles([]string{examplePath}); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(srv.GetRoutes()); got != 3 {
+		t.Fatalf("mock routes = %d, want 3", got)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = srv.StartWithContext(ctx) }()
+	for i := 0; ; i++ {
+		c, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond)
+		if err == nil {
+			_ = c.Close()
+			break
+		}
+		if i > 50 {
+			t.Fatalf("mock server did not start: %v", err)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	r := runner.NewRunner(&runner.Config{
+		Environment:    "dev",
+		Timeout:        5 * time.Second,
+		ValidateSSL:    true,
+		FollowRedirect: true,
+		ConfigEnvironments: map[string]map[string]any{
+			"dev": {"baseUrl": fmt.Sprintf("http://127.0.0.1:%d", port)},
+		},
+	})
+	res, err := r.RunFile(examplePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Failed != 0 || res.Passed != 3 {
+		for _, rr := range res.Results {
+			t.Logf("%s passed=%v err=%v", rr.Name, rr.Passed, rr.Error)
+		}
+		t.Fatalf("passed=%d failed=%d skipped=%d, want 3 passed", res.Passed, res.Failed, res.Skipped)
 	}
 }

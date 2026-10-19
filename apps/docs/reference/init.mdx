@@ -16,7 +16,7 @@ hitspec init [flags]
 | File | Description |
 |------|-------------|
 | `hitspec.yaml` | Configuration file with default environments (dev, staging, prod) |
-| `example.http` | Example test file with CRUD operations and captures |
+| `example.http` | Example requests (health check, create, get) with assertions, a capture, and `>>>mock` blocks so `hitspec mock` can serve them |
 
 ## Flags
 
@@ -40,13 +40,13 @@ The generated `hitspec.yaml` includes:
 
 ```yaml
 defaultEnvironment: dev
-timeout: 30s
+timeout: 30000
 retries: 0
 followRedirects: true
 maxRedirects: 10
 validateSSL: true
 headers:
-  User-Agent: hitspec/1.0
+  User-Agent: hitspec
 environments:
   dev:
     baseUrl: http://localhost:3000
@@ -66,8 +66,18 @@ The generated `example.http` demonstrates:
 - Capture blocks with `>>>capture` / `<<<`
 - Dependencies with `@depends`
 
-Run the example:
+## Run the Example
+
+The example is self-contained: `hitspec mock` serves it from its own `>>>mock` blocks, so it passes without an API of your own. Use two terminals:
 
 ```bash
+# Terminal 1: serve example.http on the dev baseUrl (http://localhost:3000)
+hitspec mock example.http --port 3000
+
+# Terminal 2: run it
 hitspec run example.http
 ```
+
+`hitspec run` ignores `>>>mock` blocks. To test a real API, set `baseUrl` in `hitspec.yaml` and replace the requests in `example.http`.
+
+The line `@baseUrl = {{baseUrl}}` at the top of `example.http` makes the file default to the `baseUrl` of the active environment. See [Variables](/concepts/variables).

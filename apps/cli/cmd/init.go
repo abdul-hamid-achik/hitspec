@@ -18,7 +18,7 @@ var initCmd = &cobra.Command{
 
 This creates:
   - hitspec.yaml   - Configuration file with environments
-  - example.http   - Example test file
+  - example.http   - Example requests, servable by "hitspec mock"
 
 Examples:
   hitspec init
@@ -60,9 +60,10 @@ func initCommand(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(cmd.OutOrStdout(), "Created: %s\n", exampleFile)
 
 	fmt.Fprintf(cmd.OutOrStdout(), "\nProject initialized. Next steps:\n")
-	fmt.Fprintf(cmd.OutOrStdout(), "  hitspec studio                    Open the interactive app\n")
-	fmt.Fprintf(cmd.OutOrStdout(), "  hitspec run example.http          Run the example tests\n")
-	fmt.Fprintf(cmd.OutOrStdout(), "  hitspec run example.http -v       Run with verbose output\n")
+	fmt.Fprintf(cmd.OutOrStdout(), "  hitspec mock example.http --port 3000   Serve the example locally (terminal 1)\n")
+	fmt.Fprintf(cmd.OutOrStdout(), "  hitspec run example.http                Run the example tests against it (terminal 2)\n")
+	fmt.Fprintf(cmd.OutOrStdout(), "  hitspec studio                          Open the interactive app\n")
+	fmt.Fprintf(cmd.OutOrStdout(), "\nTo test your own API, set baseUrl in hitspec.yaml and edit example.http.\n")
 
 	return nil
 }
