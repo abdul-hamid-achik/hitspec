@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/portprobe"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/builtin"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
 	"log"
@@ -370,9 +371,15 @@ func (s *Server) Listen() (net.Addr, error) {
 	if s.listener != nil {
 		return s.listener.Addr(), nil
 	}
-	ln, err := net.Listen("tcp", net.JoinHostPort(s.host, strconv.Itoa(s.port)))
+	hostPort := net.JoinHostPort(s.host, strconv.Itoa(s.port))
+	// bind() can succeed next to a wildcard listener (macOS, SO_REUSEADDR):
+	// probe first so that case is an error too.
+	if portprobe.ShouldProbe(s.host) && portprobe.InUse(s.port) {
+		return nil, fmt.Errorf("mock server cannot listen on %s: port %d is already in use", hostPort, s.port)
+	}
+	ln, err := net.Listen("tcp", hostPort)
 	if err != nil {
-		return nil, fmt.Errorf("mock server cannot listen on %s: %w", net.JoinHostPort(s.host, strconv.Itoa(s.port)), err)
+		return nil, fmt.Errorf("mock server cannot listen on %s: %w", hostPort, err)
 	}
 	s.listener = ln
 	return ln.Addr(), nil

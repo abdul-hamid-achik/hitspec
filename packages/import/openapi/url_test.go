@@ -75,7 +75,7 @@ func TestConvertFile_URLTimesOut(t *testing.T) {
 	defer close(release)
 
 	start := time.Now()
-	_, err := NewConverter(WithTimeout(300*time.Millisecond)).ConvertFile(srv.URL + "/hang.yaml")
+	_, err := NewConverter(WithTimeout(300 * time.Millisecond)).ConvertFile(srv.URL + "/hang.yaml")
 	if err == nil {
 		t.Fatal("a hanging server must produce an error")
 	}

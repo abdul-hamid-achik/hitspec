@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/portprobe"
 )
 
 // DefaultHost is the address the proxy binds to unless WithHost says otherwise.
@@ -177,6 +179,11 @@ func (r *Recorder) Listen() (net.Addr, error) {
 		return r.listener.Addr(), nil
 	}
 	hostPort := net.JoinHostPort(r.host, strconv.Itoa(r.port))
+	// bind() can succeed next to a wildcard listener (macOS, SO_REUSEADDR):
+	// probe first so that case is an error too.
+	if portprobe.ShouldProbe(r.host) && portprobe.InUse(r.port) {
+		return nil, fmt.Errorf("recording proxy cannot listen on %s: port %d is already in use", hostPort, r.port)
+	}
 	ln, err := net.Listen("tcp", hostPort)
 	if err != nil {
 		return nil, fmt.Errorf("recording proxy cannot listen on %s: %w", hostPort, err)
@@ -529,19 +536,49 @@ func (r *Recorder) sanitizeHeaders(h http.Header) map[string]string {
 	return result
 }
 
-// fullURL reconstructs the full, runnable request URL from the configured
-// target (scheme + host) and the request path + query that the reverse proxy
-// received. Falls back to the raw request URI when no target is configured.
+// fullURL reconstructs the full, runnable request URL the way the reverse proxy
+// forwards it: the target's scheme, host, path prefix and query joined with the
+// request's path and query. Falls back to the raw request URI when no (valid)
+// target is configured.
 func (r *Recorder) fullURL(reqURL *url.URL) string {
 	if r.targetURL == "" {
 		return reqURL.String()
 	}
-	base := strings.TrimRight(r.targetURL, "/")
-	uri := reqURL.RequestURI() // path + ?query
-	if uri == "" {
-		uri = "/"
+	target, err := url.Parse(r.targetURL)
+	if err != nil || target.Host == "" {
+		return strings.TrimRight(r.targetURL, "/") + reqURL.RequestURI()
 	}
-	return base + uri
+	out := *target
+	out.Fragment, out.RawFragment = "", ""
+	raw := joinURLPath(target.EscapedPath(), reqURL.EscapedPath())
+	if p, err := url.PathUnescape(raw); err == nil {
+		out.Path, out.RawPath = p, raw
+	} else {
+		out.Path, out.RawPath = raw, ""
+	}
+	switch {
+	case target.RawQuery == "" || reqURL.RawQuery == "":
+		out.RawQuery = target.RawQuery + reqURL.RawQuery
+	default:
+		out.RawQuery = target.RawQuery + "&" + reqURL.RawQuery
+	}
+	return out.String()
+}
+
+// joinURLPath joins two escaped URL paths with exactly one slash, like
+// httputil.ReverseProxy does for the target's path prefix.
+func joinURLPath(a, b string) string {
+	aSlash, bSlash := strings.HasSuffix(a, "/"), strings.HasPrefix(b, "/")
+	switch {
+	case aSlash && bSlash:
+		return a + b[1:]
+	case !aSlash && !bSlash && a != "" && b != "":
+		return a + "/" + b
+	}
+	if a+b == "" {
+		return "/"
+	}
+	return a + b
 }
 
 // GetRecordings returns all recorded requests

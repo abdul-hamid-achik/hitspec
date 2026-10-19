@@ -187,3 +187,21 @@ func TestHandler_CORSOptIn(t *testing.T) {
 		t.Errorf("Allow-Methods = %q", resp.Header.Get("Access-Control-Allow-Methods"))
 	}
 }
+
+// A holder on the wildcard address (a dev server, a Docker port forward) must
+// count as "port in use" even where bind() on 127.0.0.1 would still succeed
+// (macOS with SO_REUSEADDR).
+func TestServer_WildcardHolderIsBusy(t *testing.T) {
+	holder, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer holder.Close()
+	port := holder.Addr().(*net.TCPAddr).Port
+
+	s := NewServer(WithPort(port))
+	if _, err := s.Listen(); err == nil {
+		_ = s.listener.Close()
+		t.Fatalf("Listen succeeded on port %d held by a wildcard listener", port)
+	}
+}

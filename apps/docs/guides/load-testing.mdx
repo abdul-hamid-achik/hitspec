@@ -58,7 +58,10 @@ Available threshold metrics:
 - `p50` -- 50th percentile latency
 - `p95` -- 95th percentile latency
 - `p99` -- 99th percentile latency
-- `errors` -- Error rate percentage
+- `errors` -- Error rate percentage (transport errors and non-2xx responses; assertion failures are not counted)
+- `assertions` -- Share of checked responses that failed an `expect` assertion (`assertions<0%` means none may fail)
+
+Requests still in flight when the duration ends are reported as "incomplete" and do not count as errors. If the run cannot reach its target `--rate` (more than 10% short), hitspec prints a warning, because the latencies then understate real load. See [Load and stress test APIs](/features/stress-testing#assertions-errors-and-incomplete-requests).
 
 ## Stress Profiles
 

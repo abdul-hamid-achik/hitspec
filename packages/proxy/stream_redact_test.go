@@ -241,3 +241,39 @@ func TestRecordingURLWithTrailingSlashTargetPrefix(t *testing.T) {
 		t.Errorf("recorded URL %q does not match the proxied one %q", got[0].URL, want)
 	}
 }
+
+func TestListen_WildcardHolderIsBusy(t *testing.T) {
+	holder, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer holder.Close()
+	port := holder.Addr().(*net.TCPAddr).Port
+
+	r := NewRecorder(WithPort(port), WithTargetURL("http://example.invalid"))
+	if _, err := r.Listen(); err == nil {
+		_ = r.listener.Close()
+		t.Fatalf("Listen succeeded on port %d held by a wildcard listener", port)
+	}
+}
+
+func TestRecordingURLWithQueryInTarget(t *testing.T) {
+	var upstream string
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstream = r.URL.RequestURI()
+	}))
+	defer backend.Close()
+	rec, proxyURL, _ := startRecorderProxy(t, backend, WithTargetURL(backend.URL+"/api?k=1"))
+	resp, err := http.Get(proxyURL + "/users?x=2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	got := rec.GetRecordings()
+	if len(got) != 1 {
+		t.Fatalf("recordings = %d", len(got))
+	}
+	if want := backend.URL + upstream; got[0].URL != want {
+		t.Errorf("recorded URL %q does not match what upstream saw %q", got[0].URL, want)
+	}
+}
