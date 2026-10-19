@@ -15,6 +15,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 12,
         "Metadata": {
@@ -58,6 +59,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 31,
         "Metadata": {
@@ -120,6 +122,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "",
+        "HTTPVersion": "",
         "Headers": [
           {
             "Key": "Content-Type",

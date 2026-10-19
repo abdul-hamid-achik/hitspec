@@ -1,0 +1,124 @@
+# Request-line, header and variable values reach the server verbatim:
+# quotes, '#', apostrophes, comments between headers, spaces inside {{ }}.
+
+exitcode 0 hitspec run verbatim.http
+stdout 'Tests: 6 passed, 6 total'
+! stdout 'failed'
+
+exitcode 0 hitspec run auth.http
+stdout 'Tests: 4 passed, 4 total'
+! stdout 'failed'
+
+-- verbatim.http --
+@pw = abc#123
+@greeting = "hi there"
+
+### header values are verbatim
+GET {{$env(SERVER)}}/echo/etag
+If-None-Match: "abc"
+Content-Disposition: attachment; filename="a.txt"
+X-Color: #fff
+
+>>>
+expect status 200
+expect body.headers.If-None-Match == '"abc"'
+expect body.headers.Content-Disposition == 'attachment; filename="a.txt"'
+expect body.headers.X-Color == "#fff"
+<<<
+
+### file variables are verbatim
+GET {{$env(SERVER)}}/echo/vars
+X-Pw: {{pw}}
+X-Greeting: {{greeting}}
+
+>>>
+expect status 200
+expect body.headers.X-Pw == "abc#123"
+expect body.headers.X-Greeting == '"hi there"'
+<<<
+
+### spaces inside {{ }} in the request line
+GET {{ $env(SERVER) }}/echo/q?x={{$urlEncode(hello world)}}&n={{$random(1, 100)}} HTTP/1.1
+
+>>>
+expect status 200
+expect body.method == "GET"
+expect body.path == "/echo/q"
+expect body.query matches "^x=hello(%20|\+)world&n=[0-9]+$"
+<<<
+
+### comment lines inside the header block
+GET {{$env(SERVER)}}/echo/comment
+X-First: one
+# a comment between headers
+// and a slash comment
+# @name not-a-directive
+X-Second: two
+
+>>>
+expect status 200
+expect body.headers.X-First == "one"
+expect body.headers.X-Second == "two"
+expect body.body == ""
+<<<
+
+### an apostrophe in a header does not swallow the file
+GET {{$env(SERVER)}}/echo/apostrophe
+X-Note: it's fine
+
+>>>
+expect status 200
+expect body.headers.X-Note == "it's fine"
+<<<
+
+### this request must still run
+# @description it's still here
+POST {{$env(SERVER)}}/echo/after
+Content-Type: text/plain
+
+don't panic, it's "fine" # not a comment
+mail me at bob@example.com
+
+>>>
+expect status 200
+expect body.body startsWith "don't panic, it's"
+expect body.body contains '"fine" # not a comment'
+expect body.body endsWith "bob@example.com"
+<<<
+
+-- auth.http --
+### comma separated
+# @auth basic alice, s3cret
+GET {{$env(SERVER)}}/echo/basic-comma
+
+>>>
+expect status 200
+expect body.headers.Authorization == "Basic YWxpY2U6czNjcmV0"
+<<<
+
+### space separated
+# @auth basic alice s3cret
+GET {{$env(SERVER)}}/echo/basic-space
+
+>>>
+expect status 200
+expect body.headers.Authorization == "Basic YWxpY2U6czNjcmV0"
+<<<
+
+### apiKey header
+# @auth apiKey X-API-Key, k-123
+GET {{$env(SERVER)}}/echo/apikey
+
+>>>
+expect status 200
+expect body.headers.X-Api-Key == "k-123"
+<<<
+
+### apiKeyQuery
+# @auth apiKeyQuery api_key, k-123
+GET {{$env(SERVER)}}/echo/apikeyquery
+
+>>>
+expect status 200
+expect body.query == "api_key=k-123"
+<<<

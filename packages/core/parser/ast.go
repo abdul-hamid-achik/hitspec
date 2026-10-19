@@ -23,6 +23,7 @@ type Request struct {
 	Tags          []string
 	Method        string
 	URL           string
+	HTTPVersion   string // optional protocol token from the request line, e.g. "HTTP/1.1"
 	Headers       []*Header
 	QueryParams   []*QueryParam
 	Body          *Body

@@ -27,6 +27,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Authenticate with a Bearer token",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 13,
         "Metadata": {
@@ -87,12 +88,13 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Authenticate with username and password",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 27,
         "Metadata": {
           "Auth": {
             "Params": [
-              "{{username}},",
+              "{{username}}",
               "{{password}}"
             ],
             "Type": "basic"
@@ -148,12 +150,13 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Send API key via custom header",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 41,
         "Metadata": {
           "Auth": {
             "Params": [
-              "X-API-Key,",
+              "X-API-Key",
               "{{apiKey}}"
             ],
             "Type": "apikey"
@@ -203,12 +206,13 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Send API key as query parameter",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 55,
         "Metadata": {
           "Auth": {
             "Params": [
-              "api_key,",
+              "api_key",
               "{{apiKey}}"
             ],
             "Type": "apikey-query"
@@ -264,12 +268,13 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Authenticate with HTTP Digest auth",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 68,
         "Metadata": {
           "Auth": {
             "Params": [
-              "user,",
+              "user",
               "passwd"
             ],
             "Type": "digest"
@@ -333,6 +338,7 @@
         ],
         "DBAssertions": null,
         "Description": "Simulate login to get a token",
+        "HTTPVersion": "",
         "Headers": [
           {
             "Key": "Content-Type",
@@ -388,6 +394,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Use token from login to access a protected endpoint",
+        "HTTPVersion": "",
         "Headers": [
           {
             "Key": "Authorization",

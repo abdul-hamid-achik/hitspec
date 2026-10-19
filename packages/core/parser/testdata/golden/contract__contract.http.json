@@ -45,6 +45,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Verify the response matches the Pet schema",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 7,
         "Metadata": {
@@ -166,6 +167,7 @@
         ],
         "DBAssertions": null,
         "Description": "Create a pet and validate response matches contract",
+        "HTTPVersion": "",
         "Headers": [
           {
             "Key": "Content-Type",
@@ -240,6 +242,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Verify every field has the expected type per the contract",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 66,
         "Metadata": {
@@ -291,6 +294,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Verify the inventory endpoint returns a map of status counts",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 82,
         "Metadata": {
@@ -375,6 +379,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Place an order and validate the response contract",
+        "HTTPVersion": "",
         "Headers": [
           {
             "Key": "Content-Type",
@@ -443,6 +448,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Verify error responses follow the expected format",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 120,
         "Metadata": {

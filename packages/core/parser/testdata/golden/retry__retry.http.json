@@ -21,6 +21,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Retries up to 3 times on any non-2xx response",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 9,
         "Metadata": {
@@ -64,6 +65,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Retries with 2-second delay between attempts",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 22,
         "Metadata": {
@@ -119,6 +121,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Only retries when the server returns 500, 502, or 503",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 36,
         "Metadata": {
@@ -172,6 +175,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Retries specifically on 504 Gateway Timeout",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 51,
         "Metadata": {
@@ -223,6 +227,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Combines retry with a per-request timeout",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 67,
         "Metadata": {
@@ -272,6 +277,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Wait for a health endpoint, then retry the actual request",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 82,
         "Metadata": {
@@ -339,6 +345,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Retry a POST request -- only safe for idempotent endpoints",
+        "HTTPVersion": "",
         "Headers": [
           {
             "Key": "Content-Type",

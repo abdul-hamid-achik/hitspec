@@ -60,6 +60,7 @@ type Token struct {
 	Line    int
 	Column  int
 	Literal any
+	Offset  int // byte offset of the token's first character in the input
 }
 
 type Lexer struct {
@@ -117,7 +118,15 @@ func (l *Lexer) peekChars(n int) string {
 	return l.input[l.pos:end]
 }
 
+// NextToken scans the next token and records where it started.
 func (l *Lexer) NextToken() Token {
+	start := l.pos
+	tok := l.scanToken()
+	tok.Offset = start
+	return tok
+}
+
+func (l *Lexer) scanToken() Token {
 	var tok Token
 	tok.Line = l.line
 	tok.Column = l.column
@@ -439,7 +448,10 @@ func (l *Lexer) readString(quote rune) Token {
 	col := l.column
 	l.readChar()
 	var builder strings.Builder
-	for l.ch != 0 && l.ch != quote {
+	// A quoted string ends at its closing quote or at the end of the line. An
+	// unclosed quote (an apostrophe in prose, say) must not swallow the rest of
+	// the file.
+	for l.ch != 0 && l.ch != quote && l.ch != '\n' && l.ch != '\r' {
 		if l.ch == '\\' {
 			// Preserve escape sequences: write the backslash
 			builder.WriteRune(l.ch)
@@ -658,4 +670,65 @@ func isHTTPMethod(s string) bool {
 		return true
 	}
 	return false
+}
+
+// seekLineStart repositions the lexer at the start of the line containing byte
+// offset off. line is the 1-based number of that line (the Line of a token that
+// starts there). It lets the parser drop back from the token stream to raw line
+// reading, which is how headers, bodies and the request line are read verbatim.
+func (l *Lexer) seekLineStart(off, line int) {
+	start := off
+	if start > len(l.input) {
+		start = len(l.input)
+	}
+	for start > 0 && l.input[start-1] != '\n' && l.input[start-1] != '\r' {
+		start--
+	}
+	l.readPos = start
+	l.line = line
+	l.column = 0
+	l.readChar()
+}
+
+// atEOF reports whether the whole input has been consumed.
+func (l *Lexer) atEOF() bool {
+	return l.ch == 0
+}
+
+// peekLine returns the text of the line starting at the current position,
+// without its line terminator, and without consuming anything.
+func (l *Lexer) peekLine() string {
+	if l.ch == 0 {
+		return ""
+	}
+	end := l.pos
+	for end < len(l.input) && l.input[end] != '\n' && l.input[end] != '\r' {
+		end++
+	}
+	return l.input[l.pos:end]
+}
+
+// skipLine consumes the rest of the current line including its terminator
+// (\n, \r\n or a lone \r).
+func (l *Lexer) skipLine() {
+	for l.ch != 0 && l.ch != '\n' && l.ch != '\r' {
+		l.readChar()
+	}
+	if l.ch == '\r' {
+		l.readChar()
+	}
+	if l.ch == '\n' {
+		l.readChar()
+	}
+}
+
+// takeLineFrom reads the whole line that contains byte offset off (on 1-based
+// line number line), consumes it including its terminator, and returns the part
+// of it from off to the end of the line.
+func (l *Lexer) takeLineFrom(off, line int) string {
+	l.seekLineStart(off, line)
+	text := l.peekLine()
+	start := l.pos
+	l.skipLine()
+	return text[off-start:]
 }

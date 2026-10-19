@@ -21,6 +21,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Basic health check that always runs",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 9,
         "Metadata": {
@@ -81,6 +82,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Only runs when runAuthTests is truthy",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 21,
         "Metadata": {
@@ -139,6 +141,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Skipped when skipSlowTests is truthy (currently false, so this runs)",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 36,
         "Metadata": {
@@ -203,6 +206,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Only runs when environment is set to staging",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 50,
         "Metadata": {
@@ -261,6 +265,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Skipped unless debugMode variable is set",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 66,
         "Metadata": {
@@ -314,6 +319,7 @@
         ],
         "DBAssertions": null,
         "Description": "First get a user",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 79,
         "Metadata": {
@@ -368,6 +374,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Only fetch posts if user was found (depends on getUser)",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 94,
         "Metadata": {

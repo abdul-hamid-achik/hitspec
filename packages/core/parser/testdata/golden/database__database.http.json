@@ -28,6 +28,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Create a user and verify it exists in the database",
+        "HTTPVersion": "",
         "Headers": [
           {
             "Key": "Content-Type",
@@ -77,6 +78,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Check that specific fields exist in the database",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 36,
         "Metadata": {
@@ -120,6 +122,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Verify the total number of records in a table",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 55,
         "Metadata": {
@@ -170,6 +173,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Update a resource and confirm DB reflects the change",
+        "HTTPVersion": "",
         "Headers": [
           {
             "Key": "Content-Type",
@@ -221,6 +225,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Run several database queries against the same request",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 96,
         "Metadata": {

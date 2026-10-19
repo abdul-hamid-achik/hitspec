@@ -45,6 +45,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Get all posts from the API",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 6,
         "Metadata": {
@@ -112,6 +113,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Get a specific post by ID",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 22,
         "Metadata": {
@@ -192,6 +194,7 @@
         ],
         "DBAssertions": null,
         "Description": "Create a new post",
+        "HTTPVersion": "",
         "Headers": [
           {
             "Key": "Content-Type",
@@ -253,6 +256,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Update an existing post (using fixed ID since jsonplaceholder doesn't persist)",
+        "HTTPVersion": "",
         "Headers": [
           {
             "Key": "Content-Type",
@@ -320,6 +324,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Partially update a post",
+        "HTTPVersion": "",
         "Headers": [
           {
             "Key": "Content-Type",
@@ -368,6 +373,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Delete a post (using fixed ID since jsonplaceholder doesn't persist)",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 101,
         "Metadata": {
@@ -434,6 +440,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Get comments for a specific post",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 112,
         "Metadata": {
@@ -488,6 +495,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Get posts filtered by userId query param",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 127,
         "Metadata": {

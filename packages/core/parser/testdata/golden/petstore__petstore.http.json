@@ -34,6 +34,7 @@
         ],
         "DBAssertions": null,
         "Description": "Find available pets",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 3,
         "Metadata": {
@@ -89,6 +90,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Get the created pet",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 20,
         "Metadata": {
@@ -159,6 +161,7 @@
         ],
         "DBAssertions": null,
         "Description": "Create a new pet",
+        "HTTPVersion": "",
         "Headers": [
           {
             "Key": "Content-Type",
@@ -227,6 +230,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Update the pet",
+        "HTTPVersion": "",
         "Headers": [
           {
             "Key": "Content-Type",
@@ -278,6 +282,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Delete the pet",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 91,
         "Metadata": {

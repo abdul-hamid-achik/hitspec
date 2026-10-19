@@ -1,0 +1,53 @@
+# validate rejects unknown @auth types and wrong argument counts with exit 2.
+
+exitcode 0 hitspec validate good.http
+stdout 'OK'
+
+exitcode 2 hitspec validate unknown.http
+stderr 'unknown @auth type "magic"'
+stderr 'unknown.http:2'
+
+exitcode 2 hitspec validate arity.http
+stderr '@auth basic expects 2 arguments \(username, password\), got 1'
+
+exitcode 2 hitspec validate oauth.http
+stderr '@auth oauth2 client_credentials expects 3 or more arguments'
+
+exitcode 2 hitspec validate nogrant.http
+stderr '@auth oauth2 needs a grant type'
+
+exitcode 2 hitspec validate empty.http
+stderr '@auth needs a type'
+
+-- good.http --
+### ok
+# @auth basic alice, s3cret
+GET https://example.test/a
+
+### ok too
+# @auth oauth2 client_credentials https://example.test/token, id, secret, read,write
+GET https://example.test/b
+
+### bearer with a variable containing no spaces
+# @auth bearer {{ token }}
+GET https://example.test/c
+-- unknown.http --
+### bad
+# @auth magic foo
+GET https://example.test/a
+-- arity.http --
+### bad
+# @auth basic alice
+GET https://example.test/a
+-- oauth.http --
+### bad
+# @auth oauth2 client_credentials https://example.test/token, id
+GET https://example.test/a
+-- nogrant.http --
+### bad
+# @auth oauth2 implicit https://example.test/token
+GET https://example.test/a
+-- empty.http --
+### bad
+# @auth
+GET https://example.test/a

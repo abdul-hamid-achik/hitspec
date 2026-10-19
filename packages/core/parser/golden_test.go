@@ -166,7 +166,7 @@ func TestGolden(t *testing.T) {
 			}
 			want, err := os.ReadFile(golden)
 			require.NoError(t, err, "missing golden; run with -update")
-			require.Equal(t, string(want), string(got), "parse of %s changed; review the diff and run with -update if intended", input)
+			require.Equal(t, strings.Split(string(want), "\n"), strings.Split(string(got), "\n"), "parse of %s changed; review the diff and run with -update if intended", input)
 		})
 	}
 }

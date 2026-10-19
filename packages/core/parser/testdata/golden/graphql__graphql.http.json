@@ -49,6 +49,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Fetch all countries with code and name",
+        "HTTPVersion": "",
         "Headers": [
           {
             "Key": "Content-Type",
@@ -151,6 +152,7 @@
         ],
         "DBAssertions": null,
         "Description": "Fetch a specific country by its code",
+        "HTTPVersion": "",
         "Headers": [
           {
             "Key": "Content-Type",
@@ -228,6 +230,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Get all European countries",
+        "HTTPVersion": "",
         "Headers": [
           {
             "Key": "Content-Type",
@@ -311,6 +314,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Fetch all languages with their associated info",
+        "HTTPVersion": "",
         "Headers": [
           {
             "Key": "Content-Type",
@@ -394,6 +398,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Fetch country details alongside continent list",
+        "HTTPVersion": "",
         "Headers": [
           {
             "Key": "Content-Type",

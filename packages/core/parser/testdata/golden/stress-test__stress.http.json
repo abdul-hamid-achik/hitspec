@@ -21,6 +21,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Quick health check endpoint - runs most frequently",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 7,
         "Metadata": {
@@ -82,6 +83,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "GET request with query parameters",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 20,
         "Metadata": {
@@ -160,6 +162,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "POST request - runs less frequently in stress mode",
+        "HTTPVersion": "",
         "Headers": [
           {
             "Key": "Content-Type",
@@ -221,6 +224,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Test a slow endpoint under load",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 57,
         "Metadata": {
@@ -277,6 +281,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Prepare test data before stress test begins",
+        "HTTPVersion": "",
         "Headers": [
           {
             "Key": "Content-Type",
@@ -339,6 +344,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "Clean up after stress test completes",
+        "HTTPVersion": "",
         "Headers": [
           {
             "Key": "Content-Type",
@@ -400,6 +406,7 @@
         "Captures": null,
         "DBAssertions": null,
         "Description": "This request is skipped during stress testing",
+        "HTTPVersion": "",
         "Headers": null,
         "Line": 106,
         "Metadata": {
