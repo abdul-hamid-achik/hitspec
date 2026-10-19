@@ -318,7 +318,14 @@ async function main() {
       assert.ok(page.total >= 3, `expected >= 3 stored runs, got ${page.total}`);
       const run = page.runs.find((r) => r.filePath.includes('users.http'));
       assert.ok(run, 'expected a stored run for api/users.http');
-      const detail = await request({ path: `/history/runs/${run.id}` });
+      // The server persists a run's results in the background after /run
+      // returns, so a fast reader can see the run before all of its rows.
+      let detail;
+      for (let i = 0; i < 40; i++) {
+        detail = await request({ path: `/history/runs/${run.id}` });
+        if (detail.results.length >= 5) break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
       assert.equal(detail.results.length, 5);
       assert.ok(detail.results.every((r) => r.requestName));
       const withAssertions = detail.results.find((r) => (r.assertions ?? []).length);
