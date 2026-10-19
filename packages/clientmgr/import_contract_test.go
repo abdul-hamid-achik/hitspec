@@ -125,3 +125,26 @@ func TestContractFilesAndVerifyGuards(t *testing.T) {
 		t.Fatalf("VerifyContracts results = %+v", results)
 	}
 }
+
+// A cancelled run reports the cancellation; it must not surface as a failed
+// "parse" interaction of the file that was running.
+func TestVerifyContracts_CancelledIsNotAParseFailure(t *testing.T) {
+	m := newTestManager(t)
+	if _, err := m.CreateFile(context.Background(), "contract.http", "### one\nGET https://example.com\n"); err != nil {
+		t.Fatalf("CreateFile: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	results, err := m.VerifyContracts(ctx, ContractVerifyReq{ProviderURL: "https://example.com", Files: []string{"contract.http"}})
+	if err == nil {
+		t.Fatal("a cancelled VerifyContracts should return the context error")
+	}
+	for _, r := range results {
+		for _, in := range r.Results {
+			if in.Name == "parse" {
+				t.Fatalf("cancelled run produced a %q entry: %+v", in.Name, r)
+			}
+		}
+	}
+}

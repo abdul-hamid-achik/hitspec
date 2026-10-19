@@ -545,6 +545,11 @@ func (m *Manager) VerifyContracts(ctx context.Context, req ContractVerifyReq) ([
 		} else {
 			result, err = verifier.VerifyContext(ctx, parsed)
 		}
+		if err != nil && ctx.Err() != nil {
+			// A cancelled run is not a parse failure: stop and say so, without
+			// a bogus "parse" entry for the file that was running.
+			return results, ctx.Err()
+		}
 		if err != nil {
 			results = append(results, ContractResultDTO{
 				File: file,
