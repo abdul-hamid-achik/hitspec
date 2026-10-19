@@ -81,7 +81,10 @@ jobs:
       - name: Configure the Electron sandbox (Linux)
         if: runner.os == 'Linux'
         working-directory: apps/desktop
+        # Electron 44 has no postinstall: the binary (and chrome-sandbox) is
+        # downloaded on first use, so fetch it before fixing the helper's mode.
         run: |
+          node node_modules/electron/install.js
           sudo chown root node_modules/electron/dist/chrome-sandbox
           sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
 
