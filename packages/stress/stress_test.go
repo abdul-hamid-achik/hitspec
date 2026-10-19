@@ -2,6 +2,7 @@ package stress
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -569,4 +570,46 @@ GET {{baseUrl}}/slow
 	assert.Zero(t, result.Summary.TotalRequests)
 	t.Logf("Run stopped after %v with %d incomplete requests",
 		elapsed, result.Summary.IncompleteCount)
+}
+
+// Every response's status code lands in the summary, whether or not the
+// request counts as an error.
+func TestRunnerRecordsStatusCodes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/missing" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte(`ok`))
+	}))
+	defer server.Close()
+
+	httpFile := filepath.Join(t.TempDir(), "codes.http")
+	content := `@baseUrl = ` + server.URL + `
+
+### Fine
+# @name fine
+GET {{baseUrl}}/fine
+
+### Missing
+# @name missing
+GET {{baseUrl}}/missing
+`
+	require.NoError(t, os.WriteFile(httpFile, []byte(content), 0o644))
+
+	cfg := &Config{Mode: RateMode, Duration: 1 * time.Second, Rate: 10, MaxVUs: 5}
+	runner := NewRunner(cfg, WithReporter(NewReporter(WithWriter(io.Discard), WithNoProgress(true))))
+	require.NoError(t, runner.LoadFile(httpFile))
+
+	result, err := runner.Run(context.Background())
+	require.NoError(t, err)
+
+	codes := result.Summary.StatusCodes
+	assert.Greater(t, codes[200], int64(0), "status codes: %v", codes)
+	assert.Greater(t, codes[404], int64(0), "status codes: %v", codes)
+	var sum int64
+	for _, n := range codes {
+		sum += n
+	}
+	assert.Equal(t, result.Summary.TotalRequests, sum, "every request got a response")
 }

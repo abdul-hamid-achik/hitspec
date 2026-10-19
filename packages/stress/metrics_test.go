@@ -183,3 +183,17 @@ func TestMetricsTimeSeries(t *testing.T) {
 	summary := m.GetSummary()
 	assert.Len(t, summary.TimeSeries, 2)
 }
+
+func TestMetricsSummaryStatusCodes(t *testing.T) {
+	m := NewMetrics()
+	m.Start()
+	m.RecordStatus(200)
+	m.RecordStatus(200)
+	m.RecordStatus(503)
+	m.Stop()
+
+	got := m.GetSummary().StatusCodes
+	if got[200] != 2 || got[503] != 1 || len(got) != 2 {
+		t.Errorf("StatusCodes = %v, want map[200:2 503:1]", got)
+	}
+}
