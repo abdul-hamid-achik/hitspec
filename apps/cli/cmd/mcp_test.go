@@ -12,6 +12,8 @@ import (
 	"time"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/testhome"
 )
 
 const (
@@ -36,7 +38,9 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 	rootCommandFlagDefaults = captureRootCommandFlagDefaults(rootCmd)
-	os.Exit(m.Run())
+	// Isolate HOME: in-process `run` tests would otherwise write run history
+	// into the real ~/.hitspec.
+	os.Exit(testhome.Run(m))
 }
 
 func TestMCPServeCommandValidatesLimitsWithoutStartingTransport(t *testing.T) {
