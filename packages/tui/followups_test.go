@@ -394,27 +394,26 @@ func TestDeletingFromStudioWithEditsIsNotAnOutsideDeletion(t *testing.T) {
 		t.Fatal("expected the delete confirmation")
 	}
 	m, cmd := press(m, rk('y'))
-	for i := 0; i < 4 && cmd != nil; i++ { // proceedMsg -> delete -> simpleMsg
-		next, c := m.Update(cmd())
-		m, cmd = next.(model), c
-		if _, ok := toastSeen(m); ok {
-			break
-		}
-	}
-	// The delete's own file event refreshes the list, in whichever order.
-	next, _ := m.Update(filesWithout(t, mgr))
+	next, del := m.Update(cmd()) // proceedMsg: the delete starts
 	m = next.(model)
-	if m.selected == "a.http" || m.deletedOnDisk {
-		t.Fatalf("selection kept after deleting from studio: %q", m.selected)
+	if m.removing != "a.http" {
+		t.Fatalf("the delete should mark a.http as being removed, got %q", m.removing)
 	}
-	if strings.Contains(toastTexts(m), "deleted on disk") {
+	result := del() // deletes on disk
+	// The delete's own file event refreshes the list before its result lands.
+	next, _ = m.Update(filesWithout(t, mgr))
+	m = next.(model)
+	if m.deletedOnDisk || strings.Contains(toastTexts(m), "deleted on disk") {
 		t.Fatalf("own delete reported as an outside deletion: %q", toastTexts(m))
 	}
-}
-
-func toastSeen(m model) (string, bool) {
-	s := toastTexts(m)
-	return s, strings.Contains(s, "deleted on disk")
+	if m.selected == "a.http" {
+		t.Fatalf("selection kept after deleting from studio")
+	}
+	next, _ = m.Update(result)
+	m = next.(model)
+	if m.removing != "" || m.dirty || m.deletedOnDisk {
+		t.Fatalf("after delete: removing=%q dirty=%v deleted=%v", m.removing, m.dirty, m.deletedOnDisk)
+	}
 }
 
 // Renaming from studio emits a "deleted" event for the old path; with unsaved
