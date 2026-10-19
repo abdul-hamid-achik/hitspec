@@ -160,7 +160,7 @@ func TestConvert_RequestWithBasicAuth(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if !strings.Contains(result, "# @auth basic admin secret123") {
+	if !strings.Contains(result, "# @auth basic admin, secret123") {
 		t.Errorf("expected basic auth annotation, got: %s", result)
 	}
 }

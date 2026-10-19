@@ -1,0 +1,5 @@
+defaultEnvironment: staging-env
+environments:
+    staging-env:
+        baseUrl: https://staging.example.com
+        token: abc

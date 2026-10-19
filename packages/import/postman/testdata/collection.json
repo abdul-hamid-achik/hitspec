@@ -1,0 +1,80 @@
+{
+  "info": {"name": "Demo API", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
+  "variable": [
+    {"key": "baseUrl", "value": "https://api.example.com"},
+    {"key": "version", "value": 2}
+  ],
+  "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{token}}", "type": "string"}]},
+  "item": [
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "List users",
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test(\"Status code is 200\", function () {",
+            "    pm.response.to.have.status(200);",
+            "});",
+            "const jsonData = pm.response.json();",
+            "pm.test(\"first user\", function () {",
+            "    pm.expect(jsonData.users[0].name).to.eql(\"Ann\");",
+            "    pm.expect(jsonData.total).to.be.above(0);",
+            "    pm.expect(jsonData.users).to.be.an('array');",
+            "    pm.expect(jsonData).to.have.property('total');",
+            "});",
+            "pm.test('fast', () => pm.expect(pm.response.responseTime).to.be.below(500));",
+            "pm.test(\"code\", function () { pm.expect(pm.response.code).to.equal(200); });",
+            "pm.environment.set(\"firstId\", jsonData.users[0].id);",
+            "if (jsonData.flag) { console.log('x'); }"
+          ]}}],
+          "request": {"method": "GET", "header": [{"key": "Accept", "value": "application/json"}, {"key": "X-Off", "value": "1", "disabled": true}],
+            "url": {"raw": "{{baseUrl}}/v{{version}}/users?limit=10", "host": ["{{baseUrl}}"], "path": ["v{{version}}", "users"]}}
+        },
+        {
+          "name": "Create user",
+          "request": {
+            "method": "POST",
+            "auth": {"type": "basic", "basic": [{"key": "username", "value": "admin"}, {"key": "password", "value": "{{pw}}"}]},
+            "header": [],
+            "body": {"mode": "raw", "raw": "{\"name\": \"{{$randomEmail}}\", \"id\": \"{{$guid}}\"}", "options": {"raw": {"language": "json"}}},
+            "url": "{{baseUrl}}/users"
+          }
+        },
+        {
+          "name": "Login form",
+          "request": {
+            "method": "POST", "auth": {"type": "noauth"},
+            "body": {"mode": "urlencoded", "urlencoded": [{"key": "user", "value": "a b"}, {"key": "skip", "value": "x", "disabled": true}, {"key": "tok", "value": "{{token}}"}]},
+            "url": {"raw": "{{baseUrl}}/login"}
+          }
+        },
+        {
+          "name": "Upload",
+          "request": {
+            "method": "POST",
+            "auth": {"type": "apikey", "apikey": [{"key": "key", "value": "X-API-Key"}, {"key": "value", "value": "{{apiKey}}"}, {"key": "in", "value": "header"}]},
+            "body": {"mode": "formdata", "formdata": [{"key": "title", "value": "Report", "type": "text"}, {"key": "doc", "type": "file", "src": "report.pdf"}, {"key": "off", "value": "1", "type": "text", "disabled": true}]},
+            "url": {"raw": "{{baseUrl}}/upload"}
+          }
+        }
+      ]
+    },
+    {
+      "name": "GraphQL",
+      "request": {
+        "method": "POST", "auth": {"type": "oauth2", "oauth2": []},
+        "body": {"mode": "graphql", "graphql": {"query": "query { users { id } }", "variables": "{\"a\": 1}"}},
+        "url": {"raw": "{{baseUrl}}/graphql"}
+      },
+      "event": [{"listen": "prerequest", "script": {"exec": ["pm.variables.set('t', Date.now());"]}}]
+    },
+    {
+      "name": "Get by id",
+      "request": {"method": "GET", "url": {"raw": "{{baseUrl}}/users/:id?x=1", "variable": [{"key": "id", "value": "42"}]}}
+    },
+    {
+      "name": "Get by id",
+      "request": {"method": "GET", "url": "{{baseUrl}}/users/7"}
+    }
+  ]
+}

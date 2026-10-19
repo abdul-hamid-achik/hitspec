@@ -1,0 +1,39 @@
+# curl import keeps every flag it can express and warns about the rest; the
+# output always validates.
+
+exec hitspec import curl 'curl -X POST https://api.example.com/x -u admin:s3cret -d a=1 -d b=2 --data-urlencode "c=d e" -m 5 -sS --retry 3 --weird' -o out/post.http
+stdout 'Successfully imported to out/post.http'
+stderr 'warning: --retry'
+stderr 'warning: unsupported curl option --weird'
+exists out/post.http
+grep '^# @auth basic admin, s3cret$' out/post.http
+grep '^a=1&b=2&c=d\+e$' out/post.http
+grep '^# @timeout 5000$' out/post.http
+grep '^# TODO: --retry' out/post.http
+exec hitspec validate out/post.http
+
+# -o dir/ writes <dir>/<source>.http
+exec hitspec import curl @cmds.txt -o outdir/
+exists outdir/cmds.http
+exec hitspec validate outdir/cmds.http
+grep '< \./body.json' outdir/cmds.http
+grep '>>>multipart' outdir/cmds.http
+grep '^field name = Jo$' outdir/cmds.http
+grep '^file @\./me.png$' outdir/cmds.http
+grep '^Content-Type: application/json$' outdir/cmds.http
+grep '^Accept: application/json$' outdir/cmds.http
+grep '^# @name post_json_2$' outdir/cmds.http
+
+# Header order is the command-line order, on every run.
+exec hitspec import curl 'curl https://x.test/h -H "Z: 1" -H "A: 2" -H "M: 3"'
+stdout '(?s)Z: 1.*A: 2.*M: 3'
+
+# -k is surfaced, not swallowed.
+exec hitspec import curl 'curl -k https://x.test/h'
+stderr 'warning: -k/--insecure'
+
+-- cmds.txt --
+curl -X POST https://api.example.com/upload -H 'Content-Type: application/json' -d @body.json
+curl https://api.example.com/up -F name=Jo -F 'avatar=@me.png;type=image/png'
+curl https://api.example.com/json --json '{"a":1}'
+curl https://api.example.com/json --json '{"b":2}'

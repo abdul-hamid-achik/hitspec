@@ -1,0 +1,86 @@
+# export supports every format of the Studio export action, via --format or as
+# the first argument.
+
+exec hitspec export --format python api.http
+stdout 'import requests'
+stdout 'requests.request\("POST", "https://api.example.com/users\?page=2"'
+stdout '"Authorization": "Bearer tok"'
+
+exec hitspec export python api.http
+stdout 'import requests'
+
+exec hitspec export -f fetch api.http
+stdout 'fetch\("https://api.example.com/users\?page=2"'
+stdout '^// Request: create$'
+
+exec hitspec export --format wget api.http
+stdout 'wget --method=POST'
+
+exec hitspec export httpie api.http
+stdout '\| http POST '
+
+exec hitspec export go api.http
+stdout 'http.NewRequest\("POST"'
+
+exec hitspec export ruby api.http
+stdout 'Net::HTTP::Post'
+
+# Default is curl, and the old spelling keeps working.
+exec hitspec export api.http
+stdout 'curl -X POST'
+exec hitspec export curl api.http
+stdout 'curl -X POST'
+
+# Aliases, -o and --name.
+exec hitspec export js api.http
+stdout 'fetch\('
+exec hitspec export --format python api.http -o out/snip.py --name create
+stdout 'Exported 1 python snippet\(s\) to out/snip.py'
+grep 'import requests' out/snip.py
+
+# Unknown formats fail loudly and list the valid ones.
+! exec hitspec export --format cobol api.http
+stderr 'unknown export format "cobol"'
+stderr 'curl, fetch, wget, python, httpie, go, ruby'
+! exec hitspec export cobol api.http
+stderr 'unknown export format "cobol"'
+
+# A request a format cannot express is reported, never rendered wrong: skipped
+# with a comment and a warning when others export fine, an error when none do.
+exec hitspec export --format python multi.http
+stderr 'warning: skipped request "upload"'
+stdout 'Request: upload'
+stdout 'SKIPPED'
+! exec hitspec export --format python multi.http --name upload
+stderr 'multipart'
+exec hitspec export curl multi.http --name upload
+stdout '-F'
+
+# --exec is curl only.
+! exec hitspec export --format python api.http --exec
+stderr '--exec only works with the curl format'
+
+-- api.http --
+### Create
+# @name create
+# @auth bearer tok
+POST https://api.example.com/users
+? page = 2
+Content-Type: application/json
+
+{"name":"Ann"}
+
+-- multi.http --
+### Create
+# @name create
+POST https://api.example.com/users
+
+{"a":1}
+
+### Upload
+# @name upload
+POST https://api.example.com/up
+
+>>>multipart
+field a = b
+<<<

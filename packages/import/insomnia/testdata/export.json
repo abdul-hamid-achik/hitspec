@@ -1,0 +1,29 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "resources": [
+    {"_id": "wrk_1", "_type": "workspace", "name": "Demo"},
+    {"_id": "env_base", "_type": "environment", "parentId": "wrk_1", "name": "Base Environment",
+     "data": {"baseUrl": "https://api.example.com", "token": "base-token", "retries": 3, "debug": false, "nested": {"a": 1}}},
+    {"_id": "env_dev", "_type": "environment", "parentId": "env_base", "name": "Development", "data": {"baseUrl": "http://localhost:3000"}},
+    {"_id": "env_prod", "_type": "environment", "parentId": "env_base", "name": "Production", "data": {"token": "{{ _.prodToken }}"}},
+    {"_id": "fld_1", "_type": "request_group", "parentId": "wrk_1", "name": "Users"},
+    {"_id": "req_1", "_type": "request", "parentId": "fld_1", "name": "List",
+     "method": "GET", "url": "{{ _.baseUrl }}/users",
+     "parameters": [{"name": "limit", "value": "10"}, {"name": "off", "value": "1", "disabled": true}],
+     "authentication": {"type": "bearer", "token": "{{ _.token }}"}},
+    {"_id": "req_2", "_type": "request", "parentId": "fld_1", "name": "Login",
+     "method": "POST", "url": "{{ _.baseUrl }}/login",
+     "body": {"mimeType": "application/x-www-form-urlencoded", "params": [{"name": "user", "value": "a b"}, {"name": "pw", "value": "{{ _.pw }}"}]},
+     "authentication": {"type": "apikey", "key": "X-Key", "value": "{{ _.token }}", "addTo": "header"}},
+    {"_id": "req_3", "_type": "request", "parentId": "fld_1", "name": "Upload",
+     "method": "POST", "url": "{{ _.baseUrl }}/up",
+     "body": {"mimeType": "multipart/form-data", "params": [{"name": "title", "value": "T"}, {"name": "doc", "type": "file", "fileName": "doc.pdf"}]},
+     "authentication": {"type": "oauth2"}},
+    {"_id": "req_4", "_type": "request", "parentId": "wrk_1", "name": "GQL",
+     "method": "POST", "url": "{{ _.baseUrl }}/graphql",
+     "body": {"mimeType": "application/graphql", "text": "{\"query\":\"query { me { id } }\",\"variables\":{\"a\":1}}"}},
+    {"_id": "req_5", "_type": "request", "parentId": "wrk_1", "name": "List",
+     "method": "GET", "url": "{{ _.baseUrl }}/users2", "headers": [{"name": "X-T", "value": "{% response 'body', 'req_1', 'b64::JC5pZA==::46b', 'never', 60 %}"}]}
+  ]
+}

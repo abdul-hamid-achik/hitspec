@@ -9,9 +9,11 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/import/result"
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
@@ -73,8 +75,8 @@ func NewConverter(opts ...Option) *Converter {
 	return c
 }
 
-// ConvertFile converts an OpenAPI file to hitspec format
-func (c *Converter) ConvertFile(path string) (string, error) {
+// loadDoc loads a spec from a file path or URL.
+func (c *Converter) loadDoc(path string) (*openapi3.T, error) {
 	loader := openapi3.NewLoader()
 	loader.IsExternalRefsAllowed = true
 
@@ -93,10 +95,282 @@ func (c *Converter) ConvertFile(path string) (string, error) {
 	}
 
 	if err != nil {
-		return "", fmt.Errorf("failed to load OpenAPI spec: %w", err)
+		return nil, fmt.Errorf("failed to load OpenAPI spec: %w", err)
+	}
+	return doc, nil
+}
+
+// ConvertFile converts an OpenAPI file to hitspec format
+func (c *Converter) ConvertFile(path string) (string, error) {
+	doc, err := c.loadDoc(path)
+	if err != nil {
+		return "", err
+	}
+	return c.Convert(doc)
+}
+
+// ConvertFileResult converts an OpenAPI file and reports what could not be
+// carried over.
+func (c *Converter) ConvertFileResult(path string) (*result.Result, error) {
+	doc, err := c.loadDoc(path)
+	if err != nil {
+		return nil, err
+	}
+	return c.ConvertResult(doc)
+}
+
+// File is one generated .http file.
+type File struct {
+	Name    string // e.g. "users.http"
+	Content string
+}
+
+// Split is the outcome of converting a spec into one file per tag.
+type Split struct {
+	Files    []File
+	Warnings []string
+}
+
+// ConvertFilesResult converts an OpenAPI file into one .http file per tag
+// (untagged operations are grouped by their first path segment). Every file
+// carries the @baseUrl and the path parameter variables its requests use.
+func (c *Converter) ConvertFilesResult(path string) (*Split, error) {
+	doc, err := c.loadDoc(path)
+	if err != nil {
+		return nil, err
+	}
+	st, entries := c.collect(doc)
+	groups := map[string][]*opEntry{}
+	var names []string
+	for _, e := range entries {
+		if _, ok := groups[e.group]; !ok {
+			names = append(names, e.group)
+		}
+		groups[e.group] = append(groups[e.group], e)
+	}
+	sort.Strings(names)
+	out := &Split{Warnings: st.warnings}
+	for _, n := range names {
+		out.Files = append(out.Files, File{Name: n + ".http", Content: c.render(doc, st, groups[n])})
+	}
+	return out, nil
+}
+
+// Convert converts an OpenAPI document to hitspec format
+func (c *Converter) Convert(doc *openapi3.T) (string, error) {
+	res, err := c.ConvertResult(doc)
+	if err != nil {
+		return "", err
+	}
+	for _, w := range res.Warnings {
+		if strings.HasPrefix(w, validationWarning) {
+			fmt.Fprintf(os.Stderr, "warning: %s\n", w)
+		}
+	}
+	return res.Content, nil
+}
+
+const validationWarning = "OpenAPI spec validation:"
+
+// ConvertResult converts an OpenAPI document and reports what could not be
+// carried over.
+func (c *Converter) ConvertResult(doc *openapi3.T) (*result.Result, error) {
+	st, entries := c.collect(doc)
+	return &result.Result{Content: c.render(doc, st, entries), Warnings: st.warnings}, nil
+}
+
+// state is the per-conversion bookkeeping for path parameter variables.
+type state struct {
+	baseURL  string
+	defaults map[string]string // variable name -> default value
+	order    []string          // variable names in first-use order
+	warnings []string
+}
+
+func (st *state) warn(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	for _, w := range st.warnings {
+		if w == msg {
+			return
+		}
+	}
+	st.warnings = append(st.warnings, msg)
+}
+
+// variable registers a path parameter variable and returns the name to use.
+// Two operations that share a parameter name but need different defaults (an
+// integer {id} and a UUID {id}) get distinct variables.
+func (st *state) variable(name, def, opName string) string {
+	if cur, ok := st.defaults[name]; !ok {
+		st.defaults[name] = def
+		st.order = append(st.order, name)
+		return name
+	} else if cur == def {
+		return name
+	}
+	alt := sanitizeName(opName) + "_" + name
+	for i := 2; ; i++ {
+		cur, ok := st.defaults[alt]
+		if !ok {
+			st.defaults[alt] = def
+			st.order = append(st.order, alt)
+			return alt
+		}
+		if cur == def {
+			return alt
+		}
+		alt = fmt.Sprintf("%s_%s_%d", sanitizeName(opName), name, i)
+	}
+}
+
+// opEntry is one converted operation.
+type opEntry struct {
+	text  string
+	vars  []string // variable names the operation uses
+	group string   // output file stem
+}
+
+// collect converts every included operation, in path then method order.
+func (c *Converter) collect(doc *openapi3.T) (*state, []*opEntry) {
+	st := &state{defaults: map[string]string{}}
+	if err := doc.Validate(context.Background()); err != nil {
+		// Some specs have minor validation issues; convert anyway.
+		st.warn("%s %v", validationWarning, err)
 	}
 
-	return c.Convert(doc)
+	st.baseURL = c.baseURL
+	if st.baseURL == "" {
+		st.baseURL = c.getBaseURL(doc)
+		if len(doc.Servers) == 0 || doc.Servers[0].URL == "" {
+			st.warn("the spec lists no servers; @baseUrl defaults to %s", st.baseURL)
+		}
+	}
+
+	// Get sorted paths for consistent output
+	var paths []string
+	if doc.Paths != nil {
+		for path := range doc.Paths.Map() {
+			paths = append(paths, path)
+		}
+	}
+	sort.Strings(paths)
+
+	var entries []*opEntry
+	securityUsed := false
+	for _, path := range paths {
+		pathItem := doc.Paths.Map()[path]
+		if pathItem == nil {
+			continue
+		}
+
+		operations := []struct {
+			method string
+			op     *openapi3.Operation
+		}{
+			{"GET", pathItem.Get},
+			{"POST", pathItem.Post},
+			{"PUT", pathItem.Put},
+			{"PATCH", pathItem.Patch},
+			{"DELETE", pathItem.Delete},
+			{"HEAD", pathItem.Head},
+			{"OPTIONS", pathItem.Options},
+		}
+
+		for _, op := range operations {
+			if op.op == nil || !c.shouldInclude(op.op) {
+				continue
+			}
+			text, vars := c.convertOperation(st, path, op.method, op.op, pathItem.Parameters)
+			entries = append(entries, &opEntry{text: text, vars: vars, group: groupFor(path, op.op)})
+			if (op.op.Security != nil && len(*op.op.Security) > 0) || len(doc.Security) > 0 {
+				securityUsed = true
+			}
+		}
+	}
+	if securityUsed {
+		st.warn("the spec declares security requirements; authentication was not imported (add # @auth to the requests that need it)")
+	}
+	return st, entries
+}
+
+// groupFor picks the output file stem for an operation: its first tag, else
+// the first non-parameter path segment.
+func groupFor(path string, op *openapi3.Operation) string {
+	if len(op.Tags) > 0 {
+		if n := fileStem(op.Tags[0]); n != "" {
+			return n
+		}
+	}
+	for _, seg := range strings.Split(path, "/") {
+		if seg == "" || strings.HasPrefix(seg, "{") {
+			continue
+		}
+		if n := fileStem(seg); n != "" {
+			return n
+		}
+	}
+	return "root"
+}
+
+var stemBad = regexp.MustCompile(`[^a-z0-9]+`)
+
+func fileStem(s string) string {
+	return strings.Trim(stemBad.ReplaceAllString(strings.ToLower(s), "-"), "-")
+}
+
+// render writes the file header, variables and the given operations.
+func (c *Converter) render(doc *openapi3.T, st *state, entries []*opEntry) string {
+	var sb strings.Builder
+
+	// Write header comment
+	sb.WriteString("# Generated from OpenAPI spec")
+	if doc.Info != nil && doc.Info.Title != "" {
+		sb.WriteString(": ")
+		sb.WriteString(strings.ReplaceAll(doc.Info.Title, "\n", " "))
+	}
+	sb.WriteString("\n")
+	if doc.Info != nil && doc.Info.Version != "" {
+		sb.WriteString("# Version: ")
+		sb.WriteString(doc.Info.Version)
+		sb.WriteString("\n")
+	}
+	sb.WriteString("\n")
+
+	// Base URL and the path parameter variables these operations use.
+	if st.baseURL != "" {
+		sb.WriteString("@baseUrl = ")
+		sb.WriteString(st.baseURL)
+		sb.WriteString("\n")
+	}
+	used := map[string]bool{}
+	for _, e := range entries {
+		for _, v := range e.vars {
+			used[v] = true
+		}
+	}
+	wroteVar := false
+	for _, v := range st.order {
+		if used[v] {
+			fmt.Fprintf(&sb, "@%s = %s\n", v, st.defaults[v])
+			wroteVar = true
+		}
+	}
+	if st.baseURL != "" || wroteVar {
+		sb.WriteString("\n")
+	}
+
+	for _, e := range entries {
+		sb.WriteString(e.text)
+		sb.WriteString("\n")
+	}
+	return sb.String()
+}
+
+func (c *Converter) getBaseURL(doc *openapi3.T) string {
+	if len(doc.Servers) > 0 && doc.Servers[0].URL != "" {
+		return doc.Servers[0].URL
+	}
+	return "http://localhost:3000"
 }
 
 // loadFromURL loads an OpenAPI spec from a URL
@@ -136,92 +410,6 @@ func readAll(r interface{ Read([]byte) (int, error) }) ([]byte, error) {
 		}
 	}
 	return result, nil
-}
-
-// Convert converts an OpenAPI document to hitspec format
-func (c *Converter) Convert(doc *openapi3.T) (string, error) {
-	if err := doc.Validate(context.Background()); err != nil {
-		// Log warning but continue - some specs have minor validation issues
-		fmt.Fprintf(os.Stderr, "warning: OpenAPI spec validation: %v\n", err)
-	}
-
-	var sb strings.Builder
-
-	// Write header comment
-	sb.WriteString("# Generated from OpenAPI spec")
-	if doc.Info != nil && doc.Info.Title != "" {
-		sb.WriteString(": ")
-		sb.WriteString(doc.Info.Title)
-	}
-	sb.WriteString("\n")
-	if doc.Info != nil && doc.Info.Version != "" {
-		sb.WriteString("# Version: ")
-		sb.WriteString(doc.Info.Version)
-		sb.WriteString("\n")
-	}
-	sb.WriteString("\n")
-
-	// Write base URL variable
-	baseURL := c.baseURL
-	if baseURL == "" {
-		baseURL = c.getBaseURL(doc)
-	}
-	if baseURL != "" {
-		sb.WriteString("@baseUrl = ")
-		sb.WriteString(baseURL)
-		sb.WriteString("\n\n")
-	}
-
-	// Get sorted paths for consistent output
-	paths := make([]string, 0, len(doc.Paths.Map()))
-	for path := range doc.Paths.Map() {
-		paths = append(paths, path)
-	}
-	sort.Strings(paths)
-
-	// Convert each path/operation
-	for _, path := range paths {
-		pathItem := doc.Paths.Map()[path]
-		if pathItem == nil {
-			continue
-		}
-
-		operations := []struct {
-			method string
-			op     *openapi3.Operation
-		}{
-			{"GET", pathItem.Get},
-			{"POST", pathItem.Post},
-			{"PUT", pathItem.Put},
-			{"PATCH", pathItem.Patch},
-			{"DELETE", pathItem.Delete},
-			{"HEAD", pathItem.Head},
-			{"OPTIONS", pathItem.Options},
-		}
-
-		for _, op := range operations {
-			if op.op == nil {
-				continue
-			}
-
-			if !c.shouldInclude(op.op) {
-				continue
-			}
-
-			request := c.convertOperation(path, op.method, op.op, pathItem.Parameters)
-			sb.WriteString(request)
-			sb.WriteString("\n")
-		}
-	}
-
-	return sb.String(), nil
-}
-
-func (c *Converter) getBaseURL(doc *openapi3.T) string {
-	if len(doc.Servers) > 0 && doc.Servers[0].URL != "" {
-		return doc.Servers[0].URL
-	}
-	return "http://localhost:3000"
 }
 
 func (c *Converter) shouldInclude(op *openapi3.Operation) bool {
@@ -269,7 +457,15 @@ func (c *Converter) shouldInclude(op *openapi3.Operation) bool {
 	return true
 }
 
-func (c *Converter) convertOperation(path, method string, op *openapi3.Operation, pathParams openapi3.Parameters) string {
+// concatParams returns pathParams followed by opParams without aliasing
+// either slice.
+func concatParams(pathParams, opParams openapi3.Parameters) openapi3.Parameters {
+	all := make(openapi3.Parameters, 0, len(pathParams)+len(opParams))
+	all = append(all, pathParams...)
+	return append(all, opParams...)
+}
+
+func (c *Converter) convertOperation(st *state, path, method string, op *openapi3.Operation, pathParams openapi3.Parameters) (string, []string) {
 	var sb strings.Builder
 
 	// Request separator with name
@@ -279,7 +475,7 @@ func (c *Converter) convertOperation(path, method string, op *openapi3.Operation
 	}
 	sb.WriteString("### ")
 	if op.Summary != "" {
-		sb.WriteString(op.Summary)
+		sb.WriteString(strings.ReplaceAll(op.Summary, "\n", " "))
 	} else {
 		sb.WriteString(name)
 	}
@@ -307,28 +503,38 @@ func (c *Converter) convertOperation(path, method string, op *openapi3.Operation
 		sb.WriteString("\n")
 	}
 
-	// Method and URL
-	sb.WriteString(method)
-	sb.WriteString(" {{baseUrl}}")
+	// Notes are collected while building the rest and written before the
+	// request line.
+	var notes []string
+	note := func(format string, args ...any) {
+		msg := fmt.Sprintf(format, args...)
+		notes = append(notes, msg)
+		st.warn("%s %s: %s", method, path, msg)
+	}
+
+	allParams := concatParams(pathParams, op.Parameters)
 
 	// Convert path parameters
-	convertedPath := c.convertPathParams(path, op.Parameters, pathParams)
-	sb.WriteString(convertedPath)
-	sb.WriteString("\n")
+	convertedPath, vars := c.convertPathParams(st, path, name, allParams)
+
+	var req strings.Builder
+	req.WriteString(method)
+	req.WriteString(" {{baseUrl}}")
+	req.WriteString(convertedPath)
+	req.WriteString("\n")
 
 	// Query parameters
-	allParams := append(pathParams, op.Parameters...)
 	for _, paramRef := range allParams {
 		if paramRef == nil || paramRef.Value == nil {
 			continue
 		}
 		param := paramRef.Value
 		if param.In == "query" {
-			sb.WriteString("  ? ")
-			sb.WriteString(param.Name)
-			sb.WriteString(" = ")
-			sb.WriteString(c.getParamExample(param))
-			sb.WriteString("\n")
+			req.WriteString("  ? ")
+			req.WriteString(param.Name)
+			req.WriteString(" = ")
+			req.WriteString(c.getParamExample(param, false))
+			req.WriteString("\n")
 		}
 	}
 
@@ -339,35 +545,38 @@ func (c *Converter) convertOperation(path, method string, op *openapi3.Operation
 		}
 		param := paramRef.Value
 		if param.In == "header" {
-			sb.WriteString(param.Name)
-			sb.WriteString(": ")
-			sb.WriteString(c.getParamExample(param))
-			sb.WriteString("\n")
+			req.WriteString(param.Name)
+			req.WriteString(": ")
+			req.WriteString(c.getParamExample(param, false))
+			req.WriteString("\n")
 		}
 	}
 
-	// Content-Type header for body
+	// Request body: content types are visited in sorted order so output is
+	// deterministic when a spec offers several.
+	body := ""
 	if op.RequestBody != nil && op.RequestBody.Value != nil {
-		for contentType := range op.RequestBody.Value.Content {
-			if strings.Contains(contentType, "json") {
-				sb.WriteString("Content-Type: application/json\n")
-				break
-			} else if strings.Contains(contentType, "form") {
-				sb.WriteString("Content-Type: application/x-www-form-urlencoded\n")
-				break
-			}
+		var ct string
+		ct, body = c.generateRequestBody(op.RequestBody.Value, note)
+		switch ct {
+		case "json":
+			req.WriteString("Content-Type: application/json\n")
+		case "form":
+			req.WriteString("Content-Type: application/x-www-form-urlencoded\n")
 		}
-	}
-
-	// Request body
-	if op.RequestBody != nil && op.RequestBody.Value != nil {
-		body := c.generateRequestBody(op.RequestBody.Value)
 		if body != "" {
-			sb.WriteString("\n")
-			sb.WriteString(body)
-			sb.WriteString("\n")
+			req.WriteString("\n")
+			req.WriteString(body)
+			req.WriteString("\n")
 		}
 	}
+
+	for _, n := range notes {
+		sb.WriteString("# TODO: ")
+		sb.WriteString(strings.ReplaceAll(n, "\n", " "))
+		sb.WriteString("\n")
+	}
+	sb.WriteString(req.String())
 
 	// Assertions
 	if c.generateTests {
@@ -378,83 +587,190 @@ func (c *Converter) convertOperation(path, method string, op *openapi3.Operation
 		}
 	}
 
-	return sb.String()
+	return sb.String(), vars
 }
 
-func (c *Converter) convertPathParams(path string, opParams, pathParams openapi3.Parameters) string {
-	result := path
+var pathTemplateParam = regexp.MustCompile(`\{([^{}/]+)\}`)
 
-	allParams := append(pathParams, opParams...)
+// convertPathParams rewrites {id} to {{id}} and registers a variable holding
+// the spec's example (or a type-based default) so the request runs as
+// generated. It returns the rewritten path and the variables it uses.
+func (c *Converter) convertPathParams(st *state, path, opName string, allParams openapi3.Parameters) (string, []string) {
+	declared := map[string]*openapi3.Parameter{}
 	for _, paramRef := range allParams {
-		if paramRef == nil || paramRef.Value == nil {
-			continue
-		}
-		param := paramRef.Value
-		if param.In == "path" {
-			// Replace {param} with {{param}}
-			oldPattern := "{" + param.Name + "}"
-			newPattern := "{{" + param.Name + "}}"
-			result = strings.ReplaceAll(result, oldPattern, newPattern)
+		if paramRef != nil && paramRef.Value != nil && paramRef.Value.In == "path" {
+			declared[paramRef.Value.Name] = paramRef.Value
 		}
 	}
-
-	return result
+	var vars []string
+	out := pathTemplateParam.ReplaceAllStringFunc(path, func(m string) string {
+		pname := m[1 : len(m)-1]
+		def := "example"
+		if p, ok := declared[pname]; ok {
+			def = c.getParamExample(p, true)
+		} else {
+			st.warn("path %s uses {%s} but declares no such parameter; defaulting it to %q", path, pname, def)
+		}
+		v := st.variable(pname, def, opName)
+		vars = append(vars, v)
+		return "{{" + v + "}}"
+	})
+	return out, vars
 }
 
-func (c *Converter) getParamExample(param *openapi3.Parameter) string {
-	// Try to get example
+// getParamExample returns a concrete value for a parameter: the spec's
+// example, then its default, then its first enum value, then one derived from
+// the type. forPath asks for a value that is stable across runs.
+func (c *Converter) getParamExample(param *openapi3.Parameter, forPath bool) string {
 	if param.Example != nil {
 		return fmt.Sprintf("%v", param.Example)
 	}
+	for _, ex := range sortedExamples(param.Examples) {
+		if ex != nil {
+			return fmt.Sprintf("%v", ex)
+		}
+	}
 
-	// Try schema example
 	if param.Schema != nil && param.Schema.Value != nil {
 		schema := param.Schema.Value
 		if schema.Example != nil {
 			return fmt.Sprintf("%v", schema.Example)
 		}
+		if schema.Default != nil {
+			return fmt.Sprintf("%v", schema.Default)
+		}
+		if len(schema.Enum) > 0 {
+			return fmt.Sprintf("%v", schema.Enum[0])
+		}
 
 		// Generate based on type
-		switch schema.Type.Slice()[0] {
-		case "integer":
-			return "1"
-		case "number":
-			return "1.0"
-		case "boolean":
-			return "true"
-		case "string":
-			if schema.Format == "date" {
-				return "2024-01-01"
-			} else if schema.Format == "date-time" {
-				return "2024-01-01T00:00:00Z"
-			} else if schema.Format == "email" {
-				return "user@example.com"
-			} else if schema.Format == "uuid" {
-				return "{{$uuid()}}"
+		types := schema.Type.Slice()
+		if len(types) > 0 {
+			switch types[0] {
+			case "integer":
+				return "1"
+			case "number":
+				return "1.0"
+			case "boolean":
+				return "true"
+			case "string":
+				switch schema.Format {
+				case "date":
+					return "2024-01-01"
+				case "date-time":
+					return "2024-01-01T00:00:00Z"
+				case "email":
+					return "user@example.com"
+				case "uuid":
+					if forPath {
+						return "123e4567-e89b-12d3-a456-426614174000"
+					}
+					return "{{$uuid()}}"
+				}
+				return "example"
 			}
-			return "example"
 		}
 	}
 
-	return "{{" + param.Name + "}}"
+	return "example"
 }
 
-func (c *Converter) generateRequestBody(reqBody *openapi3.RequestBody) string {
+// sortedExamples returns the values of an examples map in key order.
+func sortedExamples(m openapi3.Examples) []any {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var out []any
+	for _, k := range keys {
+		if m[k] != nil && m[k].Value != nil {
+			out = append(out, m[k].Value.Value)
+		}
+	}
+	return out
+}
+
+// generateRequestBody returns the body kind ("json", "form", "multipart" or
+// "") and its text. Content types are tried in a fixed order of preference.
+func (c *Converter) generateRequestBody(reqBody *openapi3.RequestBody, note func(string, ...any)) (string, string) {
+	types := make([]string, 0, len(reqBody.Content))
+	for ct := range reqBody.Content {
+		types = append(types, ct)
+	}
+	sort.Strings(types)
+
 	// Prefer JSON
-	for contentType, mediaType := range reqBody.Content {
-		if strings.Contains(contentType, "json") && mediaType.Schema != nil {
-			return c.generateJSONFromSchema(mediaType.Schema.Value, 0)
+	for _, ct := range types {
+		mt := reqBody.Content[ct]
+		if strings.Contains(ct, "json") && mt.Schema != nil {
+			if s := mt.Schema.Value; s != nil && len(s.Type.Slice()) == 0 && (len(s.AllOf)+len(s.OneOf)+len(s.AnyOf) > 0) {
+				note("the %s body schema uses allOf/oneOf/anyOf; the generated body is a placeholder", ct)
+			}
+			return "json", c.generateJSONFromSchema(mt.Schema.Value, 0)
 		}
 	}
 
 	// Try form data
-	for contentType, mediaType := range reqBody.Content {
-		if strings.Contains(contentType, "form") && mediaType.Schema != nil {
-			return c.generateFormFromSchema(mediaType.Schema.Value)
+	for _, ct := range types {
+		mt := reqBody.Content[ct]
+		if strings.Contains(ct, "x-www-form-urlencoded") && mt.Schema != nil {
+			return "form", c.generateFormFromSchema(mt.Schema.Value)
 		}
 	}
 
-	return ""
+	// Multipart
+	for _, ct := range types {
+		mt := reqBody.Content[ct]
+		if strings.HasPrefix(ct, "multipart/") && mt.Schema != nil {
+			return "multipart", c.generateMultipartFromSchema(mt.Schema.Value, note)
+		}
+	}
+	for _, ct := range types {
+		if strings.Contains(ct, "form") && reqBody.Content[ct].Schema != nil {
+			return "form", c.generateFormFromSchema(reqBody.Content[ct].Schema.Value)
+		}
+	}
+
+	if len(types) > 0 {
+		note("request body content type %s is not supported; the body was left out", strings.Join(types, ", "))
+	}
+	return "", ""
+}
+
+// generateMultipartFromSchema renders a >>>multipart block; binary properties
+// become file lines.
+func (c *Converter) generateMultipartFromSchema(schema *openapi3.Schema, note func(string, ...any)) string {
+	if schema == nil || len(schema.Properties) == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(schema.Properties))
+	for n := range schema.Properties {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+
+	var sb strings.Builder
+	sb.WriteString(">>>multipart\n")
+	for _, n := range names {
+		ref := schema.Properties[n]
+		var prop *openapi3.Schema
+		if ref != nil {
+			prop = ref.Value
+		}
+		if prop != nil && prop.Format == "binary" {
+			fmt.Fprintf(&sb, "file @./%s\n", n)
+			note("multipart file field name %q cannot be expressed by hitspec's `file @path` line; point it at a real file and set the name by hand", n)
+			continue
+		}
+		value := "example"
+		if prop != nil && prop.Example != nil {
+			value = fmt.Sprintf("%v", prop.Example)
+		}
+		fmt.Fprintf(&sb, "field %s = %s\n", n, value)
+	}
+	sb.WriteString("<<<")
+	return sb.String()
 }
 
 func (c *Converter) generateJSONFromSchema(schema *openapi3.Schema, depth int) string {
@@ -597,11 +913,18 @@ func (c *Converter) generateAssertions(op *openapi3.Operation) string {
 	var sb strings.Builder
 	sb.WriteString(">>>\n")
 
-	// Find success response (2xx)
+	// Find the success response (2xx). Codes are sorted so a spec with several
+	// 2xx responses always yields the same assertion.
+	codes := make([]string, 0, len(op.Responses.Map()))
+	for code := range op.Responses.Map() {
+		codes = append(codes, code)
+	}
+	sort.Strings(codes)
+
 	var successCode string
 	var successResp *openapi3.Response
-
-	for code, respRef := range op.Responses.Map() {
+	for _, code := range codes {
+		respRef := op.Responses.Map()[code]
 		if strings.HasPrefix(code, "2") && respRef != nil && respRef.Value != nil {
 			successCode = code
 			successResp = respRef.Value
@@ -610,13 +933,23 @@ func (c *Converter) generateAssertions(op *openapi3.Operation) string {
 	}
 
 	if successCode != "" {
-		sb.WriteString("expect status == ")
-		sb.WriteString(successCode)
-		sb.WriteString("\n")
+		if strings.ContainsAny(successCode, "xX") {
+			// "2XX" is a range, not a status code.
+			sb.WriteString("expect status >= 200\nexpect status < 300\n")
+		} else {
+			sb.WriteString("expect status == ")
+			sb.WriteString(successCode)
+			sb.WriteString("\n")
+		}
 
 		// Add content-type assertion if JSON
 		if successResp != nil {
+			cts := make([]string, 0, len(successResp.Content))
 			for contentType := range successResp.Content {
+				cts = append(cts, contentType)
+			}
+			sort.Strings(cts)
+			for _, contentType := range cts {
 				if strings.Contains(contentType, "json") {
 					sb.WriteString("expect header Content-Type contains application/json\n")
 					break

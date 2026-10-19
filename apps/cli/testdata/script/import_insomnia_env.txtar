@@ -1,0 +1,31 @@
+# insomnia import: the base environment and every sub environment are imported.
+
+exec hitspec import insomnia ex.json -o out/api.http
+stdout 'Wrote 3 environment\(s\) to out/hitspec.yaml'
+exists out/hitspec.yaml
+grep 'defaultEnvironment: base' out/hitspec.yaml
+grep 'baseUrl: http://localhost:3000' out/hitspec.yaml
+grep 'baseUrl: https://api.example.com' out/hitspec.yaml
+exec hitspec validate out/api.http
+grep 'GET \{\{baseUrl\}\}/users' out/api.http
+grep '^# @auth bearer \{\{token\}\}$' out/api.http
+
+# An existing hitspec.yaml is never overwritten.
+exec hitspec import insomnia ex.json -o out/second.http
+stdout 'hitspec.imported.yaml'
+stdout 'already exists'
+exists out/hitspec.imported.yaml
+
+# To stdout the environments go to stderr.
+exec hitspec import insomnia ex.json
+stderr 'defaultEnvironment: base'
+stderr 'production:'
+
+-- ex.json --
+{"_type":"export","__export_format":4,"resources":[
+ {"_id":"w","_type":"workspace","name":"W"},
+ {"_id":"e0","_type":"environment","parentId":"w","name":"Base","data":{"baseUrl":"https://api.example.com","token":"t"}},
+ {"_id":"e1","_type":"environment","parentId":"e0","name":"Dev","data":{"baseUrl":"http://localhost:3000"}},
+ {"_id":"e2","_type":"environment","parentId":"e0","name":"Production","data":{"token":"prod"}},
+ {"_id":"r","_type":"request","parentId":"w","name":"List","method":"GET","url":"{{ _.baseUrl }}/users",
+  "authentication":{"type":"bearer","token":"{{ _.token }}"}}]}

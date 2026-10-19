@@ -202,8 +202,16 @@ func (e *Exporter) buildBody(body *parser.Body) []string {
 		}
 
 	case parser.BodyForm, parser.BodyFormBlock:
+		// The raw body is already a name=value&name=value string; --data-urlencode
+		// would percent-encode its & and = separators.
 		if body.Raw != "" {
-			return []string{"--data-urlencode", quote(e.resolve(body.Raw))}
+			return []string{"-d", quote(e.resolve(body.Raw))}
+		}
+
+	case parser.BodyFile:
+		// `< ./file` sends the file's bytes unchanged.
+		if body.FilePath != "" {
+			return []string{"--data-binary", quote("@" + e.resolve(body.FilePath))}
 		}
 
 	case parser.BodyMultipart:

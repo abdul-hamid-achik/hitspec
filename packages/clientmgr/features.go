@@ -2,24 +2,23 @@ package clientmgr
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/contract"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/config"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
-	curlexport "github.com/abdul-hamid-achik/hitspec/v2/packages/export/curl"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/export/snippet"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/http"
 	curlimport "github.com/abdul-hamid-achik/hitspec/v2/packages/import/curl"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/import/insomnia"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/import/openapi"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/import/postman"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/mock"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/proxy"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/stress"
@@ -698,14 +697,15 @@ func (m *Manager) ImportPostman(ctx context.Context, req ImportPostmanReq) (Impo
 	if len(data) == 0 {
 		return ImportResultDTO{}, fmt.Errorf("data or filePath is required")
 	}
-	content, err := convertPostmanData(data)
+	res, err := postman.NewConverter().Convert(data)
 	if err != nil {
 		return ImportResultDTO{}, err
 	}
+	content := res.ContentWithEnvironments()
 	return ImportResultDTO{Content: content, RequestCount: countRequests(content)}, nil
 }
 
-// Export exports requests to curl or a compact text snippet for other client formats.
+// Export renders requests as curl or another client snippet (see snippet.Formats).
 func (m *Manager) Export(ctx context.Context, req ExportReq) (ExportResultDTO, error) {
 	_ = ctx
 	if req.File == "" {
@@ -733,14 +733,13 @@ func (m *Manager) Export(ctx context.Context, req ExportReq) (ExportResultDTO, e
 	} else {
 		reqs = parsed.Requests
 	}
-	format := strings.ToLower(req.Format)
-	if format == "" || format == "curl" {
-		exporter := curlexport.New()
-		return ExportResultDTO{Commands: exporter.ExportAll(reqs)}, nil
-	}
 	commands := make([]string, 0, len(reqs))
 	for _, r := range reqs {
-		commands = append(commands, exportSnippet(format, r))
+		cmd, err := snippet.Render(req.Format, r)
+		if err != nil {
+			return ExportResultDTO{}, err
+		}
+		commands = append(commands, cmd)
 	}
 	return ExportResultDTO{Commands: commands}, nil
 }
@@ -814,325 +813,4 @@ func convertStressStats(s stress.CurrentStats) StressStatsDTO {
 		ErrorRate: s.ErrorRate,
 		ActiveVUs: s.ActiveVUs,
 	}
-}
-
-// exportSnippet renders a request as a runnable snippet in the given language,
-// including method, URL, headers, and body. (curl has its own dedicated exporter
-// in packages/export/curl; this covers the other languages.)
-func exportSnippet(format string, r *parser.Request) string {
-	method := r.Method
-	if method == "" {
-		method = "GET"
-	}
-	switch format {
-	case "fetch", "javascript":
-		return fetchSnippet(method, r)
-	case "wget":
-		return wgetSnippet(method, r)
-	case "python":
-		return pythonSnippet(method, r)
-	case "httpie":
-		return httpieSnippet(method, r)
-	case "go":
-		return goSnippet(method, r)
-	case "ruby":
-		return rubySnippet(method, r)
-	default:
-		return fmt.Sprintf("%s %s", method, r.URL)
-	}
-}
-
-// snippetBody returns the trimmed raw request body, or "" when there is none.
-func snippetBody(r *parser.Request) string {
-	if r.Body == nil || r.Body.ContentType == parser.BodyNone {
-		return ""
-	}
-	return strings.TrimSpace(r.Body.Raw)
-}
-
-// shellQuote wraps s in single quotes, safely escaping embedded single quotes,
-// for shell-based snippets (httpie, wget).
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
-
-func fetchSnippet(method string, r *parser.Request) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "fetch(%s, {\n  method: %s", strconv.Quote(r.URL), strconv.Quote(method))
-	if len(r.Headers) > 0 {
-		b.WriteString(",\n  headers: {")
-		for i, h := range r.Headers {
-			if i > 0 {
-				b.WriteString(",")
-			}
-			fmt.Fprintf(&b, "\n    %s: %s", strconv.Quote(h.Key), strconv.Quote(h.Value))
-		}
-		b.WriteString("\n  }")
-	}
-	if body := snippetBody(r); body != "" {
-		fmt.Fprintf(&b, ",\n  body: %s", strconv.Quote(body))
-	}
-	b.WriteString("\n})")
-	return b.String()
-}
-
-func pythonSnippet(method string, r *parser.Request) string {
-	var b strings.Builder
-	b.WriteString("import requests\n\n")
-	if len(r.Headers) > 0 {
-		b.WriteString("headers = {\n")
-		for _, h := range r.Headers {
-			fmt.Fprintf(&b, "    %s: %s,\n", strconv.Quote(h.Key), strconv.Quote(h.Value))
-		}
-		b.WriteString("}\n")
-	}
-	body := snippetBody(r)
-	if body != "" {
-		fmt.Fprintf(&b, "data = %s\n", strconv.Quote(body))
-	}
-	fmt.Fprintf(&b, "response = requests.request(%s, %s", strconv.Quote(method), strconv.Quote(r.URL))
-	if len(r.Headers) > 0 {
-		b.WriteString(", headers=headers")
-	}
-	if body != "" {
-		b.WriteString(", data=data")
-	}
-	b.WriteString(")")
-	return b.String()
-}
-
-func httpieSnippet(method string, r *parser.Request) string {
-	var b strings.Builder
-	if body := snippetBody(r); body != "" {
-		fmt.Fprintf(&b, "echo %s | ", shellQuote(body))
-	}
-	fmt.Fprintf(&b, "http %s %s", method, shellQuote(r.URL))
-	for _, h := range r.Headers {
-		fmt.Fprintf(&b, " %s", shellQuote(h.Key+":"+h.Value))
-	}
-	return b.String()
-}
-
-func goSnippet(method string, r *parser.Request) string {
-	var b strings.Builder
-	if body := snippetBody(r); body != "" {
-		bodyLit := "`" + body + "`"
-		if strings.Contains(body, "`") {
-			bodyLit = strconv.Quote(body)
-		}
-		fmt.Fprintf(&b, "req, _ := http.NewRequest(%s, %s, strings.NewReader(%s))\n", strconv.Quote(method), strconv.Quote(r.URL), bodyLit)
-	} else {
-		fmt.Fprintf(&b, "req, _ := http.NewRequest(%s, %s, nil)\n", strconv.Quote(method), strconv.Quote(r.URL))
-	}
-	for _, h := range r.Headers {
-		fmt.Fprintf(&b, "req.Header.Set(%s, %s)\n", strconv.Quote(h.Key), strconv.Quote(h.Value))
-	}
-	b.WriteString("resp, _ := http.DefaultClient.Do(req)\ndefer resp.Body.Close()")
-	return b.String()
-}
-
-func rubySnippet(method string, r *parser.Request) string {
-	var b strings.Builder
-	b.WriteString("require 'net/http'\nrequire 'uri'\n\n")
-	fmt.Fprintf(&b, "uri = URI(%s)\n", strconv.Quote(r.URL))
-	fmt.Fprintf(&b, "req = Net::HTTP::%s.new(uri)\n", rubyMethodClass(method))
-	for _, h := range r.Headers {
-		fmt.Fprintf(&b, "req[%s] = %s\n", strconv.Quote(h.Key), strconv.Quote(h.Value))
-	}
-	if body := snippetBody(r); body != "" {
-		fmt.Fprintf(&b, "req.body = %s\n", strconv.Quote(body))
-	}
-	b.WriteString("res = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == 'https') { |http| http.request(req) }")
-	return b.String()
-}
-
-func wgetSnippet(method string, r *parser.Request) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "wget --method=%s", method)
-	for _, h := range r.Headers {
-		fmt.Fprintf(&b, " --header=%s", shellQuote(h.Key+": "+h.Value))
-	}
-	if body := snippetBody(r); body != "" {
-		fmt.Fprintf(&b, " --body-data=%s", shellQuote(body))
-	}
-	fmt.Fprintf(&b, " %s", shellQuote(r.URL))
-	return b.String()
-}
-
-// rubyMethodClass title-cases an HTTP method for Ruby's Net::HTTP class names
-// (get -> Get, post -> Post).
-func rubyMethodClass(method string) string {
-	m := strings.ToLower(method)
-	if m == "" {
-		return m
-	}
-	return strings.ToUpper(m[:1]) + m[1:]
-}
-
-type postmanCollection struct {
-	Info postmanInfo   `json:"info"`
-	Item []postmanItem `json:"item"`
-}
-
-type postmanInfo struct {
-	Name string `json:"name"`
-}
-
-type postmanItem struct {
-	Name    string        `json:"name"`
-	Request *postmanReq   `json:"request,omitempty"`
-	Item    []postmanItem `json:"item,omitempty"`
-}
-
-type postmanReq struct {
-	Method string          `json:"method"`
-	Header []postmanHeader `json:"header,omitempty"`
-	Body   *postmanBody    `json:"body,omitempty"`
-	URL    postmanURL      `json:"url"`
-}
-
-type postmanHeader struct {
-	Key      string `json:"key"`
-	Value    string `json:"value"`
-	Disabled bool   `json:"disabled,omitempty"`
-}
-
-type postmanBody struct {
-	Mode       string            `json:"mode"`
-	Raw        string            `json:"raw,omitempty"`
-	URLEncoded []postmanKV       `json:"urlencoded,omitempty"`
-	FormData   []postmanFormData `json:"formdata,omitempty"`
-}
-
-type postmanKV struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-}
-
-type postmanFormData struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-	Type  string `json:"type"`
-	Src   string `json:"src,omitempty"`
-}
-
-type postmanURL struct {
-	Raw string `json:"raw"`
-}
-
-func convertPostmanData(data []byte) (string, error) {
-	var collection postmanCollection
-	if err := json.Unmarshal(data, &collection); err != nil {
-		return "", fmt.Errorf("failed to parse Postman collection: %w", err)
-	}
-	var sb strings.Builder
-	sb.WriteString("# Generated from Postman collection")
-	if collection.Info.Name != "" {
-		sb.WriteString(": ")
-		sb.WriteString(collection.Info.Name)
-	}
-	sb.WriteString("\n\n")
-	convertPostmanItems(&sb, collection.Item, "")
-	return sb.String(), nil
-}
-
-func convertPostmanItems(sb *strings.Builder, items []postmanItem, prefix string) {
-	for _, item := range items {
-		if len(item.Item) > 0 {
-			nextPrefix := item.Name
-			if prefix != "" {
-				nextPrefix = prefix + "/" + item.Name
-			}
-			convertPostmanItems(sb, item.Item, nextPrefix)
-			continue
-		}
-		if item.Request == nil {
-			continue
-		}
-		sb.WriteString("### ")
-		if prefix != "" {
-			sb.WriteString(prefix)
-			sb.WriteString(" - ")
-		}
-		sb.WriteString(item.Name)
-		sb.WriteString("\n# @name ")
-		sb.WriteString(sanitizePostmanName(item.Name))
-		sb.WriteString("\n")
-
-		req := item.Request
-		sb.WriteString(req.Method)
-		sb.WriteString(" ")
-		sb.WriteString(convertPostmanVariable(req.URL.Raw))
-		sb.WriteString("\n")
-		for _, h := range req.Header {
-			if h.Disabled {
-				continue
-			}
-			sb.WriteString(h.Key)
-			sb.WriteString(": ")
-			sb.WriteString(convertPostmanVariable(h.Value))
-			sb.WriteString("\n")
-		}
-		if req.Body != nil {
-			switch req.Body.Mode {
-			case "raw":
-				if req.Body.Raw != "" {
-					sb.WriteString("\n")
-					sb.WriteString(convertPostmanVariable(req.Body.Raw))
-					sb.WriteString("\n")
-				}
-			case "urlencoded":
-				if len(req.Body.URLEncoded) > 0 {
-					sb.WriteString("\n")
-					var parts []string
-					for _, kv := range req.Body.URLEncoded {
-						parts = append(parts, kv.Key+"="+convertPostmanVariable(kv.Value))
-					}
-					sb.WriteString(strings.Join(parts, "&"))
-					sb.WriteString("\n")
-				}
-			case "formdata":
-				if len(req.Body.FormData) > 0 {
-					sb.WriteString("\n")
-					for _, kv := range req.Body.FormData {
-						value := kv.Value
-						if kv.Type == "file" && kv.Src != "" {
-							value = "@" + kv.Src
-						}
-						sb.WriteString(kv.Key)
-						sb.WriteString("=")
-						sb.WriteString(convertPostmanVariable(value))
-						sb.WriteString("\n")
-					}
-				}
-			}
-		}
-		sb.WriteString("\n>>>\nexpect status == 200\n<<<\n\n")
-	}
-}
-
-func convertPostmanVariable(s string) string {
-	s = strings.ReplaceAll(s, "{{$guid}}", "{{$uuid()}}")
-	s = strings.ReplaceAll(s, "{{$timestamp}}", "{{$timestamp()}}")
-	s = strings.ReplaceAll(s, "{{$randomInt}}", "{{$random(0, 1000)}}")
-	s = strings.ReplaceAll(s, "{{$randomEmail}}", "{{$randomEmail()}}")
-	s = strings.ReplaceAll(s, "{{$randomUUID}}", "{{$uuid()}}")
-	return s
-}
-
-func sanitizePostmanName(name string) string {
-	result := strings.Map(func(r rune) rune {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
-			return r
-		}
-		return '_'
-	}, name)
-	for strings.Contains(result, "__") {
-		result = strings.ReplaceAll(result, "__", "_")
-	}
-	result = strings.Trim(result, "_")
-	if result == "" {
-		return "request"
-	}
-	return result
 }

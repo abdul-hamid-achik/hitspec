@@ -1,0 +1,99 @@
+# Generated from Insomnia export
+
+# Environment variables are in the environments section of hitspec.yaml (use --env <name>).
+
+### Users - List
+# @name list
+# @auth bearer {{token}}
+GET {{baseUrl}}/users
+? limit = 10
+
+>>>
+expect status >= 200
+expect status < 400
+<<<
+
+### Users - Login
+# @name login
+# @auth apiKey X-Key, {{token}}
+POST {{baseUrl}}/login
+Content-Type: application/x-www-form-urlencoded
+
+user=a+b&pw={{pw}}
+
+>>>
+expect status >= 200
+expect status < 400
+<<<
+
+### Users - Upload
+# @name upload
+# TODO: auth type "oauth2" is not supported and was dropped
+# TODO: multipart file field name "doc" cannot be expressed by hitspec's `file @path` line; set the name by hand
+POST {{baseUrl}}/up
+
+>>>multipart
+field title = T
+file @./doc.pdf
+<<<
+
+>>>
+expect status >= 200
+expect status < 400
+<<<
+
+### GQL
+# @name gql
+POST {{baseUrl}}/graphql
+Content-Type: application/json
+
+>>>graphql
+query { me { id } }
+
+>>>variables
+{"a":1}
+<<<
+
+>>>
+expect status >= 200
+expect status < 400
+<<<
+
+### List
+# @name list_2
+GET {{baseUrl}}/users2
+X-T: {% response 'body', 'req_1', 'b64::JC5pZA==::46b', 'never', 60 %}
+
+>>>
+expect status >= 200
+expect status < 400
+<<<
+
+
+# environments:
+defaultEnvironment: base
+environments:
+    base:
+        baseUrl: https://api.example.com
+        debug: false
+        nested: '{"a":1}'
+        retries: 3
+        token: base-token
+    development:
+        baseUrl: http://localhost:3000
+        debug: false
+        nested: '{"a":1}'
+        retries: 3
+        token: base-token
+    production:
+        baseUrl: https://api.example.com
+        debug: false
+        nested: '{"a":1}'
+        retries: 3
+        token: '{{prodToken}}'
+
+# warnings:
+# - environment variable "nested" in "Base Environment" is an object/array; stored as a JSON string
+# - Upload: auth type "oauth2" is not supported and was dropped
+# - Upload: multipart file field name "doc" cannot be expressed by hitspec's `file @path` line; set the name by hand
+# - Insomnia template tags ({% ... %}) have no hitspec equivalent and were left as is

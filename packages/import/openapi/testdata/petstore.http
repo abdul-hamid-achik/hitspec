@@ -1,0 +1,58 @@
+# Generated from OpenAPI spec: Pet Store
+# Version: 1.2.3
+
+@baseUrl = https://pets.example.com/v1
+@id = 123e4567-e89b-12d3-a456-426614174000
+@petId = 42
+@photoId = example
+@getUser_id = 1
+
+### health
+# @name health
+GET {{baseUrl}}/health
+
+>>>
+expect status == 200
+<<<
+
+### getPet
+# @name getPet
+# @tags pets
+GET {{baseUrl}}/pets/{{id}}
+  ? verbose = example
+  ? kind = cat
+
+>>>
+expect status == 200
+<<<
+
+### uploadPhoto
+# @name uploadPhoto
+# @tags pets
+# TODO: multipart file field name "file" cannot be expressed by hitspec's `file @path` line; point it at a real file and set the name by hand
+POST {{baseUrl}}/pets/{{petId}}/photos/{{photoId}}
+
+>>>multipart
+field caption = example
+file @./file
+<<<
+
+>>>
+expect status >= 200
+expect status < 300
+<<<
+
+### Get a user
+# @name getUser
+# @tags users
+GET {{baseUrl}}/users/{{getUser_id}}
+
+>>>
+expect status == 200
+expect header Content-Type contains application/json
+<<<
+
+
+# warnings:
+# - POST /pets/{petId}/photos/{photoId}: multipart file field name "file" cannot be expressed by hitspec's `file @path` line; point it at a real file and set the name by hand
+# - the spec declares security requirements; authentication was not imported (add # @auth to the requests that need it)

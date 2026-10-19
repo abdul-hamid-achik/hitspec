@@ -1,0 +1,11 @@
+### post_x
+# @name post_x
+POST https://api.example.com/x
+accept: */*
+
+{"a":"it's"}
+
+>>>
+expect status >= 200
+expect status < 400
+<<<

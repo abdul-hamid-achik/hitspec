@@ -1,0 +1,9 @@
+### head_x
+# @name head_x
+HEAD https://api.example.com/x
+Cookie: sid=abc
+
+>>>
+expect status >= 200
+expect status < 400
+<<<

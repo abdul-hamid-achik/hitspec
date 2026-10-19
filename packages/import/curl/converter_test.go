@@ -153,7 +153,7 @@ func TestToHitspec_BasicAuth(t *testing.T) {
 
 	result := converter.ToHitspec(parsed)
 
-	if !strings.Contains(result, "# @auth basic admin secret") {
+	if !strings.Contains(result, "# @auth basic admin, secret") {
 		t.Errorf("expected hitspec to contain auth annotation, got: %s", result)
 	}
 }
