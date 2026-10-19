@@ -316,7 +316,13 @@ parse errors (`hitspec validate` exits 2).
 
 ## Captures
 
+A `>>>capture` block follows the request whose response it reads:
+
 ```http
+### Login
+# @name login
+POST {{baseUrl}}/login
+
 >>>capture
 token from body.access_token
 userId from body.user.id
@@ -325,7 +331,7 @@ statusCode from status
 responseTime from duration
 <<<
 
-# Use in subsequent requests
+### Use in subsequent requests
 # @depends login
 GET {{baseUrl}}/users/{{login.userId}}
 Authorization: Bearer {{login.token}}
@@ -1114,21 +1120,27 @@ If `{{variable}}` shows as literal text:
 ### Capture Not Working
 ```http
 ### First Request
-# @name login        <-- REQUIRED for referencing
+# REQUIRED: the @name is how later requests refer to the capture
+# @name login
 
 POST {{baseUrl}}/login
-...
 
+# captured as login.token
 >>>capture
-token from body.token   <-- captures to login.token
+token from body.token
 <<<
 
 ### Second Request
-# @depends login     <-- REQUIRED to ensure order
+# REQUIRED: @depends makes login run first
+# @depends login
 
+# use a capture as {{requestName.captureName}}
 GET {{baseUrl}}/me
-Authorization: Bearer {{login.token}}  <-- use as requestName.varName
+Authorization: Bearer {{login.token}}
 ```
+
+Notes go on their own `#` line: a directive, capture or header value runs to
+the end of its line, so `token from body.token  # note` is a path with spaces.
 
 ## Minimal Examples
 
