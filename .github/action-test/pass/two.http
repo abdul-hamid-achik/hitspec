@@ -1,0 +1,7 @@
+### Fixture returns JSON
+GET http://127.0.0.1:8765/ok.json
+
+>>>
+expect status 200
+expect header Content-Type contains "json"
+<<<

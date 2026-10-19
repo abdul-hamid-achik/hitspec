@@ -618,7 +618,7 @@ expect body.id == "{{login.userId}}"
 Use the official hitspec action to run API tests in your CI pipeline:
 
 ```yaml
-- uses: abdul-hamid-achik/hitspec@v1
+- uses: abdul-hamid-achik/hitspec@v2
   with:
     files: tests/
     output: junit
@@ -634,14 +634,14 @@ Use the official hitspec action to run API tests in your CI pipeline:
 
 | Input | Description | Default |
 |-------|-------------|---------|
-| `files` | Files/directories to test | (required) |
-| `env` | Environment name | `dev` |
+| `files` | Files, directories or globs (whitespace/newline separated); a glob matching nothing is an error | (required) |
+| `env` | Environment name (when empty, `defaultEnvironment` from `hitspec.yaml` applies) | - |
 | `env-file` | Path to .env file | - |
-| `output` | Output format (console, json, junit, tap, html) | `junit` |
-| `output-file` | Write output to file | - |
+| `output` | Output format (console, json, junit, tap, html) | `console` |
+| `output-file` | Write output to file (default `hitspec-results.<ext>` for json/junit/tap/html) | - |
 | `tags` | Filter by tags | - |
 | `name` | Filter by request name pattern | - |
-| `timeout` | Global timeout in milliseconds | - |
+| `timeout` | Request timeout: a duration (`30s`, `1m`) or a plain integer in milliseconds | - |
 | `parallel` | Run in parallel | `false` |
 | `concurrency` | Max concurrent requests when parallel is enabled | - |
 | `bail` | Stop on first failure | `false` |
@@ -657,14 +657,17 @@ Use the official hitspec action to run API tests in your CI pipeline:
 | `ramp-up` | Ramp-up time to reach target rate/VUs | - |
 | `threshold` | Pass/fail thresholds | - |
 | `profile` | Stress profile name from hitspec.yaml | - |
-| `version` | hitspec version | `latest` |
+| `version` | hitspec release to install (checksum-verified) | `latest` |
+
+Outputs: `exit-code`, `report-file` (path of the written report), `version` (installed release).
+The action runs on Linux, macOS and Windows (amd64 and arm64).
 
 See [action.yml](action.yml) for the authoritative input list.
 
 #### Stress Testing in CI
 
 ```yaml
-- uses: abdul-hamid-achik/hitspec@v1
+- uses: abdul-hamid-achik/hitspec@v2
   with:
     files: api.http
     stress: true
@@ -680,7 +683,7 @@ See [action.yml](action.yml) for the authoritative input list.
   run: |
     echo "API_TOKEN=${{ secrets.API_TOKEN }}" >> .env.ci
 
-- uses: abdul-hamid-achik/hitspec@v1
+- uses: abdul-hamid-achik/hitspec@v2
   with:
     files: tests/
     env: staging
