@@ -8,7 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/atotto/clipboard"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/clientmgr"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/clientmgr"
 )
 
 // copyToClipboard writes text to the system clipboard. It is best-effort: on

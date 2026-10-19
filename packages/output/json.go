@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/runner"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
 )
 
 // sensitiveHeaders lists header names whose values should be redacted in output.

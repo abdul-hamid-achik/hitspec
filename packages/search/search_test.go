@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/fetch"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/fetch"
 )
 
 type fakeFetcher struct {

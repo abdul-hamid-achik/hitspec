@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/runner"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
 )
 
 // TAPFormatter formats test results in TAP (Test Anything Protocol) format

@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
 )
 
 // Exporter converts hitspec requests to curl commands.

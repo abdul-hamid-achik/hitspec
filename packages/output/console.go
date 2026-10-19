@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/runner"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
 	"github.com/fatih/color"
 )
 

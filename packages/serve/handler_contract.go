@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/contract"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/contract"
 )
 
 // ContractVerifyReq is the request body for POST /contract/verify.

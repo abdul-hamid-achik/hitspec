@@ -4,8 +4,8 @@ import (
 	"context"
 	"io"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/clientmgr"
-	"github.com/abdul-hamid-achik/hitspec/packages/tui"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/clientmgr"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/tui"
 	"github.com/spf13/cobra"
 )
 

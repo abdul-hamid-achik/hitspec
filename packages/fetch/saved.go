@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/config"
-	"github.com/abdul-hamid-achik/hitspec/packages/core/env"
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
-	hitspechttp "github.com/abdul-hamid-achik/hitspec/packages/http"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/config"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/env"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
+	hitspechttp "github.com/abdul-hamid-achik/hitspec/v2/packages/http"
 )
 
 // SavedRequest selects and configures one request from a hitspec file.

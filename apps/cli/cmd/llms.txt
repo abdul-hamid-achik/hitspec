@@ -1,0 +1,1547 @@
+# hitspec
+
+> Plain text HTTP API testing tool. Write tests that look like HTTP requests.
+
+## Quick Start
+
+1. Create `test.http`:
+```http
+GET https://httpbin.org/get
+
+>>>
+expect status 200
+<<<
+```
+
+2. Run: `hitspec run test.http`
+
+3. Output on success:
+```
+✓ test.http (125ms)
+
+1 passed, 0 failed
+```
+
+4. Output on failure:
+```
+✗ test.http (89ms)
+  → status ==
+    Expected: 201
+    Actual:   200
+
+0 passed, 1 failed
+```
+
+## Install
+
+```bash
+brew install --cask abdul-hamid-achik/tap/hitspec
+go install github.com/abdul-hamid-achik/hitspec/v2/cmd/hitspec@latest
+```
+
+## File Format (.http files)
+
+### Variables
+```http
+@baseUrl = https://api.example.com
+@token = your-api-token
+```
+
+### Request Structure
+```http
+### Request Name
+# @name uniqueId
+# @tags smoke, auth
+# @timeout 5000
+# @auth bearer {{token}}
+
+GET {{baseUrl}}/endpoint
+Header-Name: Header-Value
+
+{
+  "body": "content"
+}
+
+>>>
+expect status 200
+expect body.field exists
+<<<
+
+>>>capture
+varName from body.field
+<<<
+```
+
+## Assertion Operators (26)
+
+| Operator | Example |
+|----------|---------|
+| `==` | `expect status == 200` |
+| `!=` | `expect body.error != null` |
+| `>` | `expect body.count > 0` |
+| `>=` | `expect body.count >= 1` |
+| `<` | `expect duration < 1000` |
+| `<=` | `expect duration <= 500` |
+| `contains` | `expect body contains "success"` |
+| `!contains` | `expect body !contains "error"` |
+| `startsWith` | `expect body.url startsWith "https"` |
+| `endsWith` | `expect body.email endsWith ".com"` |
+| `matches` | `expect body.id matches /^\d+$/` |
+| `exists` | `expect body.id exists` |
+| `!exists` | `expect body.error !exists` |
+| `length` | `expect body.items length 10` |
+| `length >` | `expect body.items length > 0` |
+| `length >=` | `expect body.items length >= 1` |
+| `length <` | `expect body.items length < 100` |
+| `length <=` | `expect body.items length <= 50` |
+| `includes` | `expect body.tags includes "admin"` |
+| `!includes` | `expect body.tags !includes "test"` |
+| `in` | `expect status in [200, 201, 204]` |
+| `!in` | `expect status !in [400, 404, 500]` |
+| `type` | `expect body.items type array` |
+| `schema` | `expect body schema ./schema.json` |
+| `each` | `expect body.items each type object` |
+| `snapshot` | `expect body snapshot "responseName"` |
+
+Types: `null`, `boolean`, `number`, `string`, `array`, `object`
+
+## Built-in Functions (17)
+
+| Function | Description |
+|----------|-------------|
+| `{{$uuid()}}` | Generate UUID v4 |
+| `{{$timestamp()}}` | Unix timestamp (seconds) |
+| `{{$timestampMs()}}` | Unix timestamp (milliseconds) |
+| `{{$now()}}` | Current datetime (RFC3339) |
+| `{{$date(2006-01-02)}}` | Custom date format |
+| `{{$random(1, 100)}}` | Random integer in range |
+| `{{$randomString(8)}}` | Random alphanumeric string |
+| `{{$randomEmail()}}` | Random email address |
+| `{{$randomAlphanumeric(10)}}` | Random alphanumeric |
+| `{{$base64(value)}}` | Base64 encode |
+| `{{$base64Decode(value)}}` | Base64 decode |
+| `{{$md5(value)}}` | MD5 hash |
+| `{{$sha256(value)}}` | SHA256 hash |
+| `{{$urlEncode(value)}}` | URL encode |
+| `{{$urlDecode(value)}}` | URL decode |
+| `{{$json(value)}}` | JSON passthrough |
+| `{{$env(VAR, default)}}` | Environment variable with optional default |
+
+## Metadata Directives (14) + Blocks
+
+| Directive | Description |
+|-----------|-------------|
+| `# @name id` | Request identifier for referencing |
+| `# @description text` | Human-readable description |
+| `# @tags a, b, c` | Tags for filtering (comma-separated) |
+| `# @skip reason` | Skip request execution |
+| `# @only` | Run only this request |
+| `# @timeout 5000` | Timeout in milliseconds |
+| `# @retry 3` | Retry attempts on failure |
+| `# @retryDelay 1000` | Delay between retries (ms) |
+| `# @depends login, setup` | Dependencies (request names) |
+| `# @auth type args` | Authentication method |
+| `# @before script.sh` | Run script before request |
+| `# @after script.sh` | Run script after request (always runs) |
+| `# @db connection` | Database connection for db assertions |
+| `# @waitFor url status timeout interval` | Poll until service ready |
+
+## Hooks (Setup/Teardown)
+
+Run shell scripts before and after requests for setup and cleanup:
+
+```http
+### Test with hooks
+# @name testWithHooks
+# @before ./scripts/setup.sh
+# @after ./scripts/cleanup.sh
+
+GET {{baseUrl}}/api/test
+
+>>>
+expect status 200
+<<<
+```
+
+- `@before` hooks run before the HTTP request is made
+- `@after` hooks always run, even if the request fails (for cleanup)
+- Multiple hooks are executed in order of declaration
+- Paths are relative to the .http file location
+- Variables are resolved in hook commands
+
+## Database Assertions
+
+Verify database state after HTTP requests:
+
+```http
+### Verify database state
+# @name checkDb
+# @db sqlite://./test.db
+
+GET {{baseUrl}}/api/users
+
+>>>db
+query SELECT COUNT(*) as count FROM users WHERE active = true
+expect count > 0
+<<<
+
+>>>
+expect status 200
+<<<
+```
+
+Supported databases: PostgreSQL, MySQL, SQLite
+
+Connection string formats:
+- `sqlite://./test.db` or `sqlite:./test.db`
+- `postgres://user:pass@localhost:5432/dbname`
+- `mysql://user:pass@localhost:3306/dbname`
+
+Operators: `==`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `exists`, `!exists`
+
+## Service Readiness
+
+Wait for a service to be ready before sending the request:
+
+```http
+### Wait for API to be ready
+# @waitFor {{baseUrl}}/health 200 30000 1000
+
+GET {{baseUrl}}/api/data
+
+>>>
+expect status 200
+<<<
+```
+
+Format: `@waitFor <url> <expectedStatus> <timeoutMs> <intervalMs>`
+
+- `url`: URL to poll (variables are resolved)
+- `expectedStatus`: HTTP status code to wait for (default: 200)
+- `timeoutMs`: Maximum wait time in milliseconds (default: 30000)
+- `intervalMs`: Polling interval in milliseconds (default: 1000)
+
+## Shell Commands
+
+Run shell commands after a request:
+
+```http
+### Run shell commands
+POST {{baseUrl}}/api/process
+
+>>>
+expect status 200
+<<<
+
+>>>shell
+echo "Processing complete"
+./scripts/notify.sh {{response.id}}
+<<<
+```
+
+- Commands execute after HTTP assertions
+- Variables are resolved before execution
+- Prefix with `-` to ignore errors: `-rm temp.txt`
+- Commands run via `sh -c`
+- Working directory is the .http file location
+
+## Authentication (8 types)
+
+```http
+# @auth bearer {{token}}
+# @auth basic {{username}}, {{password}}
+# @auth apiKey X-API-Key, {{apiKey}}
+# @auth apiKeyQuery api_key, {{apiKey}}
+# @auth digest {{username}}, {{password}}
+# @auth aws {{accessKey}}, {{secretKey}}, {{region}}, {{service}}
+# @auth oauth2 client_credentials {{tokenUrl}}, {{clientId}}, {{clientSecret}}, scope1,scope2
+# @auth oauth2 password {{tokenUrl}}, {{clientId}}, {{clientSecret}}, {{username}}, {{password}}, scope1,scope2
+```
+
+## Assertion Subjects
+
+| Subject | Example |
+|---------|---------|
+| `status` | `expect status 200` |
+| `duration` | `expect duration < 1000` |
+| `p50` | `expect p50 < 100` |
+| `p95` | `expect p95 < 200` |
+| `p99` | `expect p99 < 500` |
+| `header Name` | `expect header Content-Type contains json` |
+| `body` | `expect body contains "success"` |
+| `body.path` | `expect body.user.name == "John"` |
+| `body[n]` | `expect body[0].id exists` |
+| `jsonpath $.path` | `expect jsonpath $.users[0].id exists` |
+
+## Captures
+
+```http
+>>>capture
+token from body.access_token
+userId from body.user.id
+headerVal from header X-Request-Id
+statusCode from status
+responseTime from duration
+<<<
+
+# Use in subsequent requests
+# @depends login
+GET {{baseUrl}}/users/{{login.userId}}
+Authorization: Bearer {{login.token}}
+```
+
+## CLI Commands
+
+```bash
+# Run tests
+hitspec run <file|dir> [flags]
+
+# Stress testing mode (supports files, directories, or multiple files)
+hitspec run <file|dir|files...> --stress [stress-flags]
+
+# Validate syntax without executing
+hitspec validate <file|dir>
+
+# List all requests
+hitspec list <file|dir>
+
+# Initialize project
+hitspec init
+
+# Show version
+hitspec version
+
+# Output this documentation
+hitspec docs
+
+# Compare test results
+hitspec diff <results1.json> <results2.json> [flags]
+
+# Import OpenAPI/Swagger spec
+hitspec import openapi <spec.yaml|url> -o <output.http>
+
+# Import Postman collection
+hitspec import postman <collection.json> -o <output-dir>
+
+# Start mock server from .http files
+hitspec mock <file|dir> --port 3000
+
+# Record HTTP traffic as .http files
+hitspec record --port 8080 -o recorded.http
+
+# Verify API contracts
+hitspec contract verify <contracts-dir> --provider <url>
+
+# Open the interactive terminal UI (studio)
+hitspec studio [file|dir] [flags]
+
+# Start the REST/WebSocket API server
+hitspec serve --api-only --port 4000
+```
+
+## Studio (Interactive Terminal UI)
+
+`hitspec studio` opens a keyboard-first terminal workspace for your .http files:
+inline editing, request execution with a tabbed response viewer (body, headers,
+assertions, timing, captures), and screens for stress, mock, contract, record,
+history, import, cookies, and settings. (`hitspec ui` is an alias.)
+
+```bash
+hitspec studio                        # Open the current directory
+hitspec studio ./tests/               # Open a specific workspace
+hitspec studio ./tests/users.http     # Open a file's workspace
+hitspec studio --read-only            # Browse without allowing changes
+hitspec studio --theme "Tokyo Night"  # Launch with a color theme
+```
+
+Key bindings: number keys `1`-`9` switch screens; `ctrl+p` command palette;
+`ctrl+e` environment switcher; `ctrl+t` theme picker; `ctrl+f` search; `?` help;
+`q` quit.
+
+### Studio Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--watch, -w` | true | Watch for file changes |
+| `--read-only` | false | Disallow file mutations |
+| `--env, -e` | dev | Default environment |
+| `--config` | | Path to hitspec.yaml |
+| `--theme` | | Color theme (Nord, Catppuccin Mocha, Dracula, Tokyo Night, Gruvbox Dark) |
+| `--allow-shell` | false | Allow shell command execution |
+| `--allow-db` | false | Allow database assertions |
+| `--verbose, -v` | false | Verbose logging |
+
+## Serve Command (REST/WebSocket API)
+
+`hitspec serve --api-only` starts an HTTP server that exposes the same engine over
+a REST + WebSocket API (used by editor integrations and custom tooling). Run
+without `--api-only` and `serve` opens studio for backward compatibility.
+
+```bash
+hitspec serve --api-only                     # REST/WebSocket API on :4000
+hitspec serve --api-only ./tests/            # Serve a specific directory
+hitspec serve --api-only --port 8080         # Custom port
+hitspec serve --api-only --read-only --cors  # Safe mode for sharing
+```
+
+### Serve Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--api-only` | false | Start the REST/WebSocket API server |
+| `--port, -p` | 4000 | API server port |
+| `--host` | localhost | API server bind address |
+| `--cors` | false | Enable CORS headers |
+| `--watch, -w` | true | Watch for file changes |
+| `--read-only` | false | Disallow file mutations |
+| `--env, -e` | dev | Default environment |
+| `--config` | | Path to hitspec.yaml |
+| `--allow-shell` | false | Allow shell command execution |
+| `--allow-db` | false | Allow database assertions |
+| `--log-format` | text | Log format: text or json |
+| `--log-level` | info | Log level: debug, info, warn, error |
+
+### REST API Endpoints
+
+All endpoints are prefixed with `/api/v1/`.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /workspace | Workspace info and file stats |
+| GET | /files | List .http/.hitspec files |
+| POST | /files | Create a new .http/.hitspec file |
+| GET | /files/raw/{path...} | Get raw file content as plain text |
+| GET | /files/{path...} | Parse file as structured JSON |
+| PUT | /files/{path...} | Save raw file content to disk |
+| DELETE | /files/{path...} | Delete a file |
+| POST | /execute | Execute single request |
+| POST | /run | Run all requests in a file |
+| GET | /environments | List environments |
+| GET | /environments/{name} | Get environment variables |
+| PUT | /environments/{name} | Update environment |
+| PUT | /environments/active | Set active environment |
+| GET | /config | Get hitspec.yaml config |
+| PUT | /config | Update config (persists to hitspec.yaml) |
+| GET | /history | In-memory execution history |
+| DELETE | /history | Clear in-memory history |
+| GET | /history/runs | List persistent runs (SQLite) |
+| GET | /history/runs/{id} | Get run details with results |
+| DELETE | /history/runs | Delete all persistent runs |
+| DELETE | /history/runs/{id} | Delete a specific run |
+| GET | /history/results | Results for a specific request (for comparison) |
+| POST | /stress/start | Start stress test |
+| POST | /stress/stop | Stop stress test |
+| GET | /stress/status | Stress test status/metrics |
+| GET | /stress/result | Get last stress test result |
+| GET | /stress/profiles | List stress profiles |
+| POST | /stress/profiles | Create a stress profile |
+| PUT | /stress/profiles/{name} | Update a stress profile |
+| DELETE | /stress/profiles/{name} | Delete a stress profile |
+| POST | /mock/start | Start mock server |
+| POST | /mock/stop | Stop mock server |
+| GET | /mock/routes | List mock routes |
+| POST | /contract/verify | Verify API contracts |
+| GET | /contract/files | List contract files |
+| POST | /record/start | Start recording proxy |
+| POST | /record/stop | Stop recording proxy |
+| GET | /record/status | Recording proxy status |
+| POST | /record/export | Export recordings as .http |
+| DELETE | /record/clear | Clear recordings |
+| POST | /import/curl | Import from curl command |
+| POST | /import/insomnia | Import from Insomnia JSON |
+| POST | /import/openapi | Import from OpenAPI spec |
+| POST | /export/curl | Export request as curl |
+| GET | /system/info | Version and build info |
+| GET | /ws | WebSocket connection |
+
+### WebSocket Events
+
+Connect to `/api/v1/ws` for real-time updates. Message envelope: `{"type": "string", "payload": {...}}`
+
+| Type | Direction | Description |
+|------|-----------|-------------|
+| `file:changed` | server→client | File modified on disk |
+| `file:created` | server→client | New file detected |
+| `file:deleted` | server→client | File removed |
+| `exec:started` | server→client | Request execution began |
+| `exec:completed` | server→client | Request execution finished |
+| `stress_update` | server→client | Stress test progress (every 500ms), includes `running` and `completed` bools |
+| `mock:request` | server→client | Mock server received request |
+| `ping` | client→server | Heartbeat |
+
+## Run Flags
+
+| Flag | Description |
+|------|-------------|
+| `--env, -e` | Environment name (default: dev) |
+| `--env-file` | Path to .env file for variable interpolation |
+| `--name, -n` | Filter by request name pattern |
+| `--tags, -t` | Filter by tags (comma-separated) |
+| `--verbose, -v` | Show detailed output |
+| `--bail` | Stop on first failure |
+| `--timeout` | Global timeout in ms (default: 30000) |
+| `--no-color` | Disable colored output |
+| `--dry-run` | Show what would run |
+| `--output, -o` | Format: console, json, junit, tap, html |
+| `--output-file` | Write output to file |
+| `--parallel, -p` | Run requests in parallel |
+| `--concurrency` | Max concurrent requests (default: 5) |
+| `--watch, -w` | Watch files for changes |
+| `--proxy` | Proxy URL for requests |
+| `--insecure, -k` | Disable SSL validation |
+
+## Stress Testing Mode
+
+Enable stress testing with `--stress` flag on the run command:
+
+```bash
+# Simple constant rate test
+hitspec run api.http --stress --duration 1m --rate 100
+
+# Stress test all files in a directory
+hitspec run ./tests/ --stress --duration 1m --rate 100
+
+# Stress test multiple specific files
+hitspec run api.http users.http --stress -d 1m -r 100
+
+# Virtual users mode with think time
+hitspec run api.http --stress --duration 2m --vus 50 --think-time 1s
+
+# With ramp-up
+hitspec run api.http --stress --duration 5m --rate 200 --ramp-up 30s
+
+# Using config profile
+hitspec run api.http --stress --profile load --env staging
+
+# With thresholds for CI/CD
+hitspec run api.http --stress -d 1m -r 100 --threshold "p95<200ms,errors<0.1%"
+
+# With environment file (full feature parity with run)
+hitspec run api.http --stress --env prod --env-file .env -d 1m -r 50
+```
+
+### Stress Testing Flags
+
+| Flag | Description |
+|------|-------------|
+| `--stress` | Enable stress testing mode |
+| `--duration, -d` | Test duration (default: 30s) |
+| `--rate, -r` | Target requests per second (default: 10) |
+| `--vus` | Number of virtual users (alternative to rate) |
+| `--max-vus` | Maximum concurrent requests (default: 100) |
+| `--think-time` | Think time between requests per VU |
+| `--ramp-up` | Ramp-up time to reach target rate/VUs |
+| `--threshold` | Pass/fail thresholds (e.g., "p95<200ms,errors<0.1%") |
+| `--profile` | Load stress profile from config |
+| `--no-progress` | Disable real-time progress display |
+| `--stress-json` | Output stress results as JSON |
+
+### Metrics Export Flags
+
+| Flag | Description |
+|------|-------------|
+| `--metrics` | Export format: prometheus, datadog, json |
+| `--metrics-port` | Prometheus HTTP endpoint port (default: 9090) |
+| `--metrics-file` | Output file for JSON metrics |
+| `--datadog-api-key` | DataDog API key (env: DD_API_KEY) |
+| `--datadog-site` | DataDog site (default: datadoghq.com) |
+| `--datadog-tags` | Comma-separated DataDog tags |
+
+### Notification Flags
+
+| Flag | Description |
+|------|-------------|
+| `--notify` | Notification service: slack, teams |
+| `--notify-on` | When to notify: always, failure, success, recovery |
+| `--slack-webhook` | Slack webhook URL (env: SLACK_WEBHOOK) |
+| `--slack-channel` | Slack channel override |
+| `--teams-webhook` | Microsoft Teams webhook URL (env: TEAMS_WEBHOOK) |
+
+### Stress Request Configuration
+
+Configure individual request behavior in stress tests:
+
+```http
+### Main Request
+# @name apiCall
+# @stress.weight 10
+# @stress.think 500ms
+
+GET {{baseUrl}}/api/data
+
+>>>
+expect status 200
+<<<
+
+### Setup Request (runs once before stress test)
+# @name setup
+# @stress.setup
+
+POST {{baseUrl}}/api/init
+
+### Teardown Request (runs once after stress test)
+# @name teardown
+# @stress.teardown
+
+POST {{baseUrl}}/api/cleanup
+```
+
+### Understanding Rate Limits
+
+The `--rate` flag sets how many requests hitspec sends per second, but your server may have its own rate limits. High failure rates often indicate you're exceeding server limits.
+
+**Common confusion**: Server rate limits are often expressed as requests per minute, not per second.
+
+| Server Limit | Equivalent | Safe `--rate` value |
+|--------------|------------|---------------------|
+| 100 req/min  | ~1.67 req/s | `--rate 1.5` |
+| 600 req/min  | 10 req/s | `--rate 8` |
+| 1000 req/min | ~16.7 req/s | `--rate 15` |
+| 100 req/sec  | 6000 req/min | `--rate 100` |
+
+**Diagnosing rate limit issues**:
+
+```bash
+# If you see high failure rates (>10%), try reducing rate
+hitspec run api.http --stress --rate 50 --verbose
+
+# Watch for patterns in failures - exact success counts often reveal limits
+# Example: Exactly 100 successes in 60s = 100 req/minute limit
+
+# Reduce concurrency with --max-vus to avoid connection limits
+hitspec run api.http --stress --rate 10 --max-vus 5
+
+# Start low and increase to find your server's actual limits
+hitspec run api.http --stress --rate 1 --duration 60s
+```
+
+**Rate vs Max VUs**:
+- `--rate`: Target requests per second (controls throughput)
+- `--max-vus`: Maximum concurrent in-flight requests (controls concurrency)
+
+Even with a low `--rate`, a high `--max-vus` can overwhelm servers with connection limits. When troubleshooting, reduce both.
+
+### Stress Profile in Config
+
+Define stress profiles in hitspec.yaml:
+
+```yaml
+stress:
+  profiles:
+    # Conservative profile for rate-limited APIs (100 req/min limit)
+    conservative:
+      duration: 60s
+      rate: 1.5
+      maxVUs: 2
+    # Smoke test - quick validation
+    smoke:
+      duration: 30s
+      rate: 10
+      maxVUs: 5
+    # Load test - sustained traffic
+    load:
+      duration: 5m
+      rate: 100
+      maxVUs: 50
+      rampUp: 30s
+    # Spike test - high concurrency
+    spike:
+      duration: 10m
+      vus: 200
+      thinkTime: 1s
+      thresholds:
+        p95: 500ms
+        errors: 1%
+```
+
+Use: `hitspec run api.http --stress --profile conservative`
+
+## Configuration File (hitspec.yaml)
+
+Unified configuration file combining settings and environments:
+
+File: `hitspec.yaml`
+```yaml
+# Settings
+defaultEnvironment: dev
+timeout: 30000
+retries: 0
+followRedirects: true
+validateSSL: true
+headers:
+  User-Agent: hitspec/1.0
+verbose: false
+
+# Environments
+environments:
+  dev:
+    baseUrl: https://api-dev.example.com
+    token: dev-token
+  prod:
+    baseUrl: https://api.example.com
+    token: "${PROD_TOKEN}"
+```
+
+Supported config files (searched in order):
+1. `hitspec.yaml`
+2. `hitspec.yml`
+
+Use: `hitspec run tests/ --env prod`
+
+## Syntax Rules
+
+- `###` starts a new request (request separator)
+- `#` without `@` is a regular comment (ignored)
+- `# @directive` is a metadata directive (parsed)
+- `expect status 200` is shorthand for `expect status == 200`
+- Blank line separates headers from body
+
+## Body Types
+
+- **JSON:** `{ "key": "value" }`
+- **Form:** `key=value&key2=value2`
+- **Form Block:** Lines starting with `& key = value`
+- **Multipart:** `>>>multipart ... <<<`
+- **GraphQL:** `>>>graphql ... <<<` with `>>>variables ... <<<`
+- **XML:** `<?xml ...` or `<root>...</root>`
+
+### GraphQL Example
+```http
+POST {{baseUrl}}/graphql
+Content-Type: application/json
+
+>>>graphql
+query GetUsers($limit: Int) {
+  users(limit: $limit) {
+    id
+    name
+    email
+  }
+}
+<<<
+
+>>>variables
+{
+  "limit": 10
+}
+<<<
+
+>>>
+expect status 200
+expect body.data.users type array
+expect body.errors !exists
+<<<
+```
+
+### Multipart / File Upload
+```http
+POST {{baseUrl}}/upload
+# Content-Type is set automatically
+
+>>>multipart
+field name = John Doe
+field email = john@example.com
+file @./photo.jpg
+file @./report.pdf
+<<<
+
+>>>
+expect status 200
+expect body.uploaded == true
+<<<
+```
+
+### Form Data
+```http
+POST {{baseUrl}}/login
+Content-Type: application/x-www-form-urlencoded
+
+& username = john
+& password = secret123
+& remember = true
+
+>>>
+expect status 200
+<<<
+```
+
+## Query Parameters
+
+```http
+# Inline
+GET {{baseUrl}}/search?query=test&limit=10
+
+# Explicit
+GET {{baseUrl}}/search
+? query = test
+? limit = 10
+```
+
+## Common Patterns
+
+### Testing Error Responses
+```http
+### Unauthorized Access
+# @name unauthorized
+# @tags errors
+
+GET {{baseUrl}}/admin/users
+# No auth header
+
+>>>
+expect status 401
+expect body.error exists
+expect body.message contains "unauthorized"
+<<<
+
+### Not Found
+# @name notFound
+
+GET {{baseUrl}}/users/99999999
+
+>>>
+expect status 404
+<<<
+
+### Validation Error
+# @name validationError
+
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{
+  "email": "invalid-email"
+}
+
+>>>
+expect status 400
+expect body.errors type array
+expect body.errors length > 0
+<<<
+```
+
+### Complex Array Assertions
+```http
+>>>
+# Each item in array must be an object with required fields
+expect body.users each type object
+expect body.users each body.id exists
+expect body.users each body.email matches /^.+@.+\..+$/
+
+# Array contains specific value
+expect body.tags includes "active"
+expect body.roles !includes "admin"
+
+# Check array length
+expect body.items length > 0
+expect body.items length <= 100
+<<<
+```
+
+### Authentication Flow
+```http
+### Login
+# @name login
+# @tags auth
+
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "password123"
+}
+
+>>>
+expect status 200
+expect body.token exists
+expect body.refreshToken exists
+<<<
+
+>>>capture
+token from body.token
+refreshToken from body.refreshToken
+userId from body.user.id
+<<<
+
+### Access Protected Resource
+# @name protected
+# @depends login
+# @auth bearer {{login.token}}
+
+GET {{baseUrl}}/me
+
+>>>
+expect status 200
+expect body.id == {{login.userId}}
+<<<
+
+### Refresh Token
+# @name refresh
+# @depends login
+
+POST {{baseUrl}}/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{login.refreshToken}}"
+}
+
+>>>
+expect status 200
+expect body.token exists
+<<<
+```
+
+### Retry on Flaky Endpoints
+```http
+### Flaky Service
+# @name flakyCall
+# @retry 3
+# @retryDelay 1000
+# @timeout 10000
+
+GET {{baseUrl}}/external-service
+
+>>>
+expect status 200
+<<<
+```
+
+## Complete Example
+
+```http
+@baseUrl = https://jsonplaceholder.typicode.com
+
+### Health Check
+# @name health
+# @tags smoke
+
+GET {{baseUrl}}/posts/1
+
+>>>
+expect status 200
+expect body.id == 1
+<<<
+
+### Create Post
+# @name createPost
+# @tags write
+# @timeout 10000
+
+POST {{baseUrl}}/posts
+Content-Type: application/json
+
+{
+  "title": "Test Post {{$uuid()}}",
+  "body": "Created at {{$now()}}",
+  "userId": 1
+}
+
+>>>
+expect status 201
+expect body.id exists
+expect body.title startsWith "Test Post"
+<<<
+
+>>>capture
+postId from body.id
+<<<
+
+### Verify Created Post
+# @name verifyPost
+# @depends createPost
+
+GET {{baseUrl}}/posts/{{createPost.postId}}
+
+>>>
+expect status 200
+expect body.id == {{createPost.postId}}
+<<<
+```
+
+## Output Formats
+
+```bash
+# Human-readable (default)
+hitspec run tests/
+
+# JSON for CI/CD
+hitspec run tests/ --output json
+
+# JUnit XML
+hitspec run tests/ --output junit --output-file results.xml
+
+# TAP format
+hitspec run tests/ --output tap
+```
+
+## File Extensions
+
+`.http` or `.hitspec`
+
+## Project Structure
+
+```
+project/
+├── hitspec.yaml            # Config and environments
+├── tests/
+│   ├── auth.http           # Auth tests
+│   └── users.http          # User tests
+└── schemas/
+    └── user.json           # JSON Schema
+```
+
+## Troubleshooting
+
+### Syntax Errors
+```bash
+# Validate without running
+hitspec validate test.http
+```
+
+### Common Mistakes
+
+| Problem | Wrong | Correct |
+|---------|-------|---------|
+| Missing assertion block markers | `expect status 200` | `>>>` `expect status 200` `<<<` |
+| Wrong variable syntax | `${var}` or `$var` | `{{var}}` |
+| Spaces in header | `Content-Type : json` | `Content-Type: application/json` |
+| Body before blank line | Headers then body | Headers, blank line, then body |
+| Capture without @name | Can't reference | Add `# @name requestId` |
+| Depends without capture | `{{req.field}}` fails | Add `>>>capture` block first |
+
+### Debug Mode
+```bash
+# See full request/response
+hitspec run test.http --verbose
+
+# See what would run without executing
+hitspec run test.http --dry-run
+```
+
+### Variable Not Found
+If `{{variable}}` shows as literal text:
+1. Check `hitspec.yaml` exists with `environments:` section
+2. Check variable is defined in current environment
+3. Check `--env` flag matches: `hitspec run test.http --env dev`
+
+### Capture Not Working
+```http
+### First Request
+# @name login        <-- REQUIRED for referencing
+
+POST {{baseUrl}}/login
+...
+
+>>>capture
+token from body.token   <-- captures to login.token
+<<<
+
+### Second Request
+# @depends login     <-- REQUIRED to ensure order
+
+GET {{baseUrl}}/me
+Authorization: Bearer {{login.token}}  <-- use as requestName.varName
+```
+
+## Minimal Examples
+
+### Smallest Valid Test
+```http
+GET https://api.example.com/health
+
+>>>
+expect status 200
+<<<
+```
+
+### POST with JSON
+```http
+POST https://api.example.com/users
+Content-Type: application/json
+
+{"name": "test"}
+
+>>>
+expect status 201
+<<<
+```
+
+### With Variables
+```http
+@baseUrl = https://api.example.com
+
+GET {{baseUrl}}/users
+
+>>>
+expect status 200
+expect body type array
+<<<
+```
+
+## GitHub Actions
+
+Use hitspec in CI/CD pipelines with the official GitHub Action:
+
+```yaml
+- uses: abdul-hamid-achik/hitspec@v1
+  with:
+    files: tests/
+    output: junit
+    output-file: test-results.xml
+```
+
+### Action Inputs
+
+| Input | Description | Default |
+|-------|-------------|---------|
+| `files` | Files/directories to test | (required) |
+| `env` | Environment name | `dev` |
+| `env-file` | Path to .env file | - |
+| `output` | Output format | `junit` |
+| `output-file` | Write output to file | - |
+| `tags` | Filter by tags | - |
+| `parallel` | Run in parallel | `false` |
+| `stress` | Enable stress testing | `false` |
+| `duration` | Stress test duration | `30s` |
+| `rate` | Requests per second | `10` |
+| `threshold` | Pass/fail thresholds | - |
+| `version` | hitspec version | `latest` |
+
+### Stress Testing in CI
+
+```yaml
+- uses: abdul-hamid-achik/hitspec@v1
+  with:
+    files: api.http
+    stress: true
+    duration: 2m
+    rate: 100
+    threshold: 'p95<200ms,errors<0.5%'
+```
+
+### With Environment File
+
+```yaml
+- name: Create .env file
+  run: echo "API_TOKEN=${{ secrets.API_TOKEN }}" >> .env.ci
+
+- uses: abdul-hamid-achik/hitspec@v1
+  with:
+    files: tests/
+    env: staging
+    env-file: .env.ci
+```
+
+## Diff Command
+
+Compare two test result files to identify regressions:
+
+```bash
+# Compare JSON results
+hitspec diff results1.json results2.json
+
+# With threshold for CI (fail if >10% slower)
+hitspec diff results1.json results2.json --threshold 10%
+
+# Output as HTML
+hitspec diff results1.json results2.json --output html
+
+# Output as JSON
+hitspec diff results1.json results2.json --output json
+```
+
+## Import Commands
+
+### OpenAPI/Swagger Import
+
+```bash
+# Import from file
+hitspec import openapi spec.yaml -o tests/api.http
+
+# Import from URL
+hitspec import openapi https://petstore.swagger.io/v2/swagger.json -o petstore.http
+
+# With filters
+hitspec import openapi spec.yaml --tags users,auth --base-url http://localhost:3000 -o api.http
+```
+
+### Postman Collection Import
+
+```bash
+# Basic import
+hitspec import postman collection.json -o tests/
+
+# With environment file
+hitspec import postman collection.json --env environment.json -o tests/
+```
+
+## Fetch One Response
+
+`hitspec fetch` executes exactly one URL or one saved request. This is separate
+from `run --output`, which still produces test reports.
+
+```bash
+# Byte-exact body (default)
+hitspec fetch https://example.com/data
+
+# Readable or file-ready representations
+hitspec fetch https://example.com/docs --format text
+hitspec fetch https://example.com/docs --format markdown -o response.md
+hitspec fetch api.http --name getUsers --env staging --format json
+```
+
+Formats are `raw`, `text`, `markdown`, and `json`. `raw` adds no metadata or
+newline. `text` pretty-prints JSON and extracts visible HTML text. `markdown`
+includes sanitized provenance/status/timing. `json` base64-encodes binary data.
+The default body limit is 64 MiB (`--max-bytes`). Existing output files require
+`--force`; output writes reject destination symlinks and use mode 0600.
+
+HTTP 4xx/5xx bodies are emitted successfully unless `--fail` is supplied.
+A saved file with multiple requests requires `--name` or one-based `--index`.
+Requests with `@depends` must be executed with `hitspec run` instead.
+
+### Fetch Flags
+
+| Flag | Scope | Default / behavior |
+|------|-------|--------------------|
+| `--request, -X` | URL | HTTP method; `GET`, or `POST` when `--data` is non-empty |
+| `--header, -H` | URL | Repeatable `Name: value` request header |
+| `--data, -d` | URL | Request body string |
+| `--format` | Both | `raw`; one of raw, text, markdown, json |
+| `--output-file, -o` | Both | Write payload to a file instead of stdout |
+| `--force` | Both | Replace an existing regular output file |
+| `--fail, -f` | Both | Exit non-zero for non-2xx after writing the payload |
+| `--timeout` | Both | Positive Go duration; URL default 30s; saved precedence: flag, request `@timeout`, config, 30s |
+| `--max-bytes` | Both | 67108864 bytes (64 MiB) |
+| `--max-redirects` | Both | 10; must be greater than zero |
+| `--no-follow` | Both | Stop at the first redirect |
+| `--insecure, -k` | Both | Disable TLS certificate validation |
+| `--proxy` | Both | Proxy URL; overrides a saved request's config proxy |
+| `--env, -e` | Saved | Config default environment, then `dev` |
+| `--env-file` | Saved | Dotenv file loaded before variable resolution |
+| `--config` | Saved | Config file instead of discovery from the request file directory |
+| `--name, -n` | Saved | Unique request name; mutually exclusive with `--index` |
+| `--index` | Saved | One-based request index; mutually exclusive with `--name` |
+
+Saved requests honor config default headers, proxy, redirect policy, and TLS
+settings. `--timeout`, `--proxy`, `--no-follow`, and `--insecure` apply the
+explicit CLI override described above. Assertions, captures, conditions, hooks,
+shell blocks, database assertions, and `@waitFor` are not executed. URL
+credentials are rejected for both direct and saved requests.
+
+## MCP Client Testing
+
+Probe a local stdio server:
+
+```bash
+hitspec mcp probe --require-tool echo -- ./my-mcp-server --config server.json
+```
+
+Probe a Streamable HTTP endpoint:
+
+```bash
+hitspec mcp probe --url http://127.0.0.1:3000/mcp --require-tool echo --json
+```
+
+`probe` negotiates MCP, traverses all `tools/list` pages, resolves advertised
+input/output JSON Schemas, sorts tools for deterministic output, and fails with
+exit code 1 when any `--require-tool` is missing.
+
+Call one advertised tool:
+
+```bash
+hitspec mcp call echo --args '{"message":"hello"}' -- ./my-mcp-server
+hitspec mcp call weather --args @weather.json --url https://example.com/mcp --json
+```
+
+`--args` accepts a JSON object or a file prefixed with `@`; files are limited to
+1 MiB. Arguments are validated against `inputSchema`, and successful
+`structuredContent` is validated against `outputSchema` when advertised.
+Contract mismatches, `isError: true`, and unknown tools are test failures (exit
+1). Connection, protocol, and timeout failures exit 4. `call` may cause
+external changes.
+
+Common flags: `--url`, `--timeout` (30s), `--json`, repeatable HTTP `--header`,
+repeatable stdio `--env KEY=VALUE`, and stdio `--cwd`. Select exactly one
+target: `--url` or an argv after `--`. Stdio uses direct argv execution without
+a shell. HTTP redirects and URL credentials are rejected.
+
+## MCP Server
+
+Run the stdio MCP server:
+
+```bash
+hitspec mcp serve --workspace /absolute/api-workspace
+```
+
+Release status: v2.18.0 exposes the stable search, fetch, and webpage-capture
+web surface described below.
+
+MCP initialization instructions name only the tools registered for that server
+process, so clients are not prompted to use unconfigured search or capture
+tools. They also state whether `hitspec_fetch` is public-only or has
+operator-enabled non-public HTTP(S) authority, including private, loopback,
+link-local, and reserved targets; webpage capture remains public-only.
+
+Tools:
+- `hitspec_fetch`: one direct URL or saved request as raw base64, text,
+  Markdown, or JSON.
+- `hitspec_search_web`: bounded live-public-web discovery with normalized URL
+  candidates and no persistence.
+- `hitspec_capture_webpage`: GET a public webpage, render Markdown, and persist
+  it through the fixed file.cheap adapter.
+- `hitspec_list_requests`: discover request names/methods/lines/tags.
+- `hitspec_validate`: parse and structurally validate one workspace file.
+
+### MCP Server Flags
+
+| Flag | Default | Behavior |
+|------|---------|----------|
+| `--workspace` | `.` | Fixed filesystem boundary; use an absolute path in client config |
+| `--max-body-bytes` | 1048576 (1 MiB) | Maximum fetched response-body size |
+| `--timeout` | 30s | Maximum duration of one HTTP request |
+| `--allow-private-network` | false | Allow non-public targets (including private, loopback, link-local, and reserved) and standard saved-request modes |
+| `--search-provider` | none | Live search provider (`none` or `tavily`); defaults from `HITSPEC_SEARCH_PROVIDER` |
+| `--fcheap-path` | unset | Fixed file.cheap executable for durable webpage capture; defaults from `HITSPEC_FCHEAP_PATH` |
+| `--fcheap-stash-dir` | file.cheap default | Optional fixed stash root; defaults from `HITSPEC_FCHEAP_STASH_DIR` |
+
+### `hitspec_fetch` Input
+
+Supply exactly one of `url` or `file`.
+
+| Field | Type | Scope | Default / behavior |
+|-------|------|-------|--------------------|
+| `url` | string | Direct | HTTP(S) URL |
+| `file` | string | Saved | Workspace-relative `.http` or `.hitspec` file |
+| `name` | string | Saved | Unique request name; mutually exclusive with `index` |
+| `index` | integer | Saved | One-based request index; mutually exclusive with `name` |
+| `environment` | string | Saved | Config default environment, then `dev` |
+| `env_file` | string | Saved | Workspace-relative dotenv file |
+| `config_file` | string | Saved | Workspace-relative config file |
+| `method` | string | Direct | `GET`, or `POST` when `body` is non-empty |
+| `headers` | object<string,string> | Direct | Request headers |
+| `body` | string | Direct | UTF-8 request body |
+| `format` | string | Both | `text`; one of raw, text, markdown, json |
+| `no_follow` | boolean | Both | false; otherwise redirects have a fixed limit of 10 |
+
+A multi-request file requires `name` or `index`; `@depends` is rejected. Saved
+execution skips assertions, captures, conditions, hooks, shell/database blocks,
+and `@waitFor`. `hitspec_fetch` never persists the response.
+
+`hitspec_list_requests` accepts optional workspace-relative `path` (directory or
+Hitspec file), defaults to the workspace root, and searches recursively. It
+returns an error if any discovered file is invalid rather than returning an
+incomplete list. `hitspec_validate` requires workspace-relative `file` and
+reports `file`, `valid`, `requests`, and `errors`.
+
+Every successful tool call includes MCP `TextContent`. Raw fetch output is a
+JSON text envelope with base64 data; text and Markdown are rendered directly;
+JSON, discovery, validation, and search documents are serialized into text
+content. Webpage capture also publishes its typed compact stash receipt as
+structured content when the client supports it.
+
+Paths are fixed to the startup workspace after symlink resolution. Network
+requests are public-only by default. Under that policy, a saved request using
+digest, AWS, or OAuth2 auth, multipart data, or a configured proxy is rejected;
+the proxy is not ignored. `--allow-private-network` is an operator grant for
+non-public targets, including private, loopback, link-local, and reserved
+addresses; it also enables those standard saved-request modes and configured
+proxies. URL credentials are rejected and provenance drops query strings.
+stdout is JSON-RPC only. The server does not expose arbitrary output
+paths or run shell/database blocks, history, or watchers. Durable writes occur
+only through the explicitly configured file.cheap adapter.
+
+For a human-reviewed handoff, persist explicitly:
+
+```bash
+hitspec fetch URL --format markdown -o response.md
+fcheap save response.md --tool hitspec --tag hitspec-response --index
+```
+
+MCPHub can expose both servers to Local Agent with namespaced, lazy tools.
+Native tvault references are deferred; do not place secrets in `.http`
+files, command arguments, MCP config, URLs, tags, logs, or provenance.
+
+### Local Agent Web Surface
+
+Configure the optional server-owned provider and artifact sink to expose the
+stable Hitspec discovery/retrieval/evidence path:
+
+```text
+Local Agent -> MCPHub -> Hitspec
+                         |-- hitspec_search_web      (discovery)
+                         |-- hitspec_fetch           (retrieval)
+                         `-- hitspec_capture_webpage (durable evidence -> file.cheap)
+```
+
+Tavily is an internal initial provider, never another model-visible MCP server.
+The normalized search input contains only `query`, `max_results` (1–10),
+`language`, `freshness`, `include_domains`, and `exclude_domains`. It never
+accepts a provider, endpoint, API key, authorization header, or arbitrary
+headers. The response is capped at 64 KiB and contains `kind: "discovery"`,
+normalized `query`, `results`, and `truncated`. Results contain only `title`,
+`url`, `domain`, `snippet`, optional `published_at`, and a response-local
+`citation_id`. Provider-specific metadata, request IDs, scores, generated
+answers, and raw content are never exposed. Discovery results are not verified
+evidence, and `hitspec_search_web` never persists them.
+
+`hitspec_capture_webpage` accepts `url` plus optional `name`, `tags`, `ttl`, and
+`index` (default `true`). It performs a public GET and returns no page content,
+only `url`, `final_url`, `title`, `http_status`, `content_type`,
+`markdown_bytes`, and a compact `stash` receipt. The stash reports its ID,
+name, status, creation/expiry metadata, tags, content hash, file count, total
+size, whether indexing was requested and completed, and any failures.
+`hitspec_fetch` never persists content.
+
+Inject `TAVILY_API_KEY` through the MCPHub/tvault child-process boundary, not
+the parent environment or tool arguments:
+
+```yaml
+vault: tavily
+vault_only: [TAVILY_API_KEY]
+env:
+  HITSPEC_SEARCH_PROVIDER: tavily
+```
+
+`vault_only` limits what tvault adds to the child process; it does not erase a
+`TAVILY_API_KEY` already inherited from MCPHub's parent environment. Do not
+export the key globally.
+
+Search may be explicitly allowlisted for AUTO. Webpage capture may be allowlisted
+only when confined to the configured artifact store. Fetch remains approval-gated
+because it accepts methods, headers, and bodies. AUTO never relaxes network policy.
+
+Capture receipts keep web execution, durable storage, and indexing as separate
+states. A parseable receipt with a stash ID may include post-save failures and
+must not be saved again; an absent stash ID is outcome-unknown and requires
+inspection before retrying.
+
+Before replacing an installed binary, record its tool schemas and preserve the
+`hitspec_capture_webpage` contract. A candidate is eligible for cutover only
+when `mcphub doctor --server hitspec --probe` shows all five tools (search,
+fetch, webpage capture, list, and validate), followed by a successful
+`hitspec_search_web` → `hitspec_capture_webpage` → `fcheap search` canary.
+Retain the previous binary for rollback.
+
+## Mock Server
+
+Start a mock server from .http files:
+
+```bash
+# Basic usage
+hitspec mock api.http --port 3000
+
+# From directory
+hitspec mock tests/ --port 8080
+
+# With artificial delay
+hitspec mock api.http --port 3000 --delay 100ms
+```
+
+Mock responses come from a `>>>mock` block if present (returned verbatim),
+otherwise they are inferred from assertion expectations. Status comes from
+`expect status`.
+
+```http
+### Get User
+# @name getUser
+GET {{baseUrl}}/users/1
+
+>>>mock
+{
+  "id": 1,
+  "name": "Mock User"
+}
+<<<
+
+>>>
+expect status 200
+<<<
+```
+
+## Record Proxy
+
+Record HTTP traffic as .http files:
+
+```bash
+# Basic recording
+hitspec record --port 8080 -o recorded.http
+
+# With target server
+hitspec record --port 8080 --target https://api.example.com -o recorded.http
+
+# Exclude endpoints
+hitspec record --port 8080 --exclude "/health,/metrics" -o recorded.http
+```
+
+## Contract Testing
+
+Verify API contracts against a provider:
+
+```bash
+# Basic verification
+hitspec contract verify contracts/ --provider http://localhost:3000
+
+# With state handler
+hitspec contract verify contracts/ --provider http://localhost:3000 --state-handler ./setup-states.sh
+
+# Verbose output
+hitspec contract verify contracts/ --provider http://localhost:3000 -v
+```
+
+Contract annotations:
+
+```http
+### Get User
+# @contract.state "user exists with id 1"
+# @contract.provider UserService
+
+GET {{baseUrl}}/users/1
+
+>>>
+expect status 200
+expect body.id == 1
+<<<
+```
+
+## Metrics Export
+
+Export test metrics for monitoring:
+
+```bash
+# Prometheus metrics endpoint
+hitspec run api.http --stress --metrics prometheus --metrics-port 9090
+
+# JSON metrics file
+hitspec run api.http --stress --metrics json --metrics-file metrics.json
+
+# DataDog integration
+hitspec run api.http --stress --metrics datadog --datadog-api-key $DD_API_KEY
+```
+
+Prometheus metrics exposed:
+- `hitspec_requests_total` - Total requests (counter)
+- `hitspec_requests_success_total` - Successful requests (counter)
+- `hitspec_requests_failed_total` - Failed requests (counter)
+- `hitspec_request_duration_ms` - Request duration with quantiles (gauge)
+- `hitspec_requests_by_status_total` - Requests by HTTP status (counter)
+
+## Notifications
+
+Send test result notifications:
+
+```bash
+# Slack notification
+hitspec run api.http --notify slack --slack-webhook $SLACK_WEBHOOK
+
+# Teams notification
+hitspec run api.http --notify teams --teams-webhook $TEAMS_WEBHOOK
+
+# Notify only on failure
+hitspec run api.http --notify slack --slack-webhook $SLACK_WEBHOOK --notify-on failure
+
+# Notify on recovery (after failure passes again)
+hitspec run api.http --notify slack --slack-webhook $SLACK_WEBHOOK --notify-on recovery
+```

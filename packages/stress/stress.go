@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/capture"
-	"github.com/abdul-hamid-achik/hitspec/packages/core/env"
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
-	"github.com/abdul-hamid-achik/hitspec/packages/http"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/capture"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/env"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/http"
 )
 
 // requestWithBaseDir pairs a request with its base directory for relative path resolution

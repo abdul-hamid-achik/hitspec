@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	curlimport "github.com/abdul-hamid-achik/hitspec/packages/import/curl"
-	"github.com/abdul-hamid-achik/hitspec/packages/import/insomnia"
-	"github.com/abdul-hamid-achik/hitspec/packages/import/openapi"
+	curlimport "github.com/abdul-hamid-achik/hitspec/v2/packages/import/curl"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/import/insomnia"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/import/openapi"
 )
 
 func (s *Server) handleImportCurl(w http.ResponseWriter, r *http.Request) {

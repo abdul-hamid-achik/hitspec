@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/runner"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
 )
 
 // JUnit XML structures

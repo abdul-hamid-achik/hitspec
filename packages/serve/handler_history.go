@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/history"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/history"
 )
 
 // --- Legacy in-memory history (unchanged) ---

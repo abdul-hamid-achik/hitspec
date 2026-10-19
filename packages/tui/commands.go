@@ -10,7 +10,7 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/clientmgr"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/clientmgr"
 )
 
 func loadFilesCmd(ctx context.Context, mgr *clientmgr.Manager) tea.Cmd {

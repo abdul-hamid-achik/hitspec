@@ -7,7 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/clientmgr"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/clientmgr"
 )
 
 var adhocMethods = map[string]bool{

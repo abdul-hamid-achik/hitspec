@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/fetch"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/fetch"
 	"github.com/spf13/cobra"
 )
 

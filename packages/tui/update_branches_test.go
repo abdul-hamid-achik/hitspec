@@ -8,7 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/clientmgr"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/clientmgr"
 )
 
 // TestFilesLoadedMsgBranches covers the error arm and the stale-selection clear:

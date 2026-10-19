@@ -8,7 +8,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/proxy"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/proxy"
 	"github.com/spf13/cobra"
 )
 

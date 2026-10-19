@@ -1,12 +1,19 @@
 package cmd
 
 import (
+	_ "embed"
 	"fmt"
 
 	"github.com/spf13/cobra"
 )
 
 //go:generate go run gen_llms.go
+
+// llmsTxt is a copy of the repository's llms.txt (kept in sync by go generate
+// and TestEmbeddedLLMsMatchesRepoRoot).
+//
+//go:embed llms.txt
+var llmsTxt string
 
 var docsCmd = &cobra.Command{
 	Use:   "docs",

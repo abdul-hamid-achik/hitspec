@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/config"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/config"
 )
 
 func TestScaffoldSampleCreatesProject(t *testing.T) {

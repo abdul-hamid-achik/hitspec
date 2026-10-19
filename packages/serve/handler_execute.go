@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/runner"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
 )
 
 func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
 )
 
 // An explicit >>>mock block is returned verbatim as the response body, and the

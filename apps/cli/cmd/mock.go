@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/mock"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/mock"
 	"github.com/spf13/cobra"
 )
 

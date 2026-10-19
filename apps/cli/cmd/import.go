@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/import/curl"
-	"github.com/abdul-hamid-achik/hitspec/packages/import/insomnia"
-	"github.com/abdul-hamid-achik/hitspec/packages/import/openapi"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/import/curl"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/import/insomnia"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/import/openapi"
 	"github.com/spf13/cobra"
 )
 

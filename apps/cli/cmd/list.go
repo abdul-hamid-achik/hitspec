@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
 	"github.com/spf13/cobra"
 )
 

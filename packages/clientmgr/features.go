@@ -11,16 +11,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/contract"
-	"github.com/abdul-hamid-achik/hitspec/packages/core/config"
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
-	curlexport "github.com/abdul-hamid-achik/hitspec/packages/export/curl"
-	curlimport "github.com/abdul-hamid-achik/hitspec/packages/import/curl"
-	"github.com/abdul-hamid-achik/hitspec/packages/import/insomnia"
-	"github.com/abdul-hamid-achik/hitspec/packages/import/openapi"
-	"github.com/abdul-hamid-achik/hitspec/packages/mock"
-	"github.com/abdul-hamid-achik/hitspec/packages/proxy"
-	"github.com/abdul-hamid-achik/hitspec/packages/stress"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/contract"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/config"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
+	curlexport "github.com/abdul-hamid-achik/hitspec/v2/packages/export/curl"
+	curlimport "github.com/abdul-hamid-achik/hitspec/v2/packages/import/curl"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/import/insomnia"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/import/openapi"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/mock"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/proxy"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/stress"
 )
 
 // StartStress starts a background stress test.

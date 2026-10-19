@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/clientmgr"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/clientmgr"
 )
 
 func TestFocusCyclingWraps(t *testing.T) {

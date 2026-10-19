@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/internal/pathutil"
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
-	"github.com/abdul-hamid-achik/hitspec/packages/http"
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/pathutil"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/http"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

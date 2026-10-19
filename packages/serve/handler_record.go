@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/proxy"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/proxy"
 )
 
 // RecordStartReq is the request body for POST /record/start.

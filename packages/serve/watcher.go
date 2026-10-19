@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/internal/watchutil"
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/watchutil"
 	"github.com/fsnotify/fsnotify"
 )
 

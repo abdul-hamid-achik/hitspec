@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 
 	"github.com/spf13/cobra"
 )
@@ -31,8 +32,8 @@ Quick start:
 }
 
 func Execute(v, bt string) {
-	version = v
-	buildTime = bt
+	info, _ := debug.ReadBuildInfo()
+	version, buildTime = resolveVersion(v, bt, info)
 	rootCmd.Version = version
 	rootCmd.SetVersionTemplate("hitspec version {{.Version}}\n")
 	if err := rootCmd.Execute(); err != nil {

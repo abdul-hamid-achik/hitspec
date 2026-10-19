@@ -24,11 +24,11 @@ This installs the latest release and makes the `hitspec` command available in yo
 If you have Go installed:
 
 ```bash
-go install github.com/abdul-hamid-achik/hitspec/apps/cli@latest
+go install github.com/abdul-hamid-achik/hitspec/v2/cmd/hitspec@latest
 ```
 
 <Note>
-  Requires Go 1.25 or later. The binary will be placed in your `$GOPATH/bin` directory -- make sure it's in your `PATH`.
+  Requires Go 1.25 or later (the build downloads the pinned Go 1.26 toolchain automatically). The binary will be placed in your `$GOPATH/bin` directory -- make sure it's in your `PATH`.
 </Note>
 
 ## Binary Download
@@ -67,16 +67,17 @@ where `<os>` is `darwin`, `linux`, or `windows` and `<arch>` is `amd64` or `arm6
 </Tabs>
 
 <Tip>
-  Homebrew (`brew install --cask abdul-hamid-achik/tap/hitspec`) and `go install` keep
-  hitspec up to date automatically -- prefer them over manual downloads unless you
-  need a specific archived version.
+  Homebrew (`brew upgrade --cask hitspec`) and `go install ...@latest` make upgrades a
+  single command -- prefer them over manual downloads unless you need a specific
+  archived version.
 </Tip>
 
 ## Build from Source
 
 To build hitspec yourself -- to contribute, or to get an unreleased change -- clone
-the repo and build the CLI. The module is `github.com/abdul-hamid-achik/hitspec`
-and the CLI entry point is `apps/cli`.
+the repo and build the CLI. The module is `github.com/abdul-hamid-achik/hitspec/v2`
+and the CLI entry point is `apps/cli` (`cmd/hitspec` is the same binary, named for
+`go install`).
 
 <Steps>
 
@@ -153,6 +154,6 @@ brew upgrade --cask hitspec
 
 
 ```bash Go
-go install github.com/abdul-hamid-achik/hitspec/apps/cli@latest
+go install github.com/abdul-hamid-achik/hitspec/v2/cmd/hitspec@latest
 ```
 </CodeGroup>

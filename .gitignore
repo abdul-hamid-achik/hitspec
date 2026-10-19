@@ -41,10 +41,6 @@ dist/
 .task/
 !packages/serve/dist/
 
-# Generated files
-apps/cli/cmd/llms_content.go
-llms.txt
-
 # Debug files
 debug
 *.log

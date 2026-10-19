@@ -1,4 +1,4 @@
-module github.com/abdul-hamid-achik/hitspec
+module github.com/abdul-hamid-achik/hitspec/v2
 
 go 1.26.0
 

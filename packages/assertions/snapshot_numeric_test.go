@@ -4,9 +4,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
-	"github.com/abdul-hamid-achik/hitspec/packages/http"
-	"github.com/abdul-hamid-achik/hitspec/packages/snapshot"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/http"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/snapshot"
 	"github.com/stretchr/testify/assert"
 )
 

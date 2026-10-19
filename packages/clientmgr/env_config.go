@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/config"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/config"
 )
 
 // ListEnvironments returns configured environments, including the active one.

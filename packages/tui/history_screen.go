@@ -9,7 +9,7 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/clientmgr"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/clientmgr"
 )
 
 // historyItem is a persistent run shown in the interactive history list.

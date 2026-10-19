@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/config"
-	"github.com/abdul-hamid-achik/hitspec/packages/stress"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/config"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/stress"
 )
 
 func (s *Server) handleStressStart(w http.ResponseWriter, r *http.Request) {
