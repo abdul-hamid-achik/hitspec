@@ -212,3 +212,19 @@ func TestRunHTTP_RedirectForwardHeaders(t *testing.T) {
 	defer mu.Unlock()
 	assert.Equal(t, []string{"", "secret"}, got)
 }
+
+// `contract verify` builds its client from hitspec.yaml in the working
+// directory, so the HTTP keys apply there too.
+func TestContractRunConfigHonorsHTTPClientKeys(t *testing.T) {
+	m := testtls.New(t)
+	dir := t.TempDir()
+	m.WriteYAMLDir(t, dir)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "hitspec.yaml"), []byte(testtls.YAML), 0o600))
+
+	cfg, err := contractRunConfig(dir)
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(dir, "ca.pem"), cfg.CACert)
+	assert.Equal(t, filepath.Join(dir, "client.pem"), cfg.ClientCert)
+	assert.True(t, cfg.Cookies)
+	assert.True(t, cfg.HTTP1)
+}

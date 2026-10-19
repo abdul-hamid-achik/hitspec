@@ -64,7 +64,7 @@ hitspec run api.http --http1.1
 
 ## Cookies
 
-Cookies are off by default: a `Set-Cookie` response header is not sent back on later requests. `--cookies` gives the run a cookie jar, so a login request can start a session that the requests after it use. The jar lives for one run and is shared by every file in it.
+Cookies are off by default: a `Set-Cookie` response header is not sent back on later requests. `--cookies` gives the run a cookie jar, so a login request can start a session that the requests after it use. The jar is shared by every file in the run and starts empty each time you run hitspec. With `--watch` the same jar is kept across re-runs, so a session started by one run is still there in the next.
 
 ```http
 ### Log in

@@ -147,6 +147,33 @@ func (r *Request) BuildURL() string {
 	return sb.String()
 }
 
+// dropURLQueryParam removes every parameter called key from the query string of
+// rawURL, leaving the others in order.
+func dropURLQueryParam(rawURL, key string) string {
+	rest, fragment := rawURL, ""
+	if i := strings.IndexByte(rest, '#'); i >= 0 {
+		rest, fragment = rest[:i], rest[i:]
+	}
+	base, query, ok := strings.Cut(rest, "?")
+	if !ok {
+		return rawURL
+	}
+	var kept []string
+	for _, pair := range strings.Split(query, "&") {
+		name, _, _ := strings.Cut(pair, "=")
+		if decoded, err := url.QueryUnescape(name); err == nil {
+			name = decoded
+		}
+		if name != key {
+			kept = append(kept, pair)
+		}
+	}
+	if len(kept) == 0 {
+		return base + fragment
+	}
+	return base + "?" + strings.Join(kept, "&") + fragment
+}
+
 // escapeURL percent-encodes the bytes of the path, query and fragment of a URL
 // that must not be sent as they are: spaces, control characters, non-ASCII
 // bytes, quotes, angle brackets, a "%" that does not start an escape, and so on.
@@ -210,6 +237,9 @@ func (r *Request) ApplyAuth() {
 		}
 	case parser.AuthAPIKeyQuery:
 		if len(r.Auth.Params) >= 2 {
+			// The credential replaces a parameter of the same name that is
+			// already in the URL, rather than being sent next to it.
+			r.URL = dropURLQueryParam(r.URL, r.Auth.Params[0])
 			r.SetQueryParam(r.Auth.Params[0], r.Auth.Params[1])
 		}
 	case parser.AuthDigest:

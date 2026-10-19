@@ -123,3 +123,18 @@ func must(t testing.TB, err error) {
 		t.Fatal(err)
 	}
 }
+
+// WriteYAMLDir copies the CA, client certificate and key into dir under the
+// names ca.pem, client.pem and client-key.pem, so a hitspec.yaml in dir can
+// refer to them with relative paths.
+func (m *Material) WriteYAMLDir(t testing.TB, dir string) {
+	t.Helper()
+	for name, src := range map[string]string{"ca.pem": m.CAPath, "client.pem": m.ClientCertPath, "client-key.pem": m.ClientKeyPath} {
+		b, err := os.ReadFile(src)
+		must(t, err)
+		must(t, os.WriteFile(filepath.Join(dir, name), b, 0o600)) // #nosec G703 -- test helper; dir is the caller's t.TempDir() and name is a fixed literal.
+	}
+}
+
+// YAML is the hitspec.yaml text that points at the files WriteYAMLDir wrote.
+const YAML = "cacert: ca.pem\ncert: client.pem\nkey: client-key.pem\ncookies: true\nhttp1: true\nmaxResponseBytes: 2048\nredirectForwardHeaders: true\n"

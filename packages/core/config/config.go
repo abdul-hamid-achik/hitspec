@@ -207,14 +207,16 @@ func (c *Config) Merge(other *Config) *Config {
 	if other.Proxy != "" {
 		result.Proxy = other.Proxy
 	}
+	// Paths are copied as written, so a Merge followed by SaveConfig does not
+	// turn them into machine-local absolute paths.
 	if other.CACert != "" {
-		result.CACert = other.ResolvePath(other.CACert)
+		result.CACert = other.CACert
 	}
 	if other.Cert != "" {
-		result.Cert = other.ResolvePath(other.Cert)
+		result.Cert = other.Cert
 	}
 	if other.Key != "" {
-		result.Key = other.ResolvePath(other.Key)
+		result.Key = other.Key
 	}
 	if other.MaxResponseBytes != 0 {
 		result.MaxResponseBytes = other.MaxResponseBytes

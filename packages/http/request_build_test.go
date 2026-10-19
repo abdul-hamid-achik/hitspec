@@ -202,3 +202,11 @@ func mustParse(t *testing.T, raw string) *neturl.URL {
 	require.NoError(t, err)
 	return u
 }
+
+func TestAPIKeyQueryReplacesTheSameNamedURLParam(t *testing.T) {
+	r := build(t, "### k\n# @auth apikey-query api_key, new\nGET http://h/x?a=1&api_key=old&b=2#top\n? c = 3\n", "")
+	assert.Equal(t, "http://h/x?a=1&b=2&c=3&api_key=new#top", r.URL)
+
+	r = build(t, "### k\n# @auth apikey-query api_key, new\nGET http://h/x?api_key=old\n", "")
+	assert.Equal(t, "http://h/x?api_key=new", r.URL)
+}
