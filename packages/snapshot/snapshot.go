@@ -127,6 +127,12 @@ func (m *Manager) Compare(testFile string, requestName string, snapshotName stri
 	return result
 }
 
+// FilePath returns the path of the snapshot file Compare uses for testFile, so
+// a caller can vet it (the workspace boundary) before any read or write.
+func (m *Manager) FilePath(testFile string) string {
+	return m.getSnapshotFilePath(testFile)
+}
+
 // getSnapshotFilePath returns the path to the snapshot file for a test file.
 func (m *Manager) getSnapshotFilePath(testFile string) string {
 	dir := filepath.Dir(testFile)

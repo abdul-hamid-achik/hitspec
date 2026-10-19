@@ -927,6 +927,13 @@ func (e *Evaluator) snapshot(actual, expected any) (bool, string) {
 		return false, "snapshot manager not initialized"
 	}
 
+	// The snapshot file is read and, in update mode, written: with a file root
+	// it must stay inside the workspace once symlinks (a __snapshots__
+	// directory or the file itself) are resolved.
+	if err := http.CheckPathWithinRoot(e.fileRoot, manager.FilePath(e.testFile)); err != nil {
+		return false, "snapshot: " + err.Error()
+	}
+
 	result := manager.Compare(e.testFile, e.requestName, snapshotName, actual)
 	if result.Passed {
 		if result.IsNew {

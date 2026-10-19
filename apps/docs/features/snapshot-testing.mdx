@@ -53,6 +53,8 @@ So `tests/api.http` stores its snapshots in `tests/__snapshots__/api.snap.json`,
 keyed by the snapshot names you give in `expect body snapshot "..."`. Snapshots
 group by test file, not one file per snapshot.
 
+In `hitspec studio` and `hitspec serve`, the snapshot file must stay inside the workspace: a `__snapshots__` directory (or snapshot file) that is a symlink pointing outside it fails the assertion instead of being read or written. `hitspec run` follows symlinks as before.
+
 <Tip>
   Commit your `__snapshots__/` directories to version control. This allows your team to review snapshot changes in pull requests and catch unexpected API changes.
 </Tip>
