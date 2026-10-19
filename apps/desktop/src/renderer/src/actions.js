@@ -849,10 +849,12 @@ export async function startStress() {
       vus: Number(form.vus) || 0,
       maxVUs: Number(form.maxVUs) || 0,
       environment: state.activeEnv || undefined,
+      // The profile's thresholds apply; the values above win over its own.
+      profile: form.profile || undefined,
     });
     state.stress = { ...state.stress, running: true };
     emit();
-    toast(`Stress test started for ${form.duration}`, { severity: 'info' });
+    toast(`Stress test started for ${form.duration}${form.profile ? ` (profile ${form.profile})` : ''}`, { severity: 'info' });
   } catch (err) {
     toastError(err, { title: 'Could not start stress test' });
   } finally {
@@ -894,6 +896,7 @@ export function applyStressProfile(profile) {
     rate: profile.rate ?? 0,
     vus: profile.vus ?? 0,
     maxVUs: profile.maxVUs ?? 0,
+    profile: profile.name,
   });
   toast(`Profile ${profile.name} applied`, { severity: 'info', timeout: 1800 });
 }
