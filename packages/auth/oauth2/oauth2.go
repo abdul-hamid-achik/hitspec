@@ -240,6 +240,9 @@ func (p *Provider) doTokenRequest(ctx context.Context, data url.Values) (*Token,
 	if err := json.Unmarshal(body, &token); err != nil {
 		return nil, fmt.Errorf("failed to parse token response: %w", err)
 	}
+	if token.AccessToken == "" {
+		return nil, fmt.Errorf("no access_token in token response: %s", string(body))
+	}
 
 	// Calculate expiration time
 	if token.ExpiresIn > 0 {

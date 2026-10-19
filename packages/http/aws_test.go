@@ -152,17 +152,18 @@ func TestCanonicalURI(t *testing.T) {
 		{"https://h", "service", "/"},
 		{"https://h/", "service", "/"},
 		{"https://h/a/b", "service", "/a/b"},
-		// non-S3: encoded twice
+		// non-S3: the sent (escaped) path, encoded once more
 		{"https://h/a%20b/c", "service", "/a%2520b/c"},
 		{"https://h/%E1%88%B4", "service", "/%25E1%2588%25B4"},
-		{"https://h/a+b", "service", "/a%252Bb"},
-		{"https://h/a:b", "service", "/a%253Ab"},
+		{"https://h/a+b", "service", "/a%2Bb"},
+		{"https://h/a:b", "service", "/a%3Ab"},
 		// non-S3: normalized
 		{"https://h/a/./b//c/../d/", "service", "/a/b/d/"},
-		// S3: encoded once, not normalized
+		// S3: the sent path verbatim, not normalized
 		{"https://h/a%20b/c", "s3", "/a%20b/c"},
 		{"https://h/%E1%88%B4", "s3", "/%E1%88%B4"},
-		{"https://h/a+b", "s3", "/a%2Bb"},
+		{"https://h/a+b", "s3", "/a+b"},
+		{"https://h/a%2Bb", "s3", "/a%2Bb"},
 		{"https://h/a~b-c_d.e", "s3", "/a~b-c_d.e"},
 		{"https://h//double//slash", "s3", "//double//slash"},
 	}

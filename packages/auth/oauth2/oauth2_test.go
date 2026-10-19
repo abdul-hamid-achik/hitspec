@@ -1046,3 +1046,17 @@ func TestGetToken_ErrorsAreNotCached(t *testing.T) {
 		t.Fatalf("second call: %v %v", tok, err)
 	}
 }
+
+func TestGetToken_EmptyAccessTokenIsAnError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"token_type":"bearer","expires_in":3600}`))
+	}))
+	defer srv.Close()
+
+	p := NewProvider(&Config{TokenURL: srv.URL, ClientID: "id", ClientSecret: "secret", GrantType: ClientCredentials})
+	_, err := p.GetToken()
+	if err == nil || !strings.Contains(err.Error(), "no access_token") {
+		t.Fatalf("GetToken() error = %v, want a missing access_token error", err)
+	}
+}

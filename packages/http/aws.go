@@ -26,12 +26,12 @@ var awsNow = time.Now
 //   - Signed headers are host, x-amz-content-sha256, x-amz-date,
 //     x-amz-security-token (only with a session token), plus content-type,
 //     content-md5 and any other x-amz-* header already present on the request.
-//   - The canonical path is built from the path that is actually sent
-//     (RFC 3986: only A-Z a-z 0-9 - _ . ~ stay unescaped, "/" separates
-//     segments). For every service except s3 the path is normalized (dot
-//     segments and duplicate slashes removed) and URI-encoded a second time,
-//     as the SigV4 specification requires; s3 uses the single-encoded path
-//     verbatim.
+//   - The canonical path is built from the path that is actually sent (the
+//     URL's escaped path). For every service except s3 that path is
+//     normalized (dot segments and duplicate slashes removed) and URI-encoded
+//     once more (RFC 3986: only A-Z a-z 0-9 - _ . ~ stay unescaped, "/"
+//     separates segments), as the SigV4 specification requires; s3 uses the
+//     sent path verbatim.
 //   - The canonical query string is RFC 3986 encoded (a space is %20, never
 //     "+"), sorted by encoded name then value.
 //
@@ -169,12 +169,15 @@ func canonicalURI(u *url.URL, service string) string {
 	if u.Path == "" {
 		return "/"
 	}
+	// The server signs the path it receives, so start from the escaped form
+	// net/http sends (which leaves sub-delims such as ":" and "+" as-is), not
+	// from the decoded path.
+	sent := u.EscapedPath()
 	if service == "s3" {
-		return rfc3986EscapePath(u.Path)
+		return sent
 	}
-	// Every other service: normalize, then encode the (already encoded) path
-	// a second time.
-	return rfc3986EscapePath(rfc3986EscapePath(normalizePath(u.Path)))
+	// Every other service: normalize, then encode the sent path once more.
+	return rfc3986EscapePath(normalizePath(sent))
 }
 
 // normalizePath removes dot segments and duplicate slashes, keeping a trailing
