@@ -39,11 +39,11 @@ checking what it says.
     - uses: abdul-hamid-achik/hitspec@v2
       with:
         files: tests/
-        version: v2.22.0
+        version: v2.23.0
     ```
 
     With Go, install an exact version:
-    `go install github.com/abdul-hamid-achik/hitspec/v2/cmd/hitspec@v2.22.0`.
+    `go install github.com/abdul-hamid-achik/hitspec/v2/cmd/hitspec@v2.23.0`.
   </Step>
 </Steps>
 
@@ -51,6 +51,54 @@ Every release lists its changes in the
 [changelog](https://github.com/abdul-hamid-achik/hitspec/blob/main/CHANGELOG.md),
 and from 2.20.0 on the GitHub release page of each version shows the same
 notes.
+
+## 2.23.0
+
+2.23.0 runs the whole test suite on Windows and fixes what that found. It
+also applies two `hitspec.yaml` keys that used to be ignored. You only need to
+change a `.http` file if it relied on one of the old behaviors below.
+
+### Exit codes
+
+- **A busy port exits 3 in every command.** `hitspec mock` and
+  `hitspec record` used to exit 1. `hitspec run --stress --metrics prometheus`
+  used to print the error and run the whole load test without metrics. It now
+  stops before sending a request. See [Exit codes](/reference/exit-codes).
+
+### Settings that now apply
+
+- `noColor: true` in `hitspec.yaml` turns colors off in `hitspec run`.
+  `--no-color=false` or `HITSPEC_NO_COLOR=false` turns them back on.
+- With `verbose: true`, stderr starts with the `config: <path>` line, as with
+  `-v`. `--verbose=0` turns both off.
+
+### studio, serve and the desktop app
+
+- A `schema` file that a symlink points to outside the workspace is refused,
+  as body files already were. `hitspec run` is unchanged.
+- **Apply** on a saved stress profile in the desktop app now sends the
+  profile, so its thresholds are checked. A run can report failed thresholds
+  where it used to ignore them.
+- New JSON fields, omitted when empty: `duration` on the stress status and
+  `stress_update` events, `warnings` on history results, and an optional
+  `profile` on `POST /api/v1/stress/start`. Strict schema validators must
+  allow them.
+- In `hitspec studio`, `enter` in search selects the request it found, and
+  unsaved edits survive the file being deleted on disk (`ctrl+s` recreates
+  it).
+
+### Windows
+
+- Hooks and `>>>shell` blocks run through Git for Windows' `sh` when it is
+  installed. Without it they fall back to `cmd /C`, where POSIX syntax does
+  not work.
+- A contract state handler such as `setup-states.sh` runs through that `sh`.
+- Quoted globs (`hitspec run 'tests/**/*.http'`) work.
+- studio, `serve` and the desktop app report paths with `/`, and so does
+  `hitspec import -o`.
+- The MCP server refuses `/x`, `\x` and `C:x` paths.
+- On every platform, certificate and key errors show the path in plain
+  quotes, without doubled backslashes.
 
 ## 2.22.0
 

@@ -7,6 +7,161 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.23.0] - 2026-10-19
+
+hitspec's whole test suite now runs on Windows, and this release fixes what
+that turned up. Hooks and `>>>shell` blocks run through Git for Windows' `sh`,
+quoted globs work, and studio and `serve` report paths with `/`. Two
+`hitspec.yaml` keys now take effect: `noColor`, and `verbose`, which also
+prints the config line. A busy port is a configuration error (exit 3) in
+every command. Stress runs started from a saved profile in studio, `serve` or
+the desktop app use the profile's thresholds, and the run history keeps
+warnings. **Read the upgrade notes below before you bump hitspec in CI.**
+
+### Upgrade notes: tests that may start failing
+
+Most of this release fixes bugs and adds fields. Check the items below if your
+CI matches exit codes or error text, runs on Windows, or reads the `serve`
+JSON with a strict schema. As before: run `hitspec validate <dir>` and the
+suite once locally with the new version, and pin the version in CI.
+
+**Exit codes**
+
+- `hitspec mock` and `hitspec record` exit **3** instead of 1 when their
+  port is already in use. That is the configuration-error code, so a busy
+  port now reads the same in every command.
+- `hitspec run --stress --metrics prometheus` with a `--metrics-port` that is
+  already in use exits **3** before any request is sent. It used to print the
+  error and run the whole load test without a metrics endpoint. Free the port
+  or pick another with `--metrics-port`.
+
+**Settings that now apply**
+
+- `noColor: true` in `hitspec.yaml` turns colors off in `hitspec run`, in the
+  console report and the stress reporter. It used to be read and then
+  ignored. `--no-color=false` or `HITSPEC_NO_COLOR=false` turns colors back
+  on. `NO_COLOR` in the environment still turns them off.
+- With `verbose: true` in `hitspec.yaml`, stderr now starts with the same
+  `config: <path>` line that `-v` prints. `--verbose=0` turns both off. A
+  test that compares stderr exactly will see the extra line.
+
+**Files outside the workspace**
+
+- In studio, `serve` and the desktop app, `expect body schema <file>` refuses
+  a schema that a symlink points to outside the workspace. The assertion
+  fails with `outside the workspace`; it used to read the file. This applies
+  to normal runs and to stress and contract runs. `../` and absolute paths
+  were already refused. `hitspec run` on the command line is unchanged. If
+  you hit this, move the schema into the workspace.
+
+**Stress runs from a saved profile**
+
+- In the desktop app, **Apply** on a saved stress profile now sends the
+  profile with the run, so its thresholds (`rps`, `p95`, `errors`, ...) are
+  checked. A run that used to "pass" because thresholds were ignored can now
+  report failed thresholds. The values in the form still win over the
+  profile's own; **Clear** next to the applied profile drops it.
+
+**Windows**
+
+- Hooks (`# @before`, `# @after`) and `>>>shell` blocks run through `sh` from
+  Git for Windows when it is installed (on `PATH` or in the default install).
+  Without it they fall back to `cmd /C`, where POSIX shell syntax does not
+  work. They used to need `sh` on `PATH` and failed without it.
+- A contract `--state-handler` that is not an `.exe`, `.bat`, `.cmd` or `.com`
+  file, such as `setup-states.sh`, runs through that `sh`. It used to fail
+  with "not a valid Win32 application".
+- Quoted globs such as `hitspec run 'tests/**/*.http'` work. They used to stop
+  with `cannot access`.
+- studio, `serve` (JSON and WebSocket events) and the desktop app report
+  workspace-relative paths with `/` (`api/users.http`), and accept `/` or
+  `\` on input. Clients that compared against `api\users.http` must use `/`.
+  `hitspec import ... -o` prints `/` paths too.
+- The MCP server refuses `/x`, `\x` and `C:x` as paths, the way it refuses
+  absolute paths elsewhere. It used to treat them as workspace-relative.
+
+**Error text on every platform**
+
+- Errors about a CA bundle, client certificate or key put the path in plain
+  quotes: `"C:\certs\ca.pem"`, not `"C:\\certs\\ca.pem"`. Only tests that
+  match that error text exactly are affected.
+
+**JSON from `serve` and studio**
+
+- New fields, all omitted when empty:
+  - `duration` on `GET /api/v1/stress/status` and on `stress_update` events
+    (the run's configured length, in seconds);
+  - `warnings` on each result in `GET /api/v1/history/runs/{id}`;
+  - an optional `profile` on `POST /api/v1/stress/start`, which makes
+    `duration` optional.
+
+  A client that validates responses against a strict schema must allow
+  these fields. The history database gets a `result_warnings` table the
+  first time 2.23.0 opens it. Older hitspec versions keep working with it.
+
+**hitspec studio**
+
+- `enter` in the search overlay selects the request it found. It switches to
+  the workspace (opening the file if needed) and focuses the request list. A
+  hit in the open file moves the cursor without asking to discard edits.
+- The stress progress bar follows the run's own duration. When that is
+  unknown, it shows the elapsed time without a percentage.
+- When the open file is deleted outside studio, unsaved edits are kept and a
+  warning says so. They used to be cleared silently. `ctrl+s` recreates the
+  file.
+
+**Go library users**
+
+- `metrics.NewPrometheusExporter` no longer prints a bind error to stdout. On
+  a busy port it returns an exporter with no endpoint. Use
+  `metrics.NewPrometheusExporterE` to get the error.
+- A context from `clientmgr.WithExecID` sets the `ExecID` on that run's
+  events.
+
+### Security
+
+- studio, `serve` and the desktop app resolve symlinks before reading a
+  `schema` file, so a link inside the workspace cannot reach a file outside
+  it.
+- On Windows, the MCP server refuses rooted and drive-relative paths instead
+  of re-rooting them inside the workspace.
+
+### Added
+
+- The run history keeps parser and runtime warnings for each result. studio
+  and `serve` return them in the run details.
+- `POST /api/v1/stress/start` (and `Manager.StartStress`) takes a saved
+  `profile`: its duration, rate, VUs and thresholds are the base, and the
+  values in the request win. The desktop app sends the applied profile.
+- `duration` on the stress status and `stress_update` events. Clients can
+  draw progress as `elapsed / duration`.
+- Library: `stress.ApplyProfile`, `stress.ThresholdString`,
+  `metrics.NewPrometheusExporterE`, `clientmgr.WithExecID`,
+  `assertions.WithFileRoot` and `http.CheckPathWithinRoot`.
+
+### Fixed
+
+- `noColor` and `verbose` in `hitspec.yaml` (see the upgrade notes).
+- The Prometheus endpoint is bound before the run starts. Its server field is
+  no longer read and written without a lock.
+- Cancelling an OpenAPI import from studio, or a client disconnecting from
+  `POST /api/v1/import/openapi`, stops the fetch.
+- On Windows:
+  - hooks, `>>>shell` blocks, state handlers and globs work;
+  - paths in studio and `serve` use `/`;
+  - the studio cookie screen shows `~/.hitspec/tui-cookies.json`;
+  - checkouts keep LF line endings (`.gitattributes`).
+- hitspec studio:
+  - search selects its result;
+  - stress progress uses the run's duration;
+  - a run ignores progress events from other executions;
+  - a file deleted outside studio keeps its unsaved edits.
+
+### Changed
+
+- The Windows test job is required in CI. The suite runs on Linux, macOS and
+  Windows.
+
 ## [2.22.0] - 2026-10-19
 
 `hitspec run` explains its failures, tells a network problem apart from a
@@ -1135,7 +1290,8 @@ before upgrading CI.
 - `hitspec init` - Initialize a new project
 - `hitspec version` - Show version information
 
-[Unreleased]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.22.0...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.23.0...HEAD
+[2.23.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.22.0...v2.23.0
 [2.22.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.21.0...v2.22.0
 [2.21.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.20.0...v2.21.0
 [2.20.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.19.1...v2.20.0
