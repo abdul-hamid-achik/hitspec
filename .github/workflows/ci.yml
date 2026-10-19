@@ -156,25 +156,17 @@ jobs:
       - name: Docs snippets
         run: go run ./tools/docsnippets -bin "$RUNNER_TEMP/hitspec"
 
-  # The suite runs on the other release platforms too. Windows is required;
-  # macOS is still reported without blocking merges (drop its continue-on-error
-  # the same way once it has a track record).
+  # The suite runs on the other release platforms too, and both are required:
+  # macOS passed 60 runs in a row before it was made blocking.
   test-os:
-    name: Test (${{ matrix.os }}${{ matrix.suffix }})
+    name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     needs: build
-    continue-on-error: ${{ !matrix.blocking }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: macos-latest
-            blocking: false
-            suffix: ', non-blocking'
-          - os: windows-latest
-            blocking: true
-            suffix: ''
+        os: [macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
