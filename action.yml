@@ -254,8 +254,14 @@ runs:
           args+=(--name "$INPUT_NAME")
         fi
 
+        # v1 documents timeout in milliseconds; current releases take a
+        # duration, so a plain integer becomes "<n>ms".
         if [ -n "$INPUT_TIMEOUT" ]; then
-          args+=(--timeout "$INPUT_TIMEOUT")
+          if printf '%s' "$INPUT_TIMEOUT" | grep -Eq '^[0-9]+$'; then
+            args+=(--timeout "${INPUT_TIMEOUT}ms")
+          else
+            args+=(--timeout "$INPUT_TIMEOUT")
+          fi
         fi
 
         if [ "$INPUT_PARALLEL" = "true" ]; then
