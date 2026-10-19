@@ -11,7 +11,6 @@ import (
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/assertions"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/env"
-	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/history"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/http"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/snapshot"
@@ -170,7 +169,7 @@ func (r *Runner) RunFileContext(ctx context.Context, path string) (*RunResult, e
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	file, err := parser.ParseFile(path)
+	file, err := parseForRun(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse %s: %w", path, err)
 	}
