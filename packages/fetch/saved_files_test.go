@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/testhome"
 )
 
 // A saved request with a workspace root can only send files that live inside
@@ -31,7 +33,7 @@ func TestFetchSavedBodyFilesStayInWorkspace(t *testing.T) {
 	defer server.Close()
 
 	parent := t.TempDir()
-	t.Setenv("HOME", filepath.Join(parent, "home"))
+	testhome.Set(t, filepath.Join(parent, "home"))
 	workspace := filepath.Join(parent, "ws")
 	if err := os.MkdirAll(workspace, 0o755); err != nil {
 		t.Fatal(err)
