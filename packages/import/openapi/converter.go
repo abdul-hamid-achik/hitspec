@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -12,6 +14,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/import/result"
 	"github.com/getkin/kin-openapi/openapi3"
@@ -24,7 +27,16 @@ type Converter struct {
 	excludeTags   []string
 	includeOnly   []string // specific operation IDs
 	generateTests bool
+	timeout       time.Duration   // budget for loading a spec (and its $refs) from a URL
+	ctx           context.Context // parent of the load deadline; nil means Background
 }
+
+// DefaultLoadTimeout bounds how long loading a spec from a URL may take.
+const DefaultLoadTimeout = 30 * time.Second
+
+// maxSpecBytes caps a downloaded spec (or $ref) so a hostile or broken server
+// cannot make the importer buffer without limit.
+const maxSpecBytes = 64 << 20
 
 // Option is a functional option for Converter
 type Option func(*Converter)
@@ -33,6 +45,21 @@ type Option func(*Converter)
 func WithBaseURL(url string) Option {
 	return func(c *Converter) {
 		c.baseURL = url
+	}
+}
+
+// WithTimeout sets the time allowed for downloading a spec from a URL,
+// $ref documents included (default DefaultLoadTimeout; 0 keeps the default).
+func WithTimeout(d time.Duration) Option {
+	return func(c *Converter) {
+		c.timeout = d
+	}
+}
+
+// WithContext makes loading a spec from a URL cancellable from ctx.
+func WithContext(ctx context.Context) Option {
+	return func(c *Converter) {
+		c.ctx = ctx
 	}
 }
 
@@ -68,9 +95,13 @@ func WithTests(generate bool) Option {
 func NewConverter(opts ...Option) *Converter {
 	c := &Converter{
 		generateTests: true,
+		timeout:       DefaultLoadTimeout,
 	}
 	for _, opt := range opts {
 		opt(c)
+	}
+	if c.timeout <= 0 {
+		c.timeout = DefaultLoadTimeout
 	}
 	return c
 }
@@ -83,13 +114,8 @@ func (c *Converter) loadDoc(path string) (*openapi3.T, error) {
 	var doc *openapi3.T
 	var err error
 
-	// Check if it's a URL or file path
 	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
-		doc, err = loader.LoadFromURI(&url.URL{Scheme: "https", Host: strings.TrimPrefix(strings.TrimPrefix(path, "https://"), "http://"), Path: ""})
-		if err != nil {
-			// Try loading from URL directly
-			doc, err = c.loadFromURL(path)
-		}
+		doc, err = c.loadFromURL(loader, path)
 	} else {
 		doc, err = loader.LoadFromFile(path)
 	}
@@ -98,6 +124,76 @@ func (c *Converter) loadDoc(path string) (*openapi3.T, error) {
 		return nil, fmt.Errorf("failed to load OpenAPI spec: %w", err)
 	}
 	return doc, nil
+}
+
+// newSpecClient is the HTTP client used to download specs: proxy settings from
+// the environment, bounded dial/TLS/header waits.
+func newSpecClient(timeout time.Duration) *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{
+			Proxy:                 http.ProxyFromEnvironment,
+			DialContext:           (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ResponseHeaderTimeout: timeout,
+			ForceAttemptHTTP2:     true,
+		},
+	}
+}
+
+// loadFromURL downloads the spec and the documents it references over HTTP(S)
+// under one deadline. The client honors HTTP_PROXY/HTTPS_PROXY/NO_PROXY, and
+// only http(s) references are followed (a remote spec cannot make the importer
+// read local files).
+func (c *Converter) loadFromURL(loader *openapi3.Loader, specURL string) (*openapi3.T, error) {
+	u, err := url.Parse(specURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid spec URL: %w", err)
+	}
+
+	parent := c.ctx
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(parent, c.timeout)
+	defer cancel()
+
+	client := newSpecClient(c.timeout)
+	defer client.CloseIdleConnections()
+
+	loader.Context = ctx
+	loader.ReadFromURIFunc = openapi3.URIMapCache(func(_ *openapi3.Loader, loc *url.URL) ([]byte, error) {
+		if loc.Scheme != "http" && loc.Scheme != "https" {
+			return nil, openapi3.ErrURINotSupported
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, loc.String(), nil)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			if ctx.Err() == context.DeadlineExceeded {
+				return nil, fmt.Errorf("fetching %s: timed out after %s", loc, c.timeout)
+			}
+			return nil, err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("failed to fetch spec %s: %s", loc, resp.Status)
+		}
+		data, err := io.ReadAll(io.LimitReader(resp.Body, maxSpecBytes+1))
+		if err != nil {
+			if ctx.Err() == context.DeadlineExceeded {
+				return nil, fmt.Errorf("fetching %s: timed out after %s", loc, c.timeout)
+			}
+			return nil, err
+		}
+		if len(data) > maxSpecBytes {
+			return nil, fmt.Errorf("spec %s is larger than %d MiB", loc, maxSpecBytes>>20)
+		}
+		return data, nil
+	})
+
+	return loader.LoadFromURI(u)
 }
 
 // ConvertFile converts an OpenAPI file to hitspec format
@@ -371,45 +467,6 @@ func (c *Converter) getBaseURL(doc *openapi3.T) string {
 		return doc.Servers[0].URL
 	}
 	return "http://localhost:3000"
-}
-
-// loadFromURL loads an OpenAPI spec from a URL
-func (c *Converter) loadFromURL(urlStr string) (*openapi3.T, error) {
-	resp, err := http.Get(urlStr)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to fetch spec: %s", resp.Status)
-	}
-
-	data, err := readAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	loader := openapi3.NewLoader()
-	return loader.LoadFromData(data)
-}
-
-func readAll(r interface{ Read([]byte) (int, error) }) ([]byte, error) {
-	var result []byte
-	buf := make([]byte, 4096)
-	for {
-		n, err := r.Read(buf)
-		if n > 0 {
-			result = append(result, buf[:n]...)
-		}
-		if err != nil {
-			if err.Error() == "EOF" {
-				break
-			}
-			return nil, err
-		}
-	}
-	return result, nil
 }
 
 func (c *Converter) shouldInclude(op *openapi3.Operation) bool {

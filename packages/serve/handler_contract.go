@@ -109,6 +109,11 @@ func (s *Server) handleContractVerify(w http.ResponseWriter, r *http.Request) {
 		}
 
 		result, err := verifier.VerifyFileContext(r.Context(), absPath)
+		if err != nil && r.Context().Err() != nil {
+			// The client went away mid-run: that is a cancellation, not a
+			// parse failure, and nobody is left to read a response.
+			return
+		}
 		if err != nil {
 			results = append(results, ContractResultDTO{
 				File: file,

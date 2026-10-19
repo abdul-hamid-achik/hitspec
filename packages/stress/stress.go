@@ -2,11 +2,14 @@ package stress
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/assertions"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/capture"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/env"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
@@ -281,6 +284,7 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 
 	// Get summary and evaluate thresholds
 	summary := r.metrics.GetSummary()
+	summary.Warnings = r.rateWarnings(summary)
 	var thresholdResults []ThresholdResult
 	if r.config.Thresholds.HasThresholds() {
 		thresholdResults = r.metrics.EvaluateThresholds(r.config.Thresholds)
@@ -303,6 +307,35 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 		Thresholds: thresholdResults,
 		Passed:     passed,
 	}, nil
+}
+
+// expectedRequests is how many requests a rate-mode run should have started:
+// the target rate for the whole window, less what the linear ramp-up skips.
+func (c *Config) expectedRequests() float64 {
+	if c.Mode != RateMode || c.Rate <= 0 {
+		return 0
+	}
+	steady := c.Duration - c.RampUp
+	return c.Rate * (steady.Seconds() + c.RampUp.Seconds()/2)
+}
+
+// rateWarnings flags a rate-mode run that fell more than 10% short of its
+// target. When that happens the load was lower than asked and latencies
+// understate what a client arriving on schedule would see (coordinated
+// omission), so the numbers must not be read as "the server handled N req/s".
+func (r *Runner) rateWarnings(s *Summary) []string {
+	expected := r.config.expectedRequests()
+	if expected <= 0 {
+		return nil
+	}
+	started := float64(s.TotalRequests + s.IncompleteCount)
+	if started >= expected*0.9 {
+		return nil
+	}
+	secs := r.config.Duration.Seconds()
+	return []string{fmt.Sprintf(
+		"achieved %.1f req/s, %.0f%% below the %.0f req/s target: the server or the client (max VUs %d) could not keep up, so the latency figures understate the load a real client would have seen",
+		started/secs, (1-started/expected)*100, r.config.Rate, r.config.MaxVUs)}
 }
 
 // runRateMode executes the stress test in rate mode
@@ -451,22 +484,69 @@ func (r *Runner) executeScheduledRequest(ctx context.Context, sched *ScheduledRe
 	// Record metrics
 	if err != nil {
 		if ctx.Err() != nil {
-			// Context cancelled/timeout
-			r.metrics.RecordTimeout(sched.Name)
-		} else {
-			r.metrics.Record(sched.Name, duration, err)
+			// The test window closed (or the run was interrupted) while this
+			// request was in flight. That is the harness stopping, not the
+			// server failing: count it apart from the errors.
+			r.metrics.RecordIncomplete(sched.Name)
+			return err
+		}
+		r.metrics.Record(sched.Name, duration, err)
+		if isTimeout(err) {
+			r.metrics.CountTimeout()
 		}
 		return err
 	}
 
+	// Assertions are evaluated on the response; failures are counted in their
+	// own metric, apart from the errors. A non-2xx status the request itself
+	// asserts on (expect status 404) is expected, so it is not an error.
+	statusExpected := false
+	if len(reqWithDir.request.Assertions) > 0 {
+		toCheck := stressAssertions(reqWithDir.request.Assertions)
+		results := assertions.EvaluateAllWithBaseDir(resp, toCheck, reqWithDir.baseDir,
+			assertions.WithRequestName(reqWithDir.request.Name),
+			assertions.WithResolver(r.resolver.Resolve))
+		failed := false
+		for i, res := range results {
+			if !res.Passed {
+				failed = true
+			} else if toCheck[i].Subject == "status" {
+				statusExpected = true
+			}
+		}
+		if len(results) > 0 {
+			r.metrics.RecordAssertions(sched.Name, failed)
+		}
+	}
+
 	// Check if response indicates an error
 	var recordErr error
-	if !resp.IsSuccess() {
+	if !statusExpected && !resp.IsSuccess() {
 		recordErr = fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
 	r.metrics.Record(sched.Name, duration, recordErr)
 	return recordErr
+}
+
+// stressAssertions drops the assertions that make no sense under load:
+// snapshots would read and rewrite the same file from every worker.
+func stressAssertions(in []*parser.Assertion) []*parser.Assertion {
+	out := make([]*parser.Assertion, 0, len(in))
+	for _, a := range in {
+		if a.Operator == parser.OpSnapshot {
+			continue
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
+// isTimeout reports whether err is a client-side timeout (not the test window
+// closing, which executeScheduledRequest handles first).
+func isTimeout(err error) bool {
+	var ne net.Error
+	return errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &ne) && ne.Timeout())
 }
 
 // executeRequest executes a single request (for setup/teardown)

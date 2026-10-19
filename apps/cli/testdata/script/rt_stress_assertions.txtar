@@ -1,0 +1,43 @@
+# Assertions run in stress mode and are counted apart from errors:
+# errors<... stays transport/HTTP errors, assertions<... covers assertion failures.
+
+# A response that is 200 but fails a body assertion is not an error.
+exitcode 0 hitspec run api.http --stress --duration 1s --rate 10 --no-progress --no-color --threshold 'errors<1%'
+stdout 'Assertions: +[0-9]+ checked, [1-9][0-9]* failed \(100\.0%\)'
+stdout 'Failed: +0 \(0\.0%\)'
+stdout 'error rate'
+
+# The assertion threshold fails the run (exit 1) and says why.
+exitcode 1 hitspec run api.http --stress --duration 1s --rate 10 --no-progress --no-color --threshold 'assertions<0%'
+stdout 'assertion failure rate'
+
+# JSON summary carries the assertion counts.
+exitcode 0 hitspec run api.http --stress --duration 1s --rate 10 --no-progress --no-color --stress-json
+stdout '"assertions": \{'
+stdout '"failureRate": 1'
+
+# A status the request asserts on is expected: a 404 here is neither an error nor a failure.
+exitcode 0 hitspec run expected404.http --stress --duration 1s --rate 10 --no-progress --no-color --threshold 'errors<1%,assertions<0%'
+stdout 'Failed: +0 \(0\.0%\)'
+stdout 'Assertions: +[0-9]+ checked, 0 failed'
+
+-- api.http --
+@baseUrl = {{$env(SERVER)}}
+
+### Json
+GET {{baseUrl}}/json
+
+>>>
+expect status 200
+expect body.nope exists
+<<<
+
+-- expected404.http --
+@baseUrl = {{$env(SERVER)}}
+
+### Missing
+GET {{baseUrl}}/status/404
+
+>>>
+expect status 404
+<<<

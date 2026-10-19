@@ -820,6 +820,7 @@ func TestHandler_POST_MethodMatches(t *testing.T) {
 }
 
 func TestHandler_GET_DoesNotMatchPOST(t *testing.T) {
+	// A path that exists for another method is a 405 (with Allow), not a 404.
 	s, ts := newTestServer(t)
 
 	s.router.AddRoute(&Route{
@@ -835,8 +836,8 @@ func TestHandler_GET_DoesNotMatchPOST(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 404 {
-		t.Errorf("expected 404 for method mismatch, got %d", resp.StatusCode)
+	if resp.StatusCode != 405 {
+		t.Errorf("expected 405 for method mismatch, got %d", resp.StatusCode)
 	}
 }
 

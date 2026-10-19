@@ -19,6 +19,17 @@ type Metrics struct {
 	errorRequests   atomic.Int64
 	timeoutRequests atomic.Int64
 
+	// incompleteRequests were still in flight when the test window closed (or
+	// the run was interrupted). They are neither successes nor errors and are
+	// not part of totalRequests.
+	incompleteRequests atomic.Int64
+
+	// assertionChecks counts responses whose request had assertions;
+	// assertionFailures those where at least one assertion failed. They are
+	// separate from errorRequests, which stays transport/HTTP errors only.
+	assertionChecks   atomic.Int64
+	assertionFailures atomic.Int64
+
 	// Latency histogram (in microseconds for precision)
 	histogram *hdrhistogram.Histogram
 
@@ -39,12 +50,13 @@ type Metrics struct {
 
 // RequestMetrics holds metrics for a specific request
 type RequestMetrics struct {
-	Name      string
-	Total     atomic.Int64
-	Success   atomic.Int64
-	Errors    atomic.Int64
-	Histogram *hdrhistogram.Histogram
-	mu        sync.Mutex
+	Name              string
+	Total             atomic.Int64
+	Success           atomic.Int64
+	Errors            atomic.Int64
+	AssertionFailures atomic.Int64
+	Histogram         *hdrhistogram.Histogram
+	mu                sync.Mutex
 }
 
 // TimePoint represents a point in time for the time series
@@ -168,6 +180,41 @@ func (m *Metrics) RecordTimeout(name string) {
 	}
 }
 
+// RecordIncomplete records a request that was cut off because the test window
+// closed or the run was interrupted. It is not counted as a request, a success
+// or an error.
+func (m *Metrics) RecordIncomplete(name string) {
+	_ = name
+	m.incompleteRequests.Add(1)
+}
+
+// CountTimeout marks the request just recorded with Record as a client-side
+// timeout (it is already counted as an error there).
+func (m *Metrics) CountTimeout() {
+	m.timeoutRequests.Add(1)
+}
+
+// RecordAssertions records the outcome of evaluating a response's assertions:
+// failed is true when at least one of them did not hold.
+func (m *Metrics) RecordAssertions(name string, failed bool) {
+	m.assertionChecks.Add(1)
+	if !failed {
+		return
+	}
+	m.assertionFailures.Add(1)
+	if name == "" {
+		return
+	}
+	m.mu.Lock()
+	rm, ok := m.requestMetrics[name]
+	if !ok {
+		rm = &RequestMetrics{Name: name, Histogram: hdrhistogram.New(1, 60_000_000, 3)}
+		m.requestMetrics[name] = rm
+	}
+	m.mu.Unlock()
+	rm.AssertionFailures.Add(1)
+}
+
 // SetActiveVUs sets the current number of active virtual users
 func (m *Metrics) SetActiveVUs(n int32) {
 	m.activeVUs.Store(n)
@@ -234,6 +281,23 @@ type Summary struct {
 	ErrorCount    int64
 	TimeoutCount  int64
 
+	// IncompleteCount is the number of requests still in flight when the test
+	// window closed; they are not in TotalRequests or ErrorCount.
+	IncompleteCount int64
+
+	// AssertionChecks is the number of responses whose request had assertions,
+	// AssertionFailures how many of them failed at least one. They are not
+	// counted in ErrorCount.
+	AssertionChecks   int64
+	AssertionFailures int64
+	// AssertionFailRate is AssertionFailures / AssertionChecks (0 when nothing
+	// was checked).
+	AssertionFailRate float64
+
+	// Warnings are problems with the run itself, such as a target rate that
+	// was not reached.
+	Warnings []string
+
 	// Calculated rates
 	RPS         float64
 	SuccessRate float64
@@ -261,10 +325,12 @@ type RequestSummary struct {
 	Total   int64
 	Success int64
 	Errors  int64
-	P50     time.Duration
-	P95     time.Duration
-	P99     time.Duration
-	Mean    time.Duration
+	// AssertionFailures is the number of responses that failed an assertion.
+	AssertionFailures int64
+	P50               time.Duration
+	P95               time.Duration
+	P99               time.Duration
+	Mean              time.Duration
 }
 
 // GetSummary returns the metrics summary
@@ -281,6 +347,8 @@ func (m *Metrics) GetSummary() *Summary {
 	success := m.successRequests.Load()
 	errors := m.errorRequests.Load()
 	timeouts := m.timeoutRequests.Load()
+	checks := m.assertionChecks.Load()
+	assertFails := m.assertionFailures.Load()
 
 	rps := float64(0)
 	if duration.Seconds() > 0 {
@@ -294,23 +362,32 @@ func (m *Metrics) GetSummary() *Summary {
 		errorRate = float64(errors) / float64(total)
 	}
 
+	assertFailRate := float64(0)
+	if checks > 0 {
+		assertFailRate = float64(assertFails) / float64(checks)
+	}
+
 	summary := &Summary{
-		Duration:      duration,
-		TotalRequests: total,
-		SuccessCount:  success,
-		ErrorCount:    errors,
-		TimeoutCount:  timeouts,
-		RPS:           rps,
-		SuccessRate:   successRate,
-		ErrorRate:     errorRate,
-		P50:           time.Duration(m.histogram.ValueAtQuantile(50)) * time.Microsecond,
-		P95:           time.Duration(m.histogram.ValueAtQuantile(95)) * time.Microsecond,
-		P99:           time.Duration(m.histogram.ValueAtQuantile(99)) * time.Microsecond,
-		Min:           time.Duration(m.histogram.Min()) * time.Microsecond,
-		Max:           time.Duration(m.histogram.Max()) * time.Microsecond,
-		Mean:          time.Duration(m.histogram.Mean()) * time.Microsecond,
-		StdDev:        time.Duration(m.histogram.StdDev()) * time.Microsecond,
-		TimeSeries:    m.timeSeries,
+		Duration:          duration,
+		TotalRequests:     total,
+		SuccessCount:      success,
+		ErrorCount:        errors,
+		TimeoutCount:      timeouts,
+		IncompleteCount:   m.incompleteRequests.Load(),
+		AssertionChecks:   checks,
+		AssertionFailures: assertFails,
+		AssertionFailRate: assertFailRate,
+		RPS:               rps,
+		SuccessRate:       successRate,
+		ErrorRate:         errorRate,
+		P50:               time.Duration(m.histogram.ValueAtQuantile(50)) * time.Microsecond,
+		P95:               time.Duration(m.histogram.ValueAtQuantile(95)) * time.Microsecond,
+		P99:               time.Duration(m.histogram.ValueAtQuantile(99)) * time.Microsecond,
+		Min:               time.Duration(m.histogram.Min()) * time.Microsecond,
+		Max:               time.Duration(m.histogram.Max()) * time.Microsecond,
+		Mean:              time.Duration(m.histogram.Mean()) * time.Microsecond,
+		StdDev:            time.Duration(m.histogram.StdDev()) * time.Microsecond,
+		TimeSeries:        m.timeSeries,
 	}
 
 	// Per-request breakdown
@@ -322,10 +399,12 @@ func (m *Metrics) GetSummary() *Summary {
 			Total:   rm.Total.Load(),
 			Success: rm.Success.Load(),
 			Errors:  rm.Errors.Load(),
-			P50:     time.Duration(rm.Histogram.ValueAtQuantile(50)) * time.Microsecond,
-			P95:     time.Duration(rm.Histogram.ValueAtQuantile(95)) * time.Microsecond,
-			P99:     time.Duration(rm.Histogram.ValueAtQuantile(99)) * time.Microsecond,
-			Mean:    time.Duration(rm.Histogram.Mean()) * time.Microsecond,
+
+			AssertionFailures: rm.AssertionFailures.Load(),
+			P50:               time.Duration(rm.Histogram.ValueAtQuantile(50)) * time.Microsecond,
+			P95:               time.Duration(rm.Histogram.ValueAtQuantile(95)) * time.Microsecond,
+			P99:               time.Duration(rm.Histogram.ValueAtQuantile(99)) * time.Microsecond,
+			Mean:              time.Duration(rm.Histogram.Mean()) * time.Microsecond,
 		}
 		rm.mu.Unlock()
 	}
@@ -435,6 +514,15 @@ func (m *Metrics) EvaluateThresholds(t Thresholds) []ThresholdResult {
 			Passed:   passed,
 			Expected: formatPercent(t.ErrorRate),
 			Actual:   formatPercent(summary.ErrorRate),
+		})
+	}
+
+	if t.AssertionFailRateSet {
+		results = append(results, ThresholdResult{
+			Name:     "assertion failure rate",
+			Passed:   summary.AssertionFailRate <= t.AssertionFailRate,
+			Expected: "< " + formatPercent(t.AssertionFailRate),
+			Actual:   formatPercent(summary.AssertionFailRate),
 		})
 	}
 

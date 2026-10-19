@@ -134,7 +134,8 @@ Available threshold metrics:
 | `p95` | `<`, `<=` | `p95<200ms` | 95th percentile latency |
 | `p99` | `<`, `<=` | `p99<500ms` | 99th percentile latency |
 | `max` | `<`, `<=` | `max<1s` | Maximum latency |
-| `errors` | `<`, `<=` | `errors<1%` | Error rate percentage |
+| `errors` | `<`, `<=` | `errors<1%` | Error rate percentage (transport errors and non-2xx responses, not assertion failures) |
+| `assertions` | `<`, `<=` | `assertions<1%` | Share of checked responses that failed an `expect` assertion |
 | `rps` | `>`, `>=` | `rps>50` | Minimum requests per second |
 
 Combine multiple thresholds with commas.

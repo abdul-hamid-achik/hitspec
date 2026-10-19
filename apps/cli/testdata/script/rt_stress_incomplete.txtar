@@ -1,0 +1,14 @@
+# Requests still in flight when the stress duration ends are "incomplete":
+# they are not errors, not timeouts and not part of the request totals.
+exitcode 0 hitspec run slow.http --stress --duration 1s --rate 5 --no-progress --no-color --stress-json
+stdout '"incomplete": [1-9]'
+stdout '"failed": 0'
+stdout '"timeouts": 0'
+stdout 'Incomplete: +[1-9]'
+! stdout 'Failed: +[1-9]'
+
+-- slow.http --
+@baseUrl = {{$env(SERVER)}}
+
+### Slow
+GET {{baseUrl}}/slow?ms=4000

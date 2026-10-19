@@ -1,0 +1,19 @@
+# A rate-mode run that cannot reach its target says so (coordinated omission).
+exitcode 0 hitspec run slow.http --stress --duration 2s --rate 50 --max-vus 1 --no-progress --no-color
+stdout 'Warning: +achieved [0-9.]+ req/s, [0-9]+% below the 50 req/s target'
+
+# A run that keeps up does not warn.
+exitcode 0 hitspec run fast.http --stress --duration 2s --rate 10 --no-progress --no-color
+! stdout 'Warning:'
+
+-- slow.http --
+@baseUrl = {{$env(SERVER)}}
+
+### Slow
+GET {{baseUrl}}/slow?ms=250
+
+-- fast.http --
+@baseUrl = {{$env(SERVER)}}
+
+### Fast
+GET {{baseUrl}}/status/200

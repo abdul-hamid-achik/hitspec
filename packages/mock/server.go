@@ -6,15 +6,25 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/portprobe"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/builtin"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
+
+// DefaultHost is the address the mock server binds to unless WithHost says
+// otherwise: loopback only, so a mock started on a laptop is not reachable
+// from the network. Pass "0.0.0.0" (hitspec mock --host 0.0.0.0) to expose it,
+// for example from inside a container.
+const DefaultHost = "127.0.0.1"
 
 // RequestCallback is called after each mock request is served
 type RequestCallback func(method, path string, status int, duration time.Duration)
@@ -22,11 +32,16 @@ type RequestCallback func(method, path string, status int, duration time.Duratio
 // Server is a mock HTTP server based on hitspec files
 type Server struct {
 	router          *Router
+	host            string
 	port            int
+	cors            bool
 	delay           time.Duration
 	verbose         bool
 	registry        *builtin.Registry
 	requestCallback RequestCallback
+
+	mu       sync.Mutex
+	listener net.Listener
 }
 
 // Option is a functional option for Server
@@ -36,6 +51,22 @@ type Option func(*Server)
 func WithPort(port int) Option {
 	return func(s *Server) {
 		s.port = port
+	}
+}
+
+// WithHost sets the address to bind to (default 127.0.0.1).
+func WithHost(host string) Option {
+	return func(s *Server) {
+		s.host = host
+	}
+}
+
+// WithCORS makes the server answer CORS preflight requests and add
+// Access-Control-Allow-* headers to every response, so a browser app on another
+// origin can call it.
+func WithCORS(enabled bool) Option {
+	return func(s *Server) {
+		s.cors = enabled
 	}
 }
 
@@ -64,6 +95,7 @@ func WithRequestCallback(fn RequestCallback) Option {
 func NewServer(opts ...Option) *Server {
 	s := &Server{
 		router:   NewRouter(),
+		host:     DefaultHost,
 		port:     3000,
 		registry: builtin.NewRegistry(),
 	}
@@ -330,54 +362,104 @@ func (s *Server) generateBodyFromAssertions(assertions []*parser.Assertion) stri
 	return string(data)
 }
 
-// Start starts the mock server
+// Listen binds the configured host and port. It fails right away when the port
+// is taken, so callers can report that instead of announcing a server that is
+// not running. Port 0 picks a free port; Addr returns the bound address.
+func (s *Server) Listen() (net.Addr, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.listener != nil {
+		return s.listener.Addr(), nil
+	}
+	hostPort := net.JoinHostPort(s.host, strconv.Itoa(s.port))
+	// bind() can succeed next to a wildcard listener (macOS, SO_REUSEADDR):
+	// probe first so that case is an error too.
+	if portprobe.ShouldProbe(s.host) && portprobe.InUse(s.port) {
+		return nil, fmt.Errorf("mock server cannot listen on %s: port %d is already in use", hostPort, s.port)
+	}
+	ln, err := net.Listen("tcp", hostPort)
+	if err != nil {
+		return nil, fmt.Errorf("mock server cannot listen on %s: %w", hostPort, err)
+	}
+	s.listener = ln
+	return ln.Addr(), nil
+}
+
+// Addr returns the bound address, or nil before Listen/Start has bound it.
+func (s *Server) Addr() net.Addr {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.listener == nil {
+		return nil
+	}
+	return s.listener.Addr()
+}
+
+// Start starts the mock server and blocks until it fails.
 func (s *Server) Start() error {
-	addr := fmt.Sprintf(":%d", s.port)
+	return s.StartWithContext(context.Background())
+}
+
+// StartWithContext starts the server with context for graceful shutdown. A busy
+// or unusable port is returned as an error before anything is served.
+func (s *Server) StartWithContext(ctx context.Context) error {
+	addr, err := s.Listen()
+	if err != nil {
+		return err
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleRequest)
-
 	server := &http.Server{
-		Addr:    addr,
-		Handler: mux,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	log.Printf("Mock server starting on http://localhost:%d", s.port)
-	log.Printf("Routes loaded: %d", len(s.router.routes))
+	done := make(chan struct{})
+	defer close(done)
+	defer func() {
+		s.mu.Lock()
+		s.listener = nil
+		s.mu.Unlock()
+	}()
+	go func() {
+		select {
+		case <-ctx.Done():
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = server.Shutdown(shutdownCtx)
+		case <-done:
+		}
+	}()
 
+	log.Printf("Mock server listening on http://%s", displayAddr(addr))
+	log.Printf("Routes loaded: %d", len(s.router.routes))
 	if s.verbose {
 		for _, route := range s.router.routes {
 			log.Printf("  %s %s -> %d", route.Method, route.PathPattern, route.Response.StatusCode)
 		}
 	}
 
-	return server.ListenAndServe()
-}
-
-// StartWithContext starts the server with context for graceful shutdown
-func (s *Server) StartWithContext(ctx context.Context) error {
-	addr := fmt.Sprintf(":%d", s.port)
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", s.handleRequest)
-
-	server := &http.Server{
-		Addr:    addr,
-		Handler: mux,
-	}
-
-	go func() {
-		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = server.Shutdown(shutdownCtx)
-	}()
-
-	log.Printf("Mock server starting on http://localhost:%d", s.port)
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	s.mu.Lock()
+	ln := s.listener
+	s.mu.Unlock()
+	if err := server.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	return nil
+}
+
+// displayAddr renders a bound address for humans: an unspecified host shows as
+// localhost.
+func displayAddr(a net.Addr) string {
+	host, port, err := net.SplitHostPort(a.String())
+	if err != nil {
+		return a.String()
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.IsUnspecified() {
+		host = "localhost"
+	}
+	return net.JoinHostPort(host, port)
 }
 
 func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
@@ -388,10 +470,39 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(s.delay)
 	}
 
-	// Find matching route
+	if s.cors {
+		s.setCORSHeaders(w, r)
+		// A preflight is answered here unless the file defines its own OPTIONS
+		// route for the path.
+		if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
+			if route, _ := s.router.Match(r.Method, r.URL.Path); route == nil {
+				w.WriteHeader(http.StatusNoContent)
+				if s.verbose {
+					log.Printf("%s %s -> 204 CORS preflight (%s)", r.Method, r.URL.Path, time.Since(start))
+				}
+				return
+			}
+		}
+	}
+
+	// Find matching route. HEAD falls back to the GET route (the net/http
+	// server drops the body for HEAD responses).
 	route, params := s.router.Match(r.Method, r.URL.Path)
+	if route == nil && r.Method == http.MethodHead {
+		route, params = s.router.Match(http.MethodGet, r.URL.Path)
+	}
 
 	if route == nil {
+		// The path exists but not for this method: 405 with the methods it
+		// does answer, rather than a 404 that hides the real problem.
+		if allowed := s.router.AllowedMethods(r.URL.Path); len(allowed) > 0 {
+			w.Header().Set("Allow", strings.Join(allowed, ", "))
+			if s.verbose {
+				log.Printf("%s %s -> 405 Method Not Allowed, allow: %s (%s)", r.Method, r.URL.Path, strings.Join(allowed, ", "), time.Since(start))
+			}
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
 		if s.verbose {
 			log.Printf("%s %s -> 404 Not Found (%s)", r.Method, r.URL.Path, time.Since(start))
 		}
@@ -423,6 +534,21 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	if s.requestCallback != nil {
 		s.requestCallback(r.Method, r.URL.Path, resp.StatusCode, duration)
 	}
+}
+
+// setCORSHeaders opens the response to any origin and echoes the headers a
+// preflight asked for.
+func (s *Server) setCORSHeaders(w http.ResponseWriter, r *http.Request) {
+	h := w.Header()
+	h.Set("Access-Control-Allow-Origin", "*")
+	h.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS")
+	if reqHeaders := r.Header.Get("Access-Control-Request-Headers"); reqHeaders != "" {
+		h.Set("Access-Control-Allow-Headers", reqHeaders)
+	} else {
+		h.Set("Access-Control-Allow-Headers", "*")
+	}
+	h.Set("Access-Control-Expose-Headers", "*")
+	h.Set("Access-Control-Max-Age", "600")
 }
 
 func (s *Server) resolveBodyParams(body string, params map[string]string) string {
