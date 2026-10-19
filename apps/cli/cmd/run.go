@@ -753,7 +753,7 @@ func newFormatter(format string, outWriter io.Writer, verbose int, noColor, quie
 // runStressMode executes stress tests using the stress runner
 func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config, environment string, clientOpts []http.ClientOption) error {
 	// Build stress config
-	cfg, err := buildStressConfig(fileConfig)
+	cfg, err := buildStressConfig(cmd, fileConfig)
 	if err != nil {
 		return err
 	}
@@ -865,8 +865,12 @@ func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config
 		cancel()
 	}()
 
+	// Keep Prometheus scrapes current while the test runs, not just after it.
+	stopLive := publishPrometheusLive(ctx, stressRunner, metricsExporters)
+
 	// Run the stress test
 	result, err := stressRunner.Run(ctx)
+	stopLive()
 	if err != nil {
 		return err
 	}
@@ -892,9 +896,53 @@ func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config
 	return nil
 }
 
+// publishPrometheusLive pushes the runner's running totals to every Prometheus
+// exporter once a second, so a scrape during the test sees the current numbers
+// instead of zeros until the end. Other exporters (JSON, Datadog) are written
+// once, after the run. The returned func stops the loop and waits for it.
+func publishPrometheusLive(ctx context.Context, runner *stress.Runner, exporters []metrics.Exporter) (stop func()) {
+	var live []*metrics.PrometheusExporter
+	for _, e := range exporters {
+		if p, ok := e.(*metrics.PrometheusExporter); ok {
+			live = append(live, p)
+		}
+	}
+	if len(live) == 0 {
+		return func() {}
+	}
+	done := make(chan struct{})
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			case <-ticker.C:
+				aggregate := stressResultToMetrics(runner.GetSummary())
+				for _, p := range live {
+					_ = p.Export(aggregate)
+				}
+			}
+		}
+	}()
+	return func() {
+		close(done)
+		<-stopped
+	}
+}
+
 // buildStressConfig builds stress configuration from flags and profile
-func buildStressConfig(fileConfig *config.Config) (*stress.Config, error) {
+func buildStressConfig(cmd *cobra.Command, fileConfig *config.Config) (*stress.Config, error) {
 	cfg := stress.DefaultConfig()
+	// A flag overrides the profile only when it was actually passed. Comparing
+	// against the flag's default instead would let the default mask the
+	// profile, and make an explicit "--rate 10" impossible to honor.
+	flagSet := func(name string) bool { return cmd.Flags().Changed(name) }
 
 	// Load from profile if specified
 	if stressProfileFlag != "" && fileConfig != nil && fileConfig.Stress != nil {
@@ -944,7 +992,7 @@ func buildStressConfig(fileConfig *config.Config) (*stress.Config, error) {
 	}
 
 	// Override with CLI flags
-	if stressDurationFlag != "30s" { // Only override if explicitly set
+	if flagSet("duration") {
 		d, err := time.ParseDuration(stressDurationFlag)
 		if err != nil {
 			return nil, fmt.Errorf("invalid duration: %w", err)
@@ -952,20 +1000,20 @@ func buildStressConfig(fileConfig *config.Config) (*stress.Config, error) {
 		cfg.Duration = d
 	}
 
-	if stressRateFlag != 10 { // Only override if explicitly set
+	if flagSet("rate") {
 		cfg.Rate = stressRateFlag
 	}
 
-	if stressVUsFlag > 0 {
+	if flagSet("vus") && stressVUsFlag > 0 {
 		cfg.VUs = stressVUsFlag
 		cfg.Mode = stress.VUMode
 	}
 
-	if stressMaxVUsFlag != 100 { // Only override if explicitly set
+	if flagSet("max-vus") {
 		cfg.MaxVUs = stressMaxVUsFlag
 	}
 
-	if stressThinkTimeFlag != "0s" {
+	if flagSet("think-time") {
 		d, err := time.ParseDuration(stressThinkTimeFlag)
 		if err != nil {
 			return nil, fmt.Errorf("invalid think time: %w", err)
@@ -973,7 +1021,7 @@ func buildStressConfig(fileConfig *config.Config) (*stress.Config, error) {
 		cfg.ThinkTime = d
 	}
 
-	if stressRampUpFlag != "0s" {
+	if flagSet("ramp-up") {
 		d, err := time.ParseDuration(stressRampUpFlag)
 		if err != nil {
 			return nil, fmt.Errorf("invalid ramp-up: %w", err)
@@ -981,7 +1029,7 @@ func buildStressConfig(fileConfig *config.Config) (*stress.Config, error) {
 		cfg.RampUp = d
 	}
 
-	if stressThresholdFlag != "" {
+	if flagSet("threshold") && stressThresholdFlag != "" {
 		t, err := stress.ParseThresholds(stressThresholdFlag)
 		if err != nil {
 			return nil, fmt.Errorf("invalid thresholds: %w", err)

@@ -61,7 +61,20 @@ Available threshold metrics:
 | `p50` | `p50<100ms` | Median response time |
 | `p95` | `p95<200ms` | 95th percentile response time |
 | `p99` | `p99<500ms` | 99th percentile response time |
-| `errors` | `errors<0.1%` | Error rate percentage |
+| `errors` | `errors<0.1%` | Error rate: transport errors and non-2xx responses. Assertion failures are not counted here |
+| `assertions` | `assertions<1%` | Share of checked responses that failed an assertion. `assertions<0%` means no assertion may fail |
+
+## Assertions, Errors and Incomplete Requests
+
+Requests that have `expect` assertions are checked in stress mode too. The results are kept apart so each threshold means one thing:
+
+- **Errors** (`errors<...`) are requests that failed in transport (connection refused, a client timeout, ...) or came back with a non-2xx status. A non-2xx status that the request's own `expect status` accepts (`expect status 404` and the response is a 404) is expected, so it is not an error.
+- **Assertion failures** (`assertions<...`) are responses where at least one `expect` did not hold. A `200` whose body assertion fails is a success for `errors` and a failure for `assertions`. The summary prints `Assertions: N checked, M failed`, and `--stress-json` reports `checked`, `failed` and `failureRate`. `snapshot` assertions are skipped under load.
+- **Incomplete** requests were still in flight when the duration ended. They are reported on their own line and are not counted as requests, successes or errors, so a slow tail at the end of the window no longer inflates your error rate.
+
+<Warning>
+  A run that falls more than 10% short of its target `--rate` prints a warning. When the server (or `--max-vus`) cannot keep up, the test sends less load than you asked for and the latencies understate what clients arriving on schedule would see, so do not read them as "the server handled N req/s".
+</Warning>
 
 You can also assert on percentile latencies in your expect blocks:
 
@@ -194,6 +207,8 @@ Run a profile:
 hitspec run api.http --stress --profile load --env staging
 ```
 
+A flag you pass on the command line overrides the profile, even when it equals the flag's default (`--rate 10` wins over a profile's `rate: 100`). Settings you do not pass come from the profile.
+
 ### Managing Profiles from studio
 
 The [hitspec studio](/guides/api-client-manager) stress screen lets you create, edit, and delete profiles without touching `hitspec.yaml` directly. Changes are persisted to `hitspec.yaml` automatically.
@@ -256,7 +271,7 @@ Use stress testing in GitHub Actions with thresholds:
 Export stress test metrics to monitoring systems:
 
 ```bash
-# Prometheus endpoint
+# Prometheus endpoint (updated every second while the test runs)
 hitspec run api.http --stress --metrics prometheus --metrics-port 9090
 
 # JSON file

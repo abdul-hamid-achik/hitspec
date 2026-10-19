@@ -197,6 +197,26 @@ func (r *Reporter) Summary(summary *Summary, thresholdResults []ThresholdResult)
 		_, _ = r.yellow.Fprintf(r.writer, "%s\n", formatNumber(summary.TimeoutCount))
 	}
 
+	if summary.IncompleteCount > 0 {
+		_, _ = fmt.Fprintf(r.writer, "Incomplete: ")
+		_, _ = r.yellow.Fprintf(r.writer, "%s", formatNumber(summary.IncompleteCount))
+		_, _ = fmt.Fprintln(r.writer, " (in flight when the duration ended; not counted above)")
+	}
+
+	if summary.AssertionChecks > 0 {
+		_, _ = fmt.Fprintf(r.writer, "Assertions: %s checked, ", formatNumber(summary.AssertionChecks))
+		if summary.AssertionFailures > 0 {
+			_, _ = r.red.Fprintf(r.writer, "%s failed", formatNumber(summary.AssertionFailures))
+		} else {
+			_, _ = fmt.Fprint(r.writer, "0 failed")
+		}
+		_, _ = fmt.Fprintf(r.writer, " (%.1f%%)\n", summary.AssertionFailRate*100)
+	}
+
+	for _, w := range summary.Warnings {
+		_, _ = r.yellow.Fprintf(r.writer, "Warning:    %s\n", w)
+	}
+
 	// Latency
 	_, _ = fmt.Fprintln(r.writer)
 	_, _ = r.bold.Fprintln(r.writer, "LATENCY (ms)")
@@ -216,8 +236,8 @@ func (r *Reporter) Summary(summary *Summary, thresholdResults []ThresholdResult)
 		_, _ = r.bold.Fprintln(r.writer, "PER-REQUEST BREAKDOWN")
 		for name, rs := range summary.RequestBreakdown {
 			_, _ = fmt.Fprintf(r.writer, "  %s:\n", name)
-			_, _ = fmt.Fprintf(r.writer, "    Total: %s | Success: %s | Errors: %s\n",
-				formatNumber(rs.Total), formatNumber(rs.Success), formatNumber(rs.Errors))
+			_, _ = fmt.Fprintf(r.writer, "    Total: %s | Success: %s | Errors: %s | Assertion failures: %s\n",
+				formatNumber(rs.Total), formatNumber(rs.Success), formatNumber(rs.Errors), formatNumber(rs.AssertionFailures))
 			_, _ = fmt.Fprintf(r.writer, "    p50: %s | p95: %s | p99: %s\n",
 				formatLatency(rs.P50), formatLatency(rs.P95), formatLatency(rs.P99))
 		}
@@ -258,6 +278,14 @@ func (r *Reporter) JSONSummary(summary *Summary, thresholdResults []ThresholdRes
 			"success":  summary.SuccessCount,
 			"failed":   summary.ErrorCount,
 			"timeouts": summary.TimeoutCount,
+			// Requests still in flight when the duration ended; not in the
+			// counts above.
+			"incomplete": summary.IncompleteCount,
+		},
+		"assertions": map[string]interface{}{
+			"checked":     summary.AssertionChecks,
+			"failed":      summary.AssertionFailures,
+			"failureRate": summary.AssertionFailRate,
 		},
 		"rates": map[string]interface{}{
 			"rps":         summary.RPS,
@@ -273,6 +301,10 @@ func (r *Reporter) JSONSummary(summary *Summary, thresholdResults []ThresholdRes
 			"mean":   summary.Mean.Milliseconds(),
 			"stddev": summary.StdDev.Milliseconds(),
 		},
+	}
+
+	if len(summary.Warnings) > 0 {
+		output["warnings"] = summary.Warnings
 	}
 
 	if len(thresholdResults) > 0 {
@@ -292,13 +324,14 @@ func (r *Reporter) JSONSummary(summary *Summary, thresholdResults []ThresholdRes
 		breakdown := make(map[string]interface{})
 		for name, rs := range summary.RequestBreakdown {
 			breakdown[name] = map[string]interface{}{
-				"total":   rs.Total,
-				"success": rs.Success,
-				"errors":  rs.Errors,
-				"p50":     rs.P50.Milliseconds(),
-				"p95":     rs.P95.Milliseconds(),
-				"p99":     rs.P99.Milliseconds(),
-				"mean":    rs.Mean.Milliseconds(),
+				"total":             rs.Total,
+				"success":           rs.Success,
+				"errors":            rs.Errors,
+				"assertionFailures": rs.AssertionFailures,
+				"p50":               rs.P50.Milliseconds(),
+				"p95":               rs.P95.Milliseconds(),
+				"p99":               rs.P99.Milliseconds(),
+				"mean":              rs.Mean.Milliseconds(),
 			}
 		}
 		output["requestBreakdown"] = breakdown
