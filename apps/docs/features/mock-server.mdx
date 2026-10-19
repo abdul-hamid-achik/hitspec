@@ -112,7 +112,29 @@ A GET request to `/products/1` matches this route and returns:
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--port` | Server port | `3000` |
+| `--host` | Address to bind (`0.0.0.0` to expose the server) | `127.0.0.1` |
+| `--cors` | Answer CORS preflights and add `Access-Control-Allow-*` headers | off |
 | `--delay` | Artificial response delay | `0` |
+
+## Network Access
+
+The mock server listens on `127.0.0.1`, so it is reachable only from your own machine. To reach it from another machine, a phone on your network, or a container, bind all interfaces:
+
+```bash
+hitspec mock api.http --host 0.0.0.0
+```
+
+<Warning>
+  Binding `0.0.0.0` makes the mock server reachable by anything on the network. When you run it in Docker, pass `--host 0.0.0.0` (and publish the port) or the published port will not connect.
+</Warning>
+
+If the port is already taken, `hitspec mock` prints the error and exits non-zero instead of reporting a server that is not running.
+
+## Methods, HEAD and CORS
+
+- A path that exists but not for the request's method gets `405 Method Not Allowed` with an `Allow` header listing the methods it does have. Unknown paths still get `404`.
+- `HEAD` is answered from the `GET` route of the same path (status and headers, no body).
+- With `--cors`, every response carries `Access-Control-Allow-Origin: *` and friends, and `OPTIONS` preflights are answered with `204`. CORS is off by default.
 
 ## Adding Artificial Delay
 
