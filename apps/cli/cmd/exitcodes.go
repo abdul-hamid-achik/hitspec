@@ -1,5 +1,11 @@
 package cmd
 
+import (
+	"strings"
+
+	"github.com/spf13/cobra"
+)
+
 // Exit codes for hitspec CLI
 const (
 	// ExitSuccess indicates all tests passed
@@ -47,4 +53,39 @@ func (e *exitError) ExitCode() int { return e.code }
 // newExitError returns an error the root command maps to the given exit code.
 func newExitError(code int, msg string) error {
 	return &exitError{code: code, msg: msg}
+}
+
+// usageError is a command-line mistake found by the argument parser: an
+// unknown flag or command, a bad flag value, a missing required flag or the
+// wrong number of arguments. Unlike exitError, the root command prints it.
+type usageError struct{ err error }
+
+func (e usageError) Error() string { return e.err.Error() }
+func (e usageError) Unwrap() error { return e.err }
+func (e usageError) ExitCode() int { return ExitUsageError }
+
+// markUsageErrors makes cobra's own parse and argument-count errors usage
+// errors (exit 64) for c and every command below it.
+func markUsageErrors(c *cobra.Command) {
+	c.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usageError{err} })
+	if validate := c.Args; validate != nil {
+		c.Args = func(cmd *cobra.Command, args []string) error {
+			if err := validate(cmd, args); err != nil {
+				return usageError{err}
+			}
+			return nil
+		}
+	}
+	for _, sub := range c.Commands() {
+		markUsageErrors(sub)
+	}
+}
+
+// isCobraUsageError recognizes the parse errors cobra returns as plain
+// errors, before any command runs: an unknown command and a required flag
+// that was not set.
+func isCobraUsageError(err error) bool {
+	msg := err.Error()
+	return strings.HasPrefix(msg, "unknown command ") ||
+		strings.HasPrefix(msg, `required flag(s) "`)
 }
