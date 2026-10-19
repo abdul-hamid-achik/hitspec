@@ -94,7 +94,9 @@ func recordCommand(cmd *cobra.Command, args []string) error {
 
 	// Bind before announcing anything, so a busy port is an error up front.
 	if _, err := recorder.Listen(); err != nil {
-		return err
+		// Like a busy --metrics-port: a config problem, exit 3.
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return newExitError(ExitConfigError, err.Error())
 	}
 	if ip := net.ParseIP(recordHostFlag); recordHostFlag == "" || (ip != nil && ip.IsUnspecified()) {
 		fmt.Fprintln(cmd.ErrOrStderr(), "warning: the recording proxy is listening on all network interfaces")

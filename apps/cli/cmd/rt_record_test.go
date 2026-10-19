@@ -20,6 +20,9 @@ func TestRecord_BusyPortIsAnError(t *testing.T) {
 	err = rootCmd.Execute()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), strconv.Itoa(port))
+	var ec ExitCoder
+	require.ErrorAs(t, err, &ec)
+	assert.Equal(t, ExitConfigError, ec.ExitCode())
 }
 
 func TestRecord_FlagDefaults(t *testing.T) {
