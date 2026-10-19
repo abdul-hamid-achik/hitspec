@@ -1,0 +1,33 @@
+# Direction of the duration comparison: slower is "regressed", faster is
+# "improved", and a zero baseline never produces a verdict from thin air.
+
+exec hitspec diff base.json cur.json --output json
+stdout '(?s)"testName": "slower".*"statusChange": "regressed".*"durationChange": 100'
+stdout '(?s)"testName": "faster".*"statusChange": "improved".*"durationChange": -50'
+stdout '(?s)"testName": "zero-base".*"statusChange": "unchanged"'
+stdout '"Regressed": 1'
+stdout '"Improved": 1'
+
+# A threshold turns the slowdown into a failing exit.
+! exec hitspec diff base.json cur.json --threshold 50%
+stdout 'Threshold check failed'
+
+# The zero baseline alone never trips a threshold.
+exec hitspec diff base.json zero.json --threshold 10%
+stdout 'Threshold check passed'
+
+-- base.json --
+{"summary":{"total":3,"passed":3,"failed":0,"skipped":0},"duration":0,"tests":[
+ {"name":"slower","file":"a.http","passed":true,"duration":100},
+ {"name":"faster","file":"a.http","passed":true,"duration":100},
+ {"name":"zero-base","file":"a.http","passed":true,"duration":0}]}
+-- cur.json --
+{"summary":{"total":3,"passed":3,"failed":0,"skipped":0},"duration":0,"tests":[
+ {"name":"slower","file":"a.http","passed":true,"duration":200},
+ {"name":"faster","file":"a.http","passed":true,"duration":50},
+ {"name":"zero-base","file":"a.http","passed":true,"duration":3009}]}
+-- zero.json --
+{"summary":{"total":3,"passed":3,"failed":0,"skipped":0},"duration":0,"tests":[
+ {"name":"slower","file":"a.http","passed":true,"duration":100},
+ {"name":"faster","file":"a.http","passed":true,"duration":100},
+ {"name":"zero-base","file":"a.http","passed":true,"duration":3009}]}

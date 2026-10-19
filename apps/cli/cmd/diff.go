@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -72,12 +73,15 @@ type DiffResult struct {
 type TestComparison struct {
 	TestName       string
 	File           string
-	StatusChange   string  // "improved", "regressed", "unchanged", "new", "removed"
+	StatusChange   string  // "improved", "regressed", "unchanged", "skipped", "new", "removed"
 	Duration1      float64 // ms
 	Duration2      float64 // ms
-	DurationChange float64 // percentage change
+	DurationChange float64 // percentage change; 0 when the baseline duration is 0 (see NoBaseline)
+	NoBaseline     bool    // both runs present but the first duration is 0, so no percentage exists
 	Passed1        bool
 	Passed2        bool
+	Skipped1       bool
+	Skipped2       bool
 	InFile1        bool
 	InFile2        bool
 }
@@ -88,6 +92,7 @@ type DiffSummary struct {
 	Improved         int
 	Regressed        int
 	Unchanged        int
+	Skipped          int // skipped in the second run; never counted as failures
 	NewTests         int
 	RemovedTests     int
 	AvgDuration1     float64
@@ -159,6 +164,12 @@ func parseThreshold(s string) (float64, error) {
 	return v, nil
 }
 
+// testKey identifies a test by file, name and occurrence, so two tests that
+// share a file and name (e.g. unnamed requests) are not merged.
+func testKey(t DiffJSONTest, occurrence int) string {
+	return fmt.Sprintf("%s::%s#%d", t.File, t.Name, occurrence)
+}
+
 func compareResults(file1, file2 string, results1, results2 *DiffJSONOutput, threshold float64) *DiffResult {
 	diff := &DiffResult{
 		File1: file1,
@@ -171,32 +182,36 @@ func compareResults(file1, file2 string, results1, results2 *DiffJSONOutput, thr
 		},
 	}
 
-	// Create maps for quick lookup
+	// Index both runs, remembering first-seen order so the report is stable.
 	tests1 := make(map[string]DiffJSONTest)
 	tests2 := make(map[string]DiffJSONTest)
+	var order []string
+	seen := make(map[string]bool)
+	index := func(tests []DiffJSONTest, into map[string]DiffJSONTest) {
+		occurrences := make(map[string]int)
+		for _, t := range tests {
+			base := t.File + "::" + t.Name
+			occurrences[base]++
+			key := testKey(t, occurrences[base])
+			into[key] = t
+			if !seen[key] {
+				seen[key] = true
+				order = append(order, key)
+			}
+		}
+	}
+	index(results1.Tests, tests1)
+	index(results2.Tests, tests2)
 
-	for _, t := range results1.Tests {
-		key := t.File + "::" + t.Name
-		tests1[key] = t
-	}
-	for _, t := range results2.Tests {
-		key := t.File + "::" + t.Name
-		tests2[key] = t
-	}
-
-	// Track all unique test names
-	allTests := make(map[string]bool)
-	for key := range tests1 {
-		allTests[key] = true
-	}
-	for key := range tests2 {
-		allTests[key] = true
-	}
+	// Group by file (alphabetical), keeping request order within a file.
+	sort.SliceStable(order, func(i, j int) bool {
+		return getFileFromKey(order[i]) < getFileFromKey(order[j])
+	})
 
 	var totalDur1, totalDur2 float64
 	var count1, count2 int
 
-	for key := range allTests {
+	for _, key := range order {
 		t1, in1 := tests1[key]
 		t2, in2 := tests2[key]
 
@@ -210,25 +225,48 @@ func compareResults(file1, file2 string, results1, results2 *DiffJSONOutput, thr
 		if in1 {
 			comp.Duration1 = t1.Duration
 			comp.Passed1 = t1.Passed
-			totalDur1 += t1.Duration
-			count1++
+			comp.Skipped1 = t1.Skipped
+			if !t1.Skipped {
+				totalDur1 += t1.Duration
+				count1++
+			}
 		}
 		if in2 {
 			comp.Duration2 = t2.Duration
 			comp.Passed2 = t2.Passed
-			totalDur2 += t2.Duration
-			count2++
+			comp.Skipped2 = t2.Skipped
+			if !t2.Skipped {
+				totalDur2 += t2.Duration
+				count2++
+			}
 		}
 
 		// Determine status change and duration change
-		if in1 && in2 {
-			// Calculate percentage change
-			if comp.Duration1 > 0 {
+		switch {
+		case in1 && in2:
+			// A skipped run never executed, so its pass flag and its 0 ms
+			// duration say nothing about the test.
+			comparable := !comp.Skipped1 && !comp.Skipped2
+			if comparable && comp.Duration1 > 0 {
 				comp.DurationChange = ((comp.Duration2 - comp.Duration1) / comp.Duration1) * 100
+			} else if comparable {
+				comp.NoBaseline = true
 			}
 
-			// Determine status
-			if comp.Passed1 != comp.Passed2 {
+			switch {
+			case comp.Skipped2:
+				comp.StatusChange = "skipped"
+				diff.Summary.Skipped++
+			case comp.Skipped1:
+				// Newly executed: a failure now is a regression, a pass is neutral.
+				if comp.Passed2 {
+					comp.StatusChange = "unchanged"
+					diff.Summary.Unchanged++
+				} else {
+					comp.StatusChange = "regressed"
+					diff.Summary.Regressed++
+				}
+			case comp.Passed1 != comp.Passed2:
 				if comp.Passed2 {
 					comp.StatusChange = "improved"
 					diff.Summary.Improved++
@@ -236,25 +274,25 @@ func compareResults(file1, file2 string, results1, results2 *DiffJSONOutput, thr
 					comp.StatusChange = "regressed"
 					diff.Summary.Regressed++
 				}
-			} else if comp.DurationChange < -10 {
+			case comp.DurationChange < -10:
 				comp.StatusChange = "improved"
 				diff.Summary.Improved++
-			} else if comp.DurationChange > 10 {
+			case comp.DurationChange > 10:
 				comp.StatusChange = "regressed"
 				diff.Summary.Regressed++
-			} else {
+			default:
 				comp.StatusChange = "unchanged"
 				diff.Summary.Unchanged++
 			}
 
 			// Check threshold
-			if threshold > 0 && comp.DurationChange > threshold {
+			if threshold > 0 && comparable && comp.DurationChange > threshold {
 				diff.Summary.ThresholdPassed = false
 			}
-		} else if in1 && !in2 {
+		case in1:
 			comp.StatusChange = "removed"
 			diff.Summary.RemovedTests++
-		} else {
+		default:
 			comp.StatusChange = "new"
 			diff.Summary.NewTests++
 		}
@@ -274,6 +312,9 @@ func compareResults(file1, file2 string, results1, results2 *DiffJSONOutput, thr
 }
 
 func getTestNameFromKey(key string) string {
+	if i := strings.LastIndex(key, "#"); i >= 0 {
+		key = key[:i]
+	}
 	parts := strings.SplitN(key, "::", 2)
 	if len(parts) == 2 {
 		return parts[1]
@@ -312,6 +353,9 @@ func outputDiffConsole(diff *DiffResult) error {
 	if diff.Summary.Unchanged > 0 {
 		fmt.Printf("  Unchanged:      %d\n", diff.Summary.Unchanged)
 	}
+	if diff.Summary.Skipped > 0 {
+		fmt.Printf("  Skipped:        %d\n", diff.Summary.Skipped)
+	}
 	if diff.Summary.NewTests > 0 {
 		fmt.Printf("  New Tests:      %s\n", cyan(fmt.Sprintf("%d", diff.Summary.NewTests)))
 	}
@@ -330,7 +374,14 @@ func outputDiffConsole(diff *DiffResult) error {
 
 	// Detailed changes
 	fmt.Printf("%s\n", bold("Test Details"))
+	lastFile, wroteFile := "", false
 	for _, comp := range diff.Comparisons {
+		if !wroteFile || comp.File != lastFile {
+			if comp.File != "" {
+				fmt.Printf(" %s\n", cyan(comp.File))
+			}
+			lastFile, wroteFile = comp.File, true
+		}
 		var statusSymbol string
 		var statusColor func(a ...interface{}) string
 
@@ -347,6 +398,9 @@ func outputDiffConsole(diff *DiffResult) error {
 		case "removed":
 			statusSymbol = "-"
 			statusColor = yellow
+		case "skipped":
+			statusSymbol = "~"
+			statusColor = yellow
 		default:
 			statusSymbol = "="
 			statusColor = func(a ...interface{}) string { return fmt.Sprint(a...) }
@@ -357,9 +411,20 @@ func outputDiffConsole(diff *DiffResult) error {
 			name = "(unnamed)"
 		}
 
-		if comp.InFile1 && comp.InFile2 {
+		if comp.InFile1 && comp.InFile2 && (comp.Skipped1 || comp.Skipped2) {
+			state := func(skipped bool, ms float64) string {
+				if skipped {
+					return "skipped"
+				}
+				return fmt.Sprintf("%.0fms", ms)
+			}
+			fmt.Printf("  %s %s  %s → %s\n", statusColor(statusSymbol), name,
+				state(comp.Skipped1, comp.Duration1), state(comp.Skipped2, comp.Duration2))
+		} else if comp.InFile1 && comp.InFile2 {
 			changeStr := ""
-			if comp.DurationChange > 0 {
+			if comp.NoBaseline {
+				changeStr = "(no baseline)"
+			} else if comp.DurationChange > 0 {
 				changeStr = fmt.Sprintf("+%.1f%%", comp.DurationChange)
 			} else if comp.DurationChange < 0 {
 				changeStr = fmt.Sprintf("%.1f%%", comp.DurationChange)
@@ -399,6 +464,9 @@ func outputDiffJSON(diff *DiffResult) error {
 		Duration1      float64 `json:"duration1,omitempty"`
 		Duration2      float64 `json:"duration2,omitempty"`
 		DurationChange float64 `json:"durationChange,omitempty"`
+		NoBaseline     bool    `json:"noBaseline,omitempty"`
+		Skipped1       bool    `json:"skipped1,omitempty"`
+		Skipped2       bool    `json:"skipped2,omitempty"`
 	}
 
 	type JSONDiff struct {
@@ -422,6 +490,9 @@ func outputDiffJSON(diff *DiffResult) error {
 			Duration1:      c.Duration1,
 			Duration2:      c.Duration2,
 			DurationChange: c.DurationChange,
+			NoBaseline:     c.NoBaseline,
+			Skipped1:       c.Skipped1,
+			Skipped2:       c.Skipped2,
 		})
 	}
 
@@ -472,7 +543,7 @@ func outputDiffHTML(diff *DiffResult) error {
         .improved { color: var(--success); }
         .regressed { color: var(--error); }
         .new { color: var(--info); }
-        .removed { color: var(--warning); }
+        .removed, .skipped { color: var(--warning); }
         .threshold { margin-top: 2rem; padding: 1rem; border-radius: 8px; }
         .threshold.passed { background: rgba(0, 210, 106, 0.1); border: 1px solid var(--success); }
         .threshold.failed { background: rgba(255, 71, 87, 0.1); border: 1px solid var(--error); }
@@ -502,8 +573,8 @@ func outputDiffHTML(diff *DiffResult) error {
                 <tr>
                     <td>{{if .TestName}}{{.TestName}}{{else}}(unnamed){{end}}</td>
                     <td class="{{.StatusChange}}">{{.StatusChange}}</td>
-                    <td>{{if and .InFile1 .InFile2}}{{printf "%.0f" .Duration1}} → {{printf "%.0f" .Duration2}}{{else if .InFile1}}{{printf "%.0f" .Duration1}} (removed){{else}}{{printf "%.0f" .Duration2}} (new){{end}}</td>
-                    <td class="{{.StatusChange}}">{{if and .InFile1 .InFile2}}{{if gt .DurationChange 0}}+{{end}}{{printf "%.1f" .DurationChange}}%{{end}}</td>
+                    <td>{{if and .InFile1 .InFile2}}{{if .Skipped1}}skipped{{else}}{{printf "%.0f" .Duration1}}{{end}} → {{if .Skipped2}}skipped{{else}}{{printf "%.0f" .Duration2}}{{end}}{{else if .InFile1}}{{printf "%.0f" .Duration1}} (removed){{else}}{{printf "%.0f" .Duration2}} (new){{end}}</td>
+                    <td class="{{.StatusChange}}">{{if and .InFile1 .InFile2 (not .Skipped1) (not .Skipped2)}}{{if .NoBaseline}}n/a{{else}}{{if gt .DurationChange 0.0}}+{{end}}{{printf "%.1f" .DurationChange}}%{{end}}{{end}}</td>
                 </tr>
                 {{end}}
             </tbody>

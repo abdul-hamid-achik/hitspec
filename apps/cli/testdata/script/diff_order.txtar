@@ -1,0 +1,33 @@
+# diff lists tests grouped by file (alphabetical) and in request order within a
+# file, identically on every run (it used to iterate a map).
+
+exec hitspec diff a.json b.json --output json
+stdout '(?s)"testName": "alpha-1".*"testName": "alpha-2".*"testName": "alpha-3".*"testName": "zeta-1".*"testName": "zeta-2"'
+cp stdout first.json
+
+# Repeat: byte-identical output.
+exec hitspec diff a.json b.json --output json
+cmp stdout first.json
+exec hitspec diff a.json b.json --output json
+cmp stdout first.json
+exec hitspec diff a.json b.json --output json
+cmp stdout first.json
+
+# Console order matches.
+exec hitspec diff a.json b.json
+stdout '(?s)alpha-1.*alpha-2.*alpha-3.*zeta-1.*zeta-2'
+
+-- a.json --
+{"summary":{"total":5,"passed":5,"failed":0,"skipped":0},"duration":500,"tests":[
+ {"name":"zeta-1","file":"z.http","passed":true,"duration":10},
+ {"name":"alpha-1","file":"a.http","passed":true,"duration":10},
+ {"name":"zeta-2","file":"z.http","passed":true,"duration":10},
+ {"name":"alpha-2","file":"a.http","passed":true,"duration":10},
+ {"name":"alpha-3","file":"a.http","passed":true,"duration":10}]}
+-- b.json --
+{"summary":{"total":5,"passed":5,"failed":0,"skipped":0},"duration":500,"tests":[
+ {"name":"alpha-3","file":"a.http","passed":true,"duration":10},
+ {"name":"zeta-2","file":"z.http","passed":true,"duration":10},
+ {"name":"alpha-1","file":"a.http","passed":true,"duration":10},
+ {"name":"zeta-1","file":"z.http","passed":true,"duration":10},
+ {"name":"alpha-2","file":"a.http","passed":true,"duration":10}]}

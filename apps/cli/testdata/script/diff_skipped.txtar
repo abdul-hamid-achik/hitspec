@@ -1,0 +1,36 @@
+# A skipped test is not a failure: it is counted separately, and a test that was
+# skipped in the first run and passes in the second is not "improved".
+
+exec hitspec diff before.json after.json --output json
+stdout '"Skipped": 1'
+stdout '"Regressed": 0'
+stdout '"Improved": 0'
+# was skipped (0 ms), now passes in 3009 ms: neutral, and no percentage is invented
+stdout '(?s)"testName": "was-skipped".*"statusChange": "unchanged"'
+stdout '"skipped1": true'
+stdout '(?s)"testName": "now-skipped".*"statusChange": "skipped"'
+
+exec hitspec diff before.json after.json
+stdout 'Skipped: +1'
+! stdout 'Improved'
+! stdout 'Regressed'
+stdout 'was-skipped +skipped → 3009ms'
+stdout 'skipped'
+
+# A real pass -> fail is still a regression.
+exec hitspec diff before.json fail.json --output json
+stdout '"Regressed": 1'
+stdout '(?s)"testName": "now-skipped".*"statusChange": "regressed"'
+
+-- before.json --
+{"summary":{"total":2,"passed":1,"failed":0,"skipped":1},"duration":10,"tests":[
+ {"name":"was-skipped","file":"a.http","passed":false,"skipped":true,"duration":0},
+ {"name":"now-skipped","file":"a.http","passed":true,"duration":10}]}
+-- after.json --
+{"summary":{"total":2,"passed":1,"failed":0,"skipped":1},"duration":3009,"tests":[
+ {"name":"was-skipped","file":"a.http","passed":true,"duration":3009},
+ {"name":"now-skipped","file":"a.http","passed":false,"skipped":true,"duration":0}]}
+-- fail.json --
+{"summary":{"total":2,"passed":1,"failed":1,"skipped":0},"duration":3009,"tests":[
+ {"name":"was-skipped","file":"a.http","passed":true,"duration":10},
+ {"name":"now-skipped","file":"a.http","passed":false,"duration":10}]}
