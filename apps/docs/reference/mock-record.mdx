@@ -39,7 +39,7 @@ The mock server:
 - Answers `405 Method Not Allowed` with an `Allow` header when the path exists for another method
 - Serves `HEAD` from the `GET` route of the same path
 - Listens on `127.0.0.1` only; pass `--host 0.0.0.0` to expose it (for example in Docker)
-- Exits with an error when the port is already in use
+- Exits `3` when the port is already in use
 - Handles graceful shutdown on `Ctrl+C` (SIGINT/SIGTERM)
 
 ## Examples
@@ -118,7 +118,7 @@ The recording proxy:
 - Redacts secrets by default: the `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key` and `Api-Key` headers, and JSON fields named `password`, `secret`, `token` or `apiKey` (including `access_token`, `clientSecret` and similar names that end in one of those) in request and response bodies. Values become `{{AUTHORIZATION}}`, `{{ACCESS_TOKEN}}`, ... so the exported file can be run with those variables defined. Use `--no-redact` to keep everything
 - Records the full target URL, including a path prefix in `--target` (`--target https://api.example.com/v2` records `https://api.example.com/v2/users`)
 - Listens on `127.0.0.1` only; pass `--host 0.0.0.0` to expose it
-- Exits with an error when the port is already in use
+- Exits `3` when the port is already in use
 - Exports to `.http` format on shutdown (`Ctrl+C`)
 - Supports deduplication of repeated requests
 

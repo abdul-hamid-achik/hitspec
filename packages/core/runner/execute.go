@@ -436,6 +436,7 @@ func (r *Runner) executeRequest(ctx context.Context, req *parser.Request, baseDi
 			assertions.WithTestFile(filePath),
 			assertions.WithRequestName(req.Name),
 			assertions.WithSnapshotManager(r.snapshots),
+			assertions.WithFileRoot(r.config.FileRoot),
 			assertions.WithResolver(r.resolver.Resolve))
 		result.Passed = true
 		for _, a := range result.Assertions {

@@ -99,7 +99,8 @@ func (s *Server) handleImportOpenAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	opts := []openapi.Option{}
+	// The request's context cancels fetching a remote spec when the client goes away.
+	opts := []openapi.Option{openapi.WithContext(r.Context())}
 	if req.BaseURL != "" {
 		opts = append(opts, openapi.WithBaseURL(req.BaseURL))
 	}

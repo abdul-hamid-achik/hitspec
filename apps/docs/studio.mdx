@@ -68,7 +68,7 @@ Press a number key (or use the palette) to switch screens:
 | Key | Screen | Purpose |
 |-----|--------|---------|
 | `1` | Workspace | Browse, edit, and run requests |
-| `2` | Stress | Run a load test and watch live metrics |
+| `2` | Stress | Run a load test and watch live metrics (progress follows the run's own duration) |
 | `3` | Mock | Start/stop a mock server from your files |
 | `4` | Contract | Contract-test against an OpenAPI spec |
 | `5` | Record | Start/stop a recording proxy and export captured traffic |
@@ -115,7 +115,9 @@ Studio never drops your edits silently. Opening another file (`enter` in the fil
 list, search), creating one, importing, renaming or duplicating, generating a
 sample, and quitting (`q` or `ctrl+c`) all ask first when the editor has unsaved
 changes. `ctrl+s` also checks the file on disk: if it was modified outside studio
-since you opened it, studio asks before overwriting it.
+since you opened it, studio asks before overwriting it. If the open file is
+deleted outside studio while you have unsaved edits, studio keeps them, warns that
+the file was deleted on disk, and `ctrl+s` recreates the file from the editor.
 
 ### Forms (stress, mock, contract, record, import, cookies, settings)
 
@@ -140,7 +142,7 @@ is the value used when a field is left blank. Nothing starts until you ask:
 | `ctrl+p` | Command palette |
 | `ctrl+e` | Switch environment |
 | `ctrl+t` | Switch theme |
-| `ctrl+f` | Search requests |
+| `ctrl+f` | Search requests (`enter` opens the file and selects the request) |
 | `tab` / `shift+tab` | Next / previous pane |
 | `esc` | Cancel / close an overlay |
 | `?` | Help overlay |

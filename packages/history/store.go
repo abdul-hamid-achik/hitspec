@@ -218,6 +218,8 @@ type ResultRecord struct {
 	Description string
 	BodyPreview string
 	Assertions  []AssertionRecord
+	// Warnings are the request's non-fatal findings (see runner.RequestResult).
+	Warnings []string
 }
 
 // RunRecord is a finished run, ready to be stored in one transaction.
@@ -278,6 +280,11 @@ func (s *Store) RecordCompleteRun(ctx context.Context, rec RunRecord) (int64, er
 				Message:  nullString(a.Message),
 			}); err != nil {
 				return 0, fmt.Errorf("history: insert assertion: %w", err)
+			}
+		}
+		for _, w := range r.Warnings {
+			if err := qtx.InsertResultWarning(ctx, InsertResultWarningParams{ResultID: res.ID, Message: w}); err != nil {
+				return 0, fmt.Errorf("history: insert warning: %w", err)
 			}
 		}
 		switch {

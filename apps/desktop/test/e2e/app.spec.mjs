@@ -206,6 +206,28 @@ test.describe.serial('hitspec Studio desktop app', () => {
     await page.screenshot({ path: path.join(shotDir, '07-stress.png') });
   });
 
+  test('starts a stress test from a saved profile', async () => {
+    await page.locator('.rail-item', { hasText: 'Stress' }).click();
+    // Toasts sit over the bottom-right corner, where the profile buttons are,
+    // and hovering one keeps it open: dismiss them first.
+    for (const dismiss of await page.locator('#toasts button[title="Dismiss"]').all()) {
+      await dismiss.click().catch(() => {});
+    }
+    await expect(page.locator('#toasts .toast')).toHaveCount(0);
+    const profiles = page.locator('.card', { hasText: 'Saved profiles' });
+    await profiles.getByRole('button', { name: 'Apply' }).first().click();
+    const applied = page.locator('[data-testid="stress-profile"]');
+    await expect(applied).toContainText('profile quick');
+
+    // serve accepts the profile name: the run starts and finishes on its own.
+    await page.getByRole('button', { name: 'Start stress test' }).click();
+    await expect(page.locator('.toast', { hasText: '(profile quick)' })).toBeVisible();
+    await expect(page.locator('.view-head .pill', { hasText: 'idle' })).toBeVisible({ timeout: 15000 });
+
+    await applied.getByRole('button', { name: 'Clear' }).click();
+    await expect(applied).toHaveCount(0);
+  });
+
   test('switches environments from the topbar', async () => {
     const select = page.locator('.topbar select');
     await expect(select).toHaveValue('dev');

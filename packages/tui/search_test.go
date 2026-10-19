@@ -92,3 +92,116 @@ func TestSearchCmdEndToEnd(t *testing.T) {
 		t.Fatalf("unexpected search result: %+v", msg)
 	}
 }
+
+const searchTwoFiles = "### First\n# @name first\nGET https://example.com/one\n\n### Second\n# @name second\nGET https://example.com/two\n\n###\nGET https://example.com/three\n"
+
+// searchSelect drives enter on the first search result and feeds the load
+// command's message back through Update, as the Bubble Tea runtime would.
+func searchSelect(t *testing.T, m model, r clientmgr.SearchResultDTO) model {
+	t.Helper()
+	m.searchOpen = true
+	m.searchResults = []clientmgr.SearchResultDTO{r}
+	m.refreshSearchList()
+	cmd := m.handleKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+	if cmd != nil {
+		next, _ := m.Update(cmd())
+		m = next.(model)
+	}
+	return m
+}
+
+func TestSearchSelectsRequestInAnotherFile(t *testing.T) {
+	mgr := newTestManager(t)
+	ctx := context.Background()
+	if _, err := mgr.CreateFile(ctx, "a.http", sampleHTTP); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mgr.CreateFile(ctx, "b.http", searchTwoFiles); err != nil {
+		t.Fatal(err)
+	}
+	hits, err := mgr.SearchRequests(ctx, "two")
+	if err != nil || len(hits) != 1 {
+		t.Fatalf("search: %v %v", hits, err)
+	}
+	m := newModel(ctx, mgr, Options{})
+	m.selected = "a.http"
+	m = searchSelect(t, m, hits[0])
+	if m.selected != "b.http" {
+		t.Fatalf("selected = %q, want b.http", m.selected)
+	}
+	if got := m.requests.Cursor(); got != 1 {
+		t.Fatalf("cursor = %d, want 1 (the second request)", got)
+	}
+	if m.focus != focusRequests {
+		t.Fatalf("focus = %v, want the request list", m.focus)
+	}
+}
+
+func TestSearchSelectsUntitledRequestByLine(t *testing.T) {
+	mgr := newTestManager(t)
+	ctx := context.Background()
+	if _, err := mgr.CreateFile(ctx, "b.http", searchTwoFiles); err != nil {
+		t.Fatal(err)
+	}
+	hits, _ := mgr.SearchRequests(ctx, "three")
+	if len(hits) != 1 || hits[0].RequestName != "" {
+		t.Fatalf("want one untitled hit, got %+v", hits)
+	}
+	m := newModel(ctx, mgr, Options{})
+	m = searchSelect(t, m, hits[0])
+	if got := m.requests.Cursor(); got != 2 {
+		t.Fatalf("cursor = %d, want 2", got)
+	}
+}
+
+// A hit in the file that is already open moves the cursor without reloading it
+// and without asking to discard the edits in the buffer.
+func TestSearchSelectsRequestInOpenFileWithoutDiscardPrompt(t *testing.T) {
+	mgr := newTestManager(t)
+	ctx := context.Background()
+	if _, err := mgr.CreateFile(ctx, "b.http", searchTwoFiles); err != nil {
+		t.Fatal(err)
+	}
+	hits, _ := mgr.SearchRequests(ctx, "two")
+	m := newModel(ctx, mgr, Options{})
+	loaded, ok := loadFileCmd(ctx, mgr, "b.http")().(fileLoadedMsg)
+	if !ok {
+		t.Fatal("load b.http")
+	}
+	m.openFile(loaded.path, loaded.raw, loaded.parsed)
+	m.dirty = true
+	m = searchSelect(t, m, hits[0])
+	if m.confirm != nil {
+		t.Fatal("a hit in the open file must not prompt to discard")
+	}
+	if got := m.requests.Cursor(); got != 1 {
+		t.Fatalf("cursor = %d, want 1", got)
+	}
+}
+
+// Declining the discard prompt leaves no stale jump behind: a later plain open
+// of that file starts at the first request.
+func TestSearchDeclinedDiscardLeavesNoJump(t *testing.T) {
+	mgr := newTestManager(t)
+	ctx := context.Background()
+	if _, err := mgr.CreateFile(ctx, "a.http", sampleHTTP); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mgr.CreateFile(ctx, "b.http", searchTwoFiles); err != nil {
+		t.Fatal(err)
+	}
+	hits, _ := mgr.SearchRequests(ctx, "two")
+	m := newModel(ctx, mgr, Options{})
+	m.selected = "a.http"
+	m.dirty = true
+	m = searchSelect(t, m, hits[0])
+	if m.confirm == nil {
+		t.Fatal("opening another file over unsaved edits should ask first")
+	}
+	m.confirm = nil // declined
+	next, _ := m.Update(loadFileCmd(ctx, mgr, "b.http")())
+	m = next.(model)
+	if got := m.requests.Cursor(); got != 0 {
+		t.Fatalf("cursor = %d, want 0", got)
+	}
+}

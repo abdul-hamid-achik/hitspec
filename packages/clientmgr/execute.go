@@ -14,6 +14,15 @@ import (
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/http"
 )
 
+type execIDKey struct{}
+
+// WithExecID makes a run started with the returned context publish its
+// execution and request_progress events under id instead of a generated one, so
+// the caller can tell its own run's events from any other run's.
+func WithExecID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, execIDKey{}, id)
+}
+
 // Execute runs one request from a file. RequestName selects by @name;
 // RequestIndex selects by source position (used by the studio TUI to run an
 // untitled request that has no @name for the name filter to match).
@@ -131,6 +140,9 @@ func (m *Manager) run(ctx context.Context, file, requestName string, requestInde
 	env := cfg.Environment
 
 	execID := generateID()
+	if id, _ := ctx.Value(execIDKey{}).(string); id != "" {
+		execID = id
+	}
 	m.publish("execution_start", ExecEvent{ID: execID, File: file, Status: "started", Timestamp: nowISO()})
 
 	// Index mode (untitled request) takes precedence over an empty name filter so
@@ -274,6 +286,11 @@ func (m *Manager) GetRun(ctx context.Context, id int64) (HistoryRunDTO, error) {
 				rdto.Assertions = append(rdto.Assertions, convertAssertionToDTO(a))
 			}
 		}
+		if warnings, err := m.historyStore.Queries().ListWarningsByResult(ctx, res.ID); err == nil {
+			for _, w := range warnings {
+				rdto.Warnings = append(rdto.Warnings, w.Message)
+			}
+		}
 		dto.Results = append(dto.Results, rdto)
 	}
 	return dto, nil
@@ -324,6 +341,7 @@ func (m *Manager) recordRunToHistory(ctx context.Context, filePath, environment 
 			Skipped:     rr.Skipped,
 			Error:       rr.Error,
 			Description: rr.Description,
+			Warnings:    rr.Warnings,
 		}
 		if rr.Request != nil {
 			r.Method, r.URL = rr.Request.Method, rr.Request.URL

@@ -763,6 +763,7 @@ curl http://localhost:8080/api/v1/history/runs/42
       "passed": true,
       "description": "Fetch all users",
       "bodyPreview": "{\"data\":[{\"id\":1,\"name\":\"Alice\"}]}",
+      "warnings": ["{{nobody.token}} was not resolved and was sent literally (in header X-Token)"],
       "assertions": [
         {
           "id": 201,
@@ -777,6 +778,8 @@ curl http://localhost:8080/api/v1/history/runs/42
   ]
 }
 ```
+
+A result carries `warnings` (an array of strings, omitted when empty) when its request produced non-fatal findings. Runs stored by older versions have none.
 
 ---
 
@@ -894,10 +897,11 @@ curl -X POST http://localhost:8080/api/v1/stress/start \
 ```typescript
 {
   files: string[];       // Required. List of .http/.hitspec files (relative paths)
-  duration: string;      // Required. Go duration string (e.g., "30s", "5m", "1h")
+  duration?: string;     // Required unless profile is set. Go duration string (e.g., "30s", "5m", "1h")
   rate?: number;         // Optional. Target requests per second
   vus?: number;          // Optional. Number of virtual users (switches to VU mode)
   maxVUs?: number;       // Optional. Maximum concurrent virtual users
+  profile?: string;      // Optional. Name of a saved stress profile (stress.profiles in hitspec.yaml)
 }
 ```
 
@@ -905,8 +909,12 @@ curl -X POST http://localhost:8080/api/v1/stress/start \
   List of `.http` or `.hitspec` file paths relative to the workspace.
 </ParamField>
 
-<ParamField body="duration" type="string" required>
-  Duration of the stress test as a Go duration string (e.g., `"30s"`, `"5m"`, `"1h"`).
+<ParamField body="duration" type="string">
+  Duration of the stress test as a Go duration string (e.g., `"30s"`, `"5m"`, `"1h"`). Required unless `profile` is set, in which case the profile's duration is used.
+</ParamField>
+
+<ParamField body="profile" type="string">
+  Name of a saved stress profile. The profile's duration, rate, VUs, max VUs, think time, ramp-up and thresholds are the base for the run; `duration`, `rate`, `vus` and `maxVUs` in the request win over the profile's. A threshold written without an operator gets the metric's natural one (`rps` means `>`, the others `<`), and one written with an operator keeps it. An unknown profile is a `400 Bad Request`.
 </ParamField>
 
 <ParamField body="rate" type="number">
@@ -971,6 +979,7 @@ curl http://localhost:8080/api/v1/stress/status
 {
   "running": true,
   "elapsed": 15.3,
+  "duration": 60,
   "stats": {
     "total": 750,
     "success": 745,
@@ -989,7 +998,7 @@ curl http://localhost:8080/api/v1/stress/status
 }
 ```
 
-`incomplete` counts requests still in flight, and `assertionChecks` / `assertionFailures` count responses that were checked against `expect` lines and those that failed one. Assertion failures are not part of `errors`. The three fields are omitted when zero, and the same fields appear in `stress_update` messages.
+`incomplete` counts requests still in flight, and `assertionChecks` / `assertionFailures` count responses that were checked against `expect` lines and those that failed one. Assertion failures are not part of `errors`. The three fields are omitted when zero, and the same fields appear in `stress_update` messages. `duration` is the run's configured length in seconds (from the request or its `profile`), so a client can draw progress as `elapsed / duration`; it is omitted when unknown.
 
 When no stress test is running:
 
@@ -1985,6 +1994,7 @@ Sent every 500ms during an active stress test with current metrics. The `running
       "activeVUs": 10
     },
     "elapsed": 15.3,
+    "duration": 60,
     "timestamp": "2026-02-10T12:00:00Z"
   },
   "timestamp": "2026-02-10T12:00:00Z"

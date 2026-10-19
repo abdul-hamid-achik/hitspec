@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -109,12 +110,24 @@ type model struct {
 	running    bool
 	cancelling bool
 	runCancel  context.CancelFunc
+	// activeExec is the ExecID the in-flight run publishes its events under (see
+	// clientmgr.WithExecID); events carrying any other ID belong to some other
+	// execution and are ignored. execSeq numbers the runs.
+	activeExec string
+	execSeq    int
 
 	// transitioned is set within a single Update tick when a key opened/closed a
 	// modal or moved focus into a text widget, so the same key is not also
 	// re-delivered to that widget (the Bubble Tea "double-process" pitfall). It
 	// is reset at the top of every Update.
 	transitioned bool
+
+	// deletedOnDisk is set when the open file vanished from the workspace while
+	// the editor held unsaved edits: the buffer is kept and ctrl+s recreates the
+	// file. removing is the file a delete or rename started from this editor is
+	// taking away, so its disappearance is not mistaken for an outside deletion.
+	deletedOnDisk bool
+	removing      string
 }
 
 // notify pushes a toast notification and returns the command that expires it.
@@ -172,6 +185,16 @@ type fileLoadedMsg struct {
 	raw    string
 	parsed *clientmgr.ParsedFileDTO
 	err    error
+	// jump, when set, puts the request cursor on a specific request once the file
+	// is open (a search result).
+	jump *requestJump
+}
+
+// requestJump names a request inside a file: by @name when it has one, and by
+// its source line.
+type requestJump struct {
+	name string
+	line int
 }
 
 type runDoneMsg struct {
@@ -213,6 +236,8 @@ type bufferParsedMsg struct {
 type simpleMsg struct {
 	kind string
 	err  error
+	// removed names the file a delete asked to remove (set on success or failure).
+	removed string
 }
 
 type historyMsg struct {
@@ -421,7 +446,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.status = fmt.Sprintf("%d files, %d requests", len(msg.files), msg.workspace.TotalRequests)
 		// If the selected file no longer exists (e.g. it was just deleted), drop
 		// the stale selection so the topbar/source don't reference a gone file.
-		if m.selected != "" && !containsFile(msg.files, m.selected) {
+		if m.selected != "" && containsFile(msg.files, m.selected) {
+			m.deletedOnDisk = false
+		}
+		if m.selected != "" && !containsFile(msg.files, m.selected) && m.dirty && m.removing != m.selected {
+			// Deleted behind the editor's back with unsaved edits: keep them (ctrl+s
+			// recreates the file) instead of silently emptying the buffer.
+			if !m.deletedOnDisk {
+				m.deletedOnDisk = true
+				cmds = append(cmds, m.notify(toastWarn, m.selected+" was deleted on disk · your edits are kept · ctrl+s recreates it"))
+			}
+		} else if m.selected != "" && !containsFile(msg.files, m.selected) {
+			m.deletedOnDisk = false
 			m.selected = ""
 			m.parsed = nil
 			m.raw = ""
@@ -445,6 +481,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = ""
 		m.openFile(msg.path, msg.raw, msg.parsed)
 		m.status = "opened " + msg.path
+		if msg.jump != nil {
+			m.jumpToRequest(*msg.jump)
+		}
 	case saveConflictMsg:
 		m.loading = false
 		ctx, mgr := m.ctx, m.mgr
@@ -459,6 +498,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case fileSavedUnparsedMsg:
 		m.loading = false
 		if msg.path == m.selected {
+			m.deletedOnDisk = false
 			m.raw = msg.content
 			m.dirty = m.bufferModified()
 		}
@@ -483,6 +523,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.finishRun(msg)...)
 	case simpleMsg:
 		m.loading = false
+		if msg.removed != "" {
+			if m.removing == msg.removed {
+				m.removing = ""
+			}
+			if msg.err == nil && m.selected == msg.removed {
+				m.dirty = false // the delete was confirmed; there is nothing left to save to
+			}
+		}
 		if msg.err != nil {
 			m.err = msg.err.Error()
 			cmds = append(cmds, m.notify(toastError, msg.err.Error()))
@@ -597,6 +645,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case fileRenamedMsg:
 		m.loading = false
+		m.removing = ""
 		if msg.err != nil {
 			m.err = msg.err.Error()
 			cmds = append(cmds, m.notify(toastError, msg.err.Error()))
@@ -843,7 +892,7 @@ func (m *model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 			m.searchOpen = false
 			m.searchInput.Blur()
 			if it, ok := m.searchList.SelectedItem().(searchItem); ok {
-				return m.openPath(it.file)
+				return m.openRequestAt(it.file, requestJump{name: it.name, line: it.line})
 			}
 			return nil
 		}
@@ -1154,7 +1203,10 @@ func (m *model) executeCommand(id string) tea.Cmd {
 		ctx, mgr, old := m.ctx, m.mgr, m.selected
 		m.prompt = newPrompt("Rename file", "new/path.http", old, func(newPath string) tea.Cmd {
 			return proceed(func(m *model) tea.Cmd {
-				return m.guardDiscard("renaming", func(*model) tea.Cmd { return renameFileCmd(ctx, mgr, old, newPath, "renamed") })
+				return m.guardDiscard("renaming", func(m *model) tea.Cmd {
+					m.removing = old // the rename takes old away; not an outside deletion
+					return renameFileCmd(ctx, mgr, old, newPath, "renamed")
+				})
 			})
 		})
 		return nil
@@ -1306,6 +1358,67 @@ func (m *model) openPath(path string) tea.Cmd {
 	})
 }
 
+// openRequestAt opens path (asking first when that would discard unsaved edits)
+// and puts the request cursor on the request j names. A request in the file that
+// is already open needs no reload, and no discard prompt.
+func (m *model) openRequestAt(path string, j requestJump) tea.Cmd {
+	if path == m.selected && m.parsed != nil {
+		m.jumpToRequest(j)
+		return nil
+	}
+	return m.guardDiscard("opening "+path, func(m *model) tea.Cmd {
+		m.loading = true
+		load := loadFileCmd(m.ctx, m.mgr, path)
+		return func() tea.Msg {
+			msg := load()
+			if f, ok := msg.(fileLoadedMsg); ok {
+				f.jump = &j
+				return f
+			}
+			return msg
+		}
+	})
+}
+
+// jumpToRequest moves the request cursor onto j in the open file and brings the
+// request list into focus on the workspace. Lines are exact for a file loaded
+// from disk; with unsaved edits they may have shifted, so the name wins then.
+func (m *model) jumpToRequest(j requestJump) {
+	if m.parsed == nil {
+		return
+	}
+	idx := -1
+	byName := func() {
+		for i, r := range m.parsed.Requests {
+			if idx < 0 && j.name != "" && r.Name == j.name {
+				idx = i
+			}
+		}
+	}
+	byLine := func() {
+		for i, r := range m.parsed.Requests {
+			if idx < 0 && j.line > 0 && r.Line == j.line {
+				idx = i
+			}
+		}
+	}
+	if m.dirty {
+		byName()
+		byLine()
+	} else {
+		byLine()
+		byName()
+	}
+	if idx < 0 {
+		return
+	}
+	m.screen = screenWorkspace
+	m.requests.SetCursor(idx)
+	m.refreshMetaPanels()
+	m.focus = focusRequests
+	m.syncFocus()
+}
+
 // openFile installs a freshly loaded file as the current buffer.
 func (m *model) openFile(path, raw string, parsed *clientmgr.ParsedFileDTO) {
 	changed := path != m.selected
@@ -1318,6 +1431,7 @@ func (m *model) openFile(path, raw string, parsed *clientmgr.ParsedFileDTO) {
 	m.parsed = parsed
 	m.source.SetValue(raw)
 	m.dirty = false
+	m.deletedOnDisk = false
 	m.editing = false
 	m.source.Blur()
 	m.refreshRequestTables()
@@ -1338,7 +1452,12 @@ func (m *model) saveCmd() tea.Cmd {
 	return func() tea.Msg {
 		// Someone else (another editor, git, a generator) may have changed the file
 		// since it was loaded; saving over it would silently discard their change.
-		if disk, err := mgr.ReadFile(ctx, path); err == nil && disk != loaded {
+		disk, err := mgr.ReadFile(ctx, path)
+		if errors.Is(err, fs.ErrNotExist) {
+			// Deleted on disk since it was opened: saving brings it back.
+			return recreateFile(ctx, mgr, path, content)
+		}
+		if err == nil && disk != loaded {
 			return saveConflictMsg{path: path, content: content}
 		}
 		return writeFile(ctx, mgr, path, content)
@@ -1352,6 +1471,23 @@ func writeFile(ctx context.Context, mgr *clientmgr.Manager, path, content string
 		// SaveFile writes first and parses afterwards, so content that does not
 		// parse is on disk all the same. Say so: the buffer now matches the file,
 		// and the next ctrl+s must not take that for an outside change.
+		if disk, rerr := mgr.ReadFile(ctx, path); rerr == nil && disk == content {
+			return fileSavedUnparsedMsg{path: path, content: content, err: err}
+		}
+		return fileLoadedMsg{path: path, err: err}
+	}
+	return fileLoadedMsg{path: path, raw: content, parsed: parsed}
+}
+
+// recreateFile writes content to a file that no longer exists and reports the
+// result like writeFile does.
+func recreateFile(ctx context.Context, mgr *clientmgr.Manager, path, content string) tea.Msg {
+	parsed, err := mgr.CreateFile(ctx, path, content)
+	if err == nil && content == "" {
+		// CreateFile substitutes a template for empty content; the buffer is empty.
+		parsed, err = mgr.SaveFile(ctx, path, "")
+	}
+	if err != nil {
 		if disk, rerr := mgr.ReadFile(ctx, path); rerr == nil && disk == content {
 			return fileSavedUnparsedMsg{path: path, content: content, err: err}
 		}
@@ -1419,6 +1555,9 @@ func (m *model) beginRun() (context.Context, tea.Cmd, bool) {
 		return nil, m.notify(toastWarn, "a run is already in progress · x cancels it"), false
 	}
 	ctx, cancel := context.WithCancel(m.ctx)
+	m.execSeq++
+	m.activeExec = fmt.Sprintf("studio-%d", m.execSeq)
+	ctx = clientmgr.WithExecID(ctx, m.activeExec)
 	m.running, m.cancelling, m.runCancel = true, false, cancel
 	m.loading = true
 	m.err = ""
@@ -1432,6 +1571,7 @@ func (m *model) endRun() {
 		m.runCancel()
 	}
 	m.running, m.cancelling, m.runCancel = false, false, nil
+	m.activeExec = ""
 	m.loading = false
 	m.progress = clientmgr.RequestProgress{}
 }
@@ -1598,10 +1738,15 @@ func (m *model) deleteCmd() tea.Cmd {
 	m.confirm = &confirmState{
 		title: "Delete file?",
 		body:  path,
-		action: func() tea.Msg {
-			err := mgr.DeleteFile(ctx, path)
-			return simpleMsg{kind: "deleted " + path, err: err}
-		},
+		// Mark the file as being removed from here (on the live model, before the
+		// delete runs) so its disappearance is not reported as an outside deletion.
+		action: proceed(func(m *model) tea.Cmd {
+			m.removing = path
+			return func() tea.Msg {
+				err := mgr.DeleteFile(ctx, path)
+				return simpleMsg{kind: "deleted " + path, err: err, removed: path}
+			}
+		}),
 	}
 	return nil
 }
@@ -2273,8 +2418,10 @@ func (m *model) handleEvent(ev clientmgr.Event) []tea.Cmd {
 		return cmds
 	case "request_progress":
 		// Events travel on their own channel, so a late one can arrive after the
-		// run finished; only a run in flight owns the progress display.
-		if p, ok := ev.Payload.(clientmgr.RequestProgress); ok && m.running {
+		// run finished; only a run in flight owns the progress display, and only
+		// its own events: one from a cancelled run that is still winding down, or
+		// from any other execution, must not overwrite it.
+		if p, ok := ev.Payload.(clientmgr.RequestProgress); ok && m.running && m.activeExec != "" && p.ExecID == m.activeExec {
 			m.progress = p
 			if p.Total > 0 {
 				_ = m.progressBar.SetPercent(float64(p.Index) / float64(p.Total))
@@ -2283,7 +2430,7 @@ func (m *model) handleEvent(ev clientmgr.Event) []tea.Cmd {
 	case "stress_update":
 		if s, ok := ev.Payload.(clientmgr.StressMetrics); ok {
 			stats := s.Stats
-			m.stress = clientmgr.StressStatusDTO{Running: s.Running, Elapsed: s.Elapsed, Stats: &stats}
+			m.stress = clientmgr.StressStatusDTO{Running: s.Running, Elapsed: s.Elapsed, Duration: s.Duration, Stats: &stats}
 			if !s.Running {
 				m.stressResult, _ = m.mgr.StressResult(m.ctx)
 			}
@@ -2354,6 +2501,9 @@ func (m model) topbar() string {
 	dirty := ""
 	if m.dirty {
 		dirty = m.styles.warn.Render(" modified")
+		if m.deletedOnDisk {
+			dirty = m.styles.warn.Render(" modified · deleted on disk")
+		}
 	}
 	left := m.styles.top.Render("hitspec studio  " + m.styles.tag.Render(active) + dirty)
 	right := m.styles.top.Render(m.workspace.Environment + "  " + m.selected)
@@ -2610,19 +2760,18 @@ func (m model) stressContent() string {
 		return "No stress test running.\n\nPress s to start a load test on the selected file with the form's values\n(blank fields use the defaults shown: 30s at 5 RPS), e to edit them first,\nor use the command palette."
 	}
 	stats := status.Stats
-	// Progress is elapsed/configured-duration, not the hardcoded 30s. Read the
-	// duration from the stress form field; fall back to 30s if unset/invalid.
-	total := 30.0
-	if len(m.formInputs) > 0 {
-		if d, err := time.ParseDuration(m.formInputs[0].Value()); err == nil && d > 0 {
-			total = d.Seconds()
-		}
+	// The bar tracks elapsed against the duration the run really has (reported by
+	// the manager), not whatever the form says now or a guessed default. A run
+	// that does not report one shows the elapsed time alone.
+	progress := ""
+	if status.Duration > 0 {
+		progress = m.progressBar.ViewAs(min(1, status.Elapsed/status.Duration)) + "\n\n"
 	}
 	live := fmt.Sprintf(
-		"Running: %v\nElapsed: %.1fs\n\n%s\n\nRequests: %d\nSuccess: %d\nErrors: %d\nRPS: %.2f\nP50/P95/P99: %.1f / %.1f / %.1f ms\nError rate: %.2f%%\nActive VUs: %d\n",
+		"Running: %v\nElapsed: %.1fs\n\n%sRequests: %d\nSuccess: %d\nErrors: %d\nRPS: %.2f\nP50/P95/P99: %.1f / %.1f / %.1f ms\nError rate: %.2f%%\nActive VUs: %d\n",
 		status.Running,
 		status.Elapsed,
-		m.progressBar.ViewAs(min(1, status.Elapsed/total)),
+		progress,
 		stats.Total,
 		stats.Success,
 		stats.Errors,

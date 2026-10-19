@@ -13,9 +13,10 @@ import (
 // (--config / HITSPEC_CONFIG) when given, otherwise the nearest hitspec.yaml
 // from the working directory upward (config.Discover). Problems with the file
 // itself (unreadable, bad syntax) are printed to stderr and returned as an
-// exit-3 error; unknown keys are only warned about. With verbose, the config
-// file in use is reported on stderr.
-func loadConfigForCommand(cmd *cobra.Command, explicit string, verbose bool) (*config.Config, error) {
+// exit-3 error; unknown keys are only warned about. When verbose(cfg) says so
+// (it sees the loaded file, so hitspec.yaml's `verbose: true` counts), the
+// config file in use is reported on stderr.
+func loadConfigForCommand(cmd *cobra.Command, explicit string, verbose func(*config.Config) bool) (*config.Config, error) {
 	var (
 		loaded *config.Loaded
 		err    error
@@ -30,7 +31,7 @@ func loadConfigForCommand(cmd *cobra.Command, explicit string, verbose bool) (*c
 		return nil, newExitError(ExitConfigError, err.Error())
 	}
 	printConfigWarnings(cmd.ErrOrStderr(), loaded.Warnings)
-	if verbose {
+	if verbose != nil && verbose(loaded.Config) {
 		if loaded.Path == "" {
 			fmt.Fprintln(cmd.ErrOrStderr(), "config: none found (using defaults)")
 		} else {

@@ -99,7 +99,9 @@ func mockCommand(cmd *cobra.Command, args []string) error {
 	// Bind before announcing anything, so a busy port is an error and not a
 	// server that "started".
 	if _, err := server.Listen(); err != nil {
-		return err
+		// Like a busy --metrics-port: a config problem, exit 3.
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return newExitError(ExitConfigError, err.Error())
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Mock server: loaded %d route(s) from %d file(s)\n", len(routes), len(files))

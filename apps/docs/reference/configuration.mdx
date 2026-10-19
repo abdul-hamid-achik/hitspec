@@ -179,7 +179,7 @@ Headers defined in individual requests override config-level headers with the sa
 | `noColor` | boolean | `false` | Disable colored terminal output |
 
 <Note>
-`verbose: true` is applied by `hitspec run` and means `-v`. A `-v`, `-vv` or `-vvv` flag wins over it, and `--verbose=0` turns it off. The key must be a boolean. `reporters`, `outputDir` and `noColor` are read and validated, but `hitspec run` does not apply them yet. Use `--output`, `--output-file` and `--no-color` (or their `HITSPEC_*` variables).
+`verbose: true` is applied by `hitspec run` and means `-v`. A `-v`, `-vv` or `-vvv` flag wins over it, and `--verbose=0` turns it off. The key must be a boolean. `noColor: true` is applied by `hitspec run` too: `--no-color` (or `--no-color=false`) on the command line wins, then `HITSPEC_NO_COLOR`, then the file. The `NO_COLOR` environment variable is also honored and can only turn colors off. `reporters` and `outputDir` are read and validated, but `hitspec run` does not apply them yet. Use `--output` and `--output-file` (or their `HITSPEC_*` variables).
 </Note>
 
 ### Environments

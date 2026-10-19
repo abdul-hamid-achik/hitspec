@@ -283,6 +283,9 @@ type HistoryResultDTO struct {
 	Description string                `json:"description,omitempty"`
 	BodyPreview string                `json:"bodyPreview,omitempty"`
 	Assertions  []HistoryAssertionDTO `json:"assertions,omitempty"`
+	// Warnings are the request's non-fatal findings, as recorded with the run.
+	// Runs stored by older versions have none.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // HistoryAssertionDTO is an assertion result in persistent history.
@@ -313,13 +316,20 @@ type StressStartReq struct {
 	MaxVUs   int      `json:"maxVUs,omitempty"`
 	// Environment overrides the active environment for {{variable}} resolution.
 	Environment string `json:"environment,omitempty"`
+	// Profile names a saved hitspec.yaml stress profile. Its values (including
+	// thresholds) are the base; Duration, Rate, VUs and MaxVUs given here win,
+	// like the CLI's --profile with explicit flags.
+	Profile string `json:"profile,omitempty"`
 }
 
 // StressStatusDTO is the current stress test status.
 type StressStatusDTO struct {
-	Running bool            `json:"running"`
-	Elapsed float64         `json:"elapsed"`
-	Stats   *StressStatsDTO `json:"stats,omitempty"`
+	Running bool    `json:"running"`
+	Elapsed float64 `json:"elapsed"`
+	// Duration is how long the run is configured to last, in seconds (0 when
+	// unknown).
+	Duration float64         `json:"duration,omitempty"`
+	Stats    *StressStatsDTO `json:"stats,omitempty"`
 }
 
 // StressStatsDTO holds real-time stress metrics.
@@ -620,7 +630,8 @@ type StressMetrics struct {
 	Completed bool           `json:"completed,omitempty"`
 	Stats     StressStatsDTO `json:"stats"`
 	Elapsed   float64        `json:"elapsed"`
-	Error     string         `json:"error,omitempty"` // on the completed event when the run failed
+	Duration  float64        `json:"duration,omitempty"` // the run's configured length, in seconds
+	Error     string         `json:"error,omitempty"`    // on the completed event when the run failed
 	Timestamp string         `json:"timestamp"`
 }
 

@@ -392,7 +392,9 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load config from file (if present) and apply CLI overrides
-	fileConfig, err := loadConfigForCommand(cmd, configFlag, verboseFlag > 0)
+	fileConfig, err := loadConfigForCommand(cmd, configFlag, func(c *config.Config) bool {
+		return verbosityLevel(cmd.Flags(), c.GetVerbose()) > 0
+	})
 	if err != nil {
 		return err
 	}
@@ -403,6 +405,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	environment, envExplicit := resolveEnvironment(envFlag, fileConfig)
 	// -v/-vv/-vvv beat hitspec.yaml's `verbose: true` (which means -v).
 	verbosity := verbosityLevel(cmd.Flags(), fileConfig.GetVerbose())
+	noColor := noColorEnabled(cmd.Flags(), fileConfig.GetNoColor())
 
 	// Warn if the explicitly chosen environment isn't defined in the config.
 	// Only check when the user picked it (flag or HITSPEC_ENV), so an implicit
@@ -557,7 +560,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 			}
 			format, outFile = "console", ""
 		}
-		formatter, closeReport, err := openReport(format, outFile, verbosity, noColorFlag, quietFlag)
+		formatter, closeReport, err := openReport(format, outFile, verbosity, noColor, quietFlag)
 		if err != nil {
 			return runTotals{}, err
 		}
@@ -819,10 +822,18 @@ func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config
 			format = strings.TrimSpace(format)
 			switch strings.ToLower(format) {
 			case "prometheus":
-				promExporter := metrics.NewPrometheusExporter(
+				// Bind before announcing anything: a busy port stops the run
+				// (exit 3) instead of printing an error from a goroutine
+				// while the test goes on without metrics.
+				promExporter, err := metrics.NewPrometheusExporterE(
 					metrics.WithPrometheusHTTP(metricsPortFlag),
 					metrics.WithPrometheusHost(metricsHostFlag),
 				)
+				if err != nil {
+					closeExporters(metricsExporters)
+					fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+					return newExitError(ExitConfigError, err.Error())
+				}
 				metricsExporters = append(metricsExporters, promExporter)
 				fmt.Fprintf(cmd.OutOrStdout(), "Prometheus metrics available at http://%s/metrics\n", promDisplayAddr(metricsHostFlag, metricsPortFlag))
 
@@ -878,7 +889,7 @@ func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config
 
 	// Create reporter
 	reporter := stress.NewReporter(
-		stress.WithNoColor(noColorFlag),
+		stress.WithNoColor(noColorEnabled(cmd.Flags(), fileConfig.GetNoColor())),
 		stress.WithNoProgress(stressNoProgressFlag),
 		stress.WithVerbose(verbosityLevel(cmd.Flags(), fileConfig.GetVerbose()) > 0),
 	)
@@ -967,44 +978,8 @@ func buildStressConfig(cmd *cobra.Command, fileConfig *config.Config) (*stress.C
 	// Load from profile if specified
 	if stressProfileFlag != "" && fileConfig != nil && fileConfig.Stress != nil {
 		if profile, ok := fileConfig.Stress.Profiles[stressProfileFlag]; ok {
-			if profile.Duration != "" {
-				d, err := time.ParseDuration(profile.Duration)
-				if err != nil {
-					return nil, fmt.Errorf("invalid duration in profile: %w", err)
-				}
-				cfg.Duration = d
-			}
-			if profile.Rate > 0 {
-				cfg.Rate = profile.Rate
-			}
-			if profile.VUs > 0 {
-				cfg.VUs = profile.VUs
-				cfg.Mode = stress.VUMode
-			}
-			if profile.MaxVUs > 0 {
-				cfg.MaxVUs = profile.MaxVUs
-			}
-			if profile.ThinkTime != "" {
-				d, err := time.ParseDuration(profile.ThinkTime)
-				if err != nil {
-					return nil, fmt.Errorf("invalid think time in profile: %w", err)
-				}
-				cfg.ThinkTime = d
-			}
-			if profile.RampUp != "" {
-				d, err := time.ParseDuration(profile.RampUp)
-				if err != nil {
-					return nil, fmt.Errorf("invalid ramp-up in profile: %w", err)
-				}
-				cfg.RampUp = d
-			}
-			if len(profile.Thresholds) > 0 {
-				thresholdStr := buildThresholdString(profile.Thresholds)
-				t, err := stress.ParseThresholds(thresholdStr)
-				if err != nil {
-					return nil, fmt.Errorf("invalid thresholds in profile: %w", err)
-				}
-				cfg.Thresholds = t
+			if err := stress.ApplyProfile(cfg, profile); err != nil {
+				return nil, err
 			}
 		} else {
 			return nil, fmt.Errorf("stress profile %q not found in config", stressProfileFlag)
@@ -1060,36 +1035,18 @@ func buildStressConfig(cmd *cobra.Command, fileConfig *config.Config) (*stress.C
 	return cfg, nil
 }
 
-// buildThresholdString converts a profile's threshold map ("p95": "200ms",
-// "rps": ">=50") to the "p95<200ms,rps>=50" form stress.ParseThresholds reads.
-// A value that starts with an operator keeps it; a bare value gets the
-// metric's natural one (> for rps, < for everything else). Keys are sorted so
-// the result is stable.
+// buildThresholdString converts a profile's threshold map to the string form
+// stress.ParseThresholds reads (see stress.ThresholdString).
 func buildThresholdString(thresholds map[string]string) string {
-	keys := make([]string, 0, len(thresholds))
-	for k := range thresholds {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	parts := make([]string, 0, len(keys))
-	for _, k := range keys {
-		v := strings.TrimSpace(thresholds[k])
-		if hasThresholdOperator(v) {
-			parts = append(parts, k+v)
-			continue
-		}
-		op := "<"
-		switch strings.ToLower(k) {
-		case "rps", "rate":
-			op = ">"
-		}
-		parts = append(parts, k+op+v)
-	}
-	return strings.Join(parts, ",")
+	return stress.ThresholdString(thresholds)
 }
 
-func hasThresholdOperator(v string) bool {
-	return strings.HasPrefix(v, "<") || strings.HasPrefix(v, ">")
+// closeExporters closes exporters that were already started when a later one
+// fails to start.
+func closeExporters(exporters []metrics.Exporter) {
+	for _, e := range exporters {
+		_ = e.Close()
+	}
 }
 
 // stressResultToMetrics converts stress test summary to metrics aggregate format

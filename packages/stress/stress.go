@@ -556,6 +556,7 @@ func (r *Runner) executeScheduledRequest(ctx context.Context, sched *ScheduledRe
 		toCheck := stressAssertions(reqWithDir.request.Assertions)
 		results := assertions.EvaluateAllWithBaseDir(resp, toCheck, reqWithDir.baseDir,
 			assertions.WithRequestName(reqWithDir.request.Name),
+			assertions.WithFileRoot(r.fileRoot),
 			assertions.WithResolver(r.resolver.Resolve))
 		failed := false
 		for i, res := range results {
@@ -657,6 +658,11 @@ type Result struct {
 // GetCurrentStats returns current stress test statistics for external consumers
 func (r *Runner) GetCurrentStats() CurrentStats {
 	return r.metrics.GetCurrentStats()
+}
+
+// Duration returns how long the run is configured to last.
+func (r *Runner) Duration() time.Duration {
+	return r.config.Duration
 }
 
 // GetSummary returns the final metrics summary

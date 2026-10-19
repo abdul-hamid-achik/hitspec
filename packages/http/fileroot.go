@@ -49,6 +49,23 @@ func CheckFileRefs(req *parser.Request, resolve func(string) string, baseDir, ro
 	return nil
 }
 
+// CheckPathWithinRoot verifies that path lives under root once symlinks are
+// resolved; it is CheckFileRefs for a single path (a schema file named by an
+// assertion). An empty root disables the check.
+func CheckPathWithinRoot(root, path string) error {
+	if root == "" {
+		return nil
+	}
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return fmt.Errorf("resolve workspace: %w", err)
+	}
+	if !withinRoot(realRoot, path) {
+		return fmt.Errorf("file reference %q is outside the workspace", path)
+	}
+	return nil
+}
+
 // withinRoot reports whether path, with symlinks resolved, is root or below it.
 // A path that does not exist yet is checked through its nearest existing
 // ancestor so a dangling symlink cannot be used to escape.

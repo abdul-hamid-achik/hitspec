@@ -80,6 +80,12 @@ export function createStressView(root) {
             field('Rate (rps)', rateInput, 'Target requests per second'),
             field('VUs', vusInput, 'Virtual users (0 = use rate)'),
             field('Max VUs', maxVusInput, 'Cap for VU ramp-up')),
+          form.profile
+            ? h('div', { class: 'row', dataset: { testid: 'stress-profile' } },
+              pill(`profile ${form.profile}`, 'accent'),
+              h('span', { class: 'muted', style: { fontSize: '11.5px' }, text: 'Its thresholds apply; the values above win over its own.' }),
+              btn('Clear', { size: 'sm', onClick: () => actions.setStressForm({ profile: '' }) }))
+            : null,
           picker.el,
           h('div', { class: 'muted', style: { fontSize: '11.5px' }, text: 'Leaving the file list empty stresses every .http file in the workspace.' })),
         { actions: [btn('Save as profile', { size: 'sm', onClick: () => { syncForm(); actions.saveStressProfile(); } })] }),

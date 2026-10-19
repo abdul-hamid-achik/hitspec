@@ -109,6 +109,12 @@ func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
+			if warnings, err := s.historyStore.Queries().ListWarningsByResult(ctx, res.ID); err == nil {
+				for _, w := range warnings {
+					rdto.Warnings = append(rdto.Warnings, w.Message)
+				}
+			}
+
 			dto.Results = append(dto.Results, rdto)
 		}
 	}
@@ -259,6 +265,7 @@ func (s *Server) recordRunToHistory(ctx context.Context, filePath, environment s
 			Skipped:     rr.Skipped,
 			Error:       rr.Error,
 			Description: rr.Description,
+			Warnings:    rr.Warnings,
 		}
 		if rr.Request != nil {
 			r.Method, r.URL = rr.Request.Method, rr.Request.URL

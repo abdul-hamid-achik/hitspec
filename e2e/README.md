@@ -63,6 +63,8 @@ and the build/artifact dirs:
 | `form_navigate.yml` | `down` moves focus to the next form field; typing fills whichever field is focused |
 | `quit_from_overlay.yml` | `ctrl+c` quits cleanly even with the command palette open (hard interrupt) |
 | `search_overlay.yml` | `ctrl+f` opens search; typing filters requests; `ctrl+c` closes and exits |
+| `search_jump.yml` | choosing a search result opens its file and selects that request (scratch ws) |
+| `deleted_on_disk.yml` | a file deleted outside studio keeps unsaved edits, warns, and `ctrl+s` recreates it (scratch ws) |
 | `all_modules.yml` | every numbered screen (stress/mock/contract/record/import/cookies) renders its module |
 | `theme_picker.yml` | `ctrl+t` opens the theme picker overlay; `ctrl+c` closes and exits |
 | `env_switcher.yml` | `ctrl+e` opens the environment switcher overlay; `ctrl+c` closes and exits |

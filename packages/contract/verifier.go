@@ -214,7 +214,7 @@ func (v *Verifier) verifyInteraction(ctx context.Context, req *parser.Request, b
 
 	// Evaluate assertions
 	if len(req.Assertions) > 0 {
-		result.Assertions = assertions.EvaluateAllWithBaseDir(resp, req.Assertions, baseDir)
+		result.Assertions = assertions.EvaluateAllWithBaseDir(resp, req.Assertions, baseDir, assertions.WithFileRoot(v.fileRoot))
 		result.Passed = true
 		for _, a := range result.Assertions {
 			if !a.Passed {
