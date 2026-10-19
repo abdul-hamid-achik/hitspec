@@ -1,0 +1,16 @@
+# `header X exists` / `!exists` check presence: a missing header does not exist.
+# /headers sets X-Request-Id and two Set-Cookie headers.
+
+exitcode 0 hitspec run ok.http
+stdout 'Tests: 1 passed, 1 total'
+
+-- ok.http --
+### header-presence
+GET {{$env(SERVER)}}/headers
+
+>>>
+expect header X-Request-Id exists
+expect header x-request-id exists
+expect header Set-Cookie exists
+expect header X-Nope !exists
+<<<

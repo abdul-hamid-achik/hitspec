@@ -76,6 +76,16 @@ expect header Cache-Control contains "no-cache"
 
 Header names are case-insensitive as per HTTP specification.
 
+For headers, `exists` means the header is present in the response (even with an
+empty value) and `!exists` means it is absent:
+
+```http
+>>>
+expect header X-Request-Id exists
+expect header X-Debug !exists
+<<<
+```
+
 Using `header` without a name returns all headers as an object:
 
 ```http

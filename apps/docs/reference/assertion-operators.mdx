@@ -73,6 +73,8 @@ Regular expressions use Go's `regexp` syntax and are enclosed in forward slashes
 | `!exists` | `expect body.error !exists` | Value is absent or null |
 | `type` | `expect body.items type array` | Value matches the expected type |
 
+For `header` subjects, `exists` means the header is present in the response (an empty value still counts) and `!exists` means it is absent.
+
 Supported type values: `null`, `boolean`, `number`, `string`, `array`, `object`.
 
 ```http

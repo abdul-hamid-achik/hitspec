@@ -1,0 +1,12 @@
+# `expect header X-Request-Id !exists` must fail when the header is present.
+
+exitcode 1 hitspec run bad.http
+stdout 'Tests: 1 failed, 1 total'
+
+-- bad.http --
+### present-header-not-exists
+GET {{$env(SERVER)}}/headers
+
+>>>
+expect header X-Request-Id !exists
+<<<

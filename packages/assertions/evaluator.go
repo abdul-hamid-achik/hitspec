@@ -119,6 +119,13 @@ func (e *Evaluator) Evaluate(assertion *parser.Assertion) *Result {
 	}
 
 	actual, err := e.getActualValue(assertion.Subject)
+	if err == nil && isExistenceOp(assertion.Operator) {
+		// A missing header reads as "" which is non-nil, so the generic exists
+		// check would treat every header as present. Resolve presence explicitly.
+		if name, ok := headerName(assertion.Subject); ok {
+			actual = e.headerValueOrNil(name)
+		}
+	}
 	if err != nil {
 		result.Passed = false
 		result.Message = err.Error()
@@ -150,12 +157,11 @@ func (e *Evaluator) getActualValue(subject string) (any, error) {
 	case subject == "p50", subject == "p95", subject == "p99":
 		return e.response.DurationMs(), nil
 	case strings.HasPrefix(subject, "header"):
-		headerName := strings.TrimPrefix(subject, "header")
-		headerName = strings.TrimSpace(headerName)
-		if headerName == "" {
+		name, _ := headerName(subject)
+		if name == "" {
 			return e.response.Headers, nil
 		}
-		return e.response.Header(headerName), nil
+		return e.response.Header(name), nil
 	case strings.HasPrefix(subject, "body"):
 		return e.getBodyValue(subject)
 	case strings.HasPrefix(subject, "jsonpath"):
@@ -165,6 +171,32 @@ func (e *Evaluator) getActualValue(subject string) (any, error) {
 	default:
 		return e.getBodyValue("body." + subject)
 	}
+}
+
+func isExistenceOp(op parser.AssertionOperator) bool {
+	return op == parser.OpExists || op == parser.OpNotExists
+}
+
+// headerName extracts the header name from a "header <name>" subject. ok is
+// false when the subject is not a named header subject.
+func headerName(subject string) (string, bool) {
+	if !strings.HasPrefix(subject, "header") {
+		return "", false
+	}
+	name := strings.TrimSpace(strings.TrimPrefix(subject, "header"))
+	return name, name != ""
+}
+
+// headerValueOrNil returns the header value (case-insensitive name), or nil when
+// the response has no such header. A present header with an empty value is
+// returned as "" and therefore counts as existing.
+func (e *Evaluator) headerValueOrNil(name string) any {
+	for k, v := range e.response.Headers {
+		if strings.EqualFold(k, name) {
+			return v
+		}
+	}
+	return nil
 }
 
 // convertBracketNotation converts array bracket notation to gjson dot notation

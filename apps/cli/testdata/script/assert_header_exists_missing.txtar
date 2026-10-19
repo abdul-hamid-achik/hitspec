@@ -1,0 +1,12 @@
+# `expect header X-Nope exists` must fail when the header is missing.
+
+exitcode 1 hitspec run bad.http
+stdout 'Tests: 1 failed, 1 total'
+
+-- bad.http --
+### missing-header-exists
+GET {{$env(SERVER)}}/headers
+
+>>>
+expect header X-Nope exists
+<<<
