@@ -7,13 +7,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.20.0] - 2026-10-19
+
+This release fixes the regressions and false passes found in the 2026-10-19
+review. Upgrade if you use `hitspec run` in CI: v2.16.0 through v2.19.1 print
+nothing on stdout, and until now a file that failed to parse did not fail the
+run.
+
 ### Security
 
+- `serve --api-only` could be driven by any web page. A cross-origin
+  `text/plain` POST (no CORS preflight) reached `POST /contract/verify`,
+  whose `stateHandler` ran an arbitrary executable. The server now:
+  - rejects `stateHandler` unless started with `--allow-shell`, and then only
+    for a script inside the workspace (403 otherwise);
+  - requires `Content-Type: application/json` on JSON bodies (415);
+  - accepts only `localhost`, `127.0.0.1` and `[::1]` as Host on loopback binds
+    (DNS rebinding);
+  - rejects requests and WebSocket upgrades from foreign Origins;
+  - generates and prints an API token when bound beyond loopback or started
+    with `--allow-shell`/`--allow-db`;
+  - compares tokens in constant time and accepts `bearer` in any case;
+  - answers CORS preflights before authentication.
+- `HITSPEC_API_TOKEN` is read at runtime instead of being the `--api-token`
+  default, which printed the secret in `--help`. The desktop app no longer
+  passes its token on the command line, where `ps` showed it.
+- Captured response values are inserted literally. A response containing
+  `{{$env(SECRET)}}` or `{{HOME}}` used to be expanded and sent in the next
+  request.
+- The GitHub Action no longer uses `eval` or interpolates inputs into its
+  script, and verifies the downloaded archive against the release checksums.
 - Build with Go 1.26.9 and `golang.org/x/net` v0.61.0 to pick up the fix for
   GO-2026-6617 (HTTP/2 HPACK encoder race in `net/http`).
 
 ### Fixed
 
+- `hitspec run` printed nothing on stdout for every output format unless
+  `--output-file` was set, and machine formats failed with "invalid argument".
+  Config errors now print a message naming the file instead of exiting 3
+  silently.
+- `hitspec run` exits 2 when a file cannot be loaded (syntax error, duplicate
+  `@name`, `@depends` cycle) instead of 0; the other files still run and the
+  error is reported on stderr and in json/junit/tap/html.
+- `--name`/`--tags` that match no request exit 64 with a message instead of
+  passing, and a selected request's `@depends` targets run even when the
+  filter excluded them.
+- `--quiet` still writes `--output-file` and lists failures on stderr.
+- Watch mode recreates `--output-file` on every rerun (one valid document)
+  and prints its banners on stderr.
+- `run` honors `defaultEnvironment` from hitspec.yaml (order: `--env`,
+  `HITSPEC_ENV`, `defaultEnvironment`, `dev`).
+- `@baseUrl = {{baseUrl}}` resolves against the environment (hitspec.yaml, then
+  .env, then the OS) instead of being treated as a cycle.
+- Captured numbers keep their exact JSON form (`1000000`, not `1e+06`);
+  objects and arrays are inserted as compact JSON and null as `null`.
+- `hitspec init` scaffolds a project that passes against `hitspec mock`, and
+  its "Next steps" commands work. The mock server accepts a leading
+  `{{baseUrl}}` and dotted placeholders in routes.
+- Parser regressions from v2.16.0:
+  - a comment line in the header block turned the remaining headers into body;
+  - the request line was split on spaces inside `{{ }}`
+    (`{{$urlEncode(hello world)}}`, `{{ base }}`);
+  - header values lost quotes and everything after `#`
+    (`If-None-Match: "abc"`, `X-Color: #fff`);
+  - an unclosed `'` swallowed the rest of the file.
+- `@auth` arguments separated by commas (the documented form) work for every
+  auth type; spaces work too. Unknown auth types and wrong argument counts
+  are parse errors.
+- `expect header X exists` passed when the header was missing.
+- A response body cut short by a timeout counted as success; the deadline is
+  now tolerated only for `text/event-stream` responses.
+- `hitspec studio --env` and `--config` were ignored. Stress runs, mock and
+  contract verification in studio resolve `{{variables}}` from the active
+  environment, and engine output (stress progress, mock and proxy logs) no
+  longer paints over the UI.
 - `hitspec record` now forwards to the target URL's path prefix
   (`--target http://host/api` sends `/users` upstream as `/api/users`), matching
   the URL it records, so replaying a recording hits the same endpoint. The
@@ -24,6 +91,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`cp -R`, `git checkout`, unzip). Debounce timers are guarded by a mutex and
   removed once they fire. `.git`, `node_modules`, and `vendor` are no longer
   watched.
+
+### Changed
+
+- The Go module path is `github.com/abdul-hamid-achik/hitspec/v2`. Install with
+  `go install github.com/abdul-hamid-achik/hitspec/v2/cmd/hitspec@latest`
+  (the old path resolved to v1.3.0). A clean checkout builds without
+  `go generate`, and `hitspec version` reports the module version when built
+  with `go install`.
+- GitHub Action: use `abdul-hamid-achik/hitspec@v2`, a tag that now follows
+  every stable release. `files` accepts several paths and globs, `timeout`
+  accepts milliseconds or durations, `output` defaults to `console` (machine
+  formats write `hitspec-results.<ext>`, exposed as the `report-file` output),
+  `env` is passed only when set, and Windows and arm64 runners are supported.
+  `@v1` is unchanged.
+- `serve --api-only` clients must send `Content-Type: application/json` with
+  JSON bodies.
 
 ## [2.19.1] - 2026-07-19
 
@@ -572,7 +655,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `hitspec init` - Initialize a new project
 - `hitspec version` - Show version information
 
-[Unreleased]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.19.1...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.20.0...HEAD
+[2.20.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.19.1...v2.20.0
 [2.19.1]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.19.0...v2.19.1
 [2.19.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.18.1...v2.19.0
 [2.18.1]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.18.0...v2.18.1
