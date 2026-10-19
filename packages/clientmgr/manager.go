@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/config"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/env"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/history"
@@ -255,6 +256,60 @@ func (m *Manager) getConfigEnvsLocked() map[string]map[string]any {
 		return m.fileConfig.Environments
 	}
 	return nil
+}
+
+// envSnapshot returns the environment name to resolve {{variables}} against
+// (override wins over the active environment) together with a copy of
+// hitspec.yaml's environments. The copy keeps a concurrent PutEnvironment from
+// racing with engines that read it on their own goroutines. Callers must not
+// hold configMu, and should take the snapshot before m.mu (lock order mu ->
+// configMu is never used).
+func (m *Manager) envSnapshot(override string) (string, map[string]map[string]any) {
+	m.configMu.RLock()
+	defer m.configMu.RUnlock()
+	name := m.config.Env
+	if override != "" {
+		name = override
+	}
+	var envs map[string]map[string]any
+	if src := m.getConfigEnvsLocked(); src != nil {
+		envs = make(map[string]map[string]any, len(src))
+		for k, vars := range src {
+			cp := make(map[string]any, len(vars))
+			for vk, vv := range vars {
+				cp[vk] = vv
+			}
+			envs[k] = cp
+		}
+	}
+	return name, envs
+}
+
+// parseWithEnv parses an .http file and prepends the variables of the given
+// environment to its own variable list, so engines that only know a file's
+// variables (the mock server, the contract verifier) resolve {{baseUrl}} and
+// friends the way the runner and the stress engine do. Variables the file
+// declares itself come later and therefore still win.
+func parseWithEnv(path, envName string, envs map[string]map[string]any) (*parser.File, error) {
+	file, err := parser.ParseFile(path)
+	if err != nil {
+		return nil, err
+	}
+	loaded, err := env.LoadEnvironment(filepath.Dir(path), envName, envs)
+	if err != nil || loaded == nil || len(loaded.Variables) == 0 {
+		return file, nil
+	}
+	names := make([]string, 0, len(loaded.Variables))
+	for k := range loaded.Variables {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	vars := make([]*parser.Variable, 0, len(names)+len(file.Variables))
+	for _, k := range names {
+		vars = append(vars, &parser.Variable{Name: k, Value: fmt.Sprint(loaded.Variables[k])})
+	}
+	file.Variables = append(vars, file.Variables...)
+	return file, nil
 }
 
 func (m *Manager) saveConfigLocked() error {

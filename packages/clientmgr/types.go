@@ -300,6 +300,8 @@ type StressStartReq struct {
 	Rate     float64  `json:"rate,omitempty"`
 	VUs      int      `json:"vus,omitempty"`
 	MaxVUs   int      `json:"maxVUs,omitempty"`
+	// Environment overrides the active environment for {{variable}} resolution.
+	Environment string `json:"environment,omitempty"`
 }
 
 // StressStatusDTO is the current stress test status.
@@ -398,6 +400,8 @@ type MockStartReq struct {
 	Files []string `json:"files"`
 	Port  int      `json:"port,omitempty"`
 	Delay string   `json:"delay,omitempty"`
+	// Environment overrides the active environment for {{variable}} resolution.
+	Environment string `json:"environment,omitempty"`
 }
 
 // MockRouteDTO is a mock server route.
@@ -449,6 +453,8 @@ type ContractVerifyReq struct {
 	Files        []string `json:"files"`
 	ProviderURL  string   `json:"providerUrl"`
 	StateHandler string   `json:"stateHandler,omitempty"`
+	// Environment overrides the active environment for {{variable}} resolution.
+	Environment string `json:"environment,omitempty"`
 }
 
 // ContractResultDTO is the result of contract verification.
