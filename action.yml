@@ -247,7 +247,7 @@ runs:
       # the script (shell injection). argv is built as a bash array and run
       # directly: no eval, so every value stays a single literal argument.
       # The variables are named INPUT_* on purpose: HITSPEC_* are the CLI's own
-      # settings (INPUT_ENV, INPUT_TIMEOUT, ...) and a workflow may set
+      # settings (HITSPEC_ENV, HITSPEC_TIMEOUT, ...) and a workflow may set
       # them on this step, so the action must not overwrite them.
       env:
         INPUT_FILES: ${{ inputs.files }}
@@ -341,12 +341,12 @@ runs:
 
         args=(hitspec run "${files[@]}" --output "$FORMAT" --no-color)
 
-        [ -n "$INPUT_ENV" ]         && args+=(--env "$INPUT_ENV")
-        [ -n "$INPUT_ENV_FILE" ]    && args+=(--env-file "$INPUT_ENV_FILE")
-        [ -n "$REPORT_FILE" ]         && args+=(--output-file "$REPORT_FILE")
-        [ -n "$INPUT_TAGS" ]        && args+=(--tags "$INPUT_TAGS")
-        [ -n "$INPUT_NAME" ]        && args+=(--name "$INPUT_NAME")
-        [ -n "$TIMEOUT" ]             && args+=(--timeout "$TIMEOUT")
+        [ -n "$INPUT_ENV" ] && args+=(--env "$INPUT_ENV")
+        [ -n "$INPUT_ENV_FILE" ] && args+=(--env-file "$INPUT_ENV_FILE")
+        [ -n "$REPORT_FILE" ] && args+=(--output-file "$REPORT_FILE")
+        [ -n "$INPUT_TAGS" ] && args+=(--tags "$INPUT_TAGS")
+        [ -n "$INPUT_NAME" ] && args+=(--name "$INPUT_NAME")
+        [ -n "$TIMEOUT" ] && args+=(--timeout "$TIMEOUT")
 
         if is_true "$INPUT_PARALLEL"; then
           args+=(--parallel)
@@ -356,7 +356,7 @@ runs:
         is_true "$INPUT_BAIL"       && args+=(--bail)
         is_true "$INPUT_VERBOSE"    && args+=(--verbose)
         is_true "$INPUT_INSECURE"   && args+=(--insecure)
-        [ -n "$INPUT_PROXY" ]       && args+=(--proxy "$INPUT_PROXY")
+        [ -n "$INPUT_PROXY" ] && args+=(--proxy "$INPUT_PROXY")
 
         if is_true "$INPUT_STRESS"; then
           args+=(--stress --no-progress)
