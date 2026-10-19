@@ -1,0 +1,11 @@
+### get_x
+# @name get_x
+GET https://api.example.com/x
+Z-Last: 1
+A-First: 2
+M-Mid: 3
+
+>>>
+expect status >= 200
+expect status < 400
+<<<

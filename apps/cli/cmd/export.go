@@ -9,7 +9,7 @@ import (
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/env"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
-	"github.com/abdul-hamid-achik/hitspec/v2/packages/export/curl"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/export/snippet"
 	"github.com/spf13/cobra"
 )
 
@@ -18,78 +18,127 @@ var (
 	exportTagsFlag    string
 	exportOutputFlag  string
 	exportEnvFlag     string
+	exportFormatFlag  string
 	exportExecFlag    bool
 	exportVerboseFlag bool
 )
 
 var exportCmd = &cobra.Command{
-	Use:   "export <format> <file>",
+	Use:   "export [format] <file>",
 	Short: "Export hitspec files to other formats",
-	Long: `Export hitspec requests to executable formats like curl.
+	Long: `Export hitspec requests as runnable commands or client code.
 
-Supported formats:
-  curl    Export as curl commands (can pipe to shell or save to .sh file)
+Supported formats (the same names Studio's export action uses):
+  curl     curl commands (can pipe to shell or save to .sh file)
+  fetch    JavaScript fetch (alias: javascript)
+  wget     wget commands
+  python   Python requests
+  httpie   HTTPie commands
+  go       Go net/http
+  ruby     Ruby Net::HTTP
+
+Pick the format with --format or as the first argument:
+
+  hitspec export --format python tests/api.http
+  hitspec export python tests/api.http
 
 Examples:
   hitspec export curl tests/api.http
   hitspec export curl tests/api.http --name "Login*"
+  hitspec export --format fetch tests/api.http -o snippets.js
   hitspec export curl tests/api.http --exec`,
+	Args: cobra.ArbitraryArgs,
 	// Without a RunE, cobra prints help and exits 0 for an unknown
 	// subcommand (e.g. a typo'd format), silently passing in scripts.
 	// Reject unknown formats with a non-zero exit instead.
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if len(args) == 0 {
+		switch len(args) {
+		case 0:
 			return cmd.Help()
+		case 1:
+			// export <file> with --format
+			return runExport(cmd, exportFormatFlag, args[0])
 		}
-		return fmt.Errorf("unknown export format %q; supported formats: curl", args[0])
+		// export <format> <file> for aliases that have no subcommand (js, py).
+		if f, ok := snippet.Normalize(args[0]); ok && len(args) == 2 {
+			return runExport(cmd, f, args[1])
+		}
+		return fmt.Errorf("unknown export format %q; supported formats: %s", args[0], strings.Join(snippet.Formats, ", "))
 	},
 }
 
-var exportCurlCmd = &cobra.Command{
-	Use:   "curl <file>",
-	Short: "Export requests as curl commands",
-	Long: `Export hitspec requests as curl commands that can be run directly in the terminal.
+func init() {
+	// Shared by `export <file>` and every `export <format> <file>` subcommand.
+	pf := exportCmd.PersistentFlags()
+	pf.StringVarP(&exportNameFlag, "name", "n", "", "Filter by request name (glob pattern)")
+	pf.StringVarP(&exportTagsFlag, "tags", "t", "", "Filter by tags (comma-separated)")
+	pf.StringVarP(&exportOutputFlag, "output", "o", "", "Output file path (default: stdout)")
+	pf.StringVarP(&exportEnvFlag, "env", "e", "", "Environment for variable resolution")
+	pf.BoolVar(&exportExecFlag, "exec", false, "Execute the curl command directly (curl only, single request)")
+	pf.BoolVarP(&exportVerboseFlag, "verbose", "v", false, "Include -v in curl output (curl only)")
+	exportCmd.Flags().StringVarP(&exportFormatFlag, "format", "f", "curl", "Export format: "+strings.Join(snippet.Formats, ", "))
+
+	for _, format := range snippet.Formats {
+		format := format
+		exportCmd.AddCommand(&cobra.Command{
+			Use:   format + " <file>",
+			Short: "Export requests as " + format,
+			Long: fmt.Sprintf(`Export hitspec requests as %s.
 
 Examples:
-  # Export all requests from a file
-  hitspec export curl tests/api.http
-
-  # Filter by request name (glob pattern)
-  hitspec export curl tests/api.http --name "Login*"
-  hitspec export curl tests/api.http -n "createUser"
-
-  # Filter by tags
-  hitspec export curl tests/api.http --tags smoke,auth
-
-  # Output to file instead of stdout
-  hitspec export curl tests/api.http -o commands.sh
-
-  # Execute the curl command directly (single request only)
-  hitspec export curl tests/api.http --name "Login" --exec
-
-  # Include verbose flag in curl output
-  hitspec export curl tests/api.http --verbose
-
-  # Resolve variables from environment before export
-  hitspec export curl tests/api.http --env staging`,
-	Args: cobra.ExactArgs(1),
-	RunE: runExportCurl,
+  hitspec export %s tests/api.http
+  hitspec export %s tests/api.http --name "Login*"
+  hitspec export %s tests/api.http -o out.txt
+  hitspec export %s tests/api.http --env staging`, format, format, format, format, format),
+			Args: cobra.ExactArgs(1),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				return runExport(cmd, format, args[0])
+			},
+		})
+	}
 }
 
-func init() {
-	// Curl export flags
-	exportCurlCmd.Flags().StringVarP(&exportNameFlag, "name", "n", "", "Filter by request name (glob pattern)")
-	exportCurlCmd.Flags().StringVarP(&exportTagsFlag, "tags", "t", "", "Filter by tags (comma-separated)")
-	exportCurlCmd.Flags().StringVarP(&exportOutputFlag, "output", "o", "", "Output file path (default: stdout)")
-	exportCurlCmd.Flags().StringVarP(&exportEnvFlag, "env", "e", "", "Environment for variable resolution")
-	exportCurlCmd.Flags().BoolVar(&exportExecFlag, "exec", false, "Execute the curl command directly (single request only)")
-	exportCurlCmd.Flags().BoolVarP(&exportVerboseFlag, "verbose", "v", false, "Include -v in curl output")
+// exportResolver builds the {{variable}} resolver for an export: file
+// variables, plus .env files when --env is set. It returns nil when there is
+// nothing to resolve.
+func exportResolver(cmd *cobra.Command, f *parser.File) func(string) string {
+	if exportEnvFlag == "" && len(f.Variables) == 0 {
+		return nil
+	}
+	resolver := env.NewResolver()
 
-	exportCmd.AddCommand(exportCurlCmd)
+	// Load file variables
+	for _, v := range f.Variables {
+		resolver.SetVariable(v.Name, v.Value)
+	}
+
+	if exportEnvFlag != "" {
+		// Try to load environment-specific .env file
+		envFile := fmt.Sprintf(".env.%s", exportEnvFlag)
+		if _, err := os.Stat(envFile); err == nil {
+			if err := resolver.LoadDotEnv(envFile); err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to load %s: %v\n", envFile, err)
+			}
+		}
+
+		// Try to load .env file
+		if _, err := os.Stat(".env"); err == nil {
+			if err := resolver.LoadDotEnv(".env"); err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to load .env: %v\n", err)
+			}
+		}
+	}
+	return resolver.Resolve
 }
 
-func runExportCurl(cmd *cobra.Command, args []string) error {
-	filePath := args[0]
+func runExport(cmd *cobra.Command, format, filePath string) error {
+	format, ok := snippet.Normalize(format)
+	if !ok {
+		return fmt.Errorf("unknown export format %q; supported formats: %s", exportFormatFlag, strings.Join(snippet.Formats, ", "))
+	}
+	if exportExecFlag && format != "curl" {
+		return fmt.Errorf("--exec only works with the curl format")
+	}
 
 	// Validate file exists and is a hitspec file
 	info, err := os.Stat(filePath)
@@ -121,52 +170,22 @@ func runExportCurl(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--exec requires exactly one request, but %d matched. Use --name to filter to a single request", len(requests))
 	}
 
-	// Set up resolver if env flag is provided
-	var opts []curl.Option
-	if exportEnvFlag != "" {
-		resolver := env.NewResolver()
+	resolve := exportResolver(cmd, f)
 
-		// Load file variables
-		for _, v := range f.Variables {
-			resolver.SetVariable(v.Name, v.Value)
-		}
-
-		// Try to load environment-specific .env file
-		envFile := fmt.Sprintf(".env.%s", exportEnvFlag)
-		if _, err := os.Stat(envFile); err == nil {
-			if err := resolver.LoadDotEnv(envFile); err != nil {
-				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to load %s: %v\n", envFile, err)
-			}
-		}
-
-		// Try to load .env file
-		if _, err := os.Stat(".env"); err == nil {
-			if err := resolver.LoadDotEnv(".env"); err != nil {
-				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to load .env: %v\n", err)
-			}
-		}
-
-		opts = append(opts, curl.WithResolver(resolver.Resolve))
-	} else {
-		// Still resolve file-level variables without environment
-		if len(f.Variables) > 0 {
-			resolver := env.NewResolver()
-			for _, v := range f.Variables {
-				resolver.SetVariable(v.Name, v.Value)
-			}
-			opts = append(opts, curl.WithResolver(resolver.Resolve))
-		}
+	var opts []snippet.Option
+	if resolve != nil {
+		opts = append(opts, snippet.WithResolver(resolve))
 	}
-
 	if exportVerboseFlag {
-		opts = append(opts, curl.WithVerbose(true))
+		opts = append(opts, snippet.WithVerbose(true))
 	}
-
-	exporter := curl.New(opts...)
 
 	// Execute mode
 	if exportExecFlag {
-		curlCmd := exporter.Export(requests[0])
+		curlCmd, err := snippet.Render("curl", requests[0], opts...)
+		if err != nil {
+			return err
+		}
 
 		// Parse the curl command and execute it
 		// We'll use bash -c to handle the command properly
@@ -179,7 +198,35 @@ func runExportCurl(cmd *cobra.Command, args []string) error {
 	}
 
 	// Generate output
-	output := exporter.ExportFormatted(requests)
+	comment := snippet.Comment(format)
+	var sb strings.Builder
+	rendered := 0
+	var lastErr error
+	for i, req := range requests {
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+		name := req.Name
+		if name == "" {
+			name = fmt.Sprintf("%s %s", req.Method, req.URL)
+		}
+		sb.WriteString(comment + " Request: " + name + "\n")
+		out, err := snippet.Render(format, req, opts...)
+		if err != nil {
+			// Say so in the output and on stderr rather than emit a wrong snippet.
+			lastErr = err
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: skipped request %q: %v\n", name, err)
+			sb.WriteString(comment + " SKIPPED: " + err.Error() + "\n")
+			continue
+		}
+		rendered++
+		sb.WriteString(out)
+		sb.WriteString("\n")
+	}
+	if rendered == 0 {
+		return lastErr
+	}
+	output := sb.String()
 
 	// Write output
 	if exportOutputFlag != "" {
@@ -194,7 +241,7 @@ func runExportCurl(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to write output file: %w", err)
 		}
 
-		fmt.Fprintf(cmd.OutOrStdout(), "Exported %d curl command(s) to %s\n", len(requests), exportOutputFlag)
+		fmt.Fprintf(cmd.OutOrStdout(), "Exported %d %s snippet(s) to %s\n", rendered, format, exportOutputFlag)
 	} else {
 		fmt.Fprint(cmd.OutOrStdout(), output)
 	}

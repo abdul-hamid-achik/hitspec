@@ -1,0 +1,79 @@
+# Generated from Postman collection: Demo API
+
+@baseUrl = https://api.example.com
+@version = 2
+@orgId = 1234567
+
+### Users - List users
+# @name List_users
+# TODO: untranslated test: pm.environment.set("firstId", jsonData.users[0].id)
+# TODO: untranslated test: if (jsonData.flag)
+# @auth bearer {{token}}
+GET {{baseUrl}}/v{{version}}/users?limit=10
+Accept: application/json
+
+>>>
+expect status == 200
+expect body.users[0].name == "Ann"
+expect body.total > 0
+expect body.users type array
+expect body.total exists
+expect duration < 500
+<<<
+
+### Users - Create user
+# @name Create_user
+# @auth basic admin, {{pw}}
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{"name": "{{$randomEmail()}}", "id": "{{$uuid()}}"}
+
+### Users - Login form
+# @name Login_form
+POST {{baseUrl}}/login
+
+user=a+b&tok={{token}}
+
+### Users - Upload
+# @name Upload
+# TODO: multipart file field name "doc" cannot be expressed by hitspec's `file @path` line; set the name by hand
+# @auth apiKey X-API-Key, {{apiKey}}
+POST {{baseUrl}}/upload
+
+>>>multipart
+field title = Report
+file @./report.pdf
+<<<
+
+### GraphQL
+# @name GraphQL
+# TODO: auth type "oauth2" is not supported and was dropped
+# TODO: untranslated pre-request script: pm.variables.set('t', Date.now())
+POST {{baseUrl}}/graphql
+Content-Type: application/json
+
+>>>graphql
+query { users { id } }
+
+>>>variables
+{"a": 1}
+<<<
+
+### Get by id
+# @name Get_by_id
+# @auth bearer {{token}}
+GET {{baseUrl}}/users/42?x=1
+
+### Get by id
+# @name Get_by_id_2
+# @auth bearer {{token}}
+GET {{baseUrl}}/users/7
+
+
+# warnings:
+# - List users: untranslated test: pm.environment.set("firstId", jsonData.users[0].id)
+# - List users: untranslated test: if (jsonData.flag)
+# - Upload: multipart file field name "doc" cannot be expressed by hitspec's `file @path` line; set the name by hand
+# - GraphQL: auth type "oauth2" is not supported and was dropped
+# - GraphQL: untranslated pre-request script: pm.variables.set('t', Date.now())

@@ -1,0 +1,8 @@
+### get_search
+# @name get_search
+GET https://api.example.com/search?q=go&page=2
+
+>>>
+expect status >= 200
+expect status < 400
+<<<

@@ -1,0 +1,10 @@
+### post_x
+# @name post_x
+POST https://api.example.com/x
+
+q=a+b%26c&plain+text
+
+>>>
+expect status >= 200
+expect status < 400
+<<<

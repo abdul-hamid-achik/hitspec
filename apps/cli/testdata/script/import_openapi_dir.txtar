@@ -1,0 +1,49 @@
+# import openapi: path parameters get variables, and -o <dir>/ writes one file
+# per tag.
+
+exec hitspec import openapi spec.yaml
+stdout '(?m)^@id = 7$'
+stdout 'GET \{\{baseUrl\}\}/users/\{\{id\}\}'
+stdout '(?m)^@slug = example$'
+cp stdout single.http
+exec hitspec validate single.http
+
+exec hitspec import openapi spec.yaml -o gen/
+stdout 'Successfully imported to gen/pets.http'
+stdout 'Successfully imported to gen/users.http'
+exists gen/pets.http
+exists gen/users.http
+exec hitspec validate gen
+grep '^@id = 7$' gen/users.http
+! grep '@id' gen/pets.http
+grep '^@slug = example$' gen/pets.http
+
+# An existing directory without a trailing slash works too.
+mkdir existing
+exec hitspec import openapi spec.yaml -o existing
+exists existing/users.http
+
+# A plain file path still writes a single file.
+exec hitspec import openapi spec.yaml -o one/api.http
+exists one/api.http
+exec hitspec validate one/api.http
+
+-- spec.yaml --
+openapi: 3.0.3
+info: {title: T, version: "1"}
+servers: [{url: "https://api.example.com"}]
+paths:
+  /users/{id}:
+    get:
+      tags: [users]
+      operationId: getUser
+      parameters:
+        - {name: id, in: path, required: true, example: 7, schema: {type: integer}}
+      responses: {"200": {description: ok}}
+  /pets/{slug}:
+    get:
+      tags: [pets]
+      operationId: getPet
+      parameters:
+        - {name: slug, in: path, required: true, schema: {type: string}}
+      responses: {"200": {description: ok}}

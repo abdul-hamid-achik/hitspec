@@ -140,8 +140,19 @@ The diff command compares tests by name and file, then categorizes each as:
 | **improved** | Test now passes (previously failed) or is >10% faster |
 | **regressed** | Test now fails (previously passed) or is >10% slower |
 | **unchanged** | No significant change in status or duration |
+| **skipped** | Test was skipped in the second run. Skipped tests are counted separately and never as failures |
 | **new** | Test exists only in the second result file |
 | **removed** | Test exists only in the first result file |
+
+Tests are listed grouped by file (alphabetical) and in request order within each
+file, so the output is identical on every run.
+
+A test that was skipped in the first run has no baseline: its 0 ms duration is
+not compared, so it is never reported as improved or regressed because of a
+change in speed. If it now fails, it is reported as regressed; if it now passes,
+it is unchanged. When the first run has a duration of 0 ms for a test that ran,
+the percentage change is not defined, so the test is reported as unchanged and
+excluded from `--threshold`.
 
 ## Generating Input Files
 
@@ -187,6 +198,7 @@ Summary
   Improved:       1
   Regressed:      1
   Unchanged:      3
+  Skipped:        1
 
 Duration
   Total (File 1): 450ms

@@ -1,0 +1,66 @@
+openapi: 3.0.3
+info:
+  title: Pet Store
+  version: 1.2.3
+servers:
+  - url: https://pets.example.com/v1
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+paths:
+  /users/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: integer}
+    get:
+      tags: [users]
+      operationId: getUser
+      summary: Get a user
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {type: object}}}}
+        "201": {description: created}
+  /pets/{id}:
+    get:
+      tags: [pets]
+      operationId: getPet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - name: verbose
+          in: query
+          schema: {}
+        - name: kind
+          in: query
+          schema: {type: string, enum: [cat, dog]}
+      responses:
+        "200": {description: ok}
+  /pets/{petId}/photos/{photoId}:
+    post:
+      tags: [pets]
+      operationId: uploadPhoto
+      parameters:
+        - {name: petId, in: path, required: true, example: 1234567, schema: {type: integer}}
+        - {name: photoId, in: path, required: true, schema: {type: string}}
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                caption: {type: string}
+                file: {type: string, format: binary}
+      responses:
+        "2XX": {description: ok}
+  /health:
+    get:
+      operationId: health
+      responses:
+        "200": {description: ok}

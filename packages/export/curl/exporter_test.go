@@ -213,8 +213,11 @@ func TestExport_FormBody(t *testing.T) {
 
 	result := e.Export(req)
 
-	if !strings.Contains(result, "--data-urlencode") {
-		t.Error("expected --data-urlencode flag")
+	if strings.Contains(result, "--data-urlencode") {
+		t.Error("a pre-encoded form body must not go through --data-urlencode (it would escape the & and =)")
+	}
+	if !strings.Contains(result, "-d 'username=john&password=secret'") {
+		t.Errorf("expected the form body sent with -d, got %s", result)
 	}
 }
 
@@ -351,5 +354,20 @@ func TestExport_GraphQL(t *testing.T) {
 	}
 	if !strings.Contains(result, "query") {
 		t.Error("expected query in body")
+	}
+}
+
+func TestExport_FileBody(t *testing.T) {
+	e := New()
+	req := &parser.Request{
+		Method: "POST",
+		URL:    "https://api.example.com/import",
+		Body:   &parser.Body{ContentType: parser.BodyFile, FilePath: "./fixtures/user.json", Raw: "< ./fixtures/user.json"},
+	}
+
+	result := e.Export(req)
+
+	if !strings.Contains(result, "--data-binary '@./fixtures/user.json'") {
+		t.Errorf("expected file body to be sent with --data-binary, got %s", result)
 	}
 }

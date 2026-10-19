@@ -1,6 +1,6 @@
 ---
 title: "hitspec import & export"
-description: "Import from OpenAPI, Postman, curl, and Insomnia; export to curl"
+description: "Import from OpenAPI, Postman, curl, and Insomnia; export to curl, fetch, wget, python, httpie, go, and ruby"
 ---
 
 # hitspec import
@@ -20,6 +20,18 @@ hitspec import <format> <source> [flags]
 | `curl` | curl commands (inline or from a file) |
 | `insomnia` | Insomnia export files (v4 format) |
 
+## Nothing is dropped silently
+
+Anything an importer cannot carry over is reported on stderr as
+`warning: ...`. When the problem belongs to one request, it is also left in the
+generated file as a `# TODO:` comment above that request (for example an
+untranslated Postman test script or an unsupported curl flag). Every importer
+output passes `hitspec validate`.
+
+`-o` accepts a file or a directory (a trailing `/`, or an existing directory).
+For a directory, `openapi` writes one file per tag and the other formats write
+`<source-name>.http`.
+
 ---
 
 ## hitspec import openapi
@@ -34,16 +46,34 @@ hitspec import openapi <spec-file-or-url> [flags]
 
 | Flag | Short | Description | Default |
 |------|-------|-------------|---------|
-| `--output` | `-o` | Output file path | stdout |
+| `--output` | `-o` | Output file, or a directory for one file per tag | stdout |
 | `--base-url` | | Override the base URL from the spec | |
 | `--tags` | | Filter operations by tags (comma-separated) | all |
 | `--no-tests` | | Skip generating test assertions | `false` |
+
+### Path parameters
+
+`/users/{id}` becomes `{{id}}`, and the file defines `@id` with the parameter's
+`example`, then `default`, then first `enum` value, then a value for its type
+(`1`, `example`, a fixed UUID, ...). If two operations use the same parameter
+name with different defaults, the second gets its own variable named
+`<operationId>_<param>`.
+
+### One file per tag
+
+With `-o tests/` (or any existing directory) each tag becomes `tests/<tag>.http`.
+Operations without tags are grouped by their first path segment. Each file
+carries the `@baseUrl` and the path variables its own requests use.
 
 ### Examples
 
 <CodeGroup>
 ```bash From a local file
 hitspec import openapi api-spec.yaml -o tests/api.http
+```
+
+```bash One file per tag
+hitspec import openapi api-spec.yaml -o tests/
 ```
 
 ```bash From a URL
@@ -83,8 +113,17 @@ hitspec import postman <collection.json> [flags]
 
 - Converts Postman folders into request groups
 - Maps Postman dynamic variables to hitspec built-in functions (`{{$guid}}` becomes `{{$uuid()}}`)
-- Converts Bearer, Basic, and API Key authentication
-- Supports raw, URL-encoded, and form-data bodies
+- Collection variables become `@name = value` lines
+- A Postman **environment** export becomes an `environments:` entry in `hitspec.yaml`
+  (written next to the output, or printed when writing to stdout)
+- Converts Bearer, Basic, API Key and Digest authentication to `@auth`, honoring
+  the request, folder and collection levels (other types are reported)
+- Supports raw, URL-encoded, form-data (`>>>multipart`), GraphQL and file bodies
+- Translates `pm.test` scripts for the common patterns: `pm.response.to.have.status(N)`,
+  `pm.expect(pm.response.code).to.eql(N)`, response time, header checks and
+  `pm.expect(jsonData.x).to.eql(y)` (becomes `expect body.x == y`). Everything
+  else is kept as `# TODO: untranslated test: ...`. Requests without tests get no
+  assertions.
 
 ### Examples
 
@@ -112,22 +151,41 @@ hitspec import curl <command-or-file> [flags]
 
 | Flag | Short | Description | Default |
 |------|-------|-------------|---------|
-| `--output` | `-o` | Output file path | stdout |
+| `--output` | `-o` | Output file or directory path | stdout |
 | `--no-tests` | | Skip generating test assertions | `false` |
 
 ### Supported curl flags
 
-| curl Flag | Description |
-|-----------|-------------|
+| curl Flag | Result |
+|-----------|--------|
 | `-X, --request` | HTTP method |
-| `-H, --header` | Request header |
-| `-d, --data` | Request body |
-| `-u, --user` | Basic auth (`user:password`) |
-| `-k, --insecure` | Skip SSL verification |
-| `-L, --location` | Follow redirects |
+| `-H, --header` | Request header (command-line order is kept) |
+| `-d, --data, --data-ascii, --data-binary` | Request body. Repeated flags are joined with `&`; `-d @file` becomes `< ./file` |
+| `--data-raw` | Request body (a leading `@` is literal) |
+| `--data-urlencode` | Percent-encoded body part (`name=value`, `=value`, `value`) |
+| `--json` | JSON body plus `Content-Type` and `Accept: application/json` |
+| `-F, --form` | `>>>multipart` block (`name=value`, `name=@file`) |
+| `-G, --get` | Sends the data as a query string |
+| `-I, --head` | `HEAD` request |
+| `-T, --upload-file` | `PUT` with a `< ./file` body |
+| `-u, --user` | `# @auth basic user, password` (`--digest` gives `digest`) |
+| `--oauth2-bearer` | `# @auth bearer <token>` |
+| `-m, --max-time` | `# @timeout <ms>` |
 | `-A, --user-agent` | User-Agent header |
 | `-e, --referer` | Referer header |
 | `-b, --cookie` | Cookie header |
+| `-k, --insecure` | Warning only: set `validateSSL: false` in `hitspec.yaml` |
+
+Flags that only change how curl prints or transfers (`-s`, `-S`, `-v`, `-i`,
+`-f`, `--compressed`, ...) are ignored. Any other flag produces a warning, and
+a `# TODO:` above the request. Browser "Copy as cURL" commands (with `$'...'`
+quoting) are supported.
+
+<Note>
+hitspec's `file @path` line in a multipart block has no field name, so the name
+of an uploaded file field (`-F avatar=@me.png`) is reported and must be set by
+hand.
+</Note>
 
 ### Examples
 
@@ -163,16 +221,25 @@ hitspec import insomnia <export-file> [flags]
 
 | Flag | Short | Description | Default |
 |------|-------|-------------|---------|
-| `--output` | `-o` | Output file path | stdout |
+| `--output` | `-o` | Output file or directory path | stdout |
 | `--no-tests` | | Skip generating test assertions | `false` |
 
 ### Features
 
-- Request folders as file separators
-- Environment variables
-- Authentication (Bearer, Basic, API Key)
-- Request bodies (JSON, form data, raw)
-- Headers
+- Request folders as name prefixes
+- Environments: a lone base environment becomes `@name = value` lines. When sub
+  environments exist, all variables go to a `hitspec.yaml` `environments:`
+  section (a `base` entry plus one per sub environment, each merged over the
+  base), written next to the output, or printed to stderr when writing to stdout.
+  An existing `hitspec.yaml` is never overwritten (`hitspec.imported.yaml` is
+  written instead).
+  hitspec only auto-loads `hitspec.yaml` from the current directory, so for a
+  file written next to the output pass it explicitly:
+  `hitspec run tests/api.http --config tests/hitspec.yaml --env dev`.
+- Authentication (Bearer, Basic, API Key, Digest) as `@auth`
+- Request bodies (JSON, raw, form-urlencoded, multipart, GraphQL, file)
+- Headers and query parameters
+- Insomnia template tags (`{% ... %}`) are reported, not translated
 
 ### Examples
 
@@ -188,43 +255,72 @@ hitspec import insomnia insomnia-export.json --no-tests -o tests/api.http
 
 ---
 
-# hitspec export curl
+# hitspec export
 
-Export hitspec requests as executable curl commands.
+Export hitspec requests as runnable commands or client code.
 
 ```bash
-hitspec export curl <file> [flags]
+hitspec export [format] <file> [flags]
+hitspec export --format <format> <file> [flags]
 ```
+
+## Formats
+
+The same names the Studio export action uses.
+
+| Format | Output |
+|--------|--------|
+| `curl` (default) | curl commands |
+| `fetch` | JavaScript `fetch` (aliases: `javascript`, `js`) |
+| `wget` | wget commands |
+| `python` | Python `requests` |
+| `httpie` | HTTPie commands |
+| `go` | Go `net/http` |
+| `ruby` | Ruby `Net::HTTP` |
+
+Query parameters (`? key = value` lines) and `@auth` (bearer, basic, API key) are
+included in every format. A request a format cannot express (multipart or file
+bodies outside `curl`) is skipped with a `warning:` on stderr and a
+`SKIPPED` comment in the output; if no request can be exported the command fails.
 
 ## Flags
 
 | Flag | Short | Description | Default |
 |------|-------|-------------|---------|
+| `--format` | `-f` | Export format (when not given as the first argument) | `curl` |
 | `--name` | `-n` | Filter by request name (glob pattern) | all |
 | `--tags` | `-t` | Filter by tags (comma-separated) | all |
 | `--output` | `-o` | Output file path | stdout |
 | `--env` | `-e` | Environment for variable resolution | none |
-| `--exec` | | Execute the curl command directly | `false` |
-| `--verbose` | `-v` | Include `-v` in curl output | `false` |
+| `--exec` | | Execute the curl command directly (curl only) | `false` |
+| `--verbose` | `-v` | Include `-v` in curl output (curl only) | `false` |
 
 <Warning>
 The `--exec` flag requires exactly one matching request. Use `--name` to filter to a single request when using `--exec`.
 </Warning>
 
-## Auth Conversion
+## Auth Conversion (curl)
 
 | hitspec | curl |
 |---------|------|
 | `@auth bearer <token>` | `-H 'Authorization: Bearer <token>'` |
-| `@auth basic <user> <pass>` | `-u '<user>:<pass>'` |
-| `@auth apiKey <header> <key>` | `-H '<header>: <key>'` |
-| `@auth digest <user> <pass>` | `--digest -u '<user>:<pass>'` |
+| `@auth basic <user>, <pass>` | `-u '<user>:<pass>'` |
+| `@auth apiKey <header>, <key>` | `-H '<header>: <key>'` |
+| `@auth digest <user>, <pass>` | `--digest -u '<user>:<pass>'` |
 
 ## Examples
 
 <CodeGroup>
-```bash Export all requests
+```bash Export all requests as curl
 hitspec export curl tests/api.http
+```
+
+```bash Python requests
+hitspec export --format python tests/api.http
+```
+
+```bash fetch to a file
+hitspec export fetch tests/api.http -o snippets.js
 ```
 
 ```bash Filter by name
@@ -233,10 +329,6 @@ hitspec export curl tests/api.http --name "Login*"
 
 ```bash Filter by tags
 hitspec export curl tests/api.http --tags smoke,auth
-```
-
-```bash Save to file
-hitspec export curl tests/api.http -o commands.sh
 ```
 
 ```bash Execute directly

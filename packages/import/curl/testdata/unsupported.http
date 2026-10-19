@@ -1,0 +1,17 @@
+### get_x
+# @name get_x
+# TODO: -x (proxy) has no hitspec equivalent and was ignored
+# TODO: --retry (retry count) has no hitspec equivalent and was ignored
+# TODO: unsupported curl option --weird-flag was ignored
+# @timeout 5000
+GET https://api.example.com/x
+
+>>>
+expect status >= 200
+expect status < 400
+<<<
+
+# warnings:
+# - -x (proxy) has no hitspec equivalent and was ignored
+# - --retry (retry count) has no hitspec equivalent and was ignored
+# - unsupported curl option --weird-flag was ignored

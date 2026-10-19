@@ -1,0 +1,9 @@
+### get_admin
+# @name get_admin
+# @auth basic admin, s3cret
+GET https://api.example.com/admin
+
+>>>
+expect status >= 200
+expect status < 400
+<<<

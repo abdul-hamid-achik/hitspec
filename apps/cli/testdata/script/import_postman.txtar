@@ -1,0 +1,41 @@
+# postman import: variables, auth, and translated tests; untranslated scripts
+# become TODOs, never fake assertions.
+
+exec hitspec import postman col.json -o out/
+stderr 'warning: Create: untranslated test'
+exists out/col.http
+exec hitspec validate out/col.http
+grep '^@baseUrl = https://api.example.com$' out/col.http
+grep '^# @auth bearer \{\{token\}\}$' out/col.http
+grep '^expect status == 201$' out/col.http
+grep '^expect body.name == "Ann"$' out/col.http
+grep '^# TODO: untranslated test: pm.environment.set' out/col.http
+! grep 'expect status == 200' out/col.http
+
+# Environment export -> hitspec.yaml fragment next to the output
+exec hitspec import postman env.json -o envout/api.http
+stdout 'Wrote 1 environment\(s\) to envout/hitspec.yaml'
+! exists envout/api.http
+exists envout/hitspec.yaml
+grep 'baseUrl: https://staging.example.com' envout/hitspec.yaml
+grep 'defaultEnvironment: staging' envout/hitspec.yaml
+
+# To stdout the YAML is the result.
+exec hitspec import postman env.json
+stdout 'environments:'
+stdout 'baseUrl: https://staging.example.com'
+
+-- col.json --
+{"info":{"name":"C"},
+ "variable":[{"key":"baseUrl","value":"https://api.example.com"}],
+ "auth":{"type":"bearer","bearer":[{"key":"token","value":"{{token}}"}]},
+ "item":[
+  {"name":"Create","request":{"method":"POST","url":"{{baseUrl}}/users","body":{"mode":"raw","raw":"{\"name\":\"Ann\"}"}},
+   "event":[{"listen":"test","script":{"exec":[
+     "const jsonData = pm.response.json();",
+     "pm.test('created', function () { pm.response.to.have.status(201); });",
+     "pm.test('name', function () { pm.expect(jsonData.name).to.eql('Ann'); });",
+     "pm.environment.set('id', jsonData.id);"]}}]},
+  {"name":"Plain","request":{"method":"GET","url":"{{baseUrl}}/users"}}]}
+-- env.json --
+{"name":"Staging","values":[{"key":"baseUrl","value":"https://staging.example.com","enabled":true}]}
