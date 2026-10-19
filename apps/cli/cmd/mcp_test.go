@@ -151,3 +151,37 @@ func TestMCPServeCommandFailsClosedForInvalidServerOwnedProviders(t *testing.T) 
 		})
 	}
 }
+
+func TestNewSearchProviderRemovesKeyFromProcessEnvironment(t *testing.T) {
+	t.Setenv("TAVILY_API_KEY", mcpServeFakeTavilyToken)
+	provider, err := newSearchProvider("tavily")
+	if err != nil || provider == nil {
+		t.Fatalf("provider=%v err=%v", provider, err)
+	}
+	if v, ok := os.LookupEnv("TAVILY_API_KEY"); ok {
+		t.Fatalf("TAVILY_API_KEY still in the process environment: %q", v)
+	}
+	// Even with the provider disabled the key must not linger in the process.
+	t.Setenv("TAVILY_API_KEY", mcpServeFakeTavilyToken)
+	if provider, err := newSearchProvider("none"); err != nil || provider != nil {
+		t.Fatalf("none provider=%v err=%v", provider, err)
+	}
+	if _, ok := os.LookupEnv("TAVILY_API_KEY"); ok {
+		t.Fatal("TAVILY_API_KEY survived startup with the provider disabled")
+	}
+}
+
+func TestMCPServeCommandRefusesBroadWorkspace(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	for _, workspace := range []string{home, filepath.Dir(home), string(filepath.Separator)} {
+		command := newMCPServeCommand()
+		command.SetOut(&bytes.Buffer{})
+		command.SetErr(&bytes.Buffer{})
+		command.SetArgs([]string{"--workspace", workspace})
+		err := command.Execute()
+		if err == nil || !strings.Contains(err.Error(), "--allow-broad-workspace") {
+			t.Errorf("workspace %q: error = %v, want broad-workspace refusal", workspace, err)
+		}
+	}
+}

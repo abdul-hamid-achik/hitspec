@@ -1,0 +1,8 @@
+# mcp serve refuses a workspace that exposes the whole home directory.
+cd $HOME
+! exec hitspec mcp serve
+stderr 'allow-broad-workspace'
+! stdout .
+
+! exec hitspec mcp serve --workspace $HOME
+stderr 'allow-broad-workspace'

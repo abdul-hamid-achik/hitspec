@@ -33,23 +33,101 @@ type Resolver struct {
 	dotenv   map[string]string
 	funcs    *builtin.Registry
 	warnFunc WarnFunc
+
+	// isolated resolvers never fall back to the process environment except for
+	// the names in allowEnv. See WithIsolatedEnvironment.
+	isolated bool
+	allowEnv map[string]bool
 }
 
-func NewResolver() *Resolver {
-	return &Resolver{
+// ResolverOption configures a Resolver built with NewResolverWith.
+type ResolverOption func(*Resolver)
+
+// WithIsolatedEnvironment makes the resolver ignore the process environment.
+// {{NAME}}, {{$NAME}}, and {{$env(NAME)}} then resolve only from the
+// resolver's own layers (variables, the loaded .env file) and, for the names
+// listed in allow, from the process environment. With no names the process
+// environment is unreachable, so a request file from an untrusted workspace
+// cannot read secrets such as API keys. LoadDotEnv does not export into the
+// process environment in this mode.
+func WithIsolatedEnvironment(allow ...string) ResolverOption {
+	return func(r *Resolver) {
+		r.isolated = true
+		r.allowEnv = make(map[string]bool, len(allow))
+		for _, name := range allow {
+			if name = strings.TrimSpace(name); name != "" {
+				r.allowEnv[name] = true
+			}
+		}
+	}
+}
+
+// NewResolver returns a resolver that falls back to the process environment.
+func NewResolver() *Resolver { return NewResolverWith() }
+
+// NewResolverWith returns a resolver configured by options.
+func NewResolverWith(options ...ResolverOption) *Resolver {
+	r := &Resolver{
 		variables: make(map[string]any),
 		shadowed:  make(map[string][]any),
 		captures:  make(map[string]any),
 		dotenv:    make(map[string]string),
 		funcs:     builtin.NewRegistry(),
 	}
+	for _, option := range options {
+		option(r)
+	}
+	if r.isolated {
+		// Override the builtin $env(NAME[, default]), which reads os.Getenv.
+		r.funcs.Register("env", func(args []string) any {
+			if len(args) < 1 {
+				return ""
+			}
+			if val := r.LookupEnv(args[0]); val != "" {
+				return val
+			}
+			if len(args) >= 2 {
+				return args[1]
+			}
+			return ""
+		})
+	}
+	return r
+}
+
+// osEnv reads the process environment, honoring isolation.
+func (r *Resolver) osEnv(name string) string {
+	if r.isolated && !r.allowEnv[name] {
+		return ""
+	}
+	return os.Getenv(name)
+}
+
+// LookupEnv returns the value used for an environment-style reference: the
+// loaded .env file first, then the process environment (subject to isolation).
+func (r *Resolver) LookupEnv(name string) string {
+	r.mu.RLock()
+	val, ok := r.dotenv[name]
+	r.mu.RUnlock()
+	if ok {
+		return val
+	}
+	return r.osEnv(name)
 }
 
 // LoadDotEnv loads variables from a .env file for variable interpolation.
 // Variables are also exported to the OS environment so ${VAR} syntax works
 // in config files loaded after the .env file.
+//
+// An isolated resolver (WithIsolatedEnvironment) loads the file into itself
+// only and never exports it, so a .env read for one request cannot leak into
+// later ones or into child processes.
 func (r *Resolver) LoadDotEnv(path string) error {
-	vars, err := LoadAndExportDotEnv(path)
+	load := LoadAndExportDotEnv
+	if r.isolated {
+		load = LoadDotEnv
+	}
+	vars, err := load(path)
 	if err != nil {
 		return err
 	}
@@ -224,7 +302,7 @@ func (r *Resolver) resolve(input string, st *resolveState) string {
 				return val
 			}
 			r.mu.RUnlock()
-			if val := os.Getenv(funcExpr); val != "" {
+			if val := r.osEnv(funcExpr); val != "" {
 				return val
 			}
 			r.warn("unresolved environment variable: $%s", funcExpr)
@@ -279,7 +357,7 @@ func (r *Resolver) resolve(input string, st *resolveState) string {
 		}
 
 		// Fallback to OS environment variable
-		if val := os.Getenv(expr); val != "" {
+		if val := r.osEnv(expr); val != "" {
 			return val
 		}
 
@@ -344,6 +422,9 @@ func (r *Resolver) Clone() *Resolver {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	clone := NewResolver()
+	if r.isolated {
+		clone = NewResolverWith(func(c *Resolver) { c.isolated, c.allowEnv = true, r.allowEnv })
+	}
 	for k, v := range r.variables {
 		clone.variables[k] = v
 	}

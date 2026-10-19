@@ -243,7 +243,9 @@ clients that do not pass through structured output can still consume it:
 
 | Flag | Default | Behavior |
 | --- | --- | --- |
-| `--workspace` | `.` | Fixes the filesystem boundary exposed to all tools. Use an absolute path in client configuration. |
+| `--workspace` | `.` | Fixes the filesystem boundary exposed to all tools. Use an absolute path in client configuration. The server refuses to start when the workspace is your home directory, a directory that contains it, or the filesystem root. |
+| `--allow-broad-workspace` | `false` | Deliberately permits one of those broad workspaces. |
+| `--allow-env` | none | Repeatable. Names a process environment variable that saved requests may read (see [Saved-request environment isolation](#saved-request-environment-isolation)). |
 | `--max-body-bytes` | `1048576` (1 MiB) | Maximum fetched response-body size. |
 | `--timeout` | `30s` | Maximum duration of one HTTP request. |
 | `--allow-private-network` | `false` | Allows private, loopback, and other non-public targets; it also enables the standard saved-request modes described below. |
@@ -254,6 +256,26 @@ clients that do not pass through structured output can still consume it:
 Tavily authentication comes only from the server process's `TAVILY_API_KEY`.
 The key is never accepted as a tool argument or returned in output. The
 file.cheap child receives an allowlisted environment that excludes this key.
+The server also removes `TAVILY_API_KEY` from its own process environment once
+it has read it at startup, so nothing evaluated later can read it back.
+
+### Saved-request environment isolation
+
+A workspace can be a cloned repository or a pull request, so its `.http` files
+and `hitspec.yaml` are untrusted input. When `hitspec_fetch` runs a saved
+request it resolves `{{NAME}}`, `{{$NAME}}`, `{{$env(NAME)}}`, and `${NAME}` in
+`hitspec.yaml` environments from the workspace only: the config's selected
+environment, the optional `env_file`, and the file's own variables. The server's
+process environment is not consulted, so a request cannot place a secret such as
+an API key in a URL, header, or body.
+
+The operator can make specific process variables visible with `--allow-env NAME`
+(repeatable). The list is empty by default and is never model-controlled. An
+`env_file` is read into that one call only; it is not exported into the process
+and does not persist into later tool calls.
+
+Tool errors name files workspace-relative. A path that does not exist and a path
+outside the workspace return the same `path not found or not allowed` message.
 
 ## Limits and network policy
 
@@ -281,8 +303,9 @@ This operator grant also switches saved requests to the standard Hitspec HTTP
 client, enabling configured proxies and digest, AWS, OAuth2, and multipart
 request modes. Grant it only to agents and workspaces that need that authority.
 
-`hitspec_fetch` and durable webpage capture are intentionally not marked
-read-only because HTTP requests and artifact writes can have external effects.
+`hitspec_fetch` is annotated `destructiveHint: true` and not read-only because
+it can send `POST`, `PUT`, `PATCH`, and `DELETE` requests. Durable webpage
+capture is not marked read-only because artifact writes have external effects.
 The discovery-only `hitspec_search_web` tool is marked read-only and open-world.
 
 ## Approval boundaries

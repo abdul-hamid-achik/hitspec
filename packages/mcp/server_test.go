@@ -94,7 +94,7 @@ func TestServerRejectsPrivateTargetsAndWorkspaceEscape(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, err = server.handleFetch(context.Background(), nil, fetchInput{File: "escape.http", Format: "raw"})
-	if err == nil || !strings.Contains(err.Error(), "escapes the workspace") {
+	if err == nil || !strings.Contains(err.Error(), "not found or not allowed") {
 		t.Fatalf("body file escape error = %v", err)
 	}
 }

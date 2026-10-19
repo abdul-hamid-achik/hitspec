@@ -32,6 +32,17 @@ type SavedRequest struct {
 	DefaultUserAgent string
 	NetworkPolicy    NetworkPolicy
 	WorkspaceRoot    string // optional file-read boundary for agent-facing callers
+
+	// IsolateEnv resolves {{NAME}}, {{$NAME}}, {{$env(NAME)}} and ${NAME} in
+	// the saved request and its hitspec config only from the workspace (the
+	// config's environment, the env file, file variables) and the names in
+	// AllowedEnv; the process environment is otherwise unreachable and the env
+	// file is not exported into it. Agent-facing callers set this so a request
+	// file cannot read the server's secrets.
+	IsolateEnv bool
+	// AllowedEnv lists the process environment variables an isolated fetch may
+	// read. Empty by default; chosen by the operator, never by the model.
+	AllowedEnv []string
 }
 
 // FetchSaved executes exactly one saved request. Assertions, hooks, shell
@@ -39,9 +50,9 @@ type SavedRequest struct {
 func FetchSaved(ctx context.Context, input SavedRequest) (*Result, error) {
 	parsed, err := parser.ParseFile(input.Path)
 	if err != nil {
-		return nil, fmt.Errorf("parse %s: %w", input.Path, err)
+		return nil, fmt.Errorf("parse %s: %w", input.displayPath(input.Path), err)
 	}
-	selected, err := selectRequest(parsed, input.Name, input.Index)
+	selected, err := selectRequest(parsed, input.Name, input.Index, input.displayPath(input.Path))
 	if err != nil {
 		return nil, err
 	}
@@ -65,12 +76,20 @@ func FetchSaved(ctx context.Context, input SavedRequest) (*Result, error) {
 		environmentName = "dev"
 	}
 	resolver := env.NewResolver()
+	if input.IsolateEnv {
+		resolver = env.NewResolverWith(env.WithIsolatedEnvironment(input.AllowedEnv...))
+	}
 	if input.EnvFile != "" {
 		if err := resolver.LoadDotEnv(input.EnvFile); err != nil {
 			return nil, fmt.Errorf("load env file: %w", err)
 		}
 	}
-	environment, err := env.LoadEnvironment(filepath.Dir(input.Path), environmentName, fileConfig.Environments)
+	var environment *env.Environment
+	if input.IsolateEnv {
+		environment, err = env.LoadEnvironmentWithLookup(filepath.Dir(input.Path), environmentName, fileConfig.Environments, resolver.LookupEnv)
+	} else {
+		environment, err = env.LoadEnvironment(filepath.Dir(input.Path), environmentName, fileConfig.Environments)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("load environment %q: %w", environmentName, err)
 	}
@@ -159,6 +178,28 @@ func FetchSaved(ctx context.Context, input SavedRequest) (*Result, error) {
 	}, nil
 }
 
+// displayPath renders path for errors: workspace-relative when a workspace
+// root is set, so agent-facing messages never carry absolute paths.
+func (input SavedRequest) displayPath(path string) string {
+	if input.WorkspaceRoot == "" {
+		return path
+	}
+	for _, root := range []string{input.WorkspaceRoot, resolvedPath(input.WorkspaceRoot)} {
+		if relative, err := filepath.Rel(root, path); err == nil && relative != ".." &&
+			!strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			return filepath.ToSlash(relative)
+		}
+	}
+	return filepath.Base(path)
+}
+
+func resolvedPath(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
+	}
+	return path
+}
+
 func validateBodyFiles(workspace, baseDir string, request *parser.Request, resolve func(string) string) error {
 	if request.Body == nil {
 		return nil
@@ -183,19 +224,23 @@ func validateBodyFiles(workspace, baseDir string, request *parser.Request, resol
 		if !filepath.IsAbs(path) {
 			path = filepath.Join(baseDir, path)
 		}
+		// One message for missing and out-of-workspace files: the model must
+		// not be able to probe which paths exist outside the workspace.
 		canonical, err := filepath.EvalSymlinks(path)
 		if err != nil {
-			return fmt.Errorf("resolve request body file: %w", err)
+			return errBodyFileNotAllowed
 		}
 		relative, err := filepath.Rel(workspace, canonical)
 		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-			return errors.New("request body file escapes the workspace")
+			return errBodyFileNotAllowed
 		}
 	}
 	return nil
 }
 
-func selectRequest(file *parser.File, name string, index int) (*parser.Request, error) {
+var errBodyFileNotAllowed = errors.New("request body file not found or not allowed")
+
+func selectRequest(file *parser.File, name string, index int, display string) (*parser.Request, error) {
 	if name != "" && index != 0 {
 		return nil, errors.New("name and index are mutually exclusive")
 	}
@@ -216,15 +261,15 @@ func selectRequest(file *parser.File, name string, index int) (*parser.Request, 
 			}
 		}
 		if len(matches) == 0 {
-			return nil, fmt.Errorf("request %q was not found in %s", name, file.Path)
+			return nil, fmt.Errorf("request %q was not found in %s", name, display)
 		}
 		if len(matches) > 1 {
-			return nil, fmt.Errorf("request name %q is ambiguous in %s", name, file.Path)
+			return nil, fmt.Errorf("request name %q is ambiguous in %s", name, display)
 		}
 		return matches[0], nil
 	}
 	if len(file.Requests) != 1 {
-		return nil, fmt.Errorf("%s contains %d requests; select exactly one with name or index", file.Path, len(file.Requests))
+		return nil, fmt.Errorf("%s contains %d requests; select exactly one with name or index", display, len(file.Requests))
 	}
 	return file.Requests[0], nil
 }
