@@ -68,19 +68,19 @@ func NewReporter(opts ...ReporterOption) *Reporter {
 		opt(r)
 	}
 
-	// Initialize colors. The setting is per color rather than the global
+	// Initialize colors. noColor is set per color rather than on the global
 	// color.NoColor: two stress runs at once (serve) would race on the global.
+	// Without noColor the colors stay unset, so the package's own detection
+	// (NO_COLOR, TERM=dumb, stdout not a terminal) still turns them off.
 	r.green = color.New(color.FgGreen)
 	r.red = color.New(color.FgRed)
 	r.yellow = color.New(color.FgYellow)
 	r.cyan = color.New(color.FgCyan)
 	r.bold = color.New(color.Bold)
 	r.dim = color.New(color.Faint)
-	for _, c := range []*color.Color{r.green, r.red, r.yellow, r.cyan, r.bold, r.dim} {
-		if r.noColor {
+	if r.noColor {
+		for _, c := range []*color.Color{r.green, r.red, r.yellow, r.cyan, r.bold, r.dim} {
 			c.DisableColor()
-		} else {
-			c.EnableColor()
 		}
 	}
 

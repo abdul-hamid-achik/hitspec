@@ -39,11 +39,11 @@ checking what it says.
     - uses: abdul-hamid-achik/hitspec@v2
       with:
         files: tests/
-        version: v2.23.1
+        version: v2.23.2
     ```
 
     With Go, install an exact version:
-    `go install github.com/abdul-hamid-achik/hitspec/v2/cmd/hitspec@v2.23.1`.
+    `go install github.com/abdul-hamid-achik/hitspec/v2/cmd/hitspec@v2.23.2`.
   </Step>
 </Steps>
 
@@ -51,6 +51,14 @@ Every release lists its changes in the
 [changelog](https://github.com/abdul-hamid-achik/hitspec/blob/main/CHANGELOG.md),
 and from 2.20.0 on the GitHub release page of each version shows the same
 notes.
+
+## 2.23.2
+
+- `hitspec run --stress` prints no color codes when stdout is not a
+  terminal, as before 2.23.1. Only a check that expected escape codes in a
+  file or pipe is affected.
+- Go library: `output.WithNoColor(true)` turns colors off for that formatter
+  only, not for the whole process.
 
 ## 2.23.1
 

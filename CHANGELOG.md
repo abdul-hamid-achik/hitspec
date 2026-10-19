@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.23.2] - 2026-10-19
+
+Fixes a 2.23.1 regression: `hitspec run --stress` printed color codes into
+files and pipes. **The upgrade notes below list what a CI job can notice.**
+
+### Upgrade notes: tests that may start failing
+
+- **`hitspec run --stress` output has no color codes when stdout is not a
+  terminal.** 2.23.1 forced the stress reporter's colors on, so
+  `hitspec run --stress > stress.txt` and CI logs got ANSI escape codes. They
+  are gone again, as in 2.23.0 and before. Only a check that expected those
+  codes in a file or pipe is affected. `NO_COLOR` and `TERM=dumb` turn the
+  colors off again too.
+- **Go library: `output.WithNoColor(true)` no longer sets the global
+  `color.NoColor`.** It turns colors off for that console formatter only.
+  A program that relied on it to turn off every other `fatih/color` output
+  must set `color.NoColor` itself.
+
+### Fixed
+
+- `hitspec run --stress` follows the terminal detection again: no colors in
+  files, pipes, `NO_COLOR` or `TERM=dumb`.
+- `hitspec run --watch` turns colors back on when `noColor` changes from
+  `true` to `false` in `hitspec.yaml`. Once off, they used to stay off for the
+  rest of the session.
+- The console report no longer writes a process-wide color setting, so two
+  formatters at once do not race on it.
+
 ## [2.23.1] - 2026-10-19
 
 Small fixes on top of 2.23.0:
@@ -1341,7 +1369,8 @@ before upgrading CI.
 - `hitspec init` - Initialize a new project
 - `hitspec version` - Show version information
 
-[Unreleased]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.23.1...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.23.2...HEAD
+[2.23.2]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.23.1...v2.23.2
 [2.23.1]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.23.0...v2.23.1
 [2.23.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.22.0...v2.23.0
 [2.22.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.21.0...v2.22.0
