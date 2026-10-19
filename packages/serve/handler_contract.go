@@ -183,9 +183,8 @@ func (s *Server) handleContractFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	relFiles := make([]string, 0, len(files))
 	for _, f := range files {
-		rel, err := filepath.Rel(s.config.WorkDir, f)
-		if err == nil {
-			relFiles = append(relFiles, rel)
+		if rel, err := filepath.Rel(s.config.WorkDir, f); err == nil {
+			relFiles = append(relFiles, filepath.ToSlash(rel))
 		}
 	}
 	writeJSON(w, http.StatusOK, ContractStatusDTO{Files: relFiles})

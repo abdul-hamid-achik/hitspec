@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/testhome"
 )
 
 // savedConfigFixture lays out <tmp>/hitspec.yaml (parent) and
@@ -14,7 +16,7 @@ import (
 func savedConfigFixture(t *testing.T, url string) (parent, workspace, file string) {
 	t.Helper()
 	parent = t.TempDir()
-	t.Setenv("HOME", filepath.Join(parent, "home"))
+	testhome.Set(t, filepath.Join(parent, "home"))
 	workspace = filepath.Join(parent, "ws")
 	sub := filepath.Join(workspace, "sub")
 	if err := os.MkdirAll(sub, 0o755); err != nil {

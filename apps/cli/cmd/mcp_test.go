@@ -173,7 +173,7 @@ func TestNewSearchProviderRemovesKeyFromProcessEnvironment(t *testing.T) {
 
 func TestMCPServeCommandRefusesBroadWorkspace(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testhome.Set(t, home)
 	for _, workspace := range []string{home, filepath.Dir(home), string(filepath.Separator)} {
 		command := newMCPServeCommand()
 		command.SetOut(&bytes.Buffer{})

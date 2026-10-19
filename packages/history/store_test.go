@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -55,6 +56,9 @@ func TestNewStore_CreatesDatabase(t *testing.T) {
 // history database (which may hold request URLs/bodies) was created
 // world-readable (0644). It must be owner-only (0600).
 func TestNewStore_FilePermissionsOwnerOnly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no POSIX permission bits: Stat reports 0666 for any writable file")
+	}
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "history.db")
 	s, err := NewStore(dbPath)
@@ -109,8 +113,12 @@ func TestNewStore_SchemaApplied(t *testing.T) {
 }
 
 func TestNewStore_InvalidPath(t *testing.T) {
-	// A path inside a non-existent directory should fail.
-	_, err := NewStore("/no/such/directory/test.db")
+	// A database whose parent "directory" is a regular file cannot be created.
+	blocker := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := NewStore(filepath.Join(blocker, "sub", "test.db"))
 	if err == nil {
 		t.Fatal("expected error for invalid DB path, got nil")
 	}

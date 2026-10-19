@@ -2,7 +2,7 @@ package serve
 
 import (
 	"net/http"
-	"path/filepath"
+	"path"
 	"sort"
 	"strings"
 
@@ -25,10 +25,7 @@ func (s *Server) handleGetWorkspace(w http.ResponseWriter, r *http.Request) {
 	totalRequests := 0
 	entries := make([]fileEntry, 0, len(files))
 	for _, f := range files {
-		rel, _ := filepath.Rel(s.config.WorkDir, f)
-		if rel == "" {
-			rel = f
-		}
+		rel := relSlash(s.config.WorkDir, f)
 
 		reqCount := 0
 		parsed, perr := parser.ParseFile(f)
@@ -61,22 +58,22 @@ func buildFileTree(entries []fileEntry) []FileTreeNodeDTO {
 
 	// Ensure all ancestor directories exist
 	for _, e := range entries {
-		dir := filepath.Dir(e.relPath)
+		dir := path.Dir(e.relPath)
 		d := dir
 		for d != "." && d != "" {
 			if _, ok := dirs[d]; !ok {
-				parentDir := filepath.Dir(d)
+				parentDir := path.Dir(d)
 				if parentDir == "." {
 					parentDir = ""
 				}
 				dirs[d] = &FileTreeNodeDTO{
 					Path:  d,
-					Name:  filepath.Base(d),
+					Name:  path.Base(d),
 					Dir:   parentDir,
 					IsDir: true,
 				}
 			}
-			d = filepath.Dir(d)
+			d = path.Dir(d)
 			if d == "." {
 				break
 			}
@@ -87,7 +84,7 @@ func buildFileTree(entries []fileEntry) []FileTreeNodeDTO {
 	var topLevelFiles []FileTreeNodeDTO
 
 	for _, e := range entries {
-		dir := filepath.Dir(e.relPath)
+		dir := path.Dir(e.relPath)
 		dirLabel := dir
 		if dirLabel == "." {
 			dirLabel = ""
@@ -95,7 +92,7 @@ func buildFileTree(entries []fileEntry) []FileTreeNodeDTO {
 
 		node := FileTreeNodeDTO{
 			Path:         e.relPath,
-			Name:         filepath.Base(e.relPath),
+			Name:         path.Base(e.relPath),
 			Dir:          dirLabel,
 			IsDir:        false,
 			RequestCount: e.requestCount,
@@ -114,15 +111,15 @@ func buildFileTree(entries []fileEntry) []FileTreeNodeDTO {
 		sortedDirs = append(sortedDirs, d)
 	}
 	sort.Slice(sortedDirs, func(i, j int) bool {
-		return strings.Count(sortedDirs[i], string(filepath.Separator)) >
-			strings.Count(sortedDirs[j], string(filepath.Separator))
+		return strings.Count(sortedDirs[i], "/") >
+			strings.Count(sortedDirs[j], "/")
 	})
 
 	for _, d := range sortedDirs {
 		node := dirs[d]
 		sortTreeNodes(node.Children)
 
-		parentDir := filepath.Dir(d)
+		parentDir := path.Dir(d)
 		if parentDir == "." || parentDir == "" {
 			continue
 		}
@@ -135,7 +132,7 @@ func buildFileTree(entries []fileEntry) []FileTreeNodeDTO {
 	var root []FileTreeNodeDTO
 
 	for _, d := range sortedDirs {
-		parentDir := filepath.Dir(d)
+		parentDir := path.Dir(d)
 		if parentDir == "." || parentDir == "" {
 			node := dirs[d]
 			sortTreeNodes(node.Children)

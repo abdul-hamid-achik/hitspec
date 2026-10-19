@@ -17,7 +17,11 @@ func newTestServer(t *testing.T, opts ...Option) *Server {
 		WithWorkDir(t.TempDir()),
 		WithEnv("test"),
 	}
-	return NewServer(append(defaults, opts...)...)
+	s := NewServer(append(defaults, opts...)...)
+	// Windows cannot delete an open file: close the history database before
+	// t.TempDir's cleanup removes it (cleanups run last-in, first-out).
+	t.Cleanup(s.closeHistory)
+	return s
 }
 
 func TestHandleSystemInfo(t *testing.T) {

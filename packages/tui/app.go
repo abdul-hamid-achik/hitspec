@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -2766,7 +2767,8 @@ func (m model) cookiesContent() string {
 	if p := m.mgr.CookieStorePath(); p != "" {
 		where = p
 		if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(p, home+string(os.PathSeparator)) {
-			where = "~" + strings.TrimPrefix(p, home)
+			// Forward slashes on every platform, like the default spelling above.
+			where = "~" + filepath.ToSlash(strings.TrimPrefix(p, home))
 		}
 	}
 	head := m.styles.muted.Render("Global store "+where+", shared by every workspace.\n"+

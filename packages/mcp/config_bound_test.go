@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/testhome"
 )
 
 // hitspec_fetch on a workspace file never picks up a hitspec.yaml that lives
@@ -17,7 +19,7 @@ func TestFetchIgnoresConfigAboveWorkspace(t *testing.T) {
 	defer web.Close()
 
 	parent := t.TempDir()
-	t.Setenv("HOME", filepath.Join(parent, "home"))
+	testhome.Set(t, filepath.Join(parent, "home"))
 	if err := os.WriteFile(filepath.Join(parent, "hitspec.yaml"), []byte("headers:\n  X-Parent-Cfg: leaked\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}

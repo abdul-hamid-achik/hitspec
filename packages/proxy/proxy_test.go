@@ -288,8 +288,8 @@ func TestRecordingCapture_GET(t *testing.T) {
 	if !strings.Contains(r.Response.ContentType, "application/json") {
 		t.Errorf("expected response content-type json, got %q", r.Response.ContentType)
 	}
-	if r.Response.Duration <= 0 {
-		t.Error("expected positive duration")
+	if r.Response.Duration < 0 { // 0 is a valid reading on Windows' coarse clock
+		t.Error("expected a non-negative duration")
 	}
 }
 

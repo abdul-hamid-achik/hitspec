@@ -3,9 +3,9 @@ package runner
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/shellcmd"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
 )
 
@@ -65,7 +65,7 @@ func (r *Runner) executeShellCommand(cmd *parser.ShellCommand, baseDir string, r
 	}
 
 	// Execute via sh -c
-	execCmd := exec.Command("sh", "-c", cmdStr)
+	execCmd := shellcmd.Command(cmdStr)
 	execCmd.Dir = baseDir
 	execCmd.Env = os.Environ()
 

@@ -34,6 +34,7 @@ func TestStressAndContractRefuseFilesOutsideWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := NewServer(WithWorkDir(dir), WithEnv("test"), WithLogLevel("error"), WithHistoryDBPath(filepath.Join(t.TempDir(), "h.db")), WithWatch(false))
+	t.Cleanup(s.closeHistory) // Windows cannot delete the open history database
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	s.ctx, s.cancel = ctx, cancel

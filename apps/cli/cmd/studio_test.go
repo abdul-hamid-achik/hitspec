@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/testhome"
 )
 
 // TestNewStudioManager_EnvAndConfigReachManager guards the regression where
@@ -18,7 +20,7 @@ import (
 // goes through launchStudio with the same studioLaunchFlags, so it is covered
 // by the same constructor.
 func TestNewStudioManager_EnvAndConfigReachManager(t *testing.T) {
-	t.Setenv("HOME", t.TempDir()) // keep the history database out of the real ~/.hitspec
+	testhome.Set(t, t.TempDir()) // keep the history database out of the real ~/.hitspec
 
 	// workDir holds a decoy hitspec.yaml; the real config lives in another
 	// directory. If --config is ignored (or its load silently falls back to the
@@ -62,7 +64,7 @@ func TestNewStudioManager_EnvAndConfigReachManager(t *testing.T) {
 
 // Without --env the config's defaultEnvironment (from --config) applies.
 func TestNewStudioManager_DefaultEnvFromConfig(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testhome.Set(t, t.TempDir())
 	cfgPath := filepath.Join(t.TempDir(), "custom.yaml")
 	if err := os.WriteFile(cfgPath, []byte("defaultEnvironment: fromconfig\nenvironments:\n  fromconfig: {}\n"), 0o644); err != nil {
 		t.Fatal(err)

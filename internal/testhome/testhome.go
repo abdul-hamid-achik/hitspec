@@ -19,11 +19,25 @@ func Run(m *testing.M) int {
 		return 1
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
-	for _, key := range []string{"HOME", "USERPROFILE"} {
+	for _, key := range homeVars {
 		if err := os.Setenv(key, dir); err != nil {
 			_, _ = fmt.Fprintln(os.Stderr, "testhome:", err)
 			return 1
 		}
 	}
 	return m.Run()
+}
+
+// homeVars are the variables os.UserHomeDir reads: HOME on Unix, USERPROFILE on
+// Windows. A test that sets only HOME leaves the Windows runner's real profile
+// in play.
+var homeVars = []string{"HOME", "USERPROFILE"}
+
+// Set points the home directory at dir for the duration of the test, on every
+// platform. Use it instead of t.Setenv("HOME", dir).
+func Set(t testing.TB, dir string) {
+	t.Helper()
+	for _, key := range homeVars {
+		t.Setenv(key, dir)
+	}
 }

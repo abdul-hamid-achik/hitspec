@@ -243,12 +243,15 @@ func (m *Manager) absPath(relPath string) (string, error) {
 	return absPath, nil
 }
 
+// relPath spells path relative to the workspace with forward slashes on every
+// platform: it ends up in JSON DTOs, events and request paths, which clients
+// compare and send back as-is (absPath accepts both separators).
 func (m *Manager) relPath(path string) string {
 	rel, err := filepath.Rel(m.config.WorkDir, path)
 	if err != nil || rel == "" {
 		return path
 	}
-	return rel
+	return filepath.ToSlash(rel)
 }
 
 func (m *Manager) getConfigEnvsLocked() map[string]map[string]any {

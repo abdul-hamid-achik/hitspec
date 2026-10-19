@@ -145,3 +145,14 @@ type apiError struct {
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, apiError{Error: http.StatusText(status), Message: msg})
 }
+
+// relSlash spells path relative to base with forward slashes on every platform
+// (it lands in JSON DTOs and WebSocket events). A path that cannot be made
+// relative is returned unchanged.
+func relSlash(base, path string) string {
+	rel, err := filepath.Rel(base, path)
+	if err != nil || rel == "" {
+		return path
+	}
+	return filepath.ToSlash(rel)
+}

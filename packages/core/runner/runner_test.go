@@ -690,7 +690,7 @@ expect status 200
 <<<
 
 >>>shell
-echo "executed" > ` + markerFile + `
+echo "executed" > ` + filepath.ToSlash(markerFile) + `
 <<<`
 
 		testFile := filepath.Join(tmpDir, "test.http")
@@ -774,7 +774,7 @@ expect status 200
 <<<
 
 >>>shell
-echo "{{testValue}}" > ` + markerFile + `
+echo "{{testValue}}" > ` + filepath.ToSlash(markerFile) + `
 <<<`
 
 		testFile := filepath.Join(tmpDir, "test.http")
@@ -869,7 +869,7 @@ func TestRunner_Hooks(t *testing.T) {
 
 		// Create a setup script
 		setupScript := filepath.Join(tmpDir, "setup.sh")
-		err := os.WriteFile(setupScript, []byte("#!/bin/bash\necho 'before' > "+markerFile), 0755)
+		err := os.WriteFile(setupScript, []byte("#!/bin/bash\necho 'before' > "+filepath.ToSlash(markerFile)), 0755)
 		require.NoError(t, err)
 
 		content := `### Test with before hook
@@ -903,7 +903,7 @@ expect status 200
 
 		// Create a cleanup script
 		cleanupScript := filepath.Join(tmpDir, "cleanup.sh")
-		err := os.WriteFile(cleanupScript, []byte("#!/bin/bash\necho 'after' > "+markerFile), 0755)
+		err := os.WriteFile(cleanupScript, []byte("#!/bin/bash\necho 'after' > "+filepath.ToSlash(markerFile)), 0755)
 		require.NoError(t, err)
 
 		content := `### Test with after hook
@@ -942,7 +942,7 @@ expect status 200
 
 		// Create a cleanup script
 		cleanupScript := filepath.Join(tmpDir, "cleanup.sh")
-		err := os.WriteFile(cleanupScript, []byte("#!/bin/bash\necho 'cleanup' > "+markerFile), 0755)
+		err := os.WriteFile(cleanupScript, []byte("#!/bin/bash\necho 'cleanup' > "+filepath.ToSlash(markerFile)), 0755)
 		require.NoError(t, err)
 
 		content := `### Test with after hook on failure
@@ -976,11 +976,11 @@ expect status 200
 
 		// Create setup scripts
 		setup1 := filepath.Join(tmpDir, "setup1.sh")
-		err := os.WriteFile(setup1, []byte("#!/bin/bash\necho '1' >> "+orderFile), 0755)
+		err := os.WriteFile(setup1, []byte("#!/bin/bash\necho '1' >> "+filepath.ToSlash(orderFile)), 0755)
 		require.NoError(t, err)
 
 		setup2 := filepath.Join(tmpDir, "setup2.sh")
-		err = os.WriteFile(setup2, []byte("#!/bin/bash\necho '2' >> "+orderFile), 0755)
+		err = os.WriteFile(setup2, []byte("#!/bin/bash\necho '2' >> "+filepath.ToSlash(orderFile)), 0755)
 		require.NoError(t, err)
 
 		content := `### Test with multiple hooks

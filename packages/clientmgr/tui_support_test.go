@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/testhome"
 )
 
 func TestExecuteSourceRunsTheBuffer(t *testing.T) {
@@ -123,7 +125,7 @@ func TestExportSelectionUnnamedAndEnvironment(t *testing.T) {
 
 func TestCookieStorePathIsPerUserNotPerWorkspace(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testhome.Set(t, home)
 	m := configWorkspace(t, "", "### x\nGET http://x\n")
 	if got, want := m.CookieStorePath(), filepath.Join(home, ".hitspec", "tui-cookies.json"); got != want {
 		t.Fatalf("CookieStorePath = %q, want %q", got, want)

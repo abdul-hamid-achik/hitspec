@@ -24,10 +24,7 @@ func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		rel, _ := filepath.Rel(s.config.WorkDir, f)
-		if rel == "" {
-			rel = f
-		}
+		rel := relSlash(s.config.WorkDir, f)
 
 		// Quick-parse to get request count
 		reqCount := 0
@@ -181,7 +178,7 @@ func (s *Server) handleCreateFile(w http.ResponseWriter, r *http.Request) {
 	// Parse and return
 	parsed, err := parser.ParseFile(absPath)
 	if err != nil {
-		relPath, _ := filepath.Rel(s.config.WorkDir, absPath)
+		relPath := relSlash(s.config.WorkDir, absPath)
 		writeJSON(w, http.StatusCreated, map[string]string{"path": relPath, "status": "created"})
 		return
 	}

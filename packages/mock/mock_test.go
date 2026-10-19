@@ -909,8 +909,10 @@ func TestHandler_RequestCallback_Invoked(t *testing.T) {
 	if calledStatus != 200 {
 		t.Errorf("callback status = %d, want 200", calledStatus)
 	}
-	if calledDuration <= 0 {
-		t.Error("callback duration should be positive")
+	// Windows' monotonic clock ticks too coarsely to time a loopback request
+	// that finishes in microseconds, so zero is a legitimate reading there.
+	if calledDuration < 0 {
+		t.Error("callback duration should not be negative")
 	}
 }
 
