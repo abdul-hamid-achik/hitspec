@@ -1,9 +1,15 @@
 #!/usr/bin/env node
 /**
- * Boots the *packaged* app (output of `npm run dist:dir`) with Playwright and
- * asserts it resolves the bundled Go binary from process.resourcesPath.
+ * Boots the *packaged* app with Playwright and asserts it resolves the bundled
+ * Go binary from process.resourcesPath.
  *
- *   npm run dist:dir && npm run test:packaged
+ *   npm run dist:dir:test && npm run test:packaged
+ *
+ * Playwright attaches to Electron through the Node inspector, which the
+ * release build deliberately disables (fuse EnableNodeCliInspectArguments).
+ * `dist:dir:test` therefore packages into release-test/ with only that one
+ * fuse flipped back on; never ship that output. (`npm run test:fuses` checks
+ * the real release build instead.)
  *
  * Skips cleanly when no unpacked build exists for this platform.
  */
@@ -20,12 +26,11 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const desktopRoot = path.resolve(here, '..');
 
 const candidates = {
-  darwin: [
-    'release/mac-arm64/hitspec Studio.app/Contents/MacOS/hitspec Studio',
-    'release/mac/hitspec Studio.app/Contents/MacOS/hitspec Studio',
-  ],
-  linux: ['release/linux-unpacked/hitspec-studio'],
-  win32: ['release/win-unpacked/hitspec Studio.exe'],
+  darwin: process.arch === 'arm64'
+    ? ['release-test/mac-arm64/hitspec Studio.app/Contents/MacOS/hitspec Studio']
+    : ['release-test/mac/hitspec Studio.app/Contents/MacOS/hitspec Studio'],
+  linux: ['release-test/linux-unpacked/hitspec-studio'],
+  win32: ['release-test/win-unpacked/hitspec Studio.exe'],
 };
 
 const exe = (candidates[process.platform] ?? [])
@@ -33,7 +38,7 @@ const exe = (candidates[process.platform] ?? [])
   .find((abs) => fs.existsSync(abs));
 
 if (!exe) {
-  console.log('no unpacked build found for this platform — run `npm run dist:dir` first. skipping.');
+  console.log('no unpacked test build found for this platform; run `npm run dist:dir:test` first. skipping.');
   process.exit(0);
 }
 

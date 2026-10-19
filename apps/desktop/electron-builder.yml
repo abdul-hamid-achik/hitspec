@@ -6,21 +6,37 @@ directories:
   output: release
   buildResources: build
 
-# The Go CLI is copied next to the binary (outside the asar) so the main process
-# can spawn it. Run `npm run build:binary` (or `npm run dist`, which does it via
+# The Go CLI is copied next to the Electron binary (outside the asar) so the
+# main process can spawn it. There is one binary per target: build/bin/<os>-<arch>/
+# holds the executable for that exact OS and CPU, and electron-builder expands
+# ${os}/${arch} per target, so an x64 build can never carry the arm64 CLI.
+# Run `npm run build:binary -- --dist` (or `npm run dist`, which does it via
 # predist) before packaging.
 files:
   - src/**/*
   - package.json
 
 extraResources:
-  - from: build/bin
+  - from: build/bin/${os}-${arch}
     to: .
     filter:
       - hitspec
       - hitspec.exe
 
 asar: true
+
+# Flipped right before signing. These remove the ways a local attacker could
+# turn the signed app into a generic Node runtime or run unvalidated code.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: false
+  # arm64 macOS kills a binary whose signature no longer matches. Flipping fuses
+  # invalidates Electron's ad-hoc signature, so unsigned builds need a fresh one.
+  resetAdHocDarwinSignature: true
 
 mac:
   category: public.app-category.developer-tools
@@ -29,20 +45,28 @@ mac:
       arch: [arm64, x64]
     - target: zip
       arch: [arm64, x64]
-  # Unsigned local builds need the quarantine flag cleared, mirroring the
-  # homebrew cask hook in .goreleaser.yml.
-  identity: null
+  # Signing is driven by the environment, not this file: without CSC_LINK (or a
+  # "Developer ID Application" certificate in the keychain) the app is left
+  # unsigned, and CSC_IDENTITY_AUTO_DISCOVERY=false forces that. Notarization
+  # is opted into with `-c.mac.notarize=true` plus APPLE_ID,
+  # APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID (see
+  # .github/workflows/desktop.yml). Unsigned local builds need the quarantine
+  # flag cleared, mirroring the homebrew cask hook in .goreleaser.yml.
 
 win:
   target:
-    - nsis
-    - zip
+    - target: nsis
+      arch: [x64]
+    - target: zip
+      arch: [x64]
 
 linux:
   category: Development
   target:
-    - AppImage
-    - deb
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
   maintainer: hitspec
 
 nsis:

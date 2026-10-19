@@ -12,17 +12,28 @@ export function binaryName(platform) {
 }
 
 /**
+ * `<os>-<arch>` id as electron-builder spells its `${os}-${arch}` macros
+ * (mac|win|linux, x64|arm64). Per-target Go binaries live in
+ * build/bin/<id>/ so one machine can package every target.
+ */
+export function targetId(platform, arch) {
+  const os = { darwin: 'mac', win32: 'win', linux: 'linux' }[platform] ?? platform;
+  return `${os}-${arch}`;
+}
+
+/**
  * Ordered candidate locations for the hitspec CLI.
  *
  * @param {object} opts
  * @param {string} opts.platform
+ * @param {string} [opts.arch] process.arch (defaults to the running process's)
  * @param {boolean} opts.isPackaged
  * @param {string} [opts.resourcesPath] process.resourcesPath when packaged
  * @param {string} opts.appRoot absolute path to apps/desktop
  * @param {Record<string,string|undefined>} opts.env
  * @returns {{path:string, source:string}[]}
  */
-export function candidatePaths({ platform, isPackaged, resourcesPath, appRoot, env }) {
+export function candidatePaths({ platform, arch = process.arch, isPackaged, resourcesPath, appRoot, env }) {
   const name = binaryName(platform);
   const repoRoot = path.resolve(appRoot, '..', '..');
   const candidates = [];
@@ -33,7 +44,10 @@ export function candidatePaths({ platform, isPackaged, resourcesPath, appRoot, e
   if (isPackaged && resourcesPath) {
     candidates.push({ path: path.join(resourcesPath, name), source: 'bundled' });
   }
-  // Source checkout: `task build` / `npm run build:binary` outputs.
+  // Source checkout: `task build` / `npm run build:binary` outputs. The
+  // per-target directory is checked first so a stale host copy can never
+  // shadow the binary built for this CPU.
+  candidates.push({ path: path.join(appRoot, 'build', 'bin', targetId(platform, arch), name), source: 'desktop-build' });
   candidates.push({ path: path.join(appRoot, 'build', 'bin', name), source: 'desktop-build' });
   candidates.push({ path: path.join(repoRoot, 'bin', name), source: 'repo-bin' });
 
@@ -74,6 +88,7 @@ function defaultWhich(name) {
  * @returns {Promise<{path:string, source:string}|{error:string, tried:{path:string,source:string}[]}>}
  */
 export async function resolveBinary(opts) {
+  opts = { arch: process.arch, ...opts };
   const exists = opts.exists ?? defaultExists;
   const which = opts.which ?? defaultWhich;
   const tried = candidatePaths(opts);
