@@ -100,6 +100,10 @@ expect header exists
 
 The full response body. If the response is JSON, `body` gives you the parsed JSON value. Otherwise, it returns the raw body as a string.
 
+A response counts as JSON when its `Content-Type` is `application/json`, `text/json` or any `+json` type (`application/problem+json`, `application/vnd.api+json`, ...), with or without parameters such as `; charset=utf-8`. A path into a response that is not JSON (`body.x`, `body[0]`, `jsonpath ...`) **fails with "response body is not JSON"**; it never falls back to the raw text, so `body.x exists` cannot pass on an HTML error page. The same applies to a JSON `Content-Type` with an invalid body.
+
+With `contains`, `startsWith`, `endsWith` and `matches`, the whole `body` of a JSON response is matched as its raw JSON text.
+
 ```http
 >>>
 expect body contains "success"
@@ -143,6 +147,21 @@ expect body.results[0].tags[1] == "featured"
 <<<
 ```
 
+### Counts and Queries
+
+Paths use [GJSON](https://github.com/tidwall/gjson) syntax, so `.#` counts array elements and `.#(...)` selects by a condition. The same paths work in [captures](/concepts/captures):
+
+```http
+>>>
+expect body.items.# == 3
+expect body.items.#(name=="Jane Doe").id == 1
+expect body.items.#(price>10)#.name length 2
+expect body.items[*].id == [1, 2, 3]
+<<<
+```
+
+`[*]` selects the member of every element (`items.#.id`). A path that matches nothing is *absent*: `exists` is false and most operators fail (see [null versus absent](/concepts/assertions#null-versus-absent)).
+
 ### Implicit body Prefix
 
 When the subject doesn't match a known keyword (`status`, `duration`, `header`, `jsonpath`, etc.), hitspec treats it as a body path. These are equivalent:
@@ -164,8 +183,11 @@ Alternative to body dot-notation using JSONPath-style expressions:
 >>>
 expect jsonpath $.users[0].id exists
 expect jsonpath $.data.count > 0
+expect jsonpath $.users[*].name includes "Admin"
 <<<
 ```
+
+The supported subset is `$` (the whole body), `.name`, `['name']`, `[0]` and `[*]`. Recursive descent (`..`), filters (`[?(...)]`), slices and unions are not supported and fail with an error rather than being guessed at. For queries use the GJSON `#(...)` form on `body.<path>`.
 
 <Tip>
 For most cases, the `body.path` syntax is simpler and recommended. Use `jsonpath` when you need explicit JSONPath semantics.

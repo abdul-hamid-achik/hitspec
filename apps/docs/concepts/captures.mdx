@@ -27,13 +27,17 @@ Each line follows this pattern:
 <variableName> from <source>
 ```
 
+Capture lines are read as written, so a path may contain quotes and spaces (`items.#(name=="Jane Doe").id`). A trailing `# comment` is allowed. A line that is not `<name> from <source>` is a parse error, and a capture block must be closed with `<<<`.
+
 ## Capture Sources
 
-hitspec can capture values from four parts of the response:
+hitspec can capture values from these parts of the response:
 
 | Source | Syntax | Description |
 |--------|--------|-------------|
 | Body (JSON path) | `token from body.access_token` | Extract a value from the JSON response body |
+| Whole body | `doc from body` | The whole body: parsed JSON, or the text of a non-JSON response |
+| JSONPath | `token from jsonpath $.data.token` | A JSONPath expression (`$.a.b`, `$.a[0]`, `$.a[*].b`) |
 | Header | `contentType from header Content-Type` | Extract a response header value |
 | Status | `code from status` | Capture the HTTP status code |
 | Duration | `time from duration` | Capture the response time in milliseconds |
@@ -62,9 +66,29 @@ firstAdminName from body.users.#(role=="admin").name
 ```
 
 <Note>
-The same GJSON path syntax works in `expect body.<path>` assertions, so you can
-assert on `body.items.#` (array length) directly too.
+Assertions and captures share one path normalizer, so the same paths work in
+`expect body.<path>` assertions: you can assert on `body.items.#` (array length)
+directly too. Bracket notation works in both (`body.items[0].name`,
+`body[2].id`, `body.items[*].id`).
 </Note>
+
+Body paths need a JSON response (`application/json`, or any `+json` type such as
+`application/problem+json`, with or without `; charset=...`). On a non-JSON
+response only the whole `body` can be captured.
+
+### Captures that find nothing
+
+A capture whose path matches nothing (a typo, an error response with a different
+shape, a missing header) is left out and reported on stderr, once per run:
+
+```
+warning: capture "token" (line 9) captured nothing: the path "access_tokn" matches nothing in the response body
+```
+
+Without the warning the problem only appeared later as an unresolved
+`{{variable}}` in another request. A capture whose path contains spaces outside
+`(...)` (a note glued to the path instead of after `#`) is flagged by
+`hitspec validate` because it can never match.
 
 ### Header Captures
 

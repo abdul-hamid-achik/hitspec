@@ -8,7 +8,7 @@ description: "Validate syntax and list requests in hitspec files"
 Validate `.http` and `.hitspec` files for syntax errors without executing them.
 
 ```bash
-hitspec validate <file|directory>
+hitspec validate [--strict] [--json] <file|directory>
 ```
 
 ## Arguments
@@ -18,16 +18,45 @@ hitspec validate <file|directory>
 | `<file>` | Single `.http` or `.hitspec` file to validate |
 | `<directory>` | Directory to search recursively for test files |
 
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `--strict` | Treat warnings as errors, and also require every `{{variable}}` to be defined somewhere |
+| `--json` | Print the results as JSON (`file`, `ok`, `errors`, `warnings`) |
+
 ## Behavior
 
-The `validate` command parses each file and reports:
+The `validate` command parses each file without running it. Findings are either **errors** or **warnings**.
 
-- Syntax errors (malformed requests, invalid headers)
-- Invalid assertion syntax
-- Undefined variables
-- Circular dependencies
+**Errors** are constructs that would give a wrong result, or that `hitspec run` refuses. They are reported with `file:line:column` and the command exits with code 2 (the same code `run` uses for a file that fails to load):
 
-If all files are valid, each is printed with a `Valid:` prefix. If any file has errors, the command prints the error and exits with a non-zero status.
+- An unknown assertion operator (`contians`, `=`, `===`, `equals`), with a "did you mean" hint
+- An operator without a value, or extra values (`expect status 200 201`)
+- A misspelt `expect`, block type (`>>>captur`) or `type` name, and lines inside `>>>` or `>>>capture` blocks that are not assertions or captures
+- Invalid `matches` regular expressions, and `@auth` problems
+- Unclosed `>>>` blocks, and blocks that are not inside a request
+- Duplicate request names, and circular `@depends`
+- An empty file or a request without a URL
+
+**Warnings** are constructs that are probably mistakes but may be intentional. They are printed under the file's `OK` line and do not change the exit code:
+
+- An unknown `# @directive` (a typo such as `# @tag` instead of `# @tags`). Custom directives start with `x-` (`# @x-owner`); `@contract.*` is also accepted
+- An invalid `@timeout`, `@retry`, `@retryDelay` or `@retryOn` value
+- `# @directive` lines at the top of a file that lead into no request
+- A `@depends` on a request that does not exist in the file
+- A capture path containing spaces (it can never match)
+
+With `--strict`, every warning is an error (exit code 2), and `validate` additionally checks variables:
+
+- `{{name}}` must be defined in the file (`@name = ...`), by a `>>>capture` block, in an `environments:` entry of the nearest `hitspec.yaml`, in a `.env` file next to the file or in the working directory, or in the process environment. `{{$uuid()}}`, `{{$env(NAME)}}` and other built-ins are never flagged.
+- `{{request.capture}}` must name a capture that request has, and the using request should `# @depends` on it.
+
+<Note>
+Variable checking is a static check. It cannot know which environment a later `hitspec run --env` selects or what a CI job injects, so it accepts a name defined in *any* environment and in the current process environment. That is why it is only enabled by `--strict`.
+</Note>
+
+If all files are valid, each is printed as `OK    <file>`. If any file has errors, the command prints each error and exits with code 2.
 
 ## Examples
 
@@ -44,9 +73,15 @@ hitspec validate tests/
 ### Sample Output
 
 ```
-Valid: tests/auth.http
-Valid: tests/users.http
-Error in tests/broken.http: line 15: unexpected token ">>>"
+OK    tests/auth.http
+OK    tests/users.http
+      warning: tests/users.http:4:1: unknown directive @tag (did you mean @tags?)
+FAIL  tests/broken.http
+      tests/broken.http:15:18: unknown operator "contians" (did you mean "contains"?)
+  expect body.name contians "Jane"
+                   ^
+
+3 file(s) checked, 1 error(s), 1 warning(s)
 ```
 
 ### Use in CI/CD
@@ -54,12 +89,15 @@ Error in tests/broken.http: line 15: unexpected token ">>>"
 ```bash
 # Validate before running tests
 hitspec validate tests/ && hitspec run tests/ --env staging
+
+# Fail on warnings too
+hitspec validate --strict tests/
 ```
 
 ```yaml
 # GitHub Actions
 - name: Validate test files
-  run: hitspec validate tests/
+  run: hitspec validate --strict tests/
 ```
 
 ---
