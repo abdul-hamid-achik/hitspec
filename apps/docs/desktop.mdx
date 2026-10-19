@@ -14,9 +14,12 @@ and runs the exact same plain-text `.http` files, so what you click in the app
 is what CI executes.
 
 <Note>
-  The desktop app is developed in this repository under `apps/desktop`. It is
-  not bundled with the Go binary yet -- build it from source (below) or grab a
-  packaged build from the releases page.
+  The desktop app is developed in this repository under `apps/desktop`. There
+  are **no published installers yet**: signed and notarized builds need
+  Apple and Windows signing credentials that are not set up, so nothing is
+  attached to the GitHub releases. Today you run it from source (below) or
+  package an unsigned build yourself ([Package it](#package-it)). It also needs
+  hitspec v2.20.0 or newer: the app warns when the CLI it launches is older.
 </Note>
 
 ## Run it from source
@@ -83,19 +86,44 @@ Electron main ── spawns ─▶ hitspec serve --api-only (127.0.0.1:<random>)
 Because it reuses the API server, every capability added to `packages/serve`
 becomes available to the desktop app without new native code.
 
+### Safety rails
+
+- The renderer is treated as untrusted: only the app's own page can call the
+  main process, and REST calls are limited to the endpoints the UI uses.
+- Shell execution (`--allow-shell`) can only be switched on through a native
+  confirmation dialog for the current workspace, and the approval lasts until
+  you quit the app.
+- Unsaved editor changes are guarded when you switch files, close the window,
+  quit or open another workspace, and saving asks before overwriting a file that
+  changed on disk since you opened it.
+- If the app is killed without a chance to clean up, the next launch stops the
+  API server it left behind.
+
 ## Package it
 
 ```bash
 task desktop:dist        # electron-builder: dmg/zip, nsis/zip, AppImage/deb
 ```
 
-The Go binary is copied into the bundle as an extra resource, so packaged apps
-are self-contained. macOS builds are unsigned by default; clear the quarantine
-flag after a local install:
+`task desktop:dist` packages for the operating system you run it on (mac:
+arm64 and x64, Windows: x64, Linux: x64). It first cross-compiles one CLI per
+architecture into `apps/desktop/build/bin/<os>-<arch>/` and bundles the one that
+matches each target, so the Intel build never carries the Apple-silicon binary.
+Installers land in `apps/desktop/release/`.
+
+Local builds are unsigned unless your machine has a signing certificate
+(`CSC_LINK`, or a "Developer ID Application" certificate in your keychain);
+set `CSC_IDENTITY_AUTO_DISCOVERY=false` to force an unsigned build. Clear the
+quarantine flag after installing an unsigned build on macOS:
 
 ```bash
 xattr -dr com.apple.quarantine "/Applications/hitspec Studio.app"
 ```
+
+CI (`.github/workflows/desktop.yml`) packages all three platforms on every
+change to the app and verifies the bundled CLI and the hardened Electron fuses.
+Signed installers and release publishing run only when the signing credentials
+exist in the repository secrets; until then they are skipped.
 
 ## Testing
 

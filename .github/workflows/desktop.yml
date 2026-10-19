@@ -1,0 +1,306 @@
+name: Desktop
+
+# hitspec Studio (apps/desktop). Runs on changes to the app or to the REST
+# server it drives (packages/serve), because the app is a client of that API.
+on:
+  push:
+    branches: [main]
+    # `git tag desktop-v0.1.0 && git push --tags` runs the release job. (GitHub
+    # does not evaluate `paths` for tag pushes.)
+    tags: ['desktop-v*']
+    paths:
+      - 'apps/desktop/**'
+      - 'packages/serve/**'
+      - 'packages/clientmgr/**'
+      - '.github/workflows/desktop.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/desktop/**'
+      - 'packages/serve/**'
+      - 'packages/clientmgr/**'
+      - '.github/workflows/desktop.yml'
+  # Manual run: also builds installers for all three OSes (signed when the
+  # credentials described in the release job exist, unsigned otherwise) and
+  # uploads them as workflow artifacts. Nothing is published from here.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GO_VERSION: '1.26.9'
+  NODE_VERSION: '22'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      # The suites drive the real `serve --api-only` server, so build the CLI
+      # from this checkout (not the one on PATH) and point the app at it.
+      - name: Build the hitspec CLI
+        run: |
+          go build -o "$RUNNER_TEMP/hitspec" ./cmd/hitspec
+          echo "HITSPEC_BIN=$RUNNER_TEMP/hitspec" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        working-directory: apps/desktop
+        run: npm ci --no-audit --no-fund
+
+      # Chromium's SUID sandbox needs a root-owned helper on Linux runners.
+      - name: Configure the Electron sandbox (Linux)
+        if: runner.os == 'Linux'
+        working-directory: apps/desktop
+        run: |
+          sudo chown root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+
+      - name: Syntax check
+        working-directory: apps/desktop
+        run: npm run test:syntax
+
+      - name: Unit tests
+        working-directory: apps/desktop
+        run: npm test
+
+      - name: Smoke test (real API server)
+        working-directory: apps/desktop
+        run: npm run test:smoke
+
+      - name: End-to-end (Playwright + Electron)
+        working-directory: apps/desktop
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a npm run test:e2e
+          else
+            npm run test:e2e
+          fi
+
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-${{ matrix.os }}
+          path: apps/desktop/.playwright/artifacts
+          if-no-files-found: ignore
+
+  # Proves each OS/arch bundle carries a CLI built for that exact OS and CPU
+  # (the x64 mac app must not ship the arm64 binary, Windows needs hitspec.exe)
+  # and that the release fuses are flipped. No signing.
+  package:
+    name: Package (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS arm64+x64
+            os: macos-latest
+            builder: --mac --arm64 --x64
+          - name: Linux x64
+            os: ubuntu-latest
+            builder: --linux --x64
+          - name: Windows x64
+            os: windows-latest
+            builder: --win --x64
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/desktop
+        run: npm ci --no-audit --no-fund
+
+      # One CLI per target arch of this OS, cross-compiled (pure Go, no CGO).
+      - name: Build the per-target CLI binaries
+        working-directory: apps/desktop
+        run: node scripts/build-binary.mjs --dist
+
+      - name: Package (unpacked, unsigned)
+        working-directory: apps/desktop
+        run: npx --no-install electron-builder --dir ${{ matrix.builder }}
+
+      - name: Bundled CLI matches each bundle's OS and CPU
+        working-directory: apps/desktop
+        run: npm run test:bundled
+
+      - name: Release fuses are hardened
+        working-directory: apps/desktop
+        run: npm run test:fuses
+
+      # Playwright needs the inspector the release build disables, so boot a
+      # test-only build (same bundle, one fuse back on) from release-test/.
+      - name: Boot the packaged app (macOS)
+        if: runner.os == 'macOS'
+        working-directory: apps/desktop
+        run: |
+          npm run dist:dir:test
+          npm run test:packaged
+
+  # Signed installers, built only on a manual run or a desktop-v* tag. Signing,
+  # notarization and publishing need credentials this repository does not have
+  # yet; each stage is skipped (with a notice) when its secrets are absent, so
+  # the job still produces unsigned installers as workflow artifacts.
+  #
+  #   macOS signing     CSC_LINK (base64 .p12 Developer ID Application), CSC_KEY_PASSWORD
+  #   macOS notarizing  APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
+  #   Windows signing   WIN_CSC_LINK (base64 .pfx), WIN_CSC_KEY_PASSWORD
+  #   Publishing        a signed + notarized macOS build, on a desktop-v* tag
+  installers:
+    name: Installers (${{ matrix.name }})
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/desktop-v')
+    needs: [test, package]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+            builder: --mac --arm64 --x64
+            artifacts: 'apps/desktop/release/*.dmg apps/desktop/release/*.zip'
+          - name: Windows
+            os: windows-latest
+            builder: --win --x64
+            artifacts: 'apps/desktop/release/*.exe apps/desktop/release/*.zip'
+          - name: Linux
+            os: ubuntu-latest
+            builder: --linux --x64
+            artifacts: 'apps/desktop/release/*.AppImage apps/desktop/release/*.deb'
+    env:
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+      WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Check credentials
+        id: creds
+        run: |
+          sign=false
+          notarize=false
+          case "${{ runner.os }}" in
+            macOS)
+              if [ -n "$CSC_LINK" ] && [ -n "$CSC_KEY_PASSWORD" ]; then sign=true; fi
+              if [ "$sign" = true ] && [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then notarize=true; fi
+              ;;
+            Windows)
+              if [ -n "$WIN_CSC_LINK" ] && [ -n "$WIN_CSC_KEY_PASSWORD" ]; then sign=true; fi
+              ;;
+          esac
+          if [ "$sign" != true ]; then
+            echo "::notice title=Needs your credentials::No code-signing certificate for ${{ runner.os }}; building unsigned installers."
+          fi
+          if [ "${{ runner.os }}" = macOS ] && [ "$notarize" != true ]; then
+            echo "::notice title=Needs your credentials::Apple notarization credentials (APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID) are missing; the macOS build will not be notarized."
+          fi
+          echo "sign=$sign" >> "$GITHUB_OUTPUT"
+          echo "notarize=$notarize" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        working-directory: apps/desktop
+        run: npm ci --no-audit --no-fund
+
+      - name: Build the per-target CLI binaries
+        working-directory: apps/desktop
+        run: node scripts/build-binary.mjs --dist
+
+      - name: Build installers
+        working-directory: apps/desktop
+        env:
+          # Without a certificate, never sign with whatever the runner has.
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ steps.creds.outputs.sign == 'true' && 'true' || 'false' }}
+          NOTARIZE: ${{ steps.creds.outputs.notarize }}
+        run: |
+          args=(${{ matrix.builder }} --publish never)
+          if [ "$NOTARIZE" = true ]; then args+=(-c.mac.notarize=true); fi
+          npx --no-install electron-builder "${args[@]}"
+
+      - name: Upload installers
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hitspec-studio-${{ runner.os }}-${{ steps.creds.outputs.sign == 'true' && 'signed' || 'unsigned' }}
+          path: ${{ matrix.artifacts }}
+          if-no-files-found: error
+
+      # Only a signed and notarized macOS build is worth publishing; the other
+      # platforms attach to the same release once their certificates exist.
+      - name: Publish to the GitHub release
+        if: startsWith(github.ref, 'refs/tags/desktop-v') && steps.creds.outputs.sign == 'true' && (runner.os != 'macOS' || steps.creds.outputs.notarize == 'true')
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --draft --title "hitspec Studio ${tag#desktop-v}" --notes "Desktop installers for hitspec Studio ${tag#desktop-v}."
+          # shellcheck disable=SC2086
+          gh release upload "$tag" ${{ matrix.artifacts }} --clobber
+
+      - name: Skip publishing (no credentials)
+        if: startsWith(github.ref, 'refs/tags/desktop-v') && !(steps.creds.outputs.sign == 'true' && (runner.os != 'macOS' || steps.creds.outputs.notarize == 'true'))
+        run: |
+          echo "::warning title=Needs your credentials::Not publishing a release for ${{ runner.os }} because signing or notarization credentials are not configured. The installers are attached to this run as unsigned artifacts only."
