@@ -13,7 +13,14 @@ Demonstrates the various authentication methods supported by hitspec.
 
 ## Running
 
+The file is self-contained: `>>>mock` blocks let `hitspec mock` serve canned
+httpbin-style responses, so it runs offline. The mock does **not** verify the
+credentials it receives, so offline runs prove the request/assertion plumbing,
+not the auth schemes. Set `@baseUrl = https://httpbin.org` to test the real
+thing.
+
 ```bash
+hitspec mock examples/auth-flow/auth.http &     # serves http://localhost:3000
 hitspec run examples/auth-flow/auth.http
 
 # Run only bearer tests
@@ -21,6 +28,8 @@ hitspec run examples/auth-flow/auth.http --tags bearer
 
 # Run the full auth flow chain
 hitspec run examples/auth-flow/auth.http --tags flow
+
+kill %1
 ```
 
 ## Key Concepts

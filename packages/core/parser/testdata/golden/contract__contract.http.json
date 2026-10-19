@@ -6,37 +6,37 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 15,
+            "Line": 24,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": "array",
-            "Line": 16,
+            "Line": 25,
             "Operator": "type",
             "Subject": "body"
           },
           {
             "Expected": null,
-            "Line": 17,
+            "Line": 26,
             "Operator": "exists",
             "Subject": "body[0].id"
           },
           {
             "Expected": null,
-            "Line": 18,
+            "Line": 27,
             "Operator": "exists",
             "Subject": "body[0].name"
           },
           {
             "Expected": "available",
-            "Line": 19,
+            "Line": 28,
             "Operator": "==",
             "Subject": "body[0].status"
           },
           {
             "Expected": "array",
-            "Line": 20,
+            "Line": 29,
             "Operator": "type",
             "Subject": "body[0].photoUrls"
           }
@@ -47,7 +47,7 @@
         "Description": "Verify the response matches the Pet schema",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 7,
+        "Line": 16,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -66,7 +66,7 @@
           "WaitFor": null
         },
         "Method": "GET",
-        "MockBody": "",
+        "MockBody": "[{\n  \"id\": 99999,\n  \"category\": { \"id\": 1, \"name\": \"Dogs\" },\n  \"name\": \"Rex\",\n  \"photoUrls\": [\"https://example.com/rex.jpg\"],\n  \"tags\": [{ \"id\": 1, \"name\": \"friendly\" }],\n  \"status\": \"available\"\n}]",
         "Name": "findPets",
         "QueryParams": null,
         "ShellCommands": null,
@@ -80,61 +80,61 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 49,
+            "Line": 69,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": 99999,
-            "Line": 50,
+            "Line": 70,
             "Operator": "==",
             "Subject": "body.id"
           },
           {
             "Expected": "Rex",
-            "Line": 51,
+            "Line": 71,
             "Operator": "==",
             "Subject": "body.name"
           },
           {
             "Expected": "object",
-            "Line": 52,
+            "Line": 72,
             "Operator": "type",
             "Subject": "body.category"
           },
           {
             "Expected": "number",
-            "Line": 53,
+            "Line": 73,
             "Operator": "type",
             "Subject": "body.category.id"
           },
           {
             "Expected": "string",
-            "Line": 54,
+            "Line": 74,
             "Operator": "type",
             "Subject": "body.category.name"
           },
           {
             "Expected": "array",
-            "Line": 55,
+            "Line": 75,
             "Operator": "type",
             "Subject": "body.photoUrls"
           },
           {
             "Expected": "array",
-            "Line": 56,
+            "Line": 76,
             "Operator": "type",
             "Subject": "body.tags"
           },
           {
             "Expected": "number",
-            "Line": 57,
+            "Line": 77,
             "Operator": "type",
             "Subject": "body.tags[0].id"
           },
           {
             "Expected": "string",
-            "Line": 58,
+            "Line": 78,
             "Operator": "type",
             "Subject": "body.tags[0].name"
           },
@@ -144,7 +144,7 @@
               "pending",
               "sold"
             ],
-            "Line": 59,
+            "Line": 79,
             "Operator": "in",
             "Subject": "body.status"
           }
@@ -153,13 +153,13 @@
           "ContentType": "json",
           "FilePath": "",
           "GraphQL": null,
-          "Line": 31,
+          "Line": 51,
           "Multipart": null,
           "Raw": "{\n  \"id\": 99999,\n  \"category\": {\n    \"id\": 1,\n    \"name\": \"Dogs\"\n  },\n  \"name\": \"Rex\",\n  \"photoUrls\": [\"https://example.com/rex.jpg\"],\n  \"tags\": [\n    {\n      \"id\": 1,\n      \"name\": \"friendly\"\n    }\n  ],\n  \"status\": \"available\"\n}"
         },
         "Captures": [
           {
-            "Line": 63,
+            "Line": 94,
             "Name": "petId",
             "Path": "id",
             "Source": "body"
@@ -171,11 +171,11 @@
         "Headers": [
           {
             "Key": "Content-Type",
-            "Line": 29,
+            "Line": 49,
             "Value": "application/json"
           }
         ],
-        "Line": 23,
+        "Line": 43,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -194,7 +194,7 @@
           "WaitFor": null
         },
         "Method": "POST",
-        "MockBody": "",
+        "MockBody": "{\n  \"id\": 99999,\n  \"category\": { \"id\": 1, \"name\": \"Dogs\" },\n  \"name\": \"Rex\",\n  \"photoUrls\": [\"https://example.com/rex.jpg\"],\n  \"tags\": [{ \"id\": 1, \"name\": \"friendly\" }],\n  \"status\": \"available\"\n}",
         "Name": "createPet",
         "QueryParams": null,
         "ShellCommands": null,
@@ -208,32 +208,94 @@
       {
         "Assertions": [
           {
+            "Expected": 404,
+            "Line": 105,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": null,
+            "Line": 106,
+            "Operator": "exists",
+            "Subject": "body.code"
+          },
+          {
+            "Expected": null,
+            "Line": 107,
+            "Operator": "exists",
+            "Subject": "body.type"
+          },
+          {
+            "Expected": null,
+            "Line": 108,
+            "Operator": "exists",
+            "Subject": "body.message"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Verify error responses follow the expected format",
+        "HTTPVersion": "",
+        "Headers": null,
+        "Line": 97,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "{ \"code\": 1, \"type\": \"error\", \"message\": \"Pet not found\" }",
+        "Name": "notFoundPet",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "contract",
+          "error"
+        ],
+        "URL": "{{baseUrl}}/pet/0"
+      },
+      {
+        "Assertions": [
+          {
             "Expected": 200,
-            "Line": 75,
+            "Line": 124,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": "number",
-            "Line": 76,
+            "Line": 125,
             "Operator": "type",
             "Subject": "body.id"
           },
           {
             "Expected": "string",
-            "Line": 77,
+            "Line": 126,
             "Operator": "type",
             "Subject": "body.name"
           },
           {
             "Expected": "array",
-            "Line": 78,
+            "Line": 127,
             "Operator": "type",
             "Subject": "body.photoUrls"
           },
           {
             "Expected": "string",
-            "Line": 79,
+            "Line": 128,
             "Operator": "type",
             "Subject": "body.status"
           }
@@ -244,7 +306,7 @@
         "Description": "Verify every field has the expected type per the contract",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 66,
+        "Line": 115,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -265,7 +327,7 @@
           "WaitFor": null
         },
         "Method": "GET",
-        "MockBody": "",
+        "MockBody": "{\n  \"id\": 99999,\n  \"category\": { \"id\": 1, \"name\": \"Dogs\" },\n  \"name\": \"Rex\",\n  \"photoUrls\": [\"https://example.com/rex.jpg\"],\n  \"tags\": [{ \"id\": 1, \"name\": \"friendly\" }],\n  \"status\": \"available\"\n}",
         "Name": "getPetById",
         "QueryParams": null,
         "ShellCommands": null,
@@ -279,13 +341,13 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 90,
+            "Line": 150,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": "object",
-            "Line": 91,
+            "Line": 151,
             "Operator": "type",
             "Subject": "body"
           }
@@ -296,7 +358,7 @@
         "Description": "Verify the inventory endpoint returns a map of status counts",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 82,
+        "Line": 142,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -315,7 +377,7 @@
           "WaitFor": null
         },
         "Method": "GET",
-        "MockBody": "",
+        "MockBody": "{ \"available\": 12, \"pending\": 3, \"sold\": 7 }",
         "Name": "getInventory",
         "QueryParams": null,
         "ShellCommands": null,
@@ -329,25 +391,25 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 112,
+            "Line": 176,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": "number",
-            "Line": 113,
+            "Line": 177,
             "Operator": "type",
             "Subject": "body.id"
           },
           {
             "Expected": "number",
-            "Line": 114,
+            "Line": 178,
             "Operator": "type",
             "Subject": "body.petId"
           },
           {
             "Expected": "number",
-            "Line": 115,
+            "Line": 179,
             "Operator": "type",
             "Subject": "body.quantity"
           },
@@ -357,13 +419,13 @@
               "approved",
               "delivered"
             ],
-            "Line": 116,
+            "Line": 180,
             "Operator": "in",
             "Subject": "body.status"
           },
           {
             "Expected": "boolean",
-            "Line": 117,
+            "Line": 181,
             "Operator": "type",
             "Subject": "body.complete"
           }
@@ -372,7 +434,7 @@
           "ContentType": "json",
           "FilePath": "",
           "GraphQL": null,
-          "Line": 102,
+          "Line": 166,
           "Multipart": null,
           "Raw": "{\n  \"id\": 10,\n  \"petId\": 99999,\n  \"quantity\": 1,\n  \"shipDate\": \"{{$now()}}\",\n  \"status\": \"placed\",\n  \"complete\": false\n}"
         },
@@ -383,11 +445,11 @@
         "Headers": [
           {
             "Key": "Content-Type",
-            "Line": 100,
+            "Line": 164,
             "Value": "application/json"
           }
         ],
-        "Line": 94,
+        "Line": 158,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -406,7 +468,7 @@
           "WaitFor": null
         },
         "Method": "POST",
-        "MockBody": "",
+        "MockBody": "{\n  \"id\": 10,\n  \"petId\": 99999,\n  \"quantity\": 1,\n  \"shipDate\": \"2026-01-01T00:00:00.000+0000\",\n  \"status\": \"placed\",\n  \"complete\": false\n}",
         "Name": "createOrder",
         "QueryParams": null,
         "ShellCommands": null,
@@ -416,75 +478,13 @@
           "write"
         ],
         "URL": "{{baseUrl}}/store/order"
-      },
-      {
-        "Assertions": [
-          {
-            "Expected": 404,
-            "Line": 128,
-            "Operator": "==",
-            "Subject": "status"
-          },
-          {
-            "Expected": null,
-            "Line": 129,
-            "Operator": "exists",
-            "Subject": "body.code"
-          },
-          {
-            "Expected": null,
-            "Line": 130,
-            "Operator": "exists",
-            "Subject": "body.type"
-          },
-          {
-            "Expected": null,
-            "Line": 131,
-            "Operator": "exists",
-            "Subject": "body.message"
-          }
-        ],
-        "Body": null,
-        "Captures": null,
-        "DBAssertions": null,
-        "Description": "Verify error responses follow the expected format",
-        "HTTPVersion": "",
-        "Headers": null,
-        "Line": 120,
-        "Metadata": {
-          "Auth": null,
-          "Condition": null,
-          "Custom": null,
-          "DBConnection": "",
-          "Depends": null,
-          "Only": false,
-          "PostHooks": null,
-          "PreHooks": null,
-          "Retry": 0,
-          "RetryDelay": 0,
-          "RetryOn": null,
-          "Skip": "",
-          "Stress": null,
-          "Timeout": 0,
-          "WaitFor": null
-        },
-        "Method": "GET",
-        "MockBody": "",
-        "Name": "notFoundPet",
-        "QueryParams": null,
-        "ShellCommands": null,
-        "Tags": [
-          "contract",
-          "error"
-        ],
-        "URL": "{{baseUrl}}/pet/0"
       }
     ],
     "Variables": [
       {
-        "Line": 5,
+        "Line": 14,
         "Name": "baseUrl",
-        "Value": "https://petstore.swagger.io/v2"
+        "Value": "http://localhost:3000"
       }
     ]
   }

@@ -112,24 +112,6 @@
     ],
     "description": "Create an OPTIONS request"
   },
-  "WebSocket Request": {
-    "prefix": "ws",
-    "body": [
-      "### ${1:WebSocket Test}",
-      "# @name ${2:wsTest}",
-      "WS ${3:{{baseUrl}}/ws}",
-      "",
-      "{",
-      "  \"${4:type}\": \"${5:message}\"",
-      "}",
-      "",
-      ">>>",
-      "expect status == 101",
-      "<<<",
-      ""
-    ],
-    "description": "Create a WebSocket request"
-  },
   "Assertion Block": {
     "prefix": "assert",
     "body": [

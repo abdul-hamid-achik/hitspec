@@ -4,9 +4,9 @@ Thank you for your interest in contributing to hitspec! This document provides g
 
 ## Prerequisites
 
-- **Go 1.25+** — [golang.org/dl](https://go.dev/dl/)
-- **Bun** (latest) — [bun.sh](https://bun.sh/) — used for the web client
+- **Go 1.26** — [golang.org/dl](https://go.dev/dl/) (`go.mod` pins the `go1.26.9` toolchain, which Go downloads automatically; asdf users get it the same way through `.tool-versions`, which only needs a Go 1.26 release)
 - **Task** — [taskfile.dev](https://taskfile.dev/) — task runner for all dev commands
+- Optional: **Node.js 24** for the docs (`task docs:check`) and the desktop app (`apps/desktop`), `sqlite3` for the database example, [`glyph`](https://github.com/abdul-hamid-achik/glyphrun) for the studio e2e specs (`task e2e`)
 
 ## Getting Started
 
@@ -20,7 +20,7 @@ Thank you for your interest in contributing to hitspec! This document provides g
    ```bash
    task setup
    ```
-   This installs Go and frontend dependencies, builds the client, and runs code generation.
+   This downloads the Go dependencies and runs code generation.
 
 4. Verify the build:
    ```bash
@@ -46,7 +46,7 @@ Thank you for your interest in contributing to hitspec! This document provides g
 ### Running Tests
 
 ```bash
-# Run all tests (Go + client)
+# Run all Go tests (race detector + coverage)
 task test
 
 # Run only Go tests
@@ -69,6 +69,28 @@ go test ./packages/core/parser/...
 - Test edge cases and error conditions
 - Use the `testdata/` directory for test fixtures
 
+### Binary smoke tests and docs checks
+
+Unit tests never looked at what the built binary prints, which is how a silent
+`hitspec run` shipped. CI therefore also runs the real binary:
+
+```bash
+# init -> validate -> mock -> run, then every example in examples/ against its
+# own >>>mock blocks (same script CI runs)
+task smoke
+
+# Parse every ```http block in apps/docs, README.md, AGENTS.md and llms.txt, and
+# check `hitspec <cmd> --flag` lines in shell blocks against the binary's --help
+task docs:snippets
+
+# Studio TUI specs through a real PTY (needs glyph)
+task e2e
+```
+
+If a docs sample is intentionally partial or invalid, put `{/* docsnippets: skip */}`
+(`.mdx`) or `<!-- docsnippets: skip -->` (`.md`) on the line above the fence.
+When you change `llms.txt`, copy it to `apps/cli/cmd/llms.txt` (a test checks they match).
+
 ## Terminal UI Development
 
 The API Client Manager is a native terminal UI (Charm Bubble Tea v2) in
@@ -77,7 +99,7 @@ no web build step — it ships inside the Go binary.
 
 ```bash
 # Run the TUI locally
-task serve:dev          # == go run ./apps/cli serve
+task studio:dev         # == go run ./apps/cli studio
 
 # Test + lint the TUI
 go test -race ./packages/tui/...
@@ -87,8 +109,8 @@ golangci-lint run ./packages/tui/...
 go test ./packages/tui/ -run Golden -update
 ```
 
-`hitspec serve --api-only` runs the legacy REST/WebSocket server (`packages/serve`)
-for integrations. See `AGENTS.md` for the TUI architecture and keybindings.
+`hitspec serve --api-only` (`task serve:dev`) runs the legacy REST/WebSocket server
+(`packages/serve`) for integrations. See `AGENTS.md` for the TUI architecture and keybindings.
 
 ## Code Generation
 
@@ -102,8 +124,12 @@ task generate
 
 ## Editor Extensions
 
-- **VSCode** — `apps/vscode/` — syntax highlighting and snippets for `.http`/`.hitspec` files
-- **Neovim** — `apps/nvim/` — Tree-sitter grammar and ftdetect for Neovim
+- **VSCode** — `apps/vscode/` — TextMate grammar and snippets for `.http`/`.hitspec` files (published by `.github/workflows/vscode-publish.yml` once the Marketplace tokens exist)
+- **Neovim** — `apps/nvim/` — Vim syntax file, filetype detection and LuaSnip snippets (the plugin lives in this subdirectory; see its README for the `runtimepath` setup)
+- **Desktop** — `apps/desktop/` — Electron client that spawns `hitspec serve --api-only`
+
+Keep grammars and snippets to syntax the parser actually has: hitspec has no `WS`
+method and no `@import` directive.
 
 ## Pull Request Process
 
@@ -148,6 +174,7 @@ hitspec/
 ├── apps/
 │   ├── cli/           # CLI application (Cobra commands)
 │   ├── docs/          # Mintlify documentation
+│   ├── desktop/       # hitspec Studio (Electron)
 │   ├── vscode/        # VSCode extension
 │   └── nvim/          # Neovim plugin
 ├── packages/
@@ -163,8 +190,13 @@ hitspec/
 │   ├── stress/        # Stress/load testing
 │   ├── mock/          # Mock server
 │   ├── proxy/         # Recording proxy
-│   ├── import/        # Importers (curl, insomnia, openapi)
-│   ├── export/        # Exporters (curl, wget, httpie)
+│   ├── import/        # Importers (curl, insomnia, openapi, postman)
+│   ├── export/        # Exporters (curl, fetch, wget, python, httpie, go, ruby)
+│   ├── fetch/         # One-shot bounded HTTP fetch
+│   ├── mcp/           # MCP server (hitspec mcp serve)
+│   ├── mcpclient/     # MCP client (hitspec mcp probe/call)
+│   ├── search/        # Web search providers for the MCP server
+│   ├── artifact/      # Result artifact stores
 │   ├── snapshot/      # Snapshot testing
 │   ├── sse/           # Server-Sent Events
 │   ├── contract/      # Contract testing
@@ -175,8 +207,13 @@ hitspec/
 │   └── auth/          # Authentication (OAuth2)
 ├── internal/
 │   ├── pathutil/      # Path validation
-│   └── conv/          # Numeric conversion
-├── examples/          # Example test files
+│   ├── conv/          # Numeric conversion
+│   ├── testhome/      # Isolates HOME for tests that touch ~/.hitspec
+│   └── watchutil/     # File watching helpers
+├── tools/
+│   └── docsnippets/   # Docs snippet checker (go run ./tools/docsnippets)
+├── e2e/               # glyphrun specs for the studio TUI
+├── examples/          # Offline-runnable example test files
 └── testdata/          # Test fixtures
 ```
 

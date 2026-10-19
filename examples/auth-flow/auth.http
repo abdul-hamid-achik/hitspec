@@ -1,10 +1,16 @@
 # Authentication Flow Examples
 # Demonstrates Bearer, Basic, API Key, and OAuth2 auth types
 #
-# Requires the public httpbin.org test service. If requests return 503, the
-# service is temporarily down (not a hitspec issue) -- retry later.
+# Runs offline against the built-in mock server (>>>mock blocks give each
+# request a canned httpbin-style response):
+#   hitspec mock examples/auth-flow/auth.http     (terminal 1)
+#   hitspec run examples/auth-flow/auth.http      (terminal 2)
+# The mock does not check credentials -- it only replays the response -- so
+# these tests prove the request/assertion plumbing, not the auth itself. To
+# really exercise each scheme, set @baseUrl = https://httpbin.org (the
+# requests below use httpbin's endpoints; if it answers 503 it is down, retry).
 
-@baseUrl = https://httpbin.org
+@baseUrl = http://localhost:3000
 @token = my-secret-token-123
 @username = testuser
 @password = testpass
@@ -24,6 +30,10 @@ expect body.authenticated == true
 expect body.token == "my-secret-token-123"
 <<<
 
+>>>mock
+{ "authenticated": true, "token": "my-secret-token-123" }
+<<<
+
 ### Basic Authentication
 # @name basicAuth
 # @description Authenticate with username and password
@@ -36,6 +46,10 @@ GET {{baseUrl}}/basic-auth/testuser/testpass
 expect status 200
 expect body.authenticated == true
 expect body.user == "testuser"
+<<<
+
+>>>mock
+{ "authenticated": true, "user": "testuser" }
 <<<
 
 ### API Key in Header
@@ -52,6 +66,10 @@ expect header Content-Type contains json
 expect body.headers.X-Api-Key == "sk-test-key-abc123"
 <<<
 
+>>>mock
+{ "headers": { "X-Api-Key": "sk-test-key-abc123", "Host": "localhost:3000" } }
+<<<
+
 ### API Key in Query String
 # @name apiKeyQuery
 # @description Send API key as query parameter
@@ -63,6 +81,10 @@ GET {{baseUrl}}/get
 >>>
 expect status 200
 expect body.args.api_key == "sk-test-key-abc123"
+<<<
+
+>>>mock
+{ "args": { "api_key": "sk-test-key-abc123" }, "url": "http://localhost:3000/get" }
 <<<
 
 ### Digest Authentication
@@ -77,6 +99,10 @@ GET {{baseUrl}}/digest-auth/auth/user/passwd
 expect status 200
 expect body.authenticated == true
 expect body.user == "user"
+<<<
+
+>>>mock
+{ "authenticated": true, "user": "user" }
 <<<
 
 ### Chained Auth Flow: Login then Access Protected Resource
@@ -97,6 +123,10 @@ expect status 200
 expect body.json.username == "admin"
 <<<
 
+>>>mock
+{ "json": { "username": "admin", "password": "secret" }, "headers": { "Host": "localhost:3000" } }
+<<<
+
 >>>capture
 sessionToken from body.headers.Host
 <<<
@@ -107,10 +137,14 @@ sessionToken from body.headers.Host
 # @tags auth, flow
 # @depends login
 
-GET {{baseUrl}}/headers
+GET {{baseUrl}}/anything
 Authorization: Bearer {{login.sessionToken}}
 
 >>>
 expect status 200
 expect body.headers.Authorization startsWith "Bearer"
+<<<
+
+>>>mock
+{ "headers": { "Authorization": "Bearer localhost:3000" } }
 <<<

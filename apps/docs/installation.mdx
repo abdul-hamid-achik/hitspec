@@ -28,7 +28,7 @@ go install github.com/abdul-hamid-achik/hitspec/v2/cmd/hitspec@latest
 ```
 
 <Note>
-  Requires Go 1.25 or later (the build downloads the pinned Go 1.26 toolchain automatically). The binary will be placed in your `$GOPATH/bin` directory -- make sure it's in your `PATH`.
+  Needs Go 1.21 or later to start; `go.mod` pins the Go 1.26.9 toolchain, which Go downloads automatically. The binary will be placed in your `$GOPATH/bin` directory -- make sure it's in your `PATH`.
 </Note>
 
 ## Binary Download
@@ -83,7 +83,7 @@ and the CLI entry point is `apps/cli` (`cmd/hitspec` is the same binary, named f
 
 <Step title="Prerequisites">
 
-- **Go 1.25+** (`go version`)
+- **Go 1.26** (`go version`; an older Go 1.21+ downloads the pinned 1.26.9 toolchain automatically)
 - **[Task](https://taskfile.dev)** -- the task runner used for every dev command (optional, but recommended)
 - **[glyph](https://github.com/abdul-hamid-achik/glyphrun)** -- only needed to run the studio end-to-end specs (`task e2e`)
 

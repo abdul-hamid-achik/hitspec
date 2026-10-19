@@ -6,19 +6,19 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 22,
+            "Line": 28,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": true,
-            "Line": 23,
+            "Line": 29,
             "Operator": "==",
             "Subject": "body.authenticated"
           },
           {
             "Expected": "my-secret-token-123",
-            "Line": 24,
+            "Line": 30,
             "Operator": "==",
             "Subject": "body.token"
           }
@@ -29,7 +29,7 @@
         "Description": "Authenticate with a Bearer token",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 13,
+        "Line": 19,
         "Metadata": {
           "Auth": {
             "Params": [
@@ -53,7 +53,7 @@
           "WaitFor": null
         },
         "Method": "GET",
-        "MockBody": "",
+        "MockBody": "{ \"authenticated\": true, \"token\": \"my-secret-token-123\" }",
         "Name": "bearerAuth",
         "QueryParams": null,
         "ShellCommands": null,
@@ -67,19 +67,19 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 36,
+            "Line": 46,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": true,
-            "Line": 37,
+            "Line": 47,
             "Operator": "==",
             "Subject": "body.authenticated"
           },
           {
             "Expected": "testuser",
-            "Line": 38,
+            "Line": 48,
             "Operator": "==",
             "Subject": "body.user"
           }
@@ -90,7 +90,7 @@
         "Description": "Authenticate with username and password",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 27,
+        "Line": 37,
         "Metadata": {
           "Auth": {
             "Params": [
@@ -115,7 +115,7 @@
           "WaitFor": null
         },
         "Method": "GET",
-        "MockBody": "",
+        "MockBody": "{ \"authenticated\": true, \"user\": \"testuser\" }",
         "Name": "basicAuth",
         "QueryParams": null,
         "ShellCommands": null,
@@ -129,19 +129,19 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 50,
+            "Line": 64,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": "json",
-            "Line": 51,
+            "Line": 65,
             "Operator": "contains",
             "Subject": "header Content-Type"
           },
           {
             "Expected": "sk-test-key-abc123",
-            "Line": 52,
+            "Line": 66,
             "Operator": "==",
             "Subject": "body.headers.X-Api-Key"
           }
@@ -152,7 +152,7 @@
         "Description": "Send API key via custom header",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 41,
+        "Line": 55,
         "Metadata": {
           "Auth": {
             "Params": [
@@ -177,7 +177,7 @@
           "WaitFor": null
         },
         "Method": "GET",
-        "MockBody": "",
+        "MockBody": "{ \"headers\": { \"X-Api-Key\": \"sk-test-key-abc123\", \"Host\": \"localhost:3000\" } }",
         "Name": "apiKeyHeader",
         "QueryParams": null,
         "ShellCommands": null,
@@ -191,13 +191,13 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 64,
+            "Line": 82,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": "sk-test-key-abc123",
-            "Line": 65,
+            "Line": 83,
             "Operator": "==",
             "Subject": "body.args.api_key"
           }
@@ -208,7 +208,7 @@
         "Description": "Send API key as query parameter",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 55,
+        "Line": 73,
         "Metadata": {
           "Auth": {
             "Params": [
@@ -233,7 +233,7 @@
           "WaitFor": null
         },
         "Method": "GET",
-        "MockBody": "",
+        "MockBody": "{ \"args\": { \"api_key\": \"sk-test-key-abc123\" }, \"url\": \"http://localhost:3000/get\" }",
         "Name": "apiKeyQuery",
         "QueryParams": null,
         "ShellCommands": null,
@@ -247,19 +247,19 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 77,
+            "Line": 99,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": true,
-            "Line": 78,
+            "Line": 100,
             "Operator": "==",
             "Subject": "body.authenticated"
           },
           {
             "Expected": "user",
-            "Line": 79,
+            "Line": 101,
             "Operator": "==",
             "Subject": "body.user"
           }
@@ -270,7 +270,7 @@
         "Description": "Authenticate with HTTP Digest auth",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 68,
+        "Line": 90,
         "Metadata": {
           "Auth": {
             "Params": [
@@ -295,7 +295,7 @@
           "WaitFor": null
         },
         "Method": "GET",
-        "MockBody": "",
+        "MockBody": "{ \"authenticated\": true, \"user\": \"user\" }",
         "Name": "digestAuth",
         "QueryParams": null,
         "ShellCommands": null,
@@ -309,13 +309,13 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 96,
+            "Line": 122,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": "admin",
-            "Line": 97,
+            "Line": 123,
             "Operator": "==",
             "Subject": "body.json.username"
           }
@@ -324,13 +324,13 @@
           "ContentType": "json",
           "FilePath": "",
           "GraphQL": null,
-          "Line": 90,
+          "Line": 116,
           "Multipart": null,
           "Raw": "{\n  \"username\": \"admin\",\n  \"password\": \"secret\"\n}"
         },
         "Captures": [
           {
-            "Line": 101,
+            "Line": 131,
             "Name": "sessionToken",
             "Path": "headers.Host",
             "Source": "body"
@@ -342,11 +342,11 @@
         "Headers": [
           {
             "Key": "Content-Type",
-            "Line": 88,
+            "Line": 114,
             "Value": "application/json"
           }
         ],
-        "Line": 82,
+        "Line": 108,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -365,7 +365,7 @@
           "WaitFor": null
         },
         "Method": "POST",
-        "MockBody": "",
+        "MockBody": "{ \"json\": { \"username\": \"admin\", \"password\": \"secret\" }, \"headers\": { \"Host\": \"localhost:3000\" } }",
         "Name": "login",
         "QueryParams": null,
         "ShellCommands": null,
@@ -379,13 +379,13 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 114,
+            "Line": 144,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": "Bearer",
-            "Line": 115,
+            "Line": 145,
             "Operator": "startsWith",
             "Subject": "body.headers.Authorization"
           }
@@ -398,11 +398,11 @@
         "Headers": [
           {
             "Key": "Authorization",
-            "Line": 111,
+            "Line": 141,
             "Value": "Bearer {{login.sessionToken}}"
           }
         ],
-        "Line": 104,
+        "Line": 134,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -423,7 +423,7 @@
           "WaitFor": null
         },
         "Method": "GET",
-        "MockBody": "",
+        "MockBody": "{ \"headers\": { \"Authorization\": \"Bearer localhost:3000\" } }",
         "Name": "protectedResource",
         "QueryParams": null,
         "ShellCommands": null,
@@ -431,32 +431,32 @@
           "auth",
           "flow"
         ],
-        "URL": "{{baseUrl}}/headers"
+        "URL": "{{baseUrl}}/anything"
       }
     ],
     "Variables": [
       {
-        "Line": 7,
+        "Line": 13,
         "Name": "baseUrl",
-        "Value": "https://httpbin.org"
+        "Value": "http://localhost:3000"
       },
       {
-        "Line": 8,
+        "Line": 14,
         "Name": "token",
         "Value": "my-secret-token-123"
       },
       {
-        "Line": 9,
+        "Line": 15,
         "Name": "username",
         "Value": "testuser"
       },
       {
-        "Line": 10,
+        "Line": 16,
         "Name": "password",
         "Value": "testpass"
       },
       {
-        "Line": 11,
+        "Line": 17,
         "Name": "apiKey",
         "Value": "sk-test-key-abc123"
       }

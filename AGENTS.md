@@ -19,7 +19,7 @@ Postman-like interface that stays true to the plain-text, git-friendly file form
 hitspec/
 ├── apps/
 │   ├── cli/                # CLI application (Cobra commands)
-│   │   └── cmd/            # Commands: run, validate, list, init, serve, mock, record, etc.
+│   │   └── cmd/            # Commands: run, validate, list, init, studio, serve, mock, record, fetch, mcp, export, import, contract, diff, docs, etc.
 │   ├── desktop/            # hitspec Studio — Electron desktop client (see apps/desktop/README.md)
 │   ├── docs/               # Mintlify documentation site
 │   ├── vscode/             # VSCode extension (syntax highlighting + snippets)
@@ -42,6 +42,12 @@ hitspec/
 │   ├── proxy/              # Recording proxy
 │   ├── import/             # Importers (curl, Insomnia, OpenAPI, Postman)
 │   ├── export/             # Exporters (curl + fetch/wget/python/httpie/go/ruby snippets)
+│   ├── fetch/              # Bounded one-shot HTTP fetch (`hitspec fetch`, MCP fetch tools)
+│   ├── mcp/                # Workspace-scoped MCP server (`hitspec mcp serve`)
+│   ├── mcpclient/          # MCP client for probing/calling servers (`hitspec mcp probe|call`)
+│   ├── search/             # Public web search providers (Tavily) for the MCP server
+│   ├── artifact/           # Persists rendered results via operator-owned stores (file.cheap)
+│   ├── coverage/           # API coverage against an OpenAPI spec (`run --coverage`)
 │   ├── builtin/            # Built-in functions ($uuid, $timestamp, etc.)
 │   ├── snapshot/           # Snapshot testing
 │   ├── sse/                # Server-Sent Events support
@@ -52,8 +58,13 @@ hitspec/
 │   └── notify/             # Slack/Teams notifications
 ├── internal/
 │   ├── pathutil/           # Path validation helpers
-│   └── conv/               # Numeric conversion helpers
-└── examples/               # Example .http files
+│   ├── conv/               # Numeric conversion helpers
+│   ├── testhome/           # Test helper that isolates HOME (~/.hitspec) for a package's tests
+│   └── watchutil/          # File-watching helpers
+├── tools/
+│   └── docsnippets/        # Docs checker: parses every ```http block in docs/README/llms.txt
+├── e2e/                    # glyphrun specs for the studio TUI (see e2e/README.md)
+└── examples/               # Offline-runnable example .http files (each has >>>mock blocks)
 ```
 
 ## Key Files
@@ -74,6 +85,10 @@ hitspec/
 | Test CLI behavior end to end | `apps/cli/testdata/script/*.txtar` (testscript runs the real binary; `$SERVER` is the offline test server in `apps/cli/testserver_test.go`; `exitcode N cmd ...` asserts exit codes) |
 | Add serve (`--api-only`) endpoint | `packages/serve/handler_*.go`, `packages/serve/routes.go`, `packages/serve/types.go` |
 | Update docs | `apps/docs/` (.mdx files, docs.json) |
+| Add an MCP tool | `packages/mcp/server.go` (server), `packages/mcpclient/` (client), `apps/cli/cmd/mcp*.go` (commands) |
+| Change `hitspec fetch` | `packages/fetch/`, `apps/cli/cmd/fetch.go` |
+| Check docs snippets | `go run ./tools/docsnippets -bin ./hitspec` (also runs in CI); skip a block with `{/* docsnippets: skip */}` above the fence |
+| Smoke-test the binary | `.github/scripts/smoke.sh ./hitspec` (init, validate, mock, run, every example) |
 | Add stress feature | `packages/stress/stress.go`, `packages/stress/metrics.go` |
 | Add mock feature | `packages/mock/server.go`, `packages/mock/router.go` |
 | Add a desktop screen/view | `apps/desktop/src/renderer/src/views/<view>.js`, register in `views/index.js` |
@@ -93,6 +108,8 @@ hitspec/
 | `packages/serve` | REST/WebSocket API (`--api-only`) | Go | `go build` |
 | `packages/core` | Parser + runner | Go | - |
 | `packages/*` | Feature packages | Go | - |
+| `tools/docsnippets` | Docs snippet checker | Go | `go run` |
+| `apps/vscode`, `apps/nvim` | Editor extensions (syntax + snippets) | JSON / Lua | - |
 
 ## `hitspec serve` Architecture
 
@@ -203,32 +220,37 @@ class of bugs.
 ## .http File Syntax (Quick Reference)
 
 ```http
-@variable = value                    # Variable definition
-{{variable}}                         # Variable interpolation
-{{$uuid()}}                          # Built-in function
+# Variable definition; {{variable}} interpolates; {{$uuid()}} is a built-in function
+@baseUrl = https://api.example.com
 
-### Request Name                     # Request separator
-# @name identifier                   # Request identifier (for captures/deps)
-# @tags smoke, auth                  # Tags for filtering
-# @depends otherRequest              # Dependency
-# @timeout 5000                      # Timeout in ms
-# @auth bearer {{token}}             # Authentication
+### Request Name
+# @name identifier
+# @tags smoke, auth
+# @depends otherRequest
+# @timeout 5000
+# @auth bearer {{token}}
 
-GET {{baseUrl}}/path                 # HTTP method and URL
-Header: Value                        # Headers
+POST {{baseUrl}}/path
+Content-Type: application/json
 
-{json body}                          # Request body
+{"name": "{{$uuid()}}"}
 
->>>                                  # Assertion block start
-expect status 200                    # Assertions
+>>>
+expect status 200
 expect body.field == "value"
 expect body[0].id exists
-<<<                                  # Assertion block end
+<<<
 
->>>capture                           # Capture block
+>>>capture
 token from body.access_token
 <<<
 ```
+
+Rules that bite: directive and header values run to the end of the line (no trailing
+`# comments`); directives live in `#` comment lines; there are 22 of them (the list is
+the `switch` in `packages/core/parser/annotation.go`), plus `@contract.*` / `@x-*`
+passthrough annotations; there is no `@assert`, `@capture`, `@import` or `WS` method.
+`go run ./tools/docsnippets` fails the build on docs that use syntax the parser lacks.
 
 ## Assertion Operators (26)
 
@@ -257,7 +279,10 @@ task build                           # CLI binary
 go build ./...                       # Everything
 
 # Development
-task serve:dev                       # Run the native TUI locally
+task studio:dev                      # Run the native TUI locally (hitspec studio)
+task serve:dev                       # Run the REST/WebSocket API server (serve --api-only)
+task smoke                           # Build the binary and smoke-test it (init/mock/run + examples)
+task docs:snippets                   # Parse every ```http block in the docs
 task docs:dev                        # Mintlify docs locally
 task dev                             # Run with the petstore example
 go run ./apps/cli run examples/      # Run example files

@@ -11,16 +11,24 @@ Demonstrates `@if` and `@unless` directives for controlling which requests execu
 
 ## Running
 
+The file carries `>>>mock` blocks, so it runs offline against the built-in mock
+server (set `@baseUrl = https://jsonplaceholder.typicode.com` to use the real
+API instead):
+
 ```bash
+hitspec mock examples/conditional/conditional.http &    # serves http://localhost:3000
+
 # Run with default variables (runAuthTests=true, skipSlowTests=false)
 hitspec run examples/conditional/conditional.http
 
-# Override variables via environment file
-hitspec run examples/conditional/conditional.http --env prod
-
 # Run only conditional tests
 hitspec run examples/conditional/conditional.http --tags conditional
+
+kill %1
 ```
+
+Edit the `@runAuthTests`, `@skipSlowTests` and `@debugMode` variables at the
+top of the file to see requests being skipped.
 
 ## How Conditions Work
 

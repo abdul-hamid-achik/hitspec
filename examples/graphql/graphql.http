@@ -1,15 +1,24 @@
 # GraphQL Query Examples
 # Demonstrates GraphQL queries, mutations, and assertions
-# Uses the public Countries GraphQL API
+#
+# Runs offline against the built-in mock server (>>>mock blocks):
+#   hitspec mock examples/graphql/graphql.http     (terminal 1)
+#   hitspec run examples/graphql/graphql.http      (terminal 2)
+# The mock server routes on method + path only and cannot tell two GraphQL
+# queries apart, so each operation below posts to its own path
+# (/graphql/countries, /graphql/country, ...). A real GraphQL server has a
+# single /graphql endpoint: to use the public Countries API, set the @baseUrl
+# line to https://countries.trevorblades.com
+# and change every /graphql/<name> URL back to /graphql.
 
-@baseUrl = https://countries.trevorblades.com
+@baseUrl = http://localhost:3000
 
 ### List All Countries
 # @name listCountries
 # @description Fetch all countries with code and name
 # @tags graphql, read
 
-POST {{baseUrl}}/graphql
+POST {{baseUrl}}/graphql/countries
 Content-Type: application/json
 
 >>>graphql
@@ -26,9 +35,16 @@ query {
 >>>
 expect status 200
 expect body.data.countries type array
-expect body.data.countries length > 100
+expect body.data.countries length > 1
 expect body.data.countries[0].code exists
 expect body.data.countries[0].name exists
+<<<
+
+>>>mock
+{ "data": { "countries": [
+  { "code": "AD", "name": "Andorra", "capital": "Andorra la Vella", "emoji": "AD" },
+  { "code": "US", "name": "United States", "capital": "Washington D.C.", "emoji": "US" }
+] } }
 <<<
 
 ### Get Country by Code
@@ -36,7 +52,7 @@ expect body.data.countries[0].name exists
 # @description Fetch a specific country by its code
 # @tags graphql, read
 
-POST {{baseUrl}}/graphql
+POST {{baseUrl}}/graphql/country
 Content-Type: application/json
 
 >>>graphql
@@ -71,6 +87,17 @@ expect body.data.country.languages length > 0
 expect body.data.country.continent.name == "North America"
 <<<
 
+>>>mock
+{ "data": { "country": {
+  "code": "US",
+  "name": "United States",
+  "capital": "Washington D.C.",
+  "currency": "USD,USN,USS",
+  "languages": [{ "name": "English" }],
+  "continent": { "name": "North America" }
+} } }
+<<<
+
 >>>capture
 countryName from body.data.country.name
 <<<
@@ -80,7 +107,7 @@ countryName from body.data.country.name
 # @description Get all European countries
 # @tags graphql, filter
 
-POST {{baseUrl}}/graphql
+POST {{baseUrl}}/graphql/continent
 Content-Type: application/json
 
 >>>graphql
@@ -105,7 +132,14 @@ query CountriesByContinent($code: ID!) {
 expect status 200
 expect body.data.continent.name == "Europe"
 expect body.data.continent.countries type array
-expect body.data.continent.countries length > 30
+expect body.data.continent.countries length > 1
+<<<
+
+>>>mock
+{ "data": { "continent": { "name": "Europe", "countries": [
+  { "code": "DE", "name": "Germany", "capital": "Berlin" },
+  { "code": "FR", "name": "France", "capital": "Paris" }
+] } } }
 <<<
 
 ### Get All Languages
@@ -113,7 +147,7 @@ expect body.data.continent.countries length > 30
 # @description Fetch all languages with their associated info
 # @tags graphql, read
 
-POST {{baseUrl}}/graphql
+POST {{baseUrl}}/graphql/languages
 Content-Type: application/json
 
 >>>graphql
@@ -134,12 +168,19 @@ expect body.data.languages[0].code exists
 expect body.data.languages[0].name exists
 <<<
 
+>>>mock
+{ "data": { "languages": [
+  { "code": "en", "name": "English", "native": "English" },
+  { "code": "ja", "name": "Japanese", "native": "Nihongo" }
+] } }
+<<<
+
 ### Multiple Fields in a Single Query
 # @name multiQuery
 # @description Fetch country details alongside continent list
 # @tags graphql, read
 
-POST {{baseUrl}}/graphql
+POST {{baseUrl}}/graphql/multi
 Content-Type: application/json
 
 >>>graphql
@@ -165,4 +206,19 @@ expect body.data.country.name == "Japan"
 expect body.data.country.emoji exists
 expect body.data.continents type array
 expect body.data.continents length 7
+<<<
+
+>>>mock
+{ "data": {
+  "country": { "name": "Japan", "capital": "Tokyo", "emoji": "JP", "languages": [{ "name": "Japanese" }] },
+  "continents": [
+    { "code": "AF", "name": "Africa" },
+    { "code": "AN", "name": "Antarctica" },
+    { "code": "AS", "name": "Asia" },
+    { "code": "EU", "name": "Europe" },
+    { "code": "NA", "name": "North America" },
+    { "code": "OC", "name": "Oceania" },
+    { "code": "SA", "name": "South America" }
+  ]
+} }
 <<<

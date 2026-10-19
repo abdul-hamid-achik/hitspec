@@ -12,11 +12,15 @@ Demonstrates how to verify API responses against an expected contract (schema).
 
 ## API Used
 
-[Swagger Petstore](https://petstore.swagger.io/) -- a well-known demo API with an OpenAPI spec.
+Modelled on the [Swagger Petstore](https://petstore.swagger.io/) -- a well-known
+demo API with an OpenAPI spec. The file carries `>>>mock` blocks, so it runs
+offline against the built-in mock server; set
+`@baseUrl = https://petstore.swagger.io/v2` to check the real service.
 
 ## Running
 
 ```bash
+hitspec mock examples/contract/contract.http &    # serves http://localhost:3000
 hitspec run examples/contract/contract.http
 
 # Run only store-related contract tests
@@ -27,7 +31,12 @@ hitspec run examples/contract/contract.http --tags error
 
 # Generate coverage against an OpenAPI spec
 hitspec run examples/contract/contract.http --coverage --openapi https://petstore.swagger.io/v2/swagger.json
+
+kill %1
 ```
+
+(The `--coverage --openapi` line fetches the spec from the internet; the rest
+is offline.)
 
 ## Key Concepts
 

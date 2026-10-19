@@ -34,7 +34,6 @@ syn match hitspecAnnotation /^#\s*@before\s.*$/ contains=hitspecAnnotationKey,hi
 syn match hitspecAnnotation /^#\s*@after\s.*$/ contains=hitspecAnnotationKey,hitspecAnnotationValue
 syn match hitspecAnnotation /^#\s*@db\s.*$/ contains=hitspecAnnotationKey,hitspecAnnotationValue
 syn match hitspecAnnotation /^#\s*@wait[Ff]or\s.*$/ contains=hitspecAnnotationKey,hitspecAnnotationValue
-syn match hitspecAnnotation /^#\s*@import\s.*$/ contains=hitspecAnnotationKey,hitspecAnnotationValue
 syn match hitspecAnnotation /^#\s*@stress\.\w\+\s.*$/ contains=hitspecAnnotationKey,hitspecAnnotationValue
 syn match hitspecAnnotation /^#\s*@stress\.\w\+\s*$/ contains=hitspecAnnotationKey
 syn match hitspecAnnotation /^#\s*@contract\.\w\+\s.*$/ contains=hitspecAnnotationKey,hitspecAnnotationValue
@@ -44,7 +43,7 @@ syn match hitspecAnnotationKey /@[a-zA-Z0-9._-]\+/ contained
 syn match hitspecAnnotationValue /\s\zs[^@#].*$/ contained contains=hitspecVariable
 
 " HTTP methods
-syn match hitspecMethod /^\(GET\|POST\|PUT\|PATCH\|DELETE\|HEAD\|OPTIONS\|TRACE\|CONNECT\|WS\)\ze\s/
+syn match hitspecMethod /^\(GET\|POST\|PUT\|PATCH\|DELETE\|HEAD\|OPTIONS\|TRACE\|CONNECT\)\ze\s/
 
 " Headers: Key: Value
 syn match hitspecHeader /^[A-Za-z][A-Za-z0-9_-]*\s*:\s*.*$/ contains=hitspecHeaderKey,hitspecHeaderColon,hitspecHeaderValue,hitspecVariable
@@ -126,7 +125,7 @@ syn keyword hitspecBoolean true false
 syn keyword hitspecNull null
 
 " URL (after method)
-syn match hitspecURL /\(GET\|POST\|PUT\|PATCH\|DELETE\|HEAD\|OPTIONS\|TRACE\|CONNECT\|WS\)\s\+\zs\S\+/ contains=hitspecVariable
+syn match hitspecURL /\(GET\|POST\|PUT\|PATCH\|DELETE\|HEAD\|OPTIONS\|TRACE\|CONNECT\)\s\+\zs\S\+/ contains=hitspecVariable
 
 " Query parameters and form data
 syn match hitspecQueryParam /^\s*[?&]\s*\w[^=]*=.*$/ contains=hitspecVariable

@@ -13,7 +13,13 @@ Demonstrates how to handle flaky or unreliable endpoints with retry logic.
 
 ## Running
 
+The file carries `>>>mock` blocks, so it runs offline against the built-in mock
+server. The mock never fails, so no retry actually fires: the run shows the
+directives parsing and the happy path passing. To watch retries happen, set
+`@baseUrl = https://httpbin.org` and point a request at `/status/503`.
+
 ```bash
+hitspec mock examples/retry/retry.http &    # serves http://localhost:3000
 hitspec run examples/retry/retry.http
 
 # Run only timeout-related retry tests
@@ -21,6 +27,8 @@ hitspec run examples/retry/retry.http --tags timeout
 
 # Run with verbose output to see retry attempts
 hitspec run examples/retry/retry.http --tags retry
+
+kill %1
 ```
 
 ## Retry Behavior

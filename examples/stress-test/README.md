@@ -13,7 +13,16 @@ Demonstrates hitspec's built-in load testing capabilities.
 
 ## Running
 
+The file carries `>>>mock` blocks, so it runs offline against the built-in mock
+server. Load-testing the in-process mock measures hitspec and your machine, not
+an API; for realistic numbers set `@baseUrl` to a staging service you own.
+
 ```bash
+hitspec mock examples/stress-test/stress.http &    # serves http://localhost:3000
+
+# One functional pass (no load)
+hitspec run examples/stress-test/stress.http
+
 # Basic stress test (30 seconds, 10 req/s)
 hitspec run examples/stress-test/stress.http --stress
 
@@ -26,6 +35,8 @@ hitspec run examples/stress-test/stress.http --stress --duration 1m --rate 100 \
 
 # JSON output for CI integration
 hitspec run examples/stress-test/stress.http --stress --duration 30s -o json
+
+kill %1
 ```
 
 ## Weight Distribution

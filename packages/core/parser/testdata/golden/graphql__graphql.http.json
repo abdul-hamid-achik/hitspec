@@ -6,31 +6,31 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 27,
+            "Line": 36,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": "array",
-            "Line": 28,
+            "Line": 37,
             "Operator": "type",
             "Subject": "body.data.countries"
           },
           {
-            "Expected": 100,
-            "Line": 29,
+            "Expected": 1,
+            "Line": 38,
             "Operator": "length \u003e",
             "Subject": "body.data.countries"
           },
           {
             "Expected": null,
-            "Line": 30,
+            "Line": 39,
             "Operator": "exists",
             "Subject": "body.data.countries[0].code"
           },
           {
             "Expected": null,
-            "Line": 31,
+            "Line": 40,
             "Operator": "exists",
             "Subject": "body.data.countries[0].name"
           }
@@ -42,7 +42,7 @@
             "Query": "query {\n  countries {\n    code\n    name\n    capital\n    emoji\n  }\n}",
             "Variables": ""
           },
-          "Line": 15,
+          "Line": 24,
           "Multipart": null,
           "Raw": ""
         },
@@ -53,11 +53,11 @@
         "Headers": [
           {
             "Key": "Content-Type",
-            "Line": 13,
+            "Line": 22,
             "Value": "application/json"
           }
         ],
-        "Line": 7,
+        "Line": 16,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -76,7 +76,7 @@
           "WaitFor": null
         },
         "Method": "POST",
-        "MockBody": "",
+        "MockBody": "{ \"data\": { \"countries\": [\n  { \"code\": \"AD\", \"name\": \"Andorra\", \"capital\": \"Andorra la Vella\", \"emoji\": \"AD\" },\n  { \"code\": \"US\", \"name\": \"United States\", \"capital\": \"Washington D.C.\", \"emoji\": \"US\" }\n] } }",
         "Name": "listCountries",
         "QueryParams": null,
         "ShellCommands": null,
@@ -84,49 +84,49 @@
           "graphql",
           "read"
         ],
-        "URL": "{{baseUrl}}/graphql"
+        "URL": "{{baseUrl}}/graphql/countries"
       },
       {
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 65,
+            "Line": 81,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": "US",
-            "Line": 66,
+            "Line": 82,
             "Operator": "==",
             "Subject": "body.data.country.code"
           },
           {
             "Expected": "United States",
-            "Line": 67,
+            "Line": 83,
             "Operator": "==",
             "Subject": "body.data.country.name"
           },
           {
             "Expected": "Washington D.C.",
-            "Line": 68,
+            "Line": 84,
             "Operator": "==",
             "Subject": "body.data.country.capital"
           },
           {
             "Expected": "array",
-            "Line": 69,
+            "Line": 85,
             "Operator": "type",
             "Subject": "body.data.country.languages"
           },
           {
             "Expected": 0,
-            "Line": 70,
+            "Line": 86,
             "Operator": "length \u003e",
             "Subject": "body.data.country.languages"
           },
           {
             "Expected": "North America",
-            "Line": 71,
+            "Line": 87,
             "Operator": "==",
             "Subject": "body.data.country.continent.name"
           }
@@ -138,13 +138,13 @@
             "Query": "query GetCountry($code: ID!) {\n  country(code: $code) {\n    code\n    name\n    capital\n    currency\n    languages {\n      name\n    }\n    continent {\n      name\n    }\n  }\n}",
             "Variables": "{\n  \"code\": \"US\"\n}"
           },
-          "Line": 42,
+          "Line": 58,
           "Multipart": null,
           "Raw": ""
         },
         "Captures": [
           {
-            "Line": 75,
+            "Line": 102,
             "Name": "countryName",
             "Path": "data.country.name",
             "Source": "body"
@@ -156,11 +156,11 @@
         "Headers": [
           {
             "Key": "Content-Type",
-            "Line": 40,
+            "Line": 56,
             "Value": "application/json"
           }
         ],
-        "Line": 34,
+        "Line": 50,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -179,7 +179,7 @@
           "WaitFor": null
         },
         "Method": "POST",
-        "MockBody": "",
+        "MockBody": "{ \"data\": { \"country\": {\n  \"code\": \"US\",\n  \"name\": \"United States\",\n  \"capital\": \"Washington D.C.\",\n  \"currency\": \"USD,USN,USS\",\n  \"languages\": [{ \"name\": \"English\" }],\n  \"continent\": { \"name\": \"North America\" }\n} } }",
         "Name": "getCountry",
         "QueryParams": null,
         "ShellCommands": null,
@@ -187,31 +187,31 @@
           "graphql",
           "read"
         ],
-        "URL": "{{baseUrl}}/graphql"
+        "URL": "{{baseUrl}}/graphql/country"
       },
       {
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 105,
+            "Line": 132,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": "Europe",
-            "Line": 106,
+            "Line": 133,
             "Operator": "==",
             "Subject": "body.data.continent.name"
           },
           {
             "Expected": "array",
-            "Line": 107,
+            "Line": 134,
             "Operator": "type",
             "Subject": "body.data.continent.countries"
           },
           {
-            "Expected": 30,
-            "Line": 108,
+            "Expected": 1,
+            "Line": 135,
             "Operator": "length \u003e",
             "Subject": "body.data.continent.countries"
           }
@@ -223,7 +223,7 @@
             "Query": "query CountriesByContinent($code: ID!) {\n  continent(code: $code) {\n    name\n    countries {\n      code\n      name\n      capital\n    }\n  }\n}",
             "Variables": "{\n  \"code\": \"EU\"\n}"
           },
-          "Line": 86,
+          "Line": 113,
           "Multipart": null,
           "Raw": ""
         },
@@ -234,11 +234,11 @@
         "Headers": [
           {
             "Key": "Content-Type",
-            "Line": 84,
+            "Line": 111,
             "Value": "application/json"
           }
         ],
-        "Line": 78,
+        "Line": 105,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -257,7 +257,7 @@
           "WaitFor": null
         },
         "Method": "POST",
-        "MockBody": "",
+        "MockBody": "{ \"data\": { \"continent\": { \"name\": \"Europe\", \"countries\": [\n  { \"code\": \"DE\", \"name\": \"Germany\", \"capital\": \"Berlin\" },\n  { \"code\": \"FR\", \"name\": \"France\", \"capital\": \"Paris\" }\n] } } }",
         "Name": "filterByContinent",
         "QueryParams": null,
         "ShellCommands": null,
@@ -265,37 +265,37 @@
           "graphql",
           "filter"
         ],
-        "URL": "{{baseUrl}}/graphql"
+        "URL": "{{baseUrl}}/graphql/continent"
       },
       {
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 130,
+            "Line": 164,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": "array",
-            "Line": 131,
+            "Line": 165,
             "Operator": "type",
             "Subject": "body.data.languages"
           },
           {
             "Expected": 0,
-            "Line": 132,
+            "Line": 166,
             "Operator": "length \u003e",
             "Subject": "body.data.languages"
           },
           {
             "Expected": null,
-            "Line": 133,
+            "Line": 167,
             "Operator": "exists",
             "Subject": "body.data.languages[0].code"
           },
           {
             "Expected": null,
-            "Line": 134,
+            "Line": 168,
             "Operator": "exists",
             "Subject": "body.data.languages[0].name"
           }
@@ -307,7 +307,7 @@
             "Query": "query {\n  languages {\n    code\n    name\n    native\n  }\n}",
             "Variables": ""
           },
-          "Line": 119,
+          "Line": 153,
           "Multipart": null,
           "Raw": ""
         },
@@ -318,11 +318,11 @@
         "Headers": [
           {
             "Key": "Content-Type",
-            "Line": 117,
+            "Line": 151,
             "Value": "application/json"
           }
         ],
-        "Line": 111,
+        "Line": 145,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -341,7 +341,7 @@
           "WaitFor": null
         },
         "Method": "POST",
-        "MockBody": "",
+        "MockBody": "{ \"data\": { \"languages\": [\n  { \"code\": \"en\", \"name\": \"English\", \"native\": \"English\" },\n  { \"code\": \"ja\", \"name\": \"Japanese\", \"native\": \"Nihongo\" }\n] } }",
         "Name": "listLanguages",
         "QueryParams": null,
         "ShellCommands": null,
@@ -349,37 +349,37 @@
           "graphql",
           "read"
         ],
-        "URL": "{{baseUrl}}/graphql"
+        "URL": "{{baseUrl}}/graphql/languages"
       },
       {
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 163,
+            "Line": 204,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": "Japan",
-            "Line": 164,
+            "Line": 205,
             "Operator": "==",
             "Subject": "body.data.country.name"
           },
           {
             "Expected": null,
-            "Line": 165,
+            "Line": 206,
             "Operator": "exists",
             "Subject": "body.data.country.emoji"
           },
           {
             "Expected": "array",
-            "Line": 166,
+            "Line": 207,
             "Operator": "type",
             "Subject": "body.data.continents"
           },
           {
             "Expected": 7,
-            "Line": 167,
+            "Line": 208,
             "Operator": "length",
             "Subject": "body.data.continents"
           }
@@ -391,7 +391,7 @@
             "Query": "query {\n  country(code: \"JP\") {\n    name\n    capital\n    emoji\n    languages {\n      name\n    }\n  }\n  continents {\n    code\n    name\n  }\n}",
             "Variables": ""
           },
-          "Line": 145,
+          "Line": 186,
           "Multipart": null,
           "Raw": ""
         },
@@ -402,11 +402,11 @@
         "Headers": [
           {
             "Key": "Content-Type",
-            "Line": 143,
+            "Line": 184,
             "Value": "application/json"
           }
         ],
-        "Line": 137,
+        "Line": 178,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -425,7 +425,7 @@
           "WaitFor": null
         },
         "Method": "POST",
-        "MockBody": "",
+        "MockBody": "{ \"data\": {\n  \"country\": { \"name\": \"Japan\", \"capital\": \"Tokyo\", \"emoji\": \"JP\", \"languages\": [{ \"name\": \"Japanese\" }] },\n  \"continents\": [\n    { \"code\": \"AF\", \"name\": \"Africa\" },\n    { \"code\": \"AN\", \"name\": \"Antarctica\" },\n    { \"code\": \"AS\", \"name\": \"Asia\" },\n    { \"code\": \"EU\", \"name\": \"Europe\" },\n    { \"code\": \"NA\", \"name\": \"North America\" },\n    { \"code\": \"OC\", \"name\": \"Oceania\" },\n    { \"code\": \"SA\", \"name\": \"South America\" }\n  ]\n} }",
         "Name": "multiQuery",
         "QueryParams": null,
         "ShellCommands": null,
@@ -433,14 +433,14 @@
           "graphql",
           "read"
         ],
-        "URL": "{{baseUrl}}/graphql"
+        "URL": "{{baseUrl}}/graphql/multi"
       }
     ],
     "Variables": [
       {
-        "Line": 5,
+        "Line": 14,
         "Name": "baseUrl",
-        "Value": "https://countries.trevorblades.com"
+        "Value": "http://localhost:3000"
       }
     ]
   }

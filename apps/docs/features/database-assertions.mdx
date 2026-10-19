@@ -66,11 +66,17 @@ Specify the database connection using the `@db` annotation:
 ### PostgreSQL example
 # @db postgres://testuser:testpass@localhost:5432/testdb
 
+GET {{baseUrl}}/users/1
+
 ### MySQL example
 # @db mysql://root:password@localhost:3306/myapp
 
+GET {{baseUrl}}/users/1
+
 ### SQLite example
 # @db sqlite://./test.db
+
+GET {{baseUrl}}/users/1
 ```
 
 ## Query and Assert Syntax

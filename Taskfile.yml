@@ -85,6 +85,11 @@ tasks:
     cmds:
       - task: go:security
 
+  security:gate:
+    desc: gosec gate used by CI (blocks on HIGH severity findings after triaged exclusions)
+    cmds:
+      - .github/scripts/gosec.sh
+
   check:
     desc: Run all checks (lint + test + security)
     cmds:
@@ -173,8 +178,13 @@ tasks:
     cmds:
       - go run {{.MAIN_PATH}} {{.CLI_ARGS}}
 
+  dev:mock:
+    desc: Serve examples/petstore/petstore.http on :3000 with the built-in mock server (run first; then `task dev`)
+    cmds:
+      - go run {{.MAIN_PATH}} mock examples/petstore/petstore.http --port 3000
+
   dev:
-    desc: Run in development mode with example file
+    desc: Run the petstore example (examples are offline; start `task dev:mock` in another terminal first)
     cmds:
       - go run {{.MAIN_PATH}} run examples/petstore/petstore.http -v
 
@@ -184,7 +194,7 @@ tasks:
       - watchexec -e go -r -- go test -v ./...
 
   watch:run:
-    desc: Watch for changes and re-run CLI
+    desc: Watch for changes and re-run CLI (needs `task dev:mock` running, like `task dev`)
     cmds:
       - watchexec -e go,http -r -- go run {{.MAIN_PATH}} run examples/petstore/petstore.http -v
 
@@ -209,6 +219,18 @@ tasks:
     dir: apps/docs
     cmds:
       - npx mintlify broken-links
+
+  docs:snippets:
+    desc: Parse every ```http block in the docs, README and llms.txt, and check CLI flags in shell blocks
+    cmds:
+      - go build -o bin/{{.BINARY_NAME}} {{.MAIN_PATH}}
+      - go run ./tools/docsnippets -bin bin/{{.BINARY_NAME}}
+
+  smoke:
+    desc: Binary smoke test (init, validate, mock, run, every offline example); same script CI runs
+    cmds:
+      - go build -o bin/{{.BINARY_NAME}} {{.MAIN_PATH}}
+      - .github/scripts/smoke.sh bin/{{.BINARY_NAME}}
 
   # ---------------------------------------------------------------------------
   # Desktop app (Electron)

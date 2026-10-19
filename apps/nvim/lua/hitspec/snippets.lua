@@ -71,13 +71,6 @@ function M.setup()
       i(0),
     }),
 
-    s("ws", {
-      t("### "), i(1, "WebSocket"),
-      t({ "", "WS " }), i(2, "{{baseUrl}}/ws"),
-      t({ "", "" }),
-      i(0),
-    }),
-
     -- Assertion block
     s("assert", {
       t({ ">>>", "" }),
@@ -177,7 +170,6 @@ function M.setup()
     s("@after", { t("# @after "), i(1, "command"), t({ "", "" }), i(0) }),
     s("@db", { t("# @db "), i(1, "postgres://user:pass@host/db"), t({ "", "" }), i(0) }),
     s("@waitfor", { t("# @waitfor "), i(1, "http://localhost:8080/health"), t(" "), i(2, "200"), t(" "), i(3, "30000"), t({ "", "" }), i(0) }),
-    s("@import", { t("# @import "), i(1, "./shared.http"), t({ "", "" }), i(0) }),
 
     -- Stress annotations
     s("@stress.weight", { t("# @stress.weight "), i(1, "1"), t({ "", "" }), i(0) }),

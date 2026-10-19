@@ -15,12 +15,19 @@ filetype detection, buffer settings, and LuaSnip snippets for the
 
 ## Installation
 
+The plugin lives in the `apps/nvim/` subdirectory of the hitspec repository, not
+at its root, so a plugin manager has to be told to add that subdirectory to
+`runtimepath`. Pointing it at `"abdul-hamid-achik/hitspec"` alone installs the
+repository but loads nothing.
+
 ### lazy.nvim
 
 ```lua
 {
   "abdul-hamid-achik/hitspec",
-  config = function()
+  -- the plugin is in a subdirectory of the repository
+  config = function(plugin)
+    vim.opt.rtp:append(plugin.dir .. "/apps/nvim")
     require("hitspec").setup()
   end,
 }
@@ -31,6 +38,7 @@ filetype detection, buffer settings, and LuaSnip snippets for the
 ```lua
 use {
   "abdul-hamid-achik/hitspec",
+  rtp = "apps/nvim",
   config = function()
     require("hitspec").setup()
   end,
@@ -39,18 +47,20 @@ use {
 
 ### Manual
 
-Clone the repository into your Neovim packages directory:
+Clone the repository somewhere and add the subdirectory to `runtimepath` in your
+`init.lua`:
 
 ```bash
-git clone https://github.com/abdul-hamid-achik/hitspec.git \
-  ~/.local/share/nvim/site/pack/hitspec/start/hitspec
+git clone https://github.com/abdul-hamid-achik/hitspec.git ~/.local/share/hitspec
 ```
-
-Then add to your `init.lua`:
 
 ```lua
+vim.opt.rtp:append(vim.fn.expand("~/.local/share/hitspec/apps/nvim"))
 require("hitspec").setup()
 ```
+
+`setup()` also registers the `.http` / `.hitspec` filetypes, so detection works
+even when the directory is added to `runtimepath` after startup.
 
 ## How It Works
 
@@ -77,7 +87,6 @@ All snippets are available in `.http` and `.hitspec` buffers after calling `setu
 | `delete`    | DELETE request template             |
 | `head`      | HEAD request template               |
 | `options`   | OPTIONS request template            |
-| `ws`        | WebSocket connection template       |
 
 ### Blocks
 
@@ -112,7 +121,6 @@ All snippets are available in `.http` and `.hitspec` buffers after calling `setu
 | `@after`          | Post-hook command              |
 | `@db`             | Database connection string     |
 | `@waitfor`        | Wait for URL health check      |
-| `@import`         | Import another file            |
 | `@stress.*`       | Stress test annotations        |
 | `@contract.*`     | Contract test annotations      |
 

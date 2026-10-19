@@ -45,7 +45,7 @@
       "patterns": [
         {
           "name": "entity.name.tag.hitspec",
-          "match": "^#\\s*@(name|description|tags|skip|only|timeout|retry|retryOn|retryDelay|depends|auth|before|after|db|wait[Ff]or|if|unless|import|stress\\.\\w+|contract\\.\\w+|x-[\\w.-]+)\\b",
+          "match": "^#\\s*@(name|description|tags|skip|only|timeout|retry|retryOn|retryDelay|depends|auth|before|after|db|wait[Ff]or|if|unless|stress\\.\\w+|contract\\.\\w+|x-[\\w.-]+)\\b",
           "captures": {
             "1": { "name": "keyword.other.annotation.hitspec" }
           }
@@ -67,7 +67,7 @@
       "patterns": [
         {
           "name": "keyword.other.method.hitspec",
-          "match": "^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE|CONNECT|WS)\\b"
+          "match": "^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE|CONNECT)\\b"
         }
       ]
     },

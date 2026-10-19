@@ -1,10 +1,19 @@
 # Retry and Resilience Examples
 # Demonstrates @retry, @retryDelay, and @retryOn for handling flaky endpoints
 #
-# Requires the public httpbin.org test service. If requests return 503, the
-# service is temporarily down (not a hitspec issue) -- retry later.
+# Runs offline against the built-in mock server (>>>mock blocks):
+#   hitspec mock examples/retry/retry.http     (terminal 1)
+#   hitspec run examples/retry/retry.http      (terminal 2)
+# The mock never fails, so no retry actually fires here: the run shows the
+# directives parsing and the happy path passing. To watch retries happen, set
+# the @baseUrl line to https://httpbin.org and point a request at /status/503 (httpbin
+# can also be flaky on its own -- a 503 from it is not a hitspec issue).
+#
+# The mock server picks the first block matching a method + path and many
+# requests below share GET /get, so the first one carries a superset body
+# (url, headers and args) that satisfies all of them.
 
-@baseUrl = https://httpbin.org
+@baseUrl = http://localhost:3000
 
 ### Basic Retry on Any Failure
 # @name basicRetry
@@ -17,6 +26,14 @@ GET {{baseUrl}}/get
 >>>
 expect status 200
 expect body.url exists
+<<<
+
+>>>mock
+{
+  "url": "http://localhost:3000/get",
+  "headers": { "Host": "localhost:3000" },
+  "args": { "ready": "true" }
+}
 <<<
 
 ### Retry with Custom Delay
@@ -62,6 +79,10 @@ GET {{baseUrl}}/delay/1
 >>>
 expect status 200
 expect duration < 10000
+<<<
+
+>>>mock
+{ "url": "http://localhost:3000/delay/1" }
 <<<
 
 ### Retry with Timeout
@@ -114,4 +135,8 @@ Content-Type: application/json
 >>>
 expect status 200
 expect body.json.idempotencyKey exists
+<<<
+
+>>>mock
+{ "json": { "idempotencyKey": "mock-key", "action": "process" } }
 <<<
