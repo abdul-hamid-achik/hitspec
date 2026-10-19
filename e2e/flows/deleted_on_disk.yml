@@ -1,0 +1,83 @@
+version: 1
+name: studio_deleted_on_disk
+
+intent: |
+  when the open file is deleted on disk while the editor holds unsaved edits,
+  the edits are kept (not silently dropped), a warning says the file was
+  deleted, and ctrl+s recreates the file with the buffer. The outside deletion
+  is simulated by a transform step that removes the file.
+
+target:
+  cmd: ["${vars.bin}", "studio", "/tmp/hitspec-studio-e2e/deleted"]
+  cwd: "."
+  timeoutMs: 40000
+  env:
+    HOME: /tmp/hitspec-studio-e2e/home-deleted_on_disk
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+    - run: "rm -rf /tmp/hitspec-studio-e2e/deleted && mkdir -p /tmp/hitspec-studio-e2e/deleted"
+      timeoutMs: 10000
+    - run: "printf '### C\\n# @name c\\nGET https://example.com/c\\n' > /tmp/hitspec-studio-e2e/deleted/c.http"
+      timeoutMs: 10000
+    - run: "printf '### D\\n# @name d\\nGET https://example.com/d\\n' > /tmp/hitspec-studio-e2e/deleted/d.http"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "c.http"
+      timeoutMs: 8000
+  - press: "e"
+  - type: "MINE"
+  - wait:
+      screen:
+        contains: "modified"
+      timeoutMs: 5000
+  # another program deletes the open file under us
+  - transform:
+      runtime: shell
+      file: ../transforms/remove_open_file.sh
+      input: ../transforms/remove_open_file.sh
+      saveAs: removed.txt
+      assign: removed
+      timeoutMs: 10000
+  # the edits survive and the deletion is called out
+  - wait:
+      screen:
+        contains: "deleted on disk"
+      timeoutMs: 15000
+  - snapshot: kept_after_delete
+  # ctrl+s brings the file back with the buffer
+  - press: "ctrl+s"
+  - wait:
+      screen:
+        notContains: "modified"
+      timeoutMs: 8000
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  - id: file_recreated_with_edits
+    description: ctrl+s recreated the deleted file, with the unsaved edit in it
+    verify:
+      file:
+        glob: /tmp/hitspec-studio-e2e/deleted/c.http
+        contains: "MINE"
+        timeoutMs: 10000
+  - id: clean_exit
+    description: q exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0

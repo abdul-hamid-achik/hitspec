@@ -752,8 +752,8 @@ func TestProgressDoesNotOutliveTheRun(t *testing.T) {
 	if m.progress.Total != 0 {
 		t.Fatal("progress with no run in flight must be ignored")
 	}
-	m.running = true
-	m.handleEvent(clientmgr.Event{Type: "request_progress", Payload: clientmgr.RequestProgress{Total: 3, Index: 1, RequestName: "x"}})
+	m.running, m.activeExec = true, "e1"
+	m.handleEvent(clientmgr.Event{Type: "request_progress", Payload: clientmgr.RequestProgress{ExecID: "e1", Total: 3, Index: 1, RequestName: "x"}})
 	if !strings.Contains(m.statusbar(), "x 1/3") {
 		t.Fatalf("progress is shown during a run: %q", plain(m.statusbar()))
 	}

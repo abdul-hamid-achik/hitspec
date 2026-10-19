@@ -1,0 +1,79 @@
+version: 1
+name: studio_search_jump
+
+intent: |
+  choosing a result in the request search overlay opens its file and puts the
+  cursor on that request (not on the file's first one). The workspace starts on
+  a.http; the hit is the third request of b.http, recognizable by the header it
+  alone carries in the headers panel.
+
+target:
+  cmd: ["${vars.bin}", "studio", "/tmp/hitspec-studio-e2e/searchjump"]
+  cwd: "."
+  timeoutMs: 25000
+  env:
+    HOME: /tmp/hitspec-studio-e2e/home-search_jump
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+    - run: "rm -rf /tmp/hitspec-studio-e2e/searchjump && mkdir -p /tmp/hitspec-studio-e2e/searchjump"
+      timeoutMs: 10000
+    - run: "printf '### Alpha\\n# @name alpha\\nGET https://example.com/alpha\\nX-Alpha-Marker: yes\\n' > /tmp/hitspec-studio-e2e/searchjump/a.http"
+      timeoutMs: 10000
+    - run: "printf '### First\\n# @name bfirst\\nGET https://example.com/one\\nX-First-Marker: yes\\n\\n### Second\\n# @name bsecond\\nGET https://example.com/two\\nX-Second-Marker: yes\\n\\n### Gamma\\n# @name gammahit\\nGET https://example.com/three\\nX-Gamma-Marker: yes\\n' > /tmp/hitspec-studio-e2e/searchjump/b.http"
+      timeoutMs: 10000
+
+steps:
+  # a.http is open first: its own header is in the headers table (the table
+  # pads names to a column; the source pane shows "Name: value" instead)
+  - wait:
+      screen:
+        contains: "X-Alpha-Marker      yes"
+      timeoutMs: 8000
+  - press: "ctrl+f"
+  - wait:
+      screen:
+        contains: "Search Requests"
+      timeoutMs: 5000
+  - type: "gammahit"
+  - wait:
+      screen:
+        contains: "1 results"
+      timeoutMs: 5000
+  - press: "enter"
+  # b.http opened with the third request selected: its header, not the first's
+  - wait:
+      screen:
+        contains: "X-Gamma-Marker      yes"
+      timeoutMs: 8000
+  - snapshot: jumped
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  - id: cursor_on_the_hit
+    description: the third request of b.http is selected (its header is in the headers table)
+    verify:
+      screen:
+        contains: "X-Gamma-Marker      yes"
+  - id: not_on_first_request
+    description: the file's first request is not the one selected
+    verify:
+      screen:
+        notContains: "X-First-Marker      yes"
+  - id: clean_exit
+    description: q exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0
