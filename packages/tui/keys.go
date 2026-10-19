@@ -51,6 +51,7 @@ type keyMap struct {
 	Save           key.Binding
 	RunRequest     key.Binding
 	RunFile        key.Binding
+	StopRun        key.Binding
 	Refresh        key.Binding
 	NewFile        key.Binding
 	DeleteFile     key.Binding
@@ -85,6 +86,7 @@ func defaultKeyMap() keyMap {
 		Save:           key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "save")),
 		RunRequest:     key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "run request")),
 		RunFile:        key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "run file")),
+		StopRun:        key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "cancel run")),
 		Refresh:        key.NewBinding(key.WithKeys("ctrl+r"), key.WithHelp("ctrl+r", "refresh")),
 		NewFile:        key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "new file")),
 		DeleteFile:     key.NewBinding(key.WithKeys("D"), key.WithHelp("D", "delete file")),

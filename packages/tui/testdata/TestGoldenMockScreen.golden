@@ -3,7 +3,7 @@
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ mock                                                                                             │
 │ port: 3000                                                                                       │
-│ delay:                                                                                           │
+│ delay: none                                                                                      │
 │                                                                                                  │
 │ Running: true                                                                                    │
 │ Port: 3000                                                                                       │
@@ -13,7 +13,7 @@
 │ POST    /users                                   201 application/json                            │
 │                                                                                                  │
 │                                                                                                  │
-│ e edit fields   enter/s start mock   x stop   esc cancel                                         │
+│ e edit fields   s start mock   x stop   esc back                                                 │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
@@ -27,4 +27,4 @@
 │                                                                                                  │
 │                                                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
- ready                                    e fields · enter run · esc back · ? help · ctrl+p palette 
+ ready                                     e fields · s submit · esc back · ? help · ctrl+p palette 

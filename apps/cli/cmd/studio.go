@@ -22,6 +22,7 @@ var (
 	studioLogFormatFlag  string
 	studioLogLevelFlag   string
 	studioThemeFlag      string
+	studioMouseFlag      bool
 )
 
 var studioCmd = &cobra.Command{
@@ -64,6 +65,7 @@ Examples:
 			logFormat:  studioLogFormatFlag,
 			logLevel:   studioLogLevelFlag,
 			theme:      studioThemeFlag,
+			mouse:      studioMouseFlag,
 		})
 	},
 }
@@ -80,11 +82,12 @@ func init() {
 	f.StringVar(&studioLogFormatFlag, "log-format", "text", "Log format: text or json")
 	f.StringVar(&studioLogLevelFlag, "log-level", "info", "Log level: debug, info, warn, error")
 	f.StringVar(&studioThemeFlag, "theme", "", "Color theme: Nord, Catppuccin Mocha, Dracula, Tokyo Night, Gruvbox Dark")
+	f.BoolVar(&studioMouseFlag, "mouse", false, "Capture the mouse (wheel scrolling); off by default so the terminal can select and copy text")
 }
 
 type studioLaunchFlags struct {
-	watch, readOnly, verbose, allowShell, allowDB bool
-	env, config, logFormat, logLevel, theme       string
+	watch, readOnly, verbose, allowShell, allowDB, mouse bool
+	env, config, logFormat, logLevel, theme              string
 }
 
 // newStudioManager builds the in-process Manager from the studio flags. It is a
@@ -121,7 +124,7 @@ func launchStudio(ctx context.Context, workDir string, f studioLaunchFlags) erro
 	mgr.BuildTime = buildTime
 	mgr.Start(ctx)
 	defer mgr.Close()
-	return tui.Run(ctx, mgr, tui.Options{Mouse: true, Theme: f.theme, Output: tuiOut})
+	return tui.Run(ctx, mgr, tui.Options{Mouse: f.mouse, Theme: f.theme, Output: tuiOut})
 }
 
 // silenceStdio redirects os.Stdout, os.Stderr and the std logger to the null

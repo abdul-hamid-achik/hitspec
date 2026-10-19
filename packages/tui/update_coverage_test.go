@@ -89,7 +89,9 @@ func TestSubmitFormCmdSafeScreens(t *testing.T) {
 	t.Run("cookies", func(t *testing.T) {
 		m := newModel(context.Background(), newTestManager(t), Options{})
 		m.setScreen(screenCookies)
-		m.formInputs[3].SetValue("tok") // value
+		m.formInputs[0].SetValue("example.com") // domain
+		m.formInputs[2].SetValue("session")     // name
+		m.formInputs[3].SetValue("tok")         // value
 		msg := m.submitFormCmd()()
 		cm, ok := msg.(cookiesMsg)
 		if !ok {
@@ -103,7 +105,8 @@ func TestSubmitFormCmdSafeScreens(t *testing.T) {
 	t.Run("import", func(t *testing.T) {
 		m := newModel(context.Background(), newTestManager(t), Options{})
 		m.setScreen(screenImport)
-		msg := m.submitFormCmd()() // defaults: curl, "curl https://example.com"
+		m.formInputs[1].SetValue("curl https://example.com") // input
+		msg := m.submitFormCmd()()                           // format defaults to curl
 		im, ok := msg.(importMsg)
 		if !ok {
 			t.Fatalf("import submit -> %T, want importMsg", msg)
@@ -118,6 +121,13 @@ func TestSubmitFormCmdSafeScreens(t *testing.T) {
 		m := newModel(context.Background(), newTestManager(t), Options{})
 		m.selected = "api.http"
 		m.setScreen(s)
+		// Required fields have no default; fill them so the submit is wired up.
+		switch s {
+		case screenContract:
+			m.formInputs[0].SetValue("http://localhost:3000")
+		case screenRecord:
+			m.formInputs[0].SetValue("http://localhost:3000")
+		}
 		if m.submitFormCmd() == nil {
 			t.Fatalf("submitFormCmd for screen %v returned nil", s)
 		}

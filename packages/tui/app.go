@@ -2,7 +2,9 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -49,6 +51,8 @@ type model struct {
 	color     bool // syntax highlighting / ANSI color enabled (disabled in golden tests)
 
 	lastResult   *clientmgr.RunResultDTO
+	lastRunIdx   int  // source index of the request a single-request run executed; -1 for a file run
+	metaFromRun  bool // the headers/assertions panels show the selected request's last result
 	progress     clientmgr.RequestProgress
 	stress       clientmgr.StressStatusDTO
 	stressResult *clientmgr.StressResultDTO
@@ -96,6 +100,13 @@ type model struct {
 	toasts  toastCenter
 	confirm *confirmState
 	prompt  *promptState
+
+	// running is true while a request/file/ad-hoc run is in flight. runCancel
+	// cancels its context (x / ctrl+c); cancelling is set once that happened, so a
+	// run that ignores the cancel cannot trap the user (the next ctrl+c quits).
+	running    bool
+	cancelling bool
+	runCancel  context.CancelFunc
 
 	// transitioned is set within a single Update tick when a key opened/closed a
 	// modal or moved focus into a text widget, so the same key is not also
@@ -165,6 +176,28 @@ type runDoneMsg struct {
 	result *clientmgr.RunResultDTO
 	err    error
 	adhoc  bool // ad-hoc runs surface the response pane even from another screen
+}
+
+// proceedMsg runs do on the live model. A confirm dialog's action returns it so
+// the guarded operation executes with the model as it is when the user answers.
+type proceedMsg struct{ do func(m *model) tea.Cmd }
+
+// saveConflictMsg reports that the file on disk no longer matches what the
+// editor loaded, so saving would overwrite someone else's change.
+type saveConflictMsg struct {
+	path    string
+	content string
+}
+
+// adhocStartMsg starts an ad-hoc request typed into the quick-request prompt.
+type adhocStartMsg struct{ line string }
+
+// bufferParsedMsg carries a fresh parse of the edited (unsaved) buffer so the
+// request list follows what is on screen.
+type bufferParsedMsg struct {
+	path   string
+	parsed *clientmgr.ParsedFileDTO
+	err    error
 }
 
 type simpleMsg struct {
@@ -315,6 +348,7 @@ func newModel(ctx context.Context, mgr *clientmgr.Manager, opts Options) model {
 	fp := filepicker.New()
 
 	return model{
+		lastRunIdx:  -1,
 		ctx:         ctx,
 		mgr:         mgr,
 		events:      mgr.Subscribe(ctx),
@@ -381,7 +415,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.selected = ""
 			m.parsed = nil
 			m.raw = ""
+			m.dirty = false
+			m.lastResult = nil
 			m.source.SetValue("")
+			m.refreshRequestTables()
 			m.respView.setPlaceholder(m.fileSummary())
 		}
 		if m.selected == "" && len(msg.files) > 0 {
@@ -396,41 +433,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 		m.err = ""
-		m.selected = msg.path
-		m.raw = msg.raw
-		m.parsed = msg.parsed
-		m.source.SetValue(msg.raw)
-		m.dirty = false
-		m.editing = false
-		m.source.Blur()
-		m.refreshRequestTables()
-		m.respView.setPlaceholder(m.fileSummary())
+		m.openFile(msg.path, msg.raw, msg.parsed)
 		m.status = "opened " + msg.path
-	case runDoneMsg:
+	case saveConflictMsg:
 		m.loading = false
+		ctx, mgr := m.ctx, m.mgr
+		m.transitioned = true
+		m.confirm = &confirmState{
+			title: "File changed on disk",
+			body:  msg.path + " was modified outside the editor.\nOverwrite it with your edits?",
+			action: func() tea.Msg {
+				return writeFile(ctx, mgr, msg.path, msg.content)
+			},
+		}
+	case proceedMsg:
+		if msg.do != nil {
+			if cmd := msg.do(&m); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+	case adhocStartMsg:
+		cmds = append(cmds, m.startAdhoc(msg.line))
+	case bufferParsedMsg:
 		if msg.err != nil {
-			m.err = msg.err.Error()
-			cmds = append(cmds, m.notify(toastError, msg.err.Error()))
-			break
+			cmds = append(cmds, m.notify(toastWarn, "buffer does not parse: "+msg.err.Error()))
+		} else if msg.path == m.selected && m.bufferModified() {
+			m.parsed = msg.parsed
+			m.refreshRequestTables()
 		}
-		m.err = ""
-		m.lastResult = msg.result
-		m.progress = clientmgr.RequestProgress{}
-		m.refreshResultViews()
-		// Ad-hoc runs can be launched from another screen, so surface the response
-		// pane — but never steal focus from an active source edit.
-		if msg.adhoc && !(m.editing && m.focus == focusSource) {
-			m.screen = screenWorkspace
-			m.focus = focusResponse
-			m.syncFocus()
-		}
-		cmds = append(cmds, m.progressBar.SetPercent(1))
-		m.status = fmt.Sprintf("run complete: %d passed, %d failed, %d skipped", msg.result.Passed, msg.result.Failed, msg.result.Skipped)
-		sev := toastSuccess
-		if msg.result.Failed > 0 {
-			sev = toastError
-		}
-		cmds = append(cmds, m.notify(sev, fmt.Sprintf("%d passed · %d failed · %d skipped", msg.result.Passed, msg.result.Failed, msg.result.Skipped)))
+	case runDoneMsg:
+		cmds = append(cmds, m.finishRun(msg)...)
 	case simpleMsg:
 		m.loading = false
 		if msg.err != nil {
@@ -541,12 +573,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.err = ""
 			m.screen = screenWorkspace
-			m.selected = msg.path
-			m.raw = msg.raw
-			m.parsed = msg.parsed
-			m.source.SetValue(msg.raw)
-			m.refreshRequestTables()
-			m.respView.setPlaceholder(m.fileSummary())
+			m.openFile(msg.path, msg.raw, msg.parsed)
 			m.status = "imported " + msg.path
 			cmds = append(cmds, m.notify(toastSuccess, "imported "+msg.path), loadFilesCmd(m.ctx, m.mgr))
 		}
@@ -558,15 +585,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.err = ""
 			m.screen = screenWorkspace
-			m.selected = msg.path
-			m.raw = msg.raw
-			m.parsed = msg.parsed
-			m.source.SetValue(msg.raw)
-			m.dirty = false
-			m.editing = false
-			m.source.Blur()
-			m.refreshRequestTables()
-			m.respView.setPlaceholder(m.fileSummary())
+			m.openFile(msg.path, msg.raw, msg.parsed)
 			m.status = msg.action + " → " + msg.path
 			cmds = append(cmds, m.notify(toastSuccess, msg.action+" → "+msg.path), loadFilesCmd(m.ctx, m.mgr))
 		}
@@ -683,7 +702,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		old := m.source.Value()
 		m.source, cmd = m.source.Update(msg)
 		if m.source.Value() != old {
-			m.dirty = true
+			m.dirty = m.bufferModified()
 		}
 		cmds = append(cmds, cmd)
 	}
@@ -695,6 +714,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Batch(cmds...)
 			case "left", "[":
 				m.respView.prevTab()
+				return m, tea.Batch(cmds...)
+			case ".", ">":
+				m.respView.selectRelative(1)
+				return m, tea.Batch(cmds...)
+			case ",", "<":
+				m.respView.selectRelative(-1)
 				return m, tea.Batch(cmds...)
 			}
 		}
@@ -719,6 +744,8 @@ func (m model) View() tea.View {
 	var v tea.View
 	v.SetContent(content)
 	v.AltScreen = true
+	// Mouse capture is only enabled on request (Options.Mouse): nothing in the UI
+	// is clickable, and capturing the mouse stops the terminal from selecting text.
 	if m.opts.Mouse {
 		v.MouseMode = tea.MouseModeCellMotion
 	}
@@ -730,6 +757,17 @@ func (m *model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	// can't be swallowed by a modal overlay, source editing, or a focused form
 	// field — every one of those blocks below returns early for unmatched keys.
 	if msg.String() == "ctrl+c" {
+		// A run in flight is cancelled first; a second ctrl+c (or one after the
+		// cancel was already requested) quits.
+		if m.running && !m.cancelling {
+			return m.cancelRun()
+		}
+		// Unsaved edits: ask once. ctrl+c on the confirm itself force-quits.
+		if m.dirty && (m.confirm == nil || !m.confirm.forQuit) {
+			m.transitioned = true
+			m.confirm = m.quitConfirm()
+			return nil
+		}
 		return func() tea.Msg { return tea.Quit() }
 	}
 	// m.err is intentionally NOT cleared here: the status bar is the only
@@ -787,8 +825,7 @@ func (m *model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 			m.searchOpen = false
 			m.searchInput.Blur()
 			if it, ok := m.searchList.SelectedItem().(searchItem); ok {
-				m.loading = true
-				return loadFileCmd(m.ctx, m.mgr, it.file)
+				return m.openPath(it.file)
 			}
 			return nil
 		}
@@ -852,8 +889,11 @@ func (m *model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 			m.source.Blur()
 			if !m.dirty {
 				m.source.SetValue(m.raw)
+				return nil
 			}
-			return nil
+			// Leaving the editor with unsaved edits: re-read the request list from the
+			// buffer so the table (and the request a run picks) matches what is shown.
+			return parseBufferCmd(m.ctx, m.mgr, m.selected, m.source.Value())
 		}
 		return nil
 	}
@@ -885,11 +925,7 @@ func (m *model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		// Unsaved changes: confirm before discarding them.
 		if m.dirty {
 			m.transitioned = true
-			m.confirm = &confirmState{
-				title:  "Discard unsaved changes?",
-				body:   "Your edits to " + m.selected + " will be lost.",
-				action: func() tea.Msg { return tea.Quit() },
-			}
+			m.confirm = m.quitConfirm()
 			return nil
 		}
 		return func() tea.Msg { return tea.Quit() }
@@ -953,8 +989,7 @@ func (m *model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(msg, m.keys.Open):
 		if m.screen == screenWorkspace && m.focus == focusFiles {
 			if item, ok := m.filesList.SelectedItem().(fileItem); ok {
-				m.loading = true
-				return loadFileCmd(m.ctx, m.mgr, item.path)
+				return m.openPath(item.path)
 			}
 		}
 	case key.Matches(msg, m.keys.Edit):
@@ -970,12 +1005,18 @@ func (m *model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return m.runRequestCmd()
 	case key.Matches(msg, m.keys.RunFile):
 		return m.runFileCmd()
+	case key.Matches(msg, m.keys.StopRun):
+		if m.running {
+			return m.cancelRun()
+		}
 	case key.Matches(msg, m.keys.NewFile):
 		return m.quickCreateCmd()
 	case key.Matches(msg, m.keys.GenerateSample):
 		if len(m.files) == 0 {
-			m.loading = true
-			return scaffoldSampleCmd(m.ctx, m.mgr)
+			return m.guardDiscard("generating a sample", func(m *model) tea.Cmd {
+				m.loading = true
+				return scaffoldSampleCmd(m.ctx, m.mgr)
+			})
 		}
 	case key.Matches(msg, m.keys.DeleteFile):
 		return m.deleteCmd()
@@ -988,6 +1029,7 @@ func (m *model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		if m.screen == screenWorkspace && m.focus == focusRequests {
 			var cmd tea.Cmd
 			m.requests, cmd = m.requests.Update(msg)
+			m.refreshMetaPanels()
 			return cmd
 		}
 	}
@@ -998,6 +1040,9 @@ func (m *model) handleSecondaryKey(msg tea.KeyPressMsg) tea.Cmd {
 	if m.screen == screenHistory {
 		return m.handleHistoryKey(msg)
 	}
+	// Submitting a form starts real work (a load test, a proxy, a mock server), so
+	// it takes an explicit key: ctrl+s while editing, s otherwise. enter only moves
+	// through the fields, so it can never fire a run by accident.
 	if m.formActive {
 		switch {
 		case key.Matches(msg, m.keys.Cancel):
@@ -1005,10 +1050,17 @@ func (m *model) handleSecondaryKey(msg tea.KeyPressMsg) tea.Cmd {
 			m.focusForm(false)
 			m.preview.SetContent(m.secondaryContent())
 			return nil
-		case key.Matches(msg, m.keys.Confirm):
+		case key.Matches(msg, m.keys.Save):
 			m.transitioned = true
 			m.focusForm(false)
 			return m.submitFormCmd()
+		case key.Matches(msg, m.keys.Confirm):
+			m.transitioned = true
+			if m.formFocus < len(m.formInputs)-1 {
+				m.moveFormFocus(1)
+			}
+			m.preview.SetContent(m.secondaryContent())
+			return nil
 		case key.Matches(msg, m.keys.FormNext):
 			m.transitioned = true
 			m.moveFormFocus(1)
@@ -1024,10 +1076,14 @@ func (m *model) handleSecondaryKey(msg tea.KeyPressMsg) tea.Cmd {
 	}
 
 	switch {
-	case key.Matches(msg, m.keys.Edit):
+	case key.Matches(msg, m.keys.Edit), key.Matches(msg, m.keys.Open):
 		m.transitioned = true
 		return m.focusForm(true)
-	case key.Matches(msg, m.keys.Open), key.Matches(msg, m.keys.Confirm):
+	case key.Matches(msg, m.keys.Cancel):
+		m.transitioned = true
+		m.setScreen(screenWorkspace)
+		return nil
+	case key.Matches(msg, m.keys.Save):
 		return m.submitFormCmd()
 	case key.Matches(msg, m.keys.Refresh):
 		return m.refreshScreenCmd()
@@ -1066,8 +1122,10 @@ func (m *model) executeCommand(id string) tea.Cmd {
 	case "new-file":
 		return m.quickCreateCmd()
 	case "scaffold":
-		m.loading = true
-		return scaffoldSampleCmd(m.ctx, m.mgr)
+		return m.guardDiscard("generating a sample", func(m *model) tea.Cmd {
+			m.loading = true
+			return scaffoldSampleCmd(m.ctx, m.mgr)
+		})
 	case "delete-file":
 		return m.deleteCmd()
 	case "rename-file":
@@ -1077,7 +1135,9 @@ func (m *model) executeCommand(id string) tea.Cmd {
 		}
 		ctx, mgr, old := m.ctx, m.mgr, m.selected
 		m.prompt = newPrompt("Rename file", "new/path.http", old, func(newPath string) tea.Cmd {
-			return renameFileCmd(ctx, mgr, old, newPath, "renamed")
+			return proceed(func(m *model) tea.Cmd {
+				return m.guardDiscard("renaming", func(*model) tea.Cmd { return renameFileCmd(ctx, mgr, old, newPath, "renamed") })
+			})
 		})
 		return nil
 	case "duplicate-file":
@@ -1087,21 +1147,23 @@ func (m *model) executeCommand(id string) tea.Cmd {
 		}
 		ctx, mgr, src := m.ctx, m.mgr, m.selected
 		m.prompt = newPrompt("Duplicate file", "new/path.http", suggestCopyName(src), func(dst string) tea.Cmd {
-			return copyFileCmd(ctx, mgr, src, dst, "duplicated")
+			return proceed(func(m *model) tea.Cmd {
+				return m.guardDiscard("duplicating", func(*model) tea.Cmd { return copyFileCmd(ctx, mgr, src, dst, "duplicated") })
+			})
 		})
 		return nil
 	case "refresh":
 		return loadFilesCmd(m.ctx, m.mgr)
 	case "copy-curl":
-		return exportCmd(m.ctx, m.mgr, m.selected, m.currentRequestName(), "curl")
+		return m.exportSelected("curl")
 	case "copy-httpie":
-		return exportCmd(m.ctx, m.mgr, m.selected, m.currentRequestName(), "httpie")
+		return m.exportSelected("httpie")
 	case "copy-python":
-		return exportCmd(m.ctx, m.mgr, m.selected, m.currentRequestName(), "python")
+		return m.exportSelected("python")
 	case "copy-fetch":
-		return exportCmd(m.ctx, m.mgr, m.selected, m.currentRequestName(), "fetch")
+		return m.exportSelected("fetch")
 	case "copy-go":
-		return exportCmd(m.ctx, m.mgr, m.selected, m.currentRequestName(), "go")
+		return m.exportSelected("go")
 	case "copy-response":
 		return copyTextCmd(m.lastResponseBody(), "response body")
 	case "env-switch":
@@ -1119,9 +1181,8 @@ func (m *model) executeCommand(id string) tea.Cmd {
 		m.refreshSearchList()
 		return m.searchInput.Focus()
 	case "adhoc":
-		ctx, mgr := m.ctx, m.mgr
 		m.prompt = newPrompt("Quick request", "GET https://api.example.com/health", "", func(line string) tea.Cmd {
-			return adhocCmd(ctx, mgr, line)
+			return func() tea.Msg { return adhocStartMsg{line: line} }
 		})
 		return nil
 	case "stress-start":
@@ -1180,19 +1241,106 @@ func (m *model) executeCommand(id string) tea.Cmd {
 	return nil
 }
 
+// bufferModified reports whether the editor holds text that differs from the
+// file as it was last loaded or saved.
+func (m model) bufferModified() bool { return m.source.Value() != m.raw }
+
+// proceed wraps a guarded operation in a command so it runs on the live model
+// when a confirm dialog's action fires.
+func proceed(do func(m *model) tea.Cmd) tea.Cmd {
+	return func() tea.Msg { return proceedMsg{do: do} }
+}
+
+// guardDiscard runs do right away when the editor has no unsaved edits, and
+// otherwise asks first: do replaces the buffer (opening another file, renaming,
+// importing...), so confirming throws the edits away. what says why, e.g.
+// "opening api.http".
+func (m *model) guardDiscard(what string, do func(m *model) tea.Cmd) tea.Cmd {
+	if !m.dirty {
+		return do(m)
+	}
+	m.transitioned = true
+	m.confirm = &confirmState{
+		title:  "Discard unsaved changes?",
+		body:   "Your edits to " + m.selected + " will be lost by " + what + ".",
+		action: proceed(do),
+	}
+	return nil
+}
+
+// quitConfirm is the dialog shown when quitting with unsaved edits. forQuit lets
+// a second ctrl+c force the quit.
+func (m *model) quitConfirm() *confirmState {
+	return &confirmState{
+		title:   "Discard unsaved changes?",
+		body:    "Your edits to " + m.selected + " will be lost.\nPress ctrl+c again to quit anyway.",
+		action:  func() tea.Msg { return tea.Quit() },
+		forQuit: true,
+	}
+}
+
+// openPath loads a workspace file into the editor, asking first when that would
+// discard unsaved edits.
+func (m *model) openPath(path string) tea.Cmd {
+	return m.guardDiscard("opening "+path, func(m *model) tea.Cmd {
+		m.loading = true
+		return loadFileCmd(m.ctx, m.mgr, path)
+	})
+}
+
+// openFile installs a freshly loaded file as the current buffer.
+func (m *model) openFile(path, raw string, parsed *clientmgr.ParsedFileDTO) {
+	changed := path != m.selected
+	if changed {
+		m.lastResult = nil
+		m.lastRunIdx = -1
+	}
+	m.selected = path
+	m.raw = raw
+	m.parsed = parsed
+	m.source.SetValue(raw)
+	m.dirty = false
+	m.editing = false
+	m.source.Blur()
+	m.refreshRequestTables()
+	if changed { // a different file starts at its first request
+		m.requests.SetCursor(0)
+		m.refreshMetaPanels()
+	}
+	m.respView.setPlaceholder(m.fileSummary())
+}
+
 func (m *model) saveCmd() tea.Cmd {
 	if m.selected == "" {
 		m.err = "no file selected"
 		return nil
 	}
-	content := m.source.Value()
+	ctx, mgr, path, content, loaded := m.ctx, m.mgr, m.selected, m.source.Value(), m.raw
 	m.loading = true
 	return func() tea.Msg {
-		parsed, err := m.mgr.SaveFile(m.ctx, m.selected, content)
-		if err != nil {
-			return fileLoadedMsg{path: m.selected, err: err}
+		// Someone else (another editor, git, a generator) may have changed the file
+		// since it was loaded; saving over it would silently discard their change.
+		if disk, err := mgr.ReadFile(ctx, path); err == nil && disk != loaded {
+			return saveConflictMsg{path: path, content: content}
 		}
-		return fileLoadedMsg{path: m.selected, raw: content, parsed: parsed}
+		return writeFile(ctx, mgr, path, content)
+	}
+}
+
+// writeFile saves content to path and reports the result as a fileLoadedMsg.
+func writeFile(ctx context.Context, mgr *clientmgr.Manager, path, content string) tea.Msg {
+	parsed, err := mgr.SaveFile(ctx, path, content)
+	if err != nil {
+		return fileLoadedMsg{path: path, err: err}
+	}
+	return fileLoadedMsg{path: path, raw: content, parsed: parsed}
+}
+
+// parseBufferCmd re-parses an unsaved buffer so the request list can follow it.
+func parseBufferCmd(ctx context.Context, mgr *clientmgr.Manager, path, source string) tea.Cmd {
+	return func() tea.Msg {
+		parsed, err := mgr.ParseSource(ctx, path, source)
+		return bufferParsedMsg{path: path, parsed: parsed, err: err}
 	}
 }
 
@@ -1233,24 +1381,136 @@ func (m model) lastResponseBody() string {
 	return ""
 }
 
+// beginRun marks a run as in flight and returns the context that cancels it. It
+// reports false (and a toast command) when a run is already going: starting a
+// second one concurrently would interleave progress and results.
+func (m *model) beginRun() (context.Context, tea.Cmd, bool) {
+	if m.running {
+		return nil, m.notify(toastWarn, "a run is already in progress · x cancels it"), false
+	}
+	ctx, cancel := context.WithCancel(m.ctx)
+	m.running, m.cancelling, m.runCancel = true, false, cancel
+	m.loading = true
+	m.err = ""
+	m.progress = clientmgr.RequestProgress{}
+	return ctx, nil, true
+}
+
+// endRun clears the in-flight state and any progress left in the status bar.
+func (m *model) endRun() {
+	if m.runCancel != nil {
+		m.runCancel()
+	}
+	m.running, m.cancelling, m.runCancel = false, false, nil
+	m.loading = false
+	m.progress = clientmgr.RequestProgress{}
+}
+
+// cancelRun asks the in-flight run to stop; the runner skips what has not
+// started and the run still reports what finished.
+func (m *model) cancelRun() tea.Cmd {
+	if !m.running || m.cancelling {
+		return nil
+	}
+	m.cancelling = true
+	if m.runCancel != nil {
+		m.runCancel()
+	}
+	m.status = "cancelling run…"
+	return m.notify(toastInfo, "cancelling run · ctrl+c again to quit")
+}
+
+// finishRun applies a run's outcome to the model and returns follow-up commands.
+func (m *model) finishRun(msg runDoneMsg) []tea.Cmd {
+	var cmds []tea.Cmd
+	m.endRun()
+	// The stacked layouts show one pane at a time; bring the response (or the
+	// error) into view unless the user is typing in the source editor. Ad-hoc runs
+	// can be launched from another screen, so they also return to the workspace.
+	reveal := func() {
+		if m.editing && m.focus == focusSource {
+			return
+		}
+		if msg.adhoc {
+			m.screen = screenWorkspace
+		}
+		if msg.adhoc || (m.screen == screenWorkspace && m.width < 120) {
+			m.focus = focusResponse
+			m.syncFocus()
+		}
+	}
+	if msg.err != nil {
+		if errors.Is(msg.err, context.Canceled) {
+			m.status = "run cancelled"
+			return append(cmds, m.notify(toastInfo, "run cancelled"))
+		}
+		m.err = msg.err.Error()
+		// Show the whole message in the response pane, where it wraps, instead of
+		// only a truncated line in the status bar.
+		m.lastResult = nil
+		m.metaFromRun = false
+		m.respView.setPlaceholder(m.styles.danger.Render(msg.err.Error()))
+		m.refreshMetaPanels()
+		reveal()
+		return append(cmds, m.notify(toastError, msg.err.Error()))
+	}
+	m.err = ""
+	m.lastResult = msg.result
+	m.refreshResultViews()
+	reveal()
+	cmds = append(cmds, m.progressBar.SetPercent(1))
+	r := msg.result
+	if r.Cancelled {
+		m.status = fmt.Sprintf("run cancelled: %d passed, %d failed, %d not run", r.Passed, r.Failed, r.Skipped)
+		return append(cmds, m.notify(toastInfo, m.status))
+	}
+	m.status = fmt.Sprintf("run complete: %d passed, %d failed, %d skipped", r.Passed, r.Failed, r.Skipped)
+	sev := toastSuccess
+	if r.Failed > 0 {
+		sev = toastError
+	}
+	return append(cmds, m.notify(sev, fmt.Sprintf("%d passed · %d failed · %d skipped", r.Passed, r.Failed, r.Skipped)))
+}
+
+// startAdhoc runs the one-off request typed into the quick-request prompt.
+func (m *model) startAdhoc(line string) tea.Cmd {
+	if _, url := parseAdHocLine(line); url == "" {
+		return m.notify(toastError, "enter a URL, optionally prefixed with a method")
+	}
+	ctx, busy, ok := m.beginRun()
+	if !ok {
+		return busy
+	}
+	m.lastRunIdx = -1
+	return adhocCmd(ctx, m.mgr, line)
+}
+
+// runRequestCmd runs the highlighted request. The editor buffer is what runs: if
+// it has unsaved edits, those edits are executed, not the file on disk.
 func (m *model) runRequestCmd() tea.Cmd {
 	if m.selected == "" {
 		m.err = "no file selected"
 		return nil
 	}
 	name, index := m.currentRequestSelection()
-	execReq := clientmgr.ExecuteReq{File: m.selected}
-	if name != "" {
-		execReq.RequestName = name
-	} else {
-		// Untitled request: filter by source position (a "line N" display name
-		// can never match the runner's name filter and silently ran nothing).
-		idx := index
-		execReq.RequestIndex = &idx
+	ctx, busy, ok := m.beginRun()
+	if !ok {
+		return busy
 	}
-	m.loading = true
+	m.lastRunIdx = index
+	mgr, file := m.mgr, m.selected
+	// RequestName selects by @name; RequestIndex is the fallback for an untitled
+	// request, which a name filter can never match.
+	req := clientmgr.ExecuteReq{File: file, RequestName: name, RequestIndex: &index}
+	buffer, useBuffer := m.source.Value(), m.bufferModified()
 	return tea.Batch(m.progressBar.SetPercent(0), func() tea.Msg {
-		result, err := m.mgr.Execute(m.ctx, execReq)
+		var result *clientmgr.RunResultDTO
+		var err error
+		if useBuffer {
+			result, err = mgr.ExecuteSource(ctx, req, buffer)
+		} else {
+			result, err = mgr.Execute(ctx, req)
+		}
 		return runDoneMsg{result: result, err: err}
 	})
 }
@@ -1260,27 +1520,42 @@ func (m *model) runFileCmd() tea.Cmd {
 		m.err = "no file selected"
 		return nil
 	}
-	m.loading = true
+	ctx, busy, ok := m.beginRun()
+	if !ok {
+		return busy
+	}
+	m.lastRunIdx = -1
+	mgr, file := m.mgr, m.selected
+	buffer, useBuffer := m.source.Value(), m.bufferModified()
 	return tea.Batch(m.progressBar.SetPercent(0), func() tea.Msg {
-		result, err := m.mgr.RunFile(m.ctx, clientmgr.RunReq{File: m.selected})
+		var result *clientmgr.RunResultDTO
+		var err error
+		if useBuffer {
+			result, err = mgr.RunFileSource(ctx, clientmgr.RunReq{File: file}, buffer)
+		} else {
+			result, err = mgr.RunFile(ctx, clientmgr.RunReq{File: file})
+		}
 		return runDoneMsg{result: result, err: err}
 	})
 }
 
 func (m *model) quickCreateCmd() tea.Cmd {
-	name := fmt.Sprintf("scratch-%d.http", time.Now().Unix())
-	m.loading = true
-	return func() tea.Msg {
-		parsed, err := m.mgr.CreateFile(m.ctx, name, "### New Request\nGET https://example.com\n")
-		if err != nil {
-			return fileLoadedMsg{path: name, err: err}
+	return m.guardDiscard("creating a new file", func(m *model) tea.Cmd {
+		name := fmt.Sprintf("scratch-%d.http", time.Now().Unix())
+		ctx, mgr := m.ctx, m.mgr
+		m.loading = true
+		return func() tea.Msg {
+			parsed, err := mgr.CreateFile(ctx, name, "### New Request\nGET https://example.com\n")
+			if err != nil {
+				return fileLoadedMsg{path: name, err: err}
+			}
+			raw, err := mgr.ReadFile(ctx, name)
+			if err != nil {
+				return fileLoadedMsg{path: name, err: err}
+			}
+			return fileLoadedMsg{path: name, raw: raw, parsed: parsed}
 		}
-		raw, err := m.mgr.ReadFile(m.ctx, name)
-		if err != nil {
-			return fileLoadedMsg{path: name, err: err}
-		}
-		return fileLoadedMsg{path: name, raw: raw, parsed: parsed}
-	}
+	})
 }
 
 func (m *model) deleteCmd() tea.Cmd {
@@ -1301,66 +1576,132 @@ func (m *model) deleteCmd() tea.Cmd {
 	return nil
 }
 
+// formError reports an invalid form field.
+func (m *model) formError(err error) tea.Cmd {
+	m.err = err.Error()
+	return m.notify(toastError, err.Error())
+}
+
+// numField reads an optional numeric form field; an empty one means def.
+func numField(values map[string]string, label string, def float64) (float64, error) {
+	v := strings.TrimSpace(values[label])
+	if v == "" {
+		return def, nil
+	}
+	n, err := strconv.ParseFloat(v, 64)
+	if err != nil || n < 0 {
+		return 0, fmt.Errorf("%s must be a non-negative number", label)
+	}
+	return n, nil
+}
+
+func intField(values map[string]string, label string, def int) (int, error) {
+	n, err := numField(values, label, float64(def))
+	return int(n), err
+}
+
+// requireFields fails with a message naming the first empty required field.
+func requireFields(values map[string]string, labels ...string) error {
+	for _, l := range labels {
+		if strings.TrimSpace(values[l]) == "" {
+			return fmt.Errorf("%s is required", l)
+		}
+	}
+	return nil
+}
+
+// submitFormCmd starts what the active secondary screen's form describes. Empty
+// optional fields use the defaults the placeholders show.
 func (m *model) submitFormCmd() tea.Cmd {
 	values := m.formValues()
+	ctx, mgr := m.ctx, m.mgr
 	switch m.screen {
 	case screenStress:
-		files := selectedFiles(m.selected)
-		rate, _ := strconv.ParseFloat(values["rate"], 64)
+		rate, err := numField(values, "rate", 5)
+		if err != nil {
+			return m.formError(err)
+		}
+		vus, err := intField(values, "vus", 0)
+		if err != nil {
+			return m.formError(err)
+		}
+		maxVUs, err := intField(values, "max vus", 0)
+		if err != nil {
+			return m.formError(err)
+		}
+		req := clientmgr.StressStartReq{
+			Files:    selectedFiles(m.selected),
+			Duration: defaultString(values["duration"], "30s"),
+			Rate:     rate,
+			VUs:      vus,
+			MaxVUs:   maxVUs,
+		}
 		return func() tea.Msg {
-			err := m.mgr.StartStress(m.ctx, clientmgr.StressStartReq{
-				Files:    files,
-				Duration: defaultString(values["duration"], "30s"),
-				Rate:     rate,
-				VUs:      atoi(values["vus"], 0),
-				MaxVUs:   atoi(values["max vus"], 0),
-			})
-			return simpleMsg{kind: "stress started", err: err}
+			return simpleMsg{kind: "stress started", err: mgr.StartStress(ctx, req)}
 		}
 	case screenMock:
-		files := selectedFiles(m.selected)
+		port, err := intField(values, "port", 3000)
+		if err != nil {
+			return m.formError(err)
+		}
+		req := clientmgr.MockStartReq{Files: selectedFiles(m.selected), Port: port, Delay: values["delay"]}
 		return func() tea.Msg {
-			_, err := m.mgr.StartMock(m.ctx, clientmgr.MockStartReq{
-				Files: files,
-				Port:  atoi(values["port"], 3000),
-				Delay: values["delay"],
-			})
+			_, err := mgr.StartMock(ctx, req)
 			return simpleMsg{kind: "mock started", err: err}
 		}
 	case screenContract:
-		files := selectedFiles(m.selected)
+		if err := requireFields(values, "provider URL"); err != nil {
+			return m.formError(err)
+		}
+		req := clientmgr.ContractVerifyReq{
+			Files:        selectedFiles(m.selected),
+			ProviderURL:  values["provider URL"],
+			StateHandler: values["state handler"],
+		}
 		return func() tea.Msg {
-			results, err := m.mgr.VerifyContracts(m.ctx, clientmgr.ContractVerifyReq{
-				Files:        files,
-				ProviderURL:  values["provider URL"],
-				StateHandler: values["state handler"],
-			})
+			results, err := mgr.VerifyContracts(ctx, req)
 			return contractMsg{results: results, err: err}
 		}
 	case screenRecord:
+		if err := requireFields(values, "target URL"); err != nil {
+			return m.formError(err)
+		}
+		port, err := intField(values, "port", 8081)
+		if err != nil {
+			return m.formError(err)
+		}
+		req := clientmgr.RecordStartReq{
+			TargetURL:   values["target URL"],
+			Port:        port,
+			Deduplicate: strings.EqualFold(defaultString(values["deduplicate"], "true"), "true"),
+		}
 		return func() tea.Msg {
-			err := m.mgr.StartRecord(m.ctx, clientmgr.RecordStartReq{
-				TargetURL:   values["target URL"],
-				Port:        atoi(values["port"], 8081),
-				Deduplicate: strings.EqualFold(values["deduplicate"], "true"),
-			})
-			return simpleMsg{kind: "recording proxy started", err: err}
+			return simpleMsg{kind: "recording proxy started", err: mgr.StartRecord(ctx, req)}
 		}
 	case screenImport:
-		m.loading = true
-		return importCmd(m.ctx, m.mgr, values["format"], values["input"], values["base URL"])
+		if err := requireFields(values, "input"); err != nil {
+			return m.formError(err)
+		}
+		format, input, baseURL := defaultString(values["format"], "curl"), values["input"], values["base URL"]
+		return m.guardDiscard("importing", func(m *model) tea.Cmd {
+			m.loading = true
+			return importCmd(m.ctx, m.mgr, format, input, baseURL)
+		})
 	case screenCookies:
+		if err := requireFields(values, "domain", "name"); err != nil {
+			return m.formError(err)
+		}
+		cookie := clientmgr.CookieDTO{
+			Domain: values["domain"],
+			Path:   defaultString(values["path"], "/"),
+			Name:   values["name"],
+			Value:  values["value"],
+		}
 		return func() tea.Msg {
-			cookies, err := m.mgr.PutCookie(m.ctx, clientmgr.CookieDTO{
-				Domain: values["domain"],
-				Path:   defaultString(values["path"], "/"),
-				Name:   values["name"],
-				Value:  values["value"],
-			})
+			cookies, err := mgr.PutCookie(ctx, cookie)
 			return cookiesMsg{cookies: cookies, err: err}
 		}
 	case screenSettings:
-		ctx, mgr := m.ctx, m.mgr
 		return func() tea.Msg {
 			cfg := clientmgr.ConfigDTO{
 				DefaultEnvironment: values["default env"],
@@ -1414,14 +1755,16 @@ func (m *model) refreshScreenCmd() tea.Cmd {
 func (m *model) stopScreenCmd() tea.Cmd {
 	switch m.screen {
 	case screenStress:
+		ctx, mgr := m.ctx, m.mgr
 		return func() tea.Msg {
-			return simpleMsg{kind: "stress stopping", err: m.mgr.StopStress(m.ctx)}
+			return simpleMsg{kind: "stress stopping", err: mgr.StopStress(ctx)}
 		}
 	case screenMock:
 		return stopMockCmd(m.ctx, m.mgr)
 	case screenRecord:
+		ctx, mgr := m.ctx, m.mgr
 		return func() tea.Msg {
-			return simpleMsg{kind: "recording proxy stopping", err: m.mgr.StopRecord(m.ctx)}
+			return simpleMsg{kind: "recording proxy stopping", err: mgr.StopRecord(ctx)}
 		}
 	}
 	return nil
@@ -1483,44 +1826,49 @@ func (m *model) initFormForScreen(s screen) {
 	m.formMode = screenNames[s]
 	m.formFocus = 0
 	m.formActive = false
+	// Fields start empty; the placeholder shows the default that applies when a
+	// field is left blank (or an example of what to type), so nothing is submitted
+	// that the user did not choose.
 	switch s {
 	case screenStress:
 		m.formInputs = []textinput.Model{
-			m.newInput("duration", "30s", 12),
-			m.newInput("rate", "5", 10),
-			m.newInput("vus", "0", 8),
-			m.newInput("max vus", "0", 8),
+			m.newField("duration", "30s", 12),
+			m.newField("rate", "5", 10),
+			m.newField("vus", "0", 8),
+			m.newField("max vus", "0", 8),
 		}
 	case screenMock:
 		m.formInputs = []textinput.Model{
-			m.newInput("port", "3000", 10),
-			m.newInput("delay", "", 12),
+			m.newField("port", "3000", 10),
+			m.newField("delay", "none", 12),
 		}
 	case screenContract:
 		m.formInputs = []textinput.Model{
-			m.newInput("provider URL", "http://localhost:3000", 44),
-			m.newInput("state handler", "", 44),
+			m.newField("provider URL", "http://localhost:3000", 44),
+			m.newField("state handler", "optional", 44),
 		}
 	case screenRecord:
 		m.formInputs = []textinput.Model{
-			m.newInput("target URL", "http://localhost:3000", 44),
-			m.newInput("port", "8081", 10),
-			m.newInput("deduplicate", "true", 10),
+			m.newField("target URL", "http://localhost:3000", 44),
+			m.newField("port", "8081", 10),
+			m.newField("deduplicate", "true", 10),
 		}
 	case screenImport:
 		m.formInputs = []textinput.Model{
-			m.newInput("format", "curl", 12),
-			m.newInput("input", "curl https://example.com", 64),
-			m.newInput("base URL", "", 44),
+			m.newField("format", "curl", 12),
+			m.newField("input", "a curl command, a file path or pasted JSON", 64),
+			m.newField("base URL", "optional", 44),
 		}
 	case screenCookies:
 		m.formInputs = []textinput.Model{
-			m.newInput("domain", "example.com", 30),
-			m.newInput("path", "/", 12),
-			m.newInput("name", "session", 24),
-			m.newInput("value", "", 48),
+			m.newField("domain", "example.com", 30),
+			m.newField("path", "/", 12),
+			m.newField("name", "session", 24),
+			m.newField("value", "", 48),
 		}
 	case screenSettings:
+		// Settings edits the live configuration, so its fields start from the
+		// current values rather than empty.
 		timeout := strconv.Itoa(m.config.Timeout)
 		if timeout == "0" {
 			timeout = ""
@@ -1546,6 +1894,13 @@ func (m *model) initFormForScreen(s screen) {
 		m.formInputs = nil
 	}
 	m.focusForm(false)
+}
+
+// newField is an empty form field that shows placeholder as its hint.
+func (m *model) newField(label, placeholder string, width int) textinput.Model {
+	input := m.newInput(label, "", width)
+	input.Placeholder = placeholder
+	return input
 }
 
 func (m *model) newInput(label, value string, width int) textinput.Model {
@@ -1626,9 +1981,10 @@ type wsGeom struct {
 	mainW    int
 	leftW    int
 	rightW   int
-	reqH     int // requests panel
-	midH     int // source/response panel
-	tblH     int // headers/assertions panels
+	reqH     int  // requests panel
+	midH     int  // source/response panel
+	tblH     int  // headers/assertions panels
+	meta     bool // room for the headers/assertions row; dropped on short terminals
 }
 
 func (m model) geom() wsGeom {
@@ -1639,9 +1995,20 @@ func (m model) geom() wsGeom {
 	g.mainW = max(30, w-g.sidebarW)
 	g.leftW = g.mainW / 2
 	g.rightW = g.mainW - g.leftW
-	g.reqH = clamp(g.bodyH/4, 5, 9)
+	// The request list needs its header plus a few rows, so it gets a third of
+	// the body (a panel's inner height is its height minus border and title).
+	g.reqH = clamp(g.bodyH/3, 6, 9)
 	g.tblH = clamp(g.bodyH/4, 5, 9)
-	g.midH = max(4, g.bodyH-g.reqH-g.tblH)
+	// On a short terminal (80x24 has 21 body rows) the headers/assertions row would
+	// leave source and response a handful of lines; those details are on the
+	// response tabs anyway, so drop the row and give the room to the main panels.
+	g.meta = g.bodyH >= 27
+	if g.meta {
+		g.midH = max(4, g.bodyH-g.reqH-g.tblH)
+	} else {
+		g.tblH = 0
+		g.midH = max(4, g.bodyH-g.reqH)
+	}
 	return g
 }
 
@@ -1671,32 +2038,32 @@ func (m *model) resize() {
 		innerH := max(1, g.bodyH-3)
 		m.filesList.SetSize(innerW, innerH)
 		m.requests.SetWidth(innerW)
-		m.requests.SetHeight(max(1, innerH-1))
+		m.requests.SetHeight(max(2, innerH))
 		m.source.SetWidth(innerW)
 		m.source.SetHeight(innerH)
 		m.respView.setSize(innerW, innerH)
 	case m.width < 120: // medium: stacked main column, full width
 		m.filesList.SetSize(g.sidebarW-4, g.bodyH-3)
 		m.requests.SetWidth(g.mainW - 4)
-		m.requests.SetHeight(max(1, g.reqH-4))
+		m.requests.SetHeight(max(2, g.reqH-3))
 		m.source.SetWidth(g.mainW - 4)
 		m.source.SetHeight(max(1, g.midH-3))
 		m.respView.setSize(g.mainW-4, max(1, g.midH-3))
 		m.headers.SetWidth(g.leftW - 4)
-		m.headers.SetHeight(max(1, g.tblH-4))
+		m.headers.SetHeight(max(2, g.tblH-3))
 		m.assertions.SetWidth(g.rightW - 4)
-		m.assertions.SetHeight(max(1, g.tblH-4))
+		m.assertions.SetHeight(max(2, g.tblH-3))
 	default: // wide: source and response side by side
 		m.filesList.SetSize(g.sidebarW-4, g.bodyH-3)
 		m.requests.SetWidth(g.mainW - 4)
-		m.requests.SetHeight(max(1, g.reqH-4))
+		m.requests.SetHeight(max(2, g.reqH-3))
 		m.source.SetWidth(g.leftW - 4)
 		m.source.SetHeight(max(1, g.midH-3))
 		m.respView.setSize(g.rightW-4, max(1, g.midH-3))
 		m.headers.SetWidth(g.leftW - 4)
-		m.headers.SetHeight(max(1, g.tblH-4))
+		m.headers.SetHeight(max(2, g.tblH-3))
 		m.assertions.SetWidth(g.rightW - 4)
-		m.assertions.SetHeight(max(1, g.tblH-4))
+		m.assertions.SetHeight(max(2, g.tblH-3))
 	}
 }
 
@@ -1736,10 +2103,10 @@ func (m *model) refreshEnvList() {
 	}
 }
 
+// refreshRequestTables rebuilds the request list from the parsed file and then
+// the headers/assertions panels from the selected request.
 func (m *model) refreshRequestTables() {
 	var rows []table.Row
-	var headerRows []table.Row
-	var assertionRows []table.Row
 	if m.parsed != nil {
 		for _, r := range m.parsed.Requests {
 			name := r.Name
@@ -1748,19 +2115,13 @@ func (m *model) refreshRequestTables() {
 			}
 			rows = append(rows, table.Row{name, r.Method, r.URL})
 		}
-		if len(m.parsed.Requests) > 0 {
-			r := m.parsed.Requests[0]
-			for _, h := range r.Headers {
-				headerRows = append(headerRows, table.Row{h.Key, h.Value})
-			}
-			for _, a := range r.Assertions {
-				assertionRows = append(assertionRows, table.Row{a.Subject, a.Operator, fmt.Sprint(a.Expected)})
-			}
-		}
 	}
 	m.requests.SetRows(rows)
-	m.headers.SetRows(headerRows)
-	m.assertions.SetRows(assertionRows)
+	// Keep the cursor on a real row (the table leaves it at -1 while it is empty).
+	if c := m.requests.Cursor(); c < 0 || c >= len(rows) {
+		m.requests.SetCursor(max(0, len(rows)-1))
+	}
+	m.refreshMetaPanels()
 }
 
 func (m *model) refreshResultViews() {
@@ -1768,10 +2129,47 @@ func (m *model) refreshResultViews() {
 		return
 	}
 	m.respView.setResult(m.lastResult)
-	var headerRows []table.Row
-	var assertionRows []table.Row
-	if len(m.lastResult.Results) > 0 {
-		rr := m.lastResult.Results[len(m.lastResult.Results)-1]
+	m.refreshMetaPanels()
+}
+
+// resultFor finds the result of the request at source index idx in the last run,
+// or nil when that request was not part of it. Named requests match by name;
+// untitled ones by position (the run's single request, or the same slot in a
+// whole-file run).
+func (m model) resultFor(idx int) *clientmgr.RequestResultDTO {
+	if m.lastResult == nil || m.parsed == nil || idx < 0 || idx >= len(m.parsed.Requests) {
+		return nil
+	}
+	rs := m.lastResult.Results
+	if name := m.parsed.Requests[idx].Name; name != "" {
+		for i := range rs {
+			if rs[i].Name == name {
+				return &rs[i]
+			}
+		}
+		return nil
+	}
+	if m.lastRunIdx >= 0 {
+		if idx == m.lastRunIdx && len(rs) == 1 {
+			return &rs[0]
+		}
+		return nil
+	}
+	if len(rs) == len(m.parsed.Requests) && rs[idx].Name == "" {
+		return &rs[idx]
+	}
+	return nil
+}
+
+// refreshMetaPanels fills the headers and assertions panels for the request
+// highlighted in the request list: what its last run returned if it has run
+// since the file was opened, else what the file declares for it.
+func (m *model) refreshMetaPanels() {
+	var headerRows, assertionRows []table.Row
+	m.metaFromRun = false
+	idx := m.requests.Cursor()
+	if rr := m.resultFor(idx); rr != nil {
+		m.metaFromRun = true
 		if rr.Response != nil {
 			for _, k := range sortedStringKeys(rr.Response.Headers) {
 				headerRows = append(headerRows, table.Row{k, rr.Response.Headers[k]})
@@ -1783,6 +2181,14 @@ func (m *model) refreshResultViews() {
 				state = "pass"
 			}
 			assertionRows = append(assertionRows, table.Row{a.Subject, a.Operator, state + " " + fmt.Sprint(a.Expected)})
+		}
+	} else if m.parsed != nil && idx >= 0 && idx < len(m.parsed.Requests) {
+		r := m.parsed.Requests[idx]
+		for _, h := range r.Headers {
+			headerRows = append(headerRows, table.Row{h.Key, h.Value})
+		}
+		for _, a := range r.Assertions {
+			assertionRows = append(assertionRows, table.Row{a.Subject, a.Operator, fmt.Sprint(a.Expected)})
 		}
 	}
 	m.headers.SetRows(headerRows)
@@ -1817,7 +2223,9 @@ func (m *model) handleEvent(ev clientmgr.Event) []tea.Cmd {
 		}
 		return cmds
 	case "request_progress":
-		if p, ok := ev.Payload.(clientmgr.RequestProgress); ok {
+		// Events travel on their own channel, so a late one can arrive after the
+		// run finished; only a run in flight owns the progress display.
+		if p, ok := ev.Payload.(clientmgr.RequestProgress); ok && m.running {
 			m.progress = p
 			if p.Total > 0 {
 				_ = m.progressBar.SetPercent(float64(p.Index) / float64(p.Total))
@@ -1965,35 +2373,51 @@ func (m model) narrowWorkspace() string {
 }
 
 func (m model) mediumMain(g wsGeom) string {
-	var content string
-	switch m.focus {
-	case focusRequests:
-		content = m.requests.View()
-	case focusResponse:
+	content := m.source.View()
+	if m.focus == focusResponse {
 		content = m.respView.view()
-	default:
-		content = m.source.View()
 	}
-	meta := lipgloss.JoinHorizontal(lipgloss.Top,
-		m.panel("headers", m.headers.View(), g.leftW, g.tblH, false),
-		m.panel("assertions", m.assertions.View(), g.rightW, g.tblH, false),
-	)
-	return lipgloss.JoinVertical(lipgloss.Left,
+	parts := []string{
 		m.panel("requests", m.requests.View(), g.mainW, g.reqH, m.focus == focusRequests),
-		m.panel("main", content, g.mainW, g.midH, m.focus == focusSource || m.focus == focusResponse),
-		meta,
-	)
+		m.panel(m.mainTitle(), content, g.mainW, g.midH, m.focus == focusSource || m.focus == focusResponse),
+	}
+	if g.meta {
+		parts = append(parts, m.metaPanels(g))
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
 func (m model) wideMain(g wsGeom) string {
 	requests := m.panel("requests", m.requests.View(), g.mainW, g.reqH, m.focus == focusRequests)
 	source := m.panel("source", m.source.View(), g.leftW, g.midH, m.focus == focusSource)
 	response := m.panel("response", m.respView.view(), g.rightW, g.midH, m.focus == focusResponse)
-	tables := lipgloss.JoinHorizontal(lipgloss.Top,
-		m.panel("headers", m.headers.View(), g.leftW, g.tblH, false),
-		m.panel("assertions", m.assertions.View(), g.rightW, g.tblH, false),
+	parts := []string{requests, lipgloss.JoinHorizontal(lipgloss.Top, source, response)}
+	if g.meta {
+		parts = append(parts, m.metaPanels(g))
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
+}
+
+// metaPanels is the headers/assertions row under the main panels. It follows the
+// highlighted request: the response it got on its last run, else what the file
+// declares for it.
+func (m model) metaPanels(g wsGeom) string {
+	headers, assertions := "headers", "assertions"
+	if m.metaFromRun {
+		headers, assertions = "response headers", "assertion results"
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Top,
+		m.panel(headers, m.headers.View(), g.leftW, g.tblH, false),
+		m.panel(assertions, m.assertions.View(), g.rightW, g.tblH, false),
 	)
-	return lipgloss.JoinVertical(lipgloss.Left, requests, lipgloss.JoinHorizontal(lipgloss.Top, source, response), tables)
+}
+
+// mainTitle names the medium layout's shared panel after what it shows.
+func (m model) mainTitle() string {
+	if m.focus == focusResponse {
+		return "response"
+	}
+	return "source"
 }
 
 func (m model) secondaryView() string {
@@ -2055,24 +2479,27 @@ func (m model) formView() string {
 }
 
 func (m model) secondaryHelp() string {
-	action := "enter submit"
+	verb, extra := "submit", ""
 	switch m.screen {
 	case screenStress:
-		action = "enter/s start stress   x stop"
+		verb, extra = "start stress", "   x stop"
 	case screenMock:
-		action = "enter/s start mock   x stop"
+		verb, extra = "start mock", "   x stop"
 	case screenContract:
-		action = "enter/s verify selected file"
+		verb = "verify the selected file"
 	case screenRecord:
-		action = "enter/s start recorder   x stop   E export"
+		verb, extra = "start recorder", "   x stop   E export"
 	case screenImport:
-		action = "enter/s import into scratch file"
+		verb = "import into a scratch file"
 	case screenCookies:
-		action = "enter/s add cookie   D delete matching cookie"
+		verb, extra = "add cookie", "   D delete matching cookie"
 	case screenSettings:
-		action = "enter/s save config & set var"
+		verb = "save config & set var"
 	}
-	return m.styles.help.Render("e edit fields   " + action + "   esc cancel")
+	if m.formActive {
+		return m.styles.help.Render("tab/enter next field   ctrl+s " + verb + "   esc leave fields")
+	}
+	return m.styles.help.Render("e edit fields   s " + verb + extra + "   esc back")
 }
 
 // panel draws a bordered box of exactly width×height cells (border included)
@@ -2111,10 +2538,6 @@ func (m model) fileSummary() string {
 	return sb.String()
 }
 
-// maxResponseBodyRender bounds how much of a body the response pane renders so a
-// huge payload never stalls the highlighter or the viewport.
-const maxResponseBodyRender = 24000
-
 // humanBytes formats a byte count in a compact, human-readable form.
 func humanBytes(n int64) string {
 	const unit = 1024
@@ -2135,7 +2558,7 @@ func (m model) stressContent() string {
 		if m.stressResult != nil {
 			return m.stressResultContent()
 		}
-		return "No stress test running.\n\nUse the form (e edit) or the command palette to start a load test.\nQuick start: 30s at 5 RPS on the selected file."
+		return "No stress test running.\n\nPress s to start a load test on the selected file with the form's values\n(blank fields use the defaults shown: 30s at 5 RPS), e to edit them first,\nor use the command palette."
 	}
 	stats := status.Stats
 	// Progress is elapsed/configured-duration, not the hardcoded 30s. Read the
@@ -2197,7 +2620,7 @@ func (m model) stressResultContent() string {
 func (m model) mockContent() string {
 	status := m.mock
 	if !status.Running && len(status.Routes) == 0 {
-		return "No mock server running.\n\nPress e to edit the form (port, delay), then enter to start it.\nRoutes are served from the selected .http file's requests."
+		return "No mock server running.\n\nPress e to edit the form (port, delay), then s to start it.\nRoutes are served from the selected .http file's requests."
 	}
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "Running: %v\nPort: %d\nRoutes: %d\n\n", status.Running, status.Port, len(status.Routes))
@@ -2209,7 +2632,7 @@ func (m model) mockContent() string {
 
 func (m model) contractContent() string {
 	if len(m.contracts) == 0 {
-		return "No contract verification result loaded.\nSelect a file, edit provider URL, then press enter to verify."
+		return "No contract verification result loaded.\nSelect a file, press e to enter the provider URL, then s to verify."
 	}
 	var sb strings.Builder
 	for _, result := range m.contracts {
@@ -2235,7 +2658,7 @@ func (m model) contractContent() string {
 func (m model) recordContent() string {
 	status := m.record
 	if !status.Running && status.Count == 0 {
-		return "No recording proxy running.\n\nPress e to set the target URL and proxy port, then enter to start it.\nPoint your client at http://localhost:PORT to capture traffic, then E to export."
+		return "No recording proxy running.\n\nPress e to set the target URL and proxy port, then s to start it.\nPoint your client at http://localhost:PORT to capture traffic, then E to export."
 	}
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "Running: %v\nTarget: %s\nPort: %d\nCaptured: %d\n\n", status.Running, status.TargetURL, status.Port, status.Count)
@@ -2263,15 +2686,28 @@ func (m model) importContent() string {
 	// viewport clips rather than soft-wraps, so a single long sentence would lose
 	// its tail at the right border.
 	return "Import supports cURL, Insomnia, OpenAPI, and Postman through the manager.\n\n" +
-		"The command palette provides quick import actions;\n" +
+		"format: curl, insomnia, openapi or postman. input: the curl command,\n" +
+		"a file path, or pasted JSON. Press s to import;\n" +
 		"imported content opens in a scratch file for review before saving."
 }
 
 func (m model) cookiesContent() string {
+	// The store is one file in the home directory, not part of the workspace: say
+	// so, because every workspace opened in studio shows and edits the same one.
+	where := "~/.hitspec/tui-cookies.json"
+	if p := m.mgr.CookieStorePath(); p != "" {
+		where = p
+		if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(p, home+string(os.PathSeparator)) {
+			where = "~" + strings.TrimPrefix(p, home)
+		}
+	}
+	head := m.styles.muted.Render("Global store "+where+", shared by every workspace.\n"+
+		"For inspection only: these cookies are not sent with requests.") + "\n\n"
 	if len(m.cookies) == 0 {
-		return "No local cookies stored.\nCookies captured from Set-Cookie headers are saved here for inspection only."
+		return head + "No local cookies stored.\nCookies captured from Set-Cookie headers are saved here for inspection only."
 	}
 	var sb strings.Builder
+	sb.WriteString(head)
 	for _, c := range m.cookies {
 		fmt.Fprintf(&sb, "%s\t%s\t%s=%s\n", c.Domain, c.Path, c.Name, c.Value)
 	}

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"unicode/utf8"
 
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
@@ -32,6 +31,7 @@ type responseViewer struct {
 	vp          viewport.Model
 	tab         responseTab
 	result      *clientmgr.RunResultDTO
+	sel         int // index into result.Results of the request the Body/Headers tabs show
 	placeholder string
 	styles      styles
 	color       bool
@@ -41,6 +41,7 @@ type responseViewer struct {
 func newResponseViewer(s styles, color bool) responseViewer {
 	vp := viewport.New(viewport.WithWidth(60), viewport.WithHeight(18))
 	vp.MouseWheelEnabled = true
+	vp.SoftWrap = true // long lines and long error messages wrap instead of being cut
 	r := responseViewer{vp: vp, styles: s, color: color, placeholder: "No response yet."}
 	r.vp.SetContent(r.placeholder)
 	return r
@@ -55,6 +56,36 @@ func (r *responseViewer) setSize(w, h int) {
 // setResult installs a run result and renders the active tab.
 func (r *responseViewer) setResult(result *clientmgr.RunResultDTO) {
 	r.result = result
+	r.sel = defaultSelection(result)
+	r.rebuild()
+}
+
+// defaultSelection picks the request a fresh result opens on: the first one that
+// failed (what a run is usually opened to find out), else the last one that got a
+// response, else the last one.
+func defaultSelection(result *clientmgr.RunResultDTO) int {
+	if result == nil || len(result.Results) == 0 {
+		return 0
+	}
+	for i, rr := range result.Results {
+		if !rr.Skipped && !rr.Passed {
+			return i
+		}
+	}
+	for i := len(result.Results) - 1; i >= 0; i-- {
+		if result.Results[i].Response != nil {
+			return i
+		}
+	}
+	return len(result.Results) - 1
+}
+
+// selectRelative moves the shown request by delta within a multi-request result.
+func (r *responseViewer) selectRelative(delta int) {
+	if r.result == nil || len(r.result.Results) < 2 {
+		return
+	}
+	r.sel = clamp(r.sel+delta, 0, len(r.result.Results)-1)
 	r.rebuild()
 }
 
@@ -101,6 +132,10 @@ func (r *responseViewer) rebuild() {
 
 func (r responseViewer) hasResult() bool { return r.result != nil }
 
+// multiResult reports whether the shown result holds several requests (a file
+// run), so the viewer can switch between them.
+func (r responseViewer) multiResult() bool { return r.result != nil && len(r.result.Results) > 1 }
+
 func (r responseViewer) view() string {
 	if r.result == nil {
 		return r.vp.View()
@@ -145,18 +180,46 @@ func (r responseViewer) tabContent() string {
 	return ""
 }
 
-// primary returns the last request result that produced a response, falling back
-// to the final result. Body/Headers tabs inspect this one.
+// primary returns the request result the Body and Headers tabs inspect.
 func (r responseViewer) primary() *clientmgr.RequestResultDTO {
-	for i := len(r.result.Results) - 1; i >= 0; i-- {
-		if r.result.Results[i].Response != nil {
-			return &r.result.Results[i]
-		}
+	if r.sel >= 0 && r.sel < len(r.result.Results) {
+		return &r.result.Results[r.sel]
 	}
-	if len(r.result.Results) > 0 {
-		return &r.result.Results[len(r.result.Results)-1]
+	if n := len(r.result.Results); n > 0 {
+		return &r.result.Results[n-1]
 	}
 	return nil
+}
+
+// resultTitle names a request result: its @name, else "METHOD URL" of what was
+// sent, else its position.
+func resultTitle(rr clientmgr.RequestResultDTO, i int) string {
+	switch {
+	case rr.Name != "":
+		return rr.Name
+	case rr.Request != nil && rr.Request.URL != "":
+		return rr.Request.Method + " " + rr.Request.URL
+	}
+	return fmt.Sprintf("request %d", i+1)
+}
+
+// requestBar tells which request of a multi-request run the tab shows and how to
+// move between them.
+func (r responseViewer) requestBar() string {
+	n := len(r.result.Results)
+	if n < 2 {
+		return ""
+	}
+	rr := r.result.Results[r.sel]
+	mark := r.styles.success.Render("✓")
+	switch {
+	case rr.Skipped:
+		mark = r.styles.warn.Render("⊘")
+	case !rr.Passed:
+		mark = r.styles.danger.Render("✗")
+	}
+	return fmt.Sprintf("%s %s %s\n%s\n\n", r.styles.accent.Render(fmt.Sprintf("request %d/%d", r.sel+1, n)),
+		mark, resultTitle(rr, r.sel), r.styles.muted.Render("< > or , . switch request"))
 }
 
 func (r responseViewer) bodyTab() string {
@@ -165,31 +228,26 @@ func (r responseViewer) bodyTab() string {
 		return "No requests executed."
 	}
 	var sb strings.Builder
+	sb.WriteString(r.requestBar())
 	if p.Response != nil {
 		sb.WriteString(statusLine(r.styles, p.Response) + "\n\n")
 		if p.Response.Body != "" {
-			body := p.Response.Body
-			truncated := false
-			if len(body) > maxResponseBodyRender {
-				// Back up to a rune boundary so we never hand invalid UTF-8 to
-				// the highlighter or the viewport.
-				cut := maxResponseBodyRender
-				for cut > 0 && !utf8.RuneStart(body[cut]) {
-					cut--
-				}
-				body = body[:cut]
-				truncated = true
-			}
-			ct := headerValue(p.Response.Headers, "Content-Type")
-			sb.WriteString(formatBody(body, ct, r.color))
-			if truncated {
-				sb.WriteString("\n" + r.styles.muted.Render("…[truncated]"))
+			text, lexer, cut := prepareBody(p.Response.Body, headerValue(p.Response.Headers, "Content-Type"))
+			sb.WriteString(highlight(text, lexer, r.color))
+			if cut != nil {
+				sb.WriteString("\n" + r.styles.muted.Render(cut.String()))
 			}
 		} else {
 			sb.WriteString(r.styles.muted.Render("(empty body)"))
 		}
 	} else if p.Error != "" {
 		sb.WriteString(r.styles.danger.Render(p.Error))
+	} else if p.Skipped {
+		reason := p.SkipReason
+		if reason == "" {
+			reason = "skipped"
+		}
+		sb.WriteString(r.styles.warn.Render("skipped: " + reason))
 	} else {
 		sb.WriteString(r.styles.muted.Render("No response."))
 	}
@@ -206,6 +264,7 @@ func (r responseViewer) headersTab() string {
 		return r.styles.muted.Render("No response headers.")
 	}
 	var sb strings.Builder
+	sb.WriteString(r.requestBar())
 	for _, k := range keys {
 		sb.WriteString(r.styles.accent.Render(k) + ": " + p.Response.Headers[k] + "\n")
 	}
@@ -215,11 +274,11 @@ func (r responseViewer) headersTab() string {
 func (r responseViewer) assertionsTab() string {
 	var sb strings.Builder
 	total, passed := 0, 0
-	for _, rr := range r.result.Results {
+	for i, rr := range r.result.Results {
 		if len(rr.Assertions) == 0 {
 			continue
 		}
-		sb.WriteString(r.styles.title.Render(rr.Name) + "\n")
+		sb.WriteString(r.styles.title.Render(resultTitle(rr, i)) + "\n")
 		for _, a := range rr.Assertions {
 			total++
 			glyph := r.styles.danger.Render("✗")
@@ -247,7 +306,7 @@ func (r responseViewer) timingTab() string {
 		r.styles.success.Render(fmt.Sprint(r.result.Passed)),
 		r.styles.danger.Render(fmt.Sprint(r.result.Failed)),
 		r.styles.warn.Render(fmt.Sprint(r.result.Skipped)))
-	for _, rr := range r.result.Results {
+	for i, rr := range r.result.Results {
 		state := r.styles.success.Render("✓")
 		switch {
 		case rr.Skipped:
@@ -259,7 +318,14 @@ func (r responseViewer) timingTab() string {
 		if rr.Response != nil {
 			extra = fmt.Sprintf("  %d  %s", rr.Response.StatusCode, humanBytes(rr.Response.Size))
 		}
-		fmt.Fprintf(&sb, "%s %-28s %6.0fms%s\n", state, truncateText(rr.Name, 28), rr.Duration, extra)
+		cursor := ""
+		if len(r.result.Results) > 1 { // mark the request the Body/Headers tabs show
+			cursor = " "
+			if i == r.sel {
+				cursor = r.styles.accent.Render("▸")
+			}
+		}
+		fmt.Fprintf(&sb, "%s%s %-28s %6.0fms%s\n", cursor, state, truncateText(resultTitle(rr, i), 28), rr.Duration, extra)
 	}
 	return sb.String()
 }
@@ -267,12 +333,12 @@ func (r responseViewer) timingTab() string {
 func (r responseViewer) capturesTab() string {
 	var sb strings.Builder
 	found := false
-	for _, rr := range r.result.Results {
+	for i, rr := range r.result.Results {
 		if len(rr.Captures) == 0 {
 			continue
 		}
 		found = true
-		sb.WriteString(r.styles.title.Render(rr.Name) + "\n")
+		sb.WriteString(r.styles.title.Render(resultTitle(rr, i)) + "\n")
 		for _, k := range sortedAnyKeys(rr.Captures) {
 			fmt.Fprintf(&sb, "  %s = %v\n", r.styles.accent.Render(k), rr.Captures[k])
 		}

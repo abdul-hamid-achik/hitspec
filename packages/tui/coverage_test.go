@@ -40,6 +40,7 @@ func TestSaveCmd(t *testing.T) {
 	}
 	m := newModel(ctx, mgr, Options{})
 	m.selected = "s.http"
+	m.raw = "### A\nGET https://x\n" // what the editor loaded
 	m.source.SetValue("### B\nGET https://y\n")
 
 	msg := m.saveCmd()().(fileLoadedMsg)
@@ -153,6 +154,7 @@ func TestRefreshScreenCmd(t *testing.T) {
 
 func TestHandleEventProgress(t *testing.T) {
 	m := newModel(context.Background(), newTestManager(t), Options{})
+	m.running = true // progress only counts while a run is in flight
 	m.handleEvent(clientmgr.Event{Type: "request_progress", Payload: clientmgr.RequestProgress{Total: 3, Index: 1, RequestName: "x"}})
 	if m.progress.Total != 3 || m.progress.Index != 1 {
 		t.Fatalf("progress not updated: %+v", m.progress)

@@ -75,7 +75,11 @@ func TestRenamePromptWiring(t *testing.T) {
 		t.Fatalf("prompt prefilled with %q, want a.http", m.prompt.input.Value())
 	}
 	// Simulate the user editing the value and submitting (what Enter does).
-	msg := m.prompt.onSubmit("renamed.http")().(fileRenamedMsg)
+	next, cmd := m.Update(m.prompt.onSubmit("renamed.http")())
+	if next.(model).confirm != nil {
+		t.Fatal("a clean buffer must not ask before renaming")
+	}
+	msg := cmd().(fileRenamedMsg)
 	if msg.err != nil || msg.path != "renamed.http" {
 		t.Fatalf("submit -> %+v", msg)
 	}

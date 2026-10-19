@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/clientmgr"
 )
 
 const sampleHTTP = `### Ping
@@ -17,7 +19,7 @@ func TestExportTextCurl(t *testing.T) {
 	if _, err := mgr.CreateFile(ctx, "sample.http", sampleHTTP); err != nil {
 		t.Fatalf("create file: %v", err)
 	}
-	out, err := exportText(ctx, mgr, "sample.http", "", "curl")
+	out, err := exportText(ctx, mgr, clientmgr.ExportSelectionReq{File: "sample.http", Format: "curl"})
 	if err != nil {
 		t.Fatalf("exportText: %v", err)
 	}
@@ -28,7 +30,7 @@ func TestExportTextCurl(t *testing.T) {
 
 func TestExportTextRequiresFile(t *testing.T) {
 	mgr := newTestManager(t)
-	if _, err := exportText(context.Background(), mgr, "", "", "curl"); err == nil {
+	if _, err := exportText(context.Background(), mgr, clientmgr.ExportSelectionReq{Format: "curl"}); err == nil {
 		t.Fatal("expected an error when no file is provided")
 	}
 }
@@ -39,7 +41,7 @@ func TestExportCmdEmitsCopyMsg(t *testing.T) {
 	if _, err := mgr.CreateFile(ctx, "sample.http", sampleHTTP); err != nil {
 		t.Fatalf("create file: %v", err)
 	}
-	msg := exportCmd(ctx, mgr, "sample.http", "", "curl")()
+	msg := exportCmd(ctx, mgr, clientmgr.ExportSelectionReq{File: "sample.http", Format: "curl"})()
 	cm, ok := msg.(copyMsg)
 	if !ok {
 		t.Fatalf("expected copyMsg, got %T", msg)
@@ -58,7 +60,7 @@ func TestExportCmdErrorsForMissingRequest(t *testing.T) {
 	if _, err := mgr.CreateFile(ctx, "sample.http", sampleHTTP); err != nil {
 		t.Fatalf("create file: %v", err)
 	}
-	msg := exportCmd(ctx, mgr, "sample.http", "does-not-exist", "curl")()
+	msg := exportCmd(ctx, mgr, clientmgr.ExportSelectionReq{File: "sample.http", RequestName: "does-not-exist", Format: "curl"})()
 	cm := msg.(copyMsg)
 	if cm.err == nil {
 		t.Fatal("expected error for unknown request name")

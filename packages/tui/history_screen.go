@@ -70,6 +70,10 @@ func (m *model) handleHistoryKey(msg tea.KeyPressMsg) tea.Cmd {
 	}
 
 	switch {
+	case key.Matches(msg, m.keys.Cancel):
+		m.transitioned = true
+		m.setScreen(screenWorkspace)
+		return nil
 	case key.Matches(msg, m.keys.Refresh):
 		return loadHistoryCmd(m.ctx, m.mgr)
 	case key.Matches(msg, m.keys.Open), key.Matches(msg, m.keys.Confirm):

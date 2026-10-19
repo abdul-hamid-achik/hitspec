@@ -122,7 +122,7 @@ func TestFileopsCmds(t *testing.T) {
 func TestBodyTabTruncatesHugeBody(t *testing.T) {
 	rv := newResponseViewer(newStyles(defaultPalette()), false)
 	rv.tab = respBody
-	huge := strings.Repeat("x", maxResponseBodyRender+5000)
+	huge := strings.Repeat("x", maxBodyBytes+5000)
 	rv.setResult(&clientmgr.RunResultDTO{Results: []clientmgr.RequestResultDTO{{
 		Name: "big", Response: &clientmgr.HTTPResponseDTO{StatusCode: 200, Status: "200 OK", Body: huge},
 	}}})

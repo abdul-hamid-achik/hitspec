@@ -112,3 +112,16 @@ func TestSilenceStdio(t *testing.T) {
 		t.Errorf("std logger not restored: %q", got)
 	}
 }
+
+// TestStudioMouseCaptureIsOptIn: capturing the mouse stops the terminal from
+// selecting text, and nothing in studio is clickable, so it must be off unless
+// asked for.
+func TestStudioMouseCaptureIsOptIn(t *testing.T) {
+	f := studioCmd.Flags().Lookup("mouse")
+	if f == nil {
+		t.Fatal("studio has no --mouse flag")
+	}
+	if f.DefValue != "false" {
+		t.Fatalf("--mouse defaults to %q, want false", f.DefValue)
+	}
+}

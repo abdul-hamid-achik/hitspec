@@ -5,13 +5,13 @@
 │                       ││  Name                    Method    URL                                  │
 │   1 item              ││            ┌──────────────────────┐                                     │
 │                       ││            │    Switch Theme      │                                     │
-│ │ api.http            │└────────────│                      │─────────────────────────────────────┘
-│ │ api.http  1 reques… │┌────────────│   5 items            │─────────────────────────────────────┐
-│                       ││ main       │                      │                                     │
-│                       ││   1 Open a │ │ ● Nord             │                                     │
-│                       ││            │ │ color theme        │                                     │
+│ │ api.http            ││            │                      │                                     │
+│ │ api.http  1 reques… ││            │   5 items            │                                     │
 │                       ││            │                      │                                     │
-│                       ││            │     Catppuccin Mocha │                                     │
+│                       │└────────────│ │ ● Nord             │─────────────────────────────────────┘
+│                       │┌────────────│ │ color theme        │─────────────────────────────────────┐
+│                       ││ source     │                      │                                     │
+│                       ││   1 Open a │     Catppuccin Mocha │                                     │
 │                       ││            │   color theme        │                                     │
 │                       ││            │                      │                                     │
 │                       ││            │     Dracula          │                                     │
