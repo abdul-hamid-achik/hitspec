@@ -10,19 +10,20 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/portprobe"
 )
 
 // PrometheusExporter exports metrics in Prometheus text format
 type PrometheusExporter struct {
-	mu           sync.RWMutex
-	metrics      []*TestMetrics
-	aggregate    *AggregateMetrics
-	writer       io.Writer
-	serveHTTP    bool
-	host         string
-	port         int
-	server       *http.Server
-	shutdownChan chan struct{}
+	mu        sync.RWMutex
+	metrics   []*TestMetrics
+	aggregate *AggregateMetrics
+	writer    io.Writer
+	serveHTTP bool
+	host      string
+	port      int
+	server    *http.Server // guarded by mu
 }
 
 // PrometheusOption is a functional option for PrometheusExporter
@@ -57,22 +58,39 @@ func WithPrometheusHTTP(port int) PrometheusOption {
 	}
 }
 
-// NewPrometheusExporter creates a new Prometheus metrics exporter
+// NewPrometheusExporter creates a new Prometheus metrics exporter. When HTTP
+// serving is enabled and the address cannot be bound, the exporter is returned
+// without an endpoint and the failure is dropped; use NewPrometheusExporterE
+// to learn about it.
 func NewPrometheusExporter(opts ...PrometheusOption) *PrometheusExporter {
-	p := &PrometheusExporter{
-		metrics:      make([]*TestMetrics, 0),
-		aggregate:    &AggregateMetrics{StatusCodes: make(map[int]int64), ByTest: make(map[string]*TestAggregate)},
-		shutdownChan: make(chan struct{}),
+	p, err := NewPrometheusExporterE(opts...)
+	if err != nil {
+		return newPrometheusExporter(opts...)
 	}
+	return p
+}
 
+// NewPrometheusExporterE is NewPrometheusExporter that binds the HTTP endpoint
+// before returning: a busy port or an unusable address is an error, not a
+// metrics endpoint that quietly never came up.
+func NewPrometheusExporterE(opts ...PrometheusOption) (*PrometheusExporter, error) {
+	p := newPrometheusExporter(opts...)
+	if p.serveHTTP {
+		if err := p.startHTTPServer(); err != nil {
+			return nil, err
+		}
+	}
+	return p, nil
+}
+
+func newPrometheusExporter(opts ...PrometheusOption) *PrometheusExporter {
+	p := &PrometheusExporter{
+		metrics:   make([]*TestMetrics, 0),
+		aggregate: &AggregateMetrics{StatusCodes: make(map[int]int64), ByTest: make(map[string]*TestAggregate)},
+	}
 	for _, opt := range opts {
 		opt(p)
 	}
-
-	if p.serveHTTP {
-		go p.startHTTPServer()
-	}
-
 	return p
 }
 
@@ -85,22 +103,30 @@ func (p *PrometheusExporter) listenAddr() string {
 	return net.JoinHostPort(host, strconv.Itoa(p.port))
 }
 
-func (p *PrometheusExporter) startHTTPServer() {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/metrics", p.handleMetrics)
-
-	p.server = &http.Server{
-		Addr:    p.listenAddr(),
-		Handler: mux,
+// startHTTPServer binds the endpoint synchronously and serves it in the
+// background. The error names the address, like the mock server's.
+func (p *PrometheusExporter) startHTTPServer() error {
+	addr := p.listenAddr()
+	// bind() can succeed next to a wildcard listener (macOS, SO_REUSEADDR):
+	// probe first so that case is an error too.
+	if portprobe.ShouldProbe(p.host) && portprobe.InUse(p.port) {
+		return fmt.Errorf("metrics endpoint cannot listen on %s: port %d is already in use", addr, p.port)
+	}
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("metrics endpoint cannot listen on %s: %w", addr, err)
 	}
 
-	go func() {
-		if err := p.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			fmt.Printf("Prometheus HTTP server error: %v\n", err)
-		}
-	}()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/metrics", p.handleMetrics)
+	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 
-	<-p.shutdownChan
+	p.mu.Lock()
+	p.server = srv
+	p.mu.Unlock()
+
+	go func() { _ = srv.Serve(ln) }()
+	return nil
 }
 
 func (p *PrometheusExporter) handleMetrics(w http.ResponseWriter, r *http.Request) {
@@ -257,9 +283,11 @@ func sanitizeLabel(s string) string {
 
 // Close shuts down the exporter
 func (p *PrometheusExporter) Close() error {
-	if p.server != nil {
-		close(p.shutdownChan)
-		return p.server.Close()
+	p.mu.Lock()
+	srv := p.server
+	p.mu.Unlock()
+	if srv != nil {
+		return srv.Close()
 	}
 	return nil
 }

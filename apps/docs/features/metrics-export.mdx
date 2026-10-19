@@ -30,6 +30,8 @@ Metrics are available at `http://localhost:9090/metrics` while the test runs, an
 | `--metrics-port` | `HITSPEC_METRICS_PORT` | `9090` | Port for the metrics endpoint |
 | `--metrics-host` | `HITSPEC_METRICS_HOST` | `127.0.0.1` | Interface to bind; `0.0.0.0` exposes the endpoint to the network |
 
+The endpoint is bound before the test starts. If the port is already in use, the command prints the error and exits `3` without sending any request.
+
 ## DataDog
 
 Sends metrics directly to the DataDog API.

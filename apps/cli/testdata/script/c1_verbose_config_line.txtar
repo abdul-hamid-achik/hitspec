@@ -1,0 +1,21 @@
+# `run -v` reports the hitspec.yaml in use; so does `verbose: true` in the file.
+# --verbose=0 keeps it silent.
+
+exitcode 0 hitspec run --no-history --no-color ok.http
+stderr 'config: .*hitspec\.yaml'
+
+exitcode 0 hitspec run --no-history --no-color --verbose=0 ok.http
+! stderr 'config:'
+
+exitcode 0 hitspec run --no-history --no-color -v ok.http
+stderr 'config: .*hitspec\.yaml'
+
+-- hitspec.yaml --
+verbose: true
+-- ok.http --
+### ok
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 200
+<<<

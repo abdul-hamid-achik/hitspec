@@ -27,6 +27,20 @@ func verbosityLevel(flags *pflag.FlagSet, yamlVerbose bool) int {
 	return 0
 }
 
+// noColorEnabled reports whether `run` should switch colors off. Precedence is
+// --no-color on the command line > HITSPEC_NO_COLOR > hitspec.yaml `noColor`
+// > default (colors on). The NO_COLOR convention (https://no-color.org) is
+// honored independently by the color library and can only turn colors off.
+func noColorEnabled(flags *pflag.FlagSet, yamlNoColor bool) bool {
+	if flags != nil && flags.Changed("no-color") {
+		return noColorFlag
+	}
+	if os.Getenv("HITSPEC_NO_COLOR") != "" {
+		return noColorFlag // the flag's default is HITSPEC_NO_COLOR
+	}
+	return yamlNoColor
+}
+
 // runTotals is the accounting for one pass over all files of a `run`.
 type runTotals struct {
 	Passed  int

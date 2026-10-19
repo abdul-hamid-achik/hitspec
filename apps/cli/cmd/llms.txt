@@ -686,7 +686,7 @@ counted as requests, successes or errors. A non-2xx status accepted by the reque
 | Flag | Description |
 |------|-------------|
 | `--metrics` | Export format: prometheus, datadog, json |
-| `--metrics-port` | Prometheus HTTP endpoint port (default: 9090) |
+| `--metrics-port` | Prometheus HTTP endpoint port (default: 9090; a port already in use stops the run with exit 3) |
 | `--metrics-host` | Prometheus bind address (default: 127.0.0.1; `0.0.0.0` exposes it; env: HITSPEC_METRICS_HOST) |
 | `--metrics-file` | Output file for JSON metrics |
 | `--datadog-api-key` | DataDog API key (env: DD_API_KEY) |
