@@ -334,6 +334,12 @@ type StressStatsDTO struct {
 	MaxMs     float64 `json:"maxMs"`
 	ErrorRate float64 `json:"errorRate"`
 	ActiveVUs int32   `json:"activeVUs"`
+	// Incomplete counts requests still in flight; AssertionChecks and
+	// AssertionFailures count checked responses and those that failed an
+	// assertion (not part of Errors).
+	Incomplete        int64 `json:"incomplete,omitempty"`
+	AssertionChecks   int64 `json:"assertionChecks,omitempty"`
+	AssertionFailures int64 `json:"assertionFailures,omitempty"`
 }
 
 // StressProfileReq creates or updates a stress profile.
@@ -371,7 +377,21 @@ type StressResultDTO struct {
 	Breakdown   []StressRequestBreakdownDTO `json:"breakdown"`
 	TimeSeries  []StressTimePointDTO        `json:"timeSeries"`
 	Thresholds  []StressThresholdDTO        `json:"thresholds,omitempty"`
-	Timestamp   string                      `json:"timestamp"`
+	// Incomplete is the number of requests still in flight when the window
+	// closed (not in Total or Errors). AssertionChecks counts responses whose
+	// request had assertions, AssertionFailures those that failed one and
+	// AssertionFailRate their ratio (assertion failures are not Errors).
+	Incomplete        int64   `json:"incomplete,omitempty"`
+	AssertionChecks   int64   `json:"assertionChecks,omitempty"`
+	AssertionFailures int64   `json:"assertionFailures,omitempty"`
+	AssertionFailRate float64 `json:"assertionFailRate,omitempty"`
+	// Warnings are problems with the run itself, e.g. a target rate that was
+	// not reached (the latency figures then understate the load).
+	Warnings []string `json:"warnings,omitempty"`
+	// Error says why the run stopped before producing numbers (invalid
+	// config, a failed setup request); the counters are then zero.
+	Error     string `json:"error,omitempty"`
+	Timestamp string `json:"timestamp"`
 }
 
 // StressRequestBreakdownDTO holds per-request stats.
@@ -384,6 +404,8 @@ type StressRequestBreakdownDTO struct {
 	P95Ms   float64 `json:"p95Ms"`
 	P99Ms   float64 `json:"p99Ms"`
 	MeanMs  float64 `json:"meanMs"`
+	// AssertionFailures is the number of this request's responses that failed an assertion.
+	AssertionFailures int64 `json:"assertionFailures,omitempty"`
 }
 
 // StressTimePointDTO is a time series data point.
@@ -598,6 +620,7 @@ type StressMetrics struct {
 	Completed bool           `json:"completed,omitempty"`
 	Stats     StressStatsDTO `json:"stats"`
 	Elapsed   float64        `json:"elapsed"`
+	Error     string         `json:"error,omitempty"` // on the completed event when the run failed
 	Timestamp string         `json:"timestamp"`
 }
 

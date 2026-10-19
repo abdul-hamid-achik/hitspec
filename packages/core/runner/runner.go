@@ -267,74 +267,53 @@ func (r *Runner) WaitHistory() {
 	r.historyWG.Wait()
 }
 
-// recordHistory persists the run result to the history store.
-// Errors are logged but do not propagate.
+// recordHistory persists the run result to the history store in one
+// transaction (history.Store.RecordCompleteRun): the run, its results and their
+// assertions are all committed or none are, so a crash or a storage error never
+// leaves a half-written run behind. Errors are logged but do not propagate.
 func (r *Runner) recordHistory(result *RunResult) {
-	ctx := context.Background()
-	store := r.config.HistoryStore
-
-	runID, err := store.RecordRun(ctx, result.File, r.config.Environment)
-	if err != nil {
-		log.Printf("history: failed to record run: %v", err)
-		return
+	rec := history.RunRecord{
+		FilePath:    result.File,
+		Environment: r.config.Environment,
+		Duration:    result.Duration,
 	}
-
 	for _, rr := range result.Results {
-		method, url := "", ""
-		statusCode := 0
+		res := history.ResultRecord{
+			Name:        rr.Name,
+			DurationMs:  rr.Duration.Milliseconds(),
+			Passed:      rr.Passed,
+			Skipped:     rr.Skipped,
+			Description: rr.Description,
+		}
 		if rr.Request != nil {
-			method = rr.Request.Method
-			url = rr.Request.URL
+			res.Method, res.URL = rr.Request.Method, rr.Request.URL
 		}
 		if rr.Response != nil {
-			statusCode = rr.Response.StatusCode
+			res.StatusCode = rr.Response.StatusCode
+			if len(rr.Response.Body) > 0 {
+				preview := string(rr.Response.Body)
+				if len(preview) > 65536 {
+					preview = preview[:65536]
+				}
+				res.BodyPreview = preview
+			}
 		}
-		errMsg := ""
 		if rr.Error != nil {
-			errMsg = rr.Error.Error()
+			res.Error = rr.Error.Error()
 		}
-
-		bodyPreview := ""
-		if rr.Response != nil && len(rr.Response.Body) > 0 {
-			preview := string(rr.Response.Body)
-			if len(preview) > 65536 {
-				preview = preview[:65536]
-			}
-			bodyPreview = preview
+		for _, a := range rr.Assertions {
+			res.Assertions = append(res.Assertions, history.AssertionRecord{
+				Operator: a.Operator,
+				Subject:  a.Subject,
+				Expected: fmt.Sprintf("%v", a.Expected),
+				Actual:   fmt.Sprintf("%v", a.Actual),
+				Passed:   a.Passed,
+				Message:  a.Message,
+			})
 		}
-
-		resultID, err := store.RecordResult(ctx, runID,
-			rr.Name, method, url, statusCode,
-			rr.Duration.Milliseconds(),
-			rr.Passed, rr.Skipped,
-			errMsg, rr.Description, bodyPreview,
-		)
-		if err != nil {
-			log.Printf("history: failed to record result %q: %v", rr.Name, err)
-			continue
-		}
-
-		if len(rr.Assertions) > 0 {
-			records := make([]history.AssertionRecord, 0, len(rr.Assertions))
-			for _, a := range rr.Assertions {
-				records = append(records, history.AssertionRecord{
-					Operator: a.Operator,
-					Subject:  a.Subject,
-					Expected: fmt.Sprintf("%v", a.Expected),
-					Actual:   fmt.Sprintf("%v", a.Actual),
-					Passed:   a.Passed,
-					Message:  a.Message,
-				})
-			}
-			if err := store.RecordAssertions(ctx, resultID, records); err != nil {
-				log.Printf("history: failed to record assertions for %q: %v", rr.Name, err)
-			}
-		}
+		rec.Results = append(rec.Results, res)
 	}
-
-	if err := store.FinishRun(ctx, runID, result.Duration,
-		int64(result.Passed), int64(result.Failed), int64(result.Skipped),
-		int64(result.Passed+result.Failed+result.Skipped)); err != nil {
-		log.Printf("history: failed to finish run: %v", err)
+	if _, err := r.config.HistoryStore.RecordCompleteRun(context.Background(), rec); err != nil {
+		log.Printf("history: failed to record run: %v", err)
 	}
 }

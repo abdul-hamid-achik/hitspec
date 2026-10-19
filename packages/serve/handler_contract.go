@@ -74,9 +74,10 @@ func (s *Server) handleContractVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, clientOpts := s.runSettings("")
+	runCfg, clientOpts := s.runSettings("")
 	opts := []contract.Option{
 		contract.WithHTTPClient(hitspechttp.NewClient(clientOpts...)),
+		contract.WithFileRoot(runCfg.FileRoot),
 		contract.WithProviderURL(req.ProviderURL),
 		contract.WithVerbose(s.config.Verbose),
 	}

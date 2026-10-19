@@ -66,6 +66,7 @@ func (m *Manager) StartStress(ctx context.Context, req StressStartReq) error {
 	// reporter writes nowhere.
 	runnerOpts := []stress.RunnerOption{
 		stress.WithHTTPClient(http.NewClient(clientOpts...)),
+		stress.WithFileRoot(runCfg.FileRoot),
 		stress.WithReporter(stress.NewReporter(stress.WithWriter(io.Discard), stress.WithNoProgress(true))),
 	}
 	if envName != "" {
@@ -92,20 +93,24 @@ func (m *Manager) StartStress(ctx context.Context, req StressStartReq) error {
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
 		done := make(chan struct{})
+		// result is written before done is closed and read only after it.
+		var result *stress.Result
+		var runErr error
 		go func() {
 			defer close(done)
-			_, _ = stressRunner.Run(runCtx)
+			result, runErr = stressRunner.Run(runCtx)
 		}()
 		for {
 			select {
 			case <-done:
 				stats := stressRunner.GetCurrentStats()
-				resultDTO := convertStressResult(stressRunner)
+				resultDTO := stressResultWithError(convertStressResult(result, stressRunner), runErr)
 				m.publish("stress_update", StressMetrics{
 					Running:   false,
 					Completed: true,
 					Stats:     convertStressStats(stats),
 					Elapsed:   stats.Elapsed.Seconds(),
+					Error:     resultDTO.Error,
 					Timestamp: nowISO(),
 				})
 				m.mu.Lock()
@@ -298,6 +303,12 @@ func (m *Manager) StartMock(ctx context.Context, req MockStartReq) (MockStatusDT
 			return MockStatusDTO{}, err
 		}
 	}
+	// Bind before announcing anything: a busy port or bad address must fail
+	// the call, not leave a "running" mock that nothing listens on.
+	if _, err := mockSrv.Listen(); err != nil {
+		m.mu.Unlock()
+		return MockStatusDTO{}, err
+	}
 	baseCtx := m.ctx
 	if baseCtx == nil {
 		baseCtx = ctx
@@ -383,7 +394,17 @@ func (m *Manager) StartRecord(ctx context.Context, req RecordStartReq) error {
 	if len(req.Sanitize) > 0 {
 		opts = append(opts, proxy.WithSanitize(req.Sanitize))
 	}
+	if _, err := url.Parse(req.TargetURL); err != nil {
+		m.mu.Unlock()
+		return fmt.Errorf("invalid target URL: %w", err)
+	}
 	recorder := proxy.NewRecorder(opts...)
+	// Bind before announcing anything: a busy port or bad address must fail
+	// the call, not leave a "running" proxy that nothing listens on.
+	if _, err := recorder.Listen(); err != nil {
+		m.mu.Unlock()
+		return err
+	}
 	baseCtx := m.ctx
 	if baseCtx == nil {
 		baseCtx = ctx
@@ -484,6 +505,7 @@ func (m *Manager) VerifyContracts(ctx context.Context, req ContractVerifyReq) ([
 	envName, configEnvs := runCfg.Environment, runCfg.ConfigEnvironments
 	opts := []contract.Option{
 		contract.WithHTTPClient(http.NewClient(clientOpts...)),
+		contract.WithFileRoot(runCfg.FileRoot),
 		contract.WithProviderURL(req.ProviderURL),
 		contract.WithVerbose(false), // verbose state-handler lines go to os.Stdout, which the TUI owns
 	}
@@ -738,8 +760,32 @@ func (m *Manager) Export(ctx context.Context, req ExportReq) (ExportResultDTO, e
 	return ExportResultDTO{Commands: commands}, nil
 }
 
-func convertStressResult(runner *stress.Runner) *StressResultDTO {
-	summary := runner.GetSummary()
+// convertStressResult builds the result DTO. result is what Runner.Run returned;
+// it carries the rate-miss warnings and the threshold verdicts, which the
+// runner's metrics alone do not. It is nil when Run failed, in which case the
+// runner's own summary is used.
+// stressResultWithError records why a stress run stopped before it could
+// produce numbers (invalid config, a failed setup request). Without it the
+// result looked like a clean run with zero requests.
+func stressResultWithError(dto *StressResultDTO, err error) *StressResultDTO {
+	if err == nil {
+		return dto
+	}
+	if dto == nil {
+		dto = &StressResultDTO{Timestamp: nowISO()}
+	}
+	dto.Error = err.Error()
+	return dto
+}
+
+func convertStressResult(result *stress.Result, runner *stress.Runner) *StressResultDTO {
+	var summary *stress.Summary
+	var thresholds []stress.ThresholdResult
+	if result != nil && result.Summary != nil {
+		summary, thresholds = result.Summary, result.Thresholds
+	} else {
+		summary = runner.GetSummary()
+	}
 	if summary == nil {
 		return nil
 	}
@@ -759,7 +805,16 @@ func convertStressResult(runner *stress.Runner) *StressResultDTO {
 		MaxMs:       float64(summary.Max.Microseconds()) / 1000.0,
 		MeanMs:      float64(summary.Mean.Microseconds()) / 1000.0,
 		StdDevMs:    float64(summary.StdDev.Microseconds()) / 1000.0,
-		Timestamp:   nowISO(),
+
+		Incomplete:        summary.IncompleteCount,
+		AssertionChecks:   summary.AssertionChecks,
+		AssertionFailures: summary.AssertionFailures,
+		AssertionFailRate: summary.AssertionFailRate,
+		Warnings:          summary.Warnings,
+		Timestamp:         nowISO(),
+	}
+	for _, tr := range thresholds {
+		dto.Thresholds = append(dto.Thresholds, StressThresholdDTO{Name: tr.Name, Passed: tr.Passed, Expected: tr.Expected, Actual: tr.Actual})
 	}
 	for _, rs := range summary.RequestBreakdown {
 		dto.Breakdown = append(dto.Breakdown, StressRequestBreakdownDTO{
@@ -771,6 +826,8 @@ func convertStressResult(runner *stress.Runner) *StressResultDTO {
 			P95Ms:   float64(rs.P95.Microseconds()) / 1000.0,
 			P99Ms:   float64(rs.P99.Microseconds()) / 1000.0,
 			MeanMs:  float64(rs.Mean.Microseconds()) / 1000.0,
+
+			AssertionFailures: rs.AssertionFailures,
 		})
 	}
 	if dto.Breakdown == nil {
@@ -806,5 +863,9 @@ func convertStressStats(s stress.CurrentStats) StressStatsDTO {
 		MaxMs:     float64(s.Max.Microseconds()) / 1000.0,
 		ErrorRate: s.ErrorRate,
 		ActiveVUs: s.ActiveVUs,
+
+		Incomplete:        s.Incomplete,
+		AssertionChecks:   s.AssertionChecks,
+		AssertionFailures: s.AssertionFailures,
 	}
 }

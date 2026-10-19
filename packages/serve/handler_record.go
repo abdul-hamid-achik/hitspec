@@ -3,6 +3,7 @@ package serve
 import (
 	"context"
 	"net/http"
+	"net/url"
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/proxy"
 )
@@ -72,7 +73,19 @@ func (s *Server) handleRecordStart(w http.ResponseWriter, r *http.Request) {
 		opts = append(opts, proxy.WithSanitize(req.Sanitize))
 	}
 
+	if _, err := url.Parse(req.TargetURL); err != nil {
+		s.mu.Unlock()
+		writeError(w, http.StatusBadRequest, "invalid targetUrl: "+err.Error())
+		return
+	}
 	recorder := proxy.NewRecorder(opts...)
+	// Bind before answering: a busy port or bad address must fail the request,
+	// not report "started" for a proxy nothing listens on.
+	if _, err := recorder.Listen(); err != nil {
+		s.mu.Unlock()
+		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
 	ctx, cancel := context.WithCancel(s.ctx)
 	s.recorder = recorder
 	s.recorderCancel = cancel

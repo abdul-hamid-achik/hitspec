@@ -73,6 +73,14 @@ func (s *Server) handleMockStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Bind before answering: a busy port or bad address must fail the request,
+	// not report "started" for a server nothing listens on.
+	if _, err := mockSrv.Listen(); err != nil {
+		s.mu.Unlock()
+		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
+
 	ctx, cancel := context.WithCancel(s.ctx)
 	s.mockServer = mockSrv
 	s.mockCancel = cancel

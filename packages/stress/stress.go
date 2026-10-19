@@ -7,6 +7,7 @@ import (
 	"net"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/assertions"
@@ -43,6 +44,14 @@ type Runner struct {
 
 	// Track loaded files for header display
 	loadedFiles []string
+
+	// fileRoot, when set, confines `< file` bodies and multipart files to that
+	// directory (the workspace of serve/studio), as runner.Config.FileRoot does.
+	fileRoot string
+	// refused counts requests the file check turned away; firstRefused keeps
+	// the first reason so the summary can say why the run is all errors.
+	refused      atomic.Int64
+	firstRefused atomic.Pointer[string]
 }
 
 // RunnerOption configures the runner
@@ -60,6 +69,43 @@ func WithResolver(resolver *env.Resolver) RunnerOption {
 	return func(r *Runner) {
 		r.resolver = resolver
 	}
+}
+
+// WithFileRoot confines every local file a request reads (a `< file` body,
+// multipart file parts) to root. A request that points outside is not sent: it
+// counts as an error, and a setup request fails the run. Empty (the default)
+// disables the check, which is what the CLI wants.
+func WithFileRoot(root string) RunnerOption {
+	return func(r *Runner) {
+		r.fileRoot = root
+	}
+}
+
+// checkFileRefs applies the FileRoot confinement to a request.
+func (r *Runner) checkFileRefs(req requestWithBaseDir) error {
+	if r.fileRoot == "" {
+		return nil
+	}
+	err := http.CheckFileRefs(req.request, r.resolver.Resolve, req.baseDir, r.fileRoot)
+	if err != nil {
+		r.refused.Add(1)
+		msg := fmt.Sprintf("%s: %v", req.request.Name, err)
+		r.firstRefused.CompareAndSwap(nil, &msg)
+	}
+	return err
+}
+
+// fileRefWarnings reports the requests turned away by the FileRoot check.
+func (r *Runner) fileRefWarnings() []string {
+	n := r.refused.Load()
+	if n == 0 {
+		return nil
+	}
+	first := ""
+	if p := r.firstRefused.Load(); p != nil {
+		first = *p
+	}
+	return []string{fmt.Sprintf("%d request(s) were not sent because they read a file outside the workspace (first: %s)", n, first)}
 }
 
 // WithReporter sets the reporter
@@ -284,7 +330,7 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 
 	// Get summary and evaluate thresholds
 	summary := r.metrics.GetSummary()
-	summary.Warnings = r.rateWarnings(summary)
+	summary.Warnings = append(r.rateWarnings(summary), r.fileRefWarnings()...)
 	var thresholdResults []ThresholdResult
 	if r.config.Thresholds.HasThresholds() {
 		thresholdResults = r.metrics.EvaluateThresholds(r.config.Thresholds)
@@ -472,6 +518,11 @@ func (r *Runner) executeScheduledRequest(ctx context.Context, sched *ScheduledRe
 		return err
 	}
 
+	if err := r.checkFileRefs(reqWithDir); err != nil {
+		r.metrics.Record(sched.Name, 0, err)
+		return err
+	}
+
 	start := time.Now()
 
 	// Build HTTP request using the request's own base directory
@@ -551,6 +602,9 @@ func isTimeout(err error) bool {
 
 // executeRequest executes a single request (for setup/teardown)
 func (r *Runner) executeRequest(ctx context.Context, reqWithDir requestWithBaseDir) error {
+	if err := r.checkFileRefs(reqWithDir); err != nil {
+		return err
+	}
 	httpReq := http.BuildRequestFromASTWithBaseDir(reqWithDir.request, r.resolver.Resolve, reqWithDir.baseDir)
 
 	resp, err := r.client.Do(httpReq)

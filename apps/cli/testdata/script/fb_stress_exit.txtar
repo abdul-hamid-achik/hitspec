@@ -1,0 +1,34 @@
+# Failed stress thresholds exit 1 through the normal return path, so deferred
+# cleanup runs: the metrics exporters are closed and keep the real totals (a
+# deferred re-export of the empty collector used to replace them on a pass).
+
+# A threshold that holds: exit 0, the metrics file has the run's requests.
+exitcode 0 hitspec run ok.http --stress --duration 1s --rate 10 --no-progress --no-color --no-history --metrics json --metrics-file pass.json --threshold 'p95<10s'
+grep '"total_requests": [1-9]' pass.json
+
+# One error against "errors<0": exit 1, same file contents, no stray message.
+exitcode 1 hitspec run fail.http --stress --duration 1s --rate 10 --no-progress --no-color --no-history --metrics json --metrics-file fail.json --threshold 'errors<0'
+stdout 'error rate'
+! stderr 'Error'
+grep '"total_requests": [1-9]' fail.json
+
+# A profile threshold with an explicit operator reaches the runner.
+exitcode 1 hitspec run fail.http --stress --profile strict --no-progress --no-color --no-history
+stdout 'error rate'
+
+-- ok.http --
+### ok
+GET {{$env(SERVER)}}/status/200
+
+-- fail.http --
+### fail
+GET {{$env(SERVER)}}/status/500
+
+-- hitspec.yaml --
+stress:
+  profiles:
+    strict:
+      duration: 1s
+      rate: 10
+      thresholds:
+        errors: "<=0"

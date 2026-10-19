@@ -8,7 +8,6 @@ import (
 
 	"github.com/abdul-hamid-achik/hitspec/v2/internal/watchutil"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/config"
-	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/env"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
 	"github.com/spf13/pflag"
 )
@@ -83,46 +82,12 @@ type adderFunc func(name string) error
 
 func (f adderFunc) Add(name string) error { return f(name) }
 
-// dotenvTracker remembers which process environment variables a runner's env
-// file created. A runner exports the file's variables to the process
-// environment unless they are already set, so an edited value would never
-// replace the exported one on the next pass (`{{$env(NAME)}}` reads the process
-// environment). release removes exactly the variables the file introduced, so
-// a variable that was set before hitspec started is left alone.
-type dotenvTracker struct{ keys []string }
-
-// capture records the variables of path that are not set yet, which are the
-// ones the runner about to be built will export. Call it before NewRunner.
-func (d *dotenvTracker) capture(path string) {
-	d.keys = nil
-	if path == "" {
-		return
-	}
-	vars, err := env.LoadDotEnv(path)
-	if err != nil {
-		return
-	}
-	for k := range vars {
-		if os.Getenv(k) == "" {
-			d.keys = append(d.keys, k)
-		}
-	}
-}
-
-// release unsets the variables recorded by capture.
-func (d *dotenvTracker) release() {
-	for _, k := range d.keys {
-		_ = os.Unsetenv(k)
-	}
-	d.keys = nil
-}
-
 // reloadRunSettings rebuilds the runner configuration for a watch pass from
 // hitspec.yaml, the env file and the flags as they are now, so an edit to
 // either takes effect on the next pass (a runner reads its env file once, at
 // construction). The history store is carried over. On error the caller keeps
 // the previous runner.
-func reloadRunSettings(flags *pflag.FlagSet, previous *runner.Config, tagsFilter []string, dotenv *dotenvTracker) (*runner.Runner, *runner.Config, error) {
+func reloadRunSettings(flags *pflag.FlagSet, previous *runner.Config, tagsFilter []string) (*runner.Runner, *runner.Config, error) {
 	fileConfig, err := config.LoadConfig(configFlag)
 	if err != nil {
 		return nil, nil, err
@@ -142,7 +107,5 @@ func reloadRunSettings(flags *pflag.FlagSet, previous *runner.Config, tagsFilter
 	if previous != nil {
 		cfg.HistoryStore = previous.HistoryStore
 	}
-	dotenv.release()
-	dotenv.capture(cfg.EnvFile)
 	return runner.NewRunner(cfg), cfg, nil
 }

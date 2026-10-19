@@ -65,7 +65,7 @@ func (r *Runner) waitForService(ctx context.Context, cfg *parser.WaitForConfig, 
 	}
 
 	if lastErr != nil {
-		return fmt.Errorf("service %s not ready after %v: %v", url, timeout, lastErr)
+		return fmt.Errorf("service %s not ready after %v: %w", url, timeout, lastErr)
 	}
 	return fmt.Errorf("service %s not ready after %v: got status %d, expected %d",
 		url, timeout, lastStatus, expectedStatus)

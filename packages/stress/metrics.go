@@ -425,6 +425,13 @@ type CurrentStats struct {
 	Max       time.Duration
 	ActiveVUs int32
 	ErrorRate float64
+
+	// Incomplete is the number of requests still in flight when the window
+	// closed; AssertionChecks/AssertionFailures count responses checked against
+	// their assertions and those that failed one (not part of Errors).
+	Incomplete        int64
+	AssertionChecks   int64
+	AssertionFailures int64
 }
 
 // GetCurrentStats returns current statistics
@@ -459,6 +466,10 @@ func (m *Metrics) GetCurrentStats() CurrentStats {
 		Max:       time.Duration(m.histogram.Max()) * time.Microsecond,
 		ActiveVUs: m.activeVUs.Load(),
 		ErrorRate: errorRate,
+
+		Incomplete:        m.incompleteRequests.Load(),
+		AssertionChecks:   m.assertionChecks.Load(),
+		AssertionFailures: m.assertionFailures.Load(),
 	}
 }
 
@@ -507,7 +518,7 @@ func (m *Metrics) EvaluateThresholds(t Thresholds) []ThresholdResult {
 		})
 	}
 
-	if t.ErrorRate > 0 {
+	if t.ErrorRate > 0 || t.ErrorRateSet {
 		passed := summary.ErrorRate <= t.ErrorRate
 		results = append(results, ThresholdResult{
 			Name:     "error rate",

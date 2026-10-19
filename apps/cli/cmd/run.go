@@ -102,6 +102,7 @@ var (
 	// Metrics flags
 	metricsFlag       string
 	metricsPortFlag   int
+	metricsHostFlag   string
 	metricsFileFlag   string
 	datadogAPIKeyFlag string
 	datadogSiteFlag   string
@@ -180,6 +181,7 @@ func registerRunFlags(f *pflag.FlagSet) {
 
 	// Metrics flags
 	f.StringVar(&metricsFlag, "metrics", getEnvString("HITSPEC_METRICS", ""), "Metrics export format: prometheus, datadog, json (env: HITSPEC_METRICS)")
+	f.StringVar(&metricsHostFlag, "metrics-host", getEnvString("HITSPEC_METRICS_HOST", metrics.DefaultPrometheusHost), "Interface the Prometheus metrics endpoint binds; use 0.0.0.0 to expose it to the network (env: HITSPEC_METRICS_HOST)")
 	f.IntVar(&metricsPortFlag, "metrics-port", getEnvInt("HITSPEC_METRICS_PORT", 9090), "Port for Prometheus metrics HTTP endpoint (env: HITSPEC_METRICS_PORT)")
 	f.StringVar(&metricsFileFlag, "metrics-file", getEnvString("HITSPEC_METRICS_FILE", ""), "Output file for metrics (JSON format) (env: HITSPEC_METRICS_FILE)")
 	f.StringVar(&datadogAPIKeyFlag, "datadog-api-key", getEnvString("DD_API_KEY", ""), "DataDog API key (env: DD_API_KEY)")
@@ -461,10 +463,6 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	var dotenv dotenvTracker // watch mode: undo the env file's exports on reload
-	if watchFlag {
-		dotenv.capture(cfg.EnvFile)
-	}
 	r := runner.NewRunner(cfg)
 	// Flush any in-flight history writes before the deferred store.Close() runs.
 	// (defers are LIFO, so this runs before the store.Close registered above.)
@@ -714,7 +712,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 			if reload {
 				reload = false
-				newRunner, newCfg, err := reloadRunSettings(cmd.Flags(), cfg, tagsFilter, &dotenv)
+				newRunner, newCfg, err := reloadRunSettings(cmd.Flags(), cfg, tagsFilter)
 				if err != nil {
 					fmt.Fprintf(stderr, "Error: %v\nKeeping the previous settings until the file is fixed.\n", err)
 				} else {
@@ -823,9 +821,10 @@ func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config
 			case "prometheus":
 				promExporter := metrics.NewPrometheusExporter(
 					metrics.WithPrometheusHTTP(metricsPortFlag),
+					metrics.WithPrometheusHost(metricsHostFlag),
 				)
 				metricsExporters = append(metricsExporters, promExporter)
-				fmt.Fprintf(cmd.OutOrStdout(), "Prometheus metrics available at http://localhost:%d/metrics\n", metricsPortFlag)
+				fmt.Fprintf(cmd.OutOrStdout(), "Prometheus metrics available at http://%s/metrics\n", promDisplayAddr(metricsHostFlag, metricsPortFlag))
 
 			case "datadog":
 				ddOpts := []metrics.DataDogOption{}
@@ -859,10 +858,11 @@ func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config
 		}
 	}
 
-	// Cleanup metrics exporters on exit
+	// Cleanup metrics exporters on exit. The summary is exported explicitly
+	// below; Flush would re-export the collector's own (empty) aggregate over
+	// it, so only Close here.
 	defer func() {
 		if metricsCollector != nil {
-			_ = metricsCollector.Flush()
 			_ = metricsCollector.Close()
 		}
 	}()
@@ -912,11 +912,15 @@ func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
 
 	go func() {
-		<-sigCh
-		fmt.Fprintln(os.Stderr, "\nReceived interrupt, stopping gracefully...")
-		cancel()
+		select {
+		case <-sigCh:
+			fmt.Fprintln(os.Stderr, "\nReceived interrupt, stopping gracefully...")
+			cancel()
+		case <-ctx.Done():
+		}
 	}()
 
 	// Keep Prometheus scrapes current while the test runs, not just after it.
@@ -942,9 +946,11 @@ func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config
 		return reporter.JSONSummary(result.Summary, result.Thresholds)
 	}
 
-	// Exit with error code if thresholds failed
+	// Failed thresholds exit 1. Returned, not os.Exit, so the deferred cleanup
+	// (metrics exporters, signal handler) still runs. The summary already said
+	// which thresholds failed, so the error carries no message.
 	if result.HasThresholdFailures() {
-		os.Exit(ExitTestFailure)
+		return newExitError(ExitTestFailure, "")
 	}
 
 	return nil
@@ -1054,13 +1060,36 @@ func buildStressConfig(cmd *cobra.Command, fileConfig *config.Config) (*stress.C
 	return cfg, nil
 }
 
-// buildThresholdString converts threshold map to string format
+// buildThresholdString converts a profile's threshold map ("p95": "200ms",
+// "rps": ">=50") to the "p95<200ms,rps>=50" form stress.ParseThresholds reads.
+// A value that starts with an operator keeps it; a bare value gets the
+// metric's natural one (> for rps, < for everything else). Keys are sorted so
+// the result is stable.
 func buildThresholdString(thresholds map[string]string) string {
-	var parts []string
-	for k, v := range thresholds {
-		parts = append(parts, k+"<"+v)
+	keys := make([]string, 0, len(thresholds))
+	for k := range thresholds {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		v := strings.TrimSpace(thresholds[k])
+		if hasThresholdOperator(v) {
+			parts = append(parts, k+v)
+			continue
+		}
+		op := "<"
+		switch strings.ToLower(k) {
+		case "rps", "rate":
+			op = ">"
+		}
+		parts = append(parts, k+op+v)
 	}
 	return strings.Join(parts, ",")
+}
+
+func hasThresholdOperator(v string) bool {
+	return strings.HasPrefix(v, "<") || strings.HasPrefix(v, ">")
 }
 
 // stressResultToMetrics converts stress test summary to metrics aggregate format

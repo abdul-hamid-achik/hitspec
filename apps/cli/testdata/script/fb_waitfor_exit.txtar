@@ -1,0 +1,20 @@
+# A @waitFor target that refuses connections is a network error: exit 4.
+# A target that answers with the wrong status is just a failed run: exit 1.
+
+exitcode 4 hitspec run refused.http --no-color
+stdout 'not ready'
+
+exitcode 1 hitspec run wrongstatus.http --no-color
+stdout 'got status 200, expected 503'
+
+-- refused.http --
+### guarded
+# @waitFor http://127.0.0.1:1/health 200 300 50
+
+GET {{$env(SERVER)}}/status/200
+
+-- wrongstatus.http --
+### guarded
+# @waitFor {{$env(SERVER)}}/status/200 503 300 50
+
+GET {{$env(SERVER)}}/status/200
