@@ -13,6 +13,10 @@ hitspec supports 8 authentication methods through the `# @auth` metadata directi
 
 All parameters support `{{variable}}` interpolation.
 
+Separate the parameters with commas (`basic alice, s3cret`) or with whitespace (`basic alice s3cret`). If the line contains a comma outside `{{ ... }}` it is split on commas, so a value may then contain spaces; a comma inside `{{ ... }}` (for example `{{$random(1, 5)}}`) never splits. For the OAuth2 grants, every parameter after the required ones is part of the scope list.
+
+hitspec checks the method name and the number of parameters when it parses the file. An unknown method (`@auth magic foo`) or a wrong parameter count is a parse error: `hitspec validate` reports it and exits with code 2 instead of sending the request without credentials.
+
 ---
 
 ## Methods

@@ -1,0 +1,454 @@
+{
+  "File": {
+    "Path": "stress-test/stress.http",
+    "Requests": [
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 16,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": 5000,
+            "Line": 17,
+            "Operator": "\u003c",
+            "Subject": "duration"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Quick health check endpoint - runs most frequently",
+        "HTTPVersion": "",
+        "Headers": null,
+        "Line": 7,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": {
+            "Setup": false,
+            "Skip": false,
+            "Teardown": false,
+            "Think": 0,
+            "Weight": 5
+          },
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "healthCheck",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "stress",
+          "smoke"
+        ],
+        "URL": "{{baseUrl}}/get"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 32,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "1",
+            "Line": 33,
+            "Operator": "==",
+            "Subject": "body.args.page"
+          },
+          {
+            "Expected": "20",
+            "Line": 34,
+            "Operator": "==",
+            "Subject": "body.args.limit"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "GET request with query parameters",
+        "HTTPVersion": "",
+        "Headers": null,
+        "Line": 20,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": {
+            "Setup": false,
+            "Skip": false,
+            "Teardown": false,
+            "Think": 0,
+            "Weight": 3
+          },
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "getWithParams",
+        "QueryParams": [
+          {
+            "Key": "page",
+            "Line": 27,
+            "Value": "1"
+          },
+          {
+            "Key": "limit",
+            "Line": 28,
+            "Value": "20"
+          },
+          {
+            "Key": "sort",
+            "Line": 29,
+            "Value": "created_at"
+          }
+        ],
+        "ShellCommands": null,
+        "Tags": [
+          "stress",
+          "read"
+        ],
+        "URL": "{{baseUrl}}/get"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 53,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": null,
+            "Line": 54,
+            "Operator": "exists",
+            "Subject": "body.json.name"
+          }
+        ],
+        "Body": {
+          "ContentType": "json",
+          "FilePath": "",
+          "GraphQL": null,
+          "Line": 46,
+          "Multipart": null,
+          "Raw": "{\n  \"name\": \"Stress Test Item {{$uuid()}}\",\n  \"timestamp\": \"{{$now()}}\",\n  \"value\": {{$random(1, 1000)}}\n}"
+        },
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "POST request - runs less frequently in stress mode",
+        "HTTPVersion": "",
+        "Headers": [
+          {
+            "Key": "Content-Type",
+            "Line": 44,
+            "Value": "application/json"
+          }
+        ],
+        "Line": 37,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": {
+            "Setup": false,
+            "Skip": false,
+            "Teardown": false,
+            "Think": 0,
+            "Weight": 1
+          },
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "POST",
+        "MockBody": "",
+        "Name": "createResource",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "stress",
+          "write"
+        ],
+        "URL": "{{baseUrl}}/post"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 67,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": 5000,
+            "Line": 68,
+            "Operator": "\u003c",
+            "Subject": "duration"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Test a slow endpoint under load",
+        "HTTPVersion": "",
+        "Headers": null,
+        "Line": 57,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": {
+            "Setup": false,
+            "Skip": false,
+            "Teardown": false,
+            "Think": 0,
+            "Weight": 1
+          },
+          "Timeout": 10000,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "delayedEndpoint",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "stress",
+          "latency"
+        ],
+        "URL": "{{baseUrl}}/delay/1"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 86,
+            "Operator": "==",
+            "Subject": "status"
+          }
+        ],
+        "Body": {
+          "ContentType": "json",
+          "FilePath": "",
+          "GraphQL": null,
+          "Line": 80,
+          "Multipart": null,
+          "Raw": "{\n  \"action\": \"setup\",\n  \"testId\": \"{{$uuid()}}\"\n}"
+        },
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Prepare test data before stress test begins",
+        "HTTPVersion": "",
+        "Headers": [
+          {
+            "Key": "Content-Type",
+            "Line": 78,
+            "Value": "application/json"
+          }
+        ],
+        "Line": 71,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": {
+            "Setup": true,
+            "Skip": false,
+            "Teardown": false,
+            "Think": 0,
+            "Weight": 0
+          },
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "POST",
+        "MockBody": "",
+        "Name": "setupData",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "stress",
+          "setup"
+        ],
+        "URL": "{{baseUrl}}/post"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 103,
+            "Operator": "==",
+            "Subject": "status"
+          }
+        ],
+        "Body": {
+          "ContentType": "json",
+          "FilePath": "",
+          "GraphQL": null,
+          "Line": 98,
+          "Multipart": null,
+          "Raw": "{\n  \"action\": \"teardown\"\n}"
+        },
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Clean up after stress test completes",
+        "HTTPVersion": "",
+        "Headers": [
+          {
+            "Key": "Content-Type",
+            "Line": 96,
+            "Value": "application/json"
+          }
+        ],
+        "Line": 89,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": {
+            "Setup": false,
+            "Skip": false,
+            "Teardown": true,
+            "Think": 0,
+            "Weight": 0
+          },
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "POST",
+        "MockBody": "",
+        "Name": "teardown",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "stress",
+          "teardown"
+        ],
+        "URL": "{{baseUrl}}/post"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 115,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": null,
+            "Line": 116,
+            "Operator": "exists",
+            "Subject": "body.headers"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "This request is skipped during stress testing",
+        "HTTPVersion": "",
+        "Headers": null,
+        "Line": 106,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": {
+            "Setup": false,
+            "Skip": true,
+            "Teardown": false,
+            "Think": 0,
+            "Weight": 0
+          },
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "debugEndpoint",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "debug"
+        ],
+        "URL": "{{baseUrl}}/headers"
+      }
+    ],
+    "Variables": [
+      {
+        "Line": 5,
+        "Name": "baseUrl",
+        "Value": "https://httpbin.org"
+      }
+    ]
+  }
+}

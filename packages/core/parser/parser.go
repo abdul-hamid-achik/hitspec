@@ -2,6 +2,7 @@ package parser
 
 import (
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -141,51 +142,19 @@ func (p *Parser) parseRequest() (*Request, error) {
 		}
 	}
 	req.Method = p.curToken.Value
+
+	// The request line, query-parameter lines and headers are read as raw
+	// lines, not tokens: their values must reach the runner verbatim (quotes,
+	// '#', apostrophes, spaces inside {{ }}), which the generic tokenizer
+	// (built for assertions) cannot guarantee.
+	line := p.lexer.takeLineFrom(p.curToken.Offset, p.curToken.Line)
+	req.URL, req.HTTPVersion = splitRequestLine(line)
+	p.parseRequestHead(req)
+
+	// Resync the token stream at the first line after the headers, skipping the
+	// blank line(s) that separate them from the body.
 	p.nextToken()
-
-	if p.curToken.Type == TokenWhitespace {
-		p.nextToken()
-	}
-
-	url := p.parseURL()
-	req.URL = url
-
-	// Advance past the URL line's terminator only (not skipNewlines): a blank
-	// line here is the header/body separator and must be preserved so the body
-	// isn't eaten by the header loop below.
-	if p.curToken.Type == TokenNewline {
-		p.nextToken()
-	}
-
-	for p.curToken.Type == TokenQueryParam {
-		qp, err := p.parseQueryParam()
-		if err != nil {
-			return nil, err
-		}
-		req.QueryParams = append(req.QueryParams, qp)
-		p.skipNewlines()
-	}
-
-	for p.curToken.Type == TokenIdentifier {
-		header, err := p.parseHeader()
-		if err != nil {
-			return nil, err
-		}
-		if header != nil {
-			req.Headers = append(req.Headers, header)
-		}
-		// Advance past only this header's line terminator. skipNewlines() here
-		// consumed the blank line that separates headers from the body, so the
-		// loop then ate plain-text body lines (identifier-led, no colon) as
-		// failed headers and the body was silently dropped.
-		if p.curToken.Type == TokenNewline {
-			p.nextToken()
-		}
-	}
-
-	if p.curToken.Type == TokenNewline {
-		p.skipNewlines()
-	}
+	p.skipNewlines()
 
 	if p.curToken.Type != TokenAssertionStart &&
 		p.curToken.Type != TokenCaptureStart &&
@@ -247,102 +216,126 @@ func (p *Parser) parseRequest() (*Request, error) {
 	}
 }
 
-// parseURL reads the request URL from the current line. It reads the raw line
-// (not the token stream) so a URL fragment (#section) isn't comment-stripped by
-// the lexer's '#' handling, and a trailing " HTTP/x.y" version token is dropped
-// instead of being concatenated into the URL ("http://x/api HTTP/1.1" used to
-// become "http://x/apiHTTP/1.1").
-func (p *Parser) parseURL() string {
-	line := p.lexer.GetCurrentLine()
-	// Consume the rest of the request line from the lexer and resync.
-	_ = p.lexer.ReadRestOfLine()
-	p.curToken = p.lexer.NextToken()
+// headerLineRe matches a "Key: Value" header line (the key is an identifier
+// that may contain digits, '-', '.' and '_').
+var headerLineRe = regexp.MustCompile(`^[\p{L}_][\p{L}\p{N}_.\-]*[ \t]*:`)
 
-	fields := strings.Fields(line)
-	// fields[0] is the method; fields[1] is the URL; an optional fields[2] is
-	// the HTTP version (ignored).
-	if len(fields) >= 2 {
-		return fields[1]
+// parseRequestHead reads everything between the request line and the body:
+// "? key = value" query parameters and "Key: Value" headers. It reads raw lines
+// from the lexer. A blank line, a separator, a block marker or any line that is
+// not a header ends the head; comment lines in between are skipped, so headers
+// after a comment are still headers. The terminating line is left unconsumed.
+func (p *Parser) parseRequestHead(req *Request) {
+	l := p.lexer
+	seenHeader := false
+	for !l.atEOF() {
+		text := strings.TrimSpace(l.peekLine())
+		switch {
+		case text == "", strings.HasPrefix(text, "###"), strings.HasPrefix(text, ">>>"):
+			return
+		case strings.HasPrefix(text, "#"), strings.HasPrefix(text, "//"):
+			// Plain comment inside the head. Even "# @name x" is only a comment
+			// here: directives belong before the request line.
+			l.skipLine()
+		case !seenHeader && (text[0] == '?' || text[0] == '&'):
+			req.QueryParams = append(req.QueryParams, parseQueryParamLine(text, l.line))
+			l.skipLine()
+			// Blank lines between query parameter lines are allowed.
+			for !l.atEOF() && strings.TrimSpace(l.peekLine()) == "" {
+				l.skipLine()
+			}
+		case headerLineRe.MatchString(text):
+			key, value, _ := strings.Cut(text, ":")
+			req.Headers = append(req.Headers, &Header{
+				Key:   strings.TrimSpace(key),
+				Value: strings.TrimSpace(value),
+				Line:  l.line,
+			})
+			seenHeader = true
+			l.skipLine()
+		default:
+			return
+		}
 	}
-	return ""
 }
 
-// parseQueryParam parses a single "? key = value" query parameter line.
-func (p *Parser) parseQueryParam() (*QueryParam, error) {
-	line := p.curToken.Line
-	p.nextToken()
-	if p.curToken.Type == TokenWhitespace {
-		p.nextToken()
+// parseQueryParamLine parses a "? key = value" (or "& key = value") line. The
+// value is everything after the first '=', trimmed, otherwise untouched.
+func parseQueryParamLine(text string, line int) *QueryParam {
+	rest := strings.TrimSpace(text[1:])
+	key, value, found := strings.Cut(rest, "=")
+	if !found {
+		key, value, _ = strings.Cut(rest, " ")
 	}
-
-	key := p.curToken.Value
-	p.nextToken()
-
-	if p.curToken.Type == TokenWhitespace {
-		p.nextToken()
-	}
-	if p.curToken.Type == TokenEquals {
-		p.nextToken()
-	}
-	if p.curToken.Type == TokenWhitespace {
-		p.nextToken()
-	}
-
-	var value strings.Builder
-	for p.curToken.Type != TokenNewline && p.curToken.Type != TokenEOF {
-		if p.curToken.Type == TokenVariableRef {
-			value.WriteString("{{")
-			value.WriteString(p.curToken.Value)
-			value.WriteString("}}")
-		} else {
-			value.WriteString(p.curToken.Value)
-		}
-		p.nextToken()
-	}
-
 	return &QueryParam{
-		Key:   key,
-		Value: strings.TrimSpace(value.String()),
+		Key:   strings.TrimSpace(key),
+		Value: strings.TrimSpace(value),
 		Line:  line,
-	}, nil
+	}
 }
 
-// parseHeader parses a single "Key: Value" header line.
-func (p *Parser) parseHeader() (*Header, error) {
-	line := p.curToken.Line
-	key := p.curToken.Value
-	p.nextTokenRaw()
+// httpVersionRe matches the optional trailing protocol token of a request line.
+var httpVersionRe = regexp.MustCompile(`(?i)^HTTP/\d+(\.\d+)?$`)
 
-	if p.curToken.Type == TokenWhitespace {
-		p.nextTokenRaw()
-	}
-
-	if p.curToken.Type != TokenColon {
-		return nil, nil
-	}
-	p.nextTokenRaw()
-
-	if p.curToken.Type == TokenWhitespace {
-		p.nextTokenRaw()
-	}
-
-	var value strings.Builder
-	for p.curToken.Type != TokenNewline && p.curToken.Type != TokenEOF {
-		if p.curToken.Type == TokenVariableRef {
-			value.WriteString("{{")
-			value.WriteString(p.curToken.Value)
-			value.WriteString("}}")
-		} else if p.curToken.Type == TokenWhitespace {
-			value.WriteString(" ")
-		} else {
-			value.WriteString(p.curToken.Value)
+// splitRequestLine splits "METHOD URL [HTTP/x.y]". The method is the first
+// token, an optional final HTTP/<version> token is the version, and the URL is
+// everything in between. Whitespace inside {{ ... }} never splits anything, so
+// "{{ base }}/q?x={{$random(1, 100)}}" is one URL. A whitespace-separated token
+// starting with '#' begins a trailing comment.
+func splitRequestLine(line string) (url, version string) {
+	fields := fieldsOutsideBraces(line)
+	for i := 2; i < len(fields); i++ {
+		if strings.HasPrefix(fields[i].text, "#") {
+			fields = fields[:i]
+			break
 		}
-		p.nextTokenRaw()
 	}
+	if len(fields) < 2 {
+		return "", ""
+	}
+	if len(fields) >= 3 && httpVersionRe.MatchString(fields[len(fields)-1].text) {
+		version = fields[len(fields)-1].text
+		fields = fields[:len(fields)-1]
+	}
+	return line[fields[1].start:fields[len(fields)-1].end], version
+}
 
-	return &Header{
-		Key:   key,
-		Value: strings.TrimSpace(value.String()),
-		Line:  line,
-	}, nil
+// field is a whitespace-delimited piece of a string with its byte span.
+type field struct {
+	text       string
+	start, end int
+}
+
+// fieldsOutsideBraces splits s on whitespace that is not inside {{ ... }}.
+func fieldsOutsideBraces(s string) []field {
+	return splitOutsideBraces(s, func(c byte) bool { return c == ' ' || c == '\t' || c == '\r' || c == '\n' }, true)
+}
+
+// splitOutsideBraces splits s at every byte for which sep is true, except
+// inside {{ ... }}. With dropEmpty, empty pieces are omitted; without it they
+// are kept (so "a,,b" splits into three).
+func splitOutsideBraces(s string, sep func(byte) bool, dropEmpty bool) []field {
+	var out []field
+	start := 0
+	depth := 0
+	flush := func(end int) {
+		if end > start || !dropEmpty {
+			out = append(out, field{text: s[start:end], start: start, end: end})
+		}
+	}
+	for i := 0; i < len(s); i++ {
+		switch {
+		case strings.HasPrefix(s[i:], "{{"):
+			depth++
+			i++
+		case depth > 0 && strings.HasPrefix(s[i:], "}}"):
+			depth--
+			i++
+		case depth == 0 && sep(s[i]):
+			flush(i)
+			start = i + 1
+		}
+	}
+	flush(len(s))
+	return out
 }

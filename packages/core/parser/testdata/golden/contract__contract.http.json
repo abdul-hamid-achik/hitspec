@@ -1,0 +1,491 @@
+{
+  "File": {
+    "Path": "contract/contract.http",
+    "Requests": [
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 15,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "array",
+            "Line": 16,
+            "Operator": "type",
+            "Subject": "body"
+          },
+          {
+            "Expected": null,
+            "Line": 17,
+            "Operator": "exists",
+            "Subject": "body[0].id"
+          },
+          {
+            "Expected": null,
+            "Line": 18,
+            "Operator": "exists",
+            "Subject": "body[0].name"
+          },
+          {
+            "Expected": "available",
+            "Line": 19,
+            "Operator": "==",
+            "Subject": "body[0].status"
+          },
+          {
+            "Expected": "array",
+            "Line": 20,
+            "Operator": "type",
+            "Subject": "body[0].photoUrls"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Verify the response matches the Pet schema",
+        "HTTPVersion": "",
+        "Headers": null,
+        "Line": 7,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "findPets",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "contract",
+          "pets"
+        ],
+        "URL": "{{baseUrl}}/pet/findByStatus?status=available"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 49,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": 99999,
+            "Line": 50,
+            "Operator": "==",
+            "Subject": "body.id"
+          },
+          {
+            "Expected": "Rex",
+            "Line": 51,
+            "Operator": "==",
+            "Subject": "body.name"
+          },
+          {
+            "Expected": "object",
+            "Line": 52,
+            "Operator": "type",
+            "Subject": "body.category"
+          },
+          {
+            "Expected": "number",
+            "Line": 53,
+            "Operator": "type",
+            "Subject": "body.category.id"
+          },
+          {
+            "Expected": "string",
+            "Line": 54,
+            "Operator": "type",
+            "Subject": "body.category.name"
+          },
+          {
+            "Expected": "array",
+            "Line": 55,
+            "Operator": "type",
+            "Subject": "body.photoUrls"
+          },
+          {
+            "Expected": "array",
+            "Line": 56,
+            "Operator": "type",
+            "Subject": "body.tags"
+          },
+          {
+            "Expected": "number",
+            "Line": 57,
+            "Operator": "type",
+            "Subject": "body.tags[0].id"
+          },
+          {
+            "Expected": "string",
+            "Line": 58,
+            "Operator": "type",
+            "Subject": "body.tags[0].name"
+          },
+          {
+            "Expected": [
+              "available",
+              "pending",
+              "sold"
+            ],
+            "Line": 59,
+            "Operator": "in",
+            "Subject": "body.status"
+          }
+        ],
+        "Body": {
+          "ContentType": "json",
+          "FilePath": "",
+          "GraphQL": null,
+          "Line": 31,
+          "Multipart": null,
+          "Raw": "{\n  \"id\": 99999,\n  \"category\": {\n    \"id\": 1,\n    \"name\": \"Dogs\"\n  },\n  \"name\": \"Rex\",\n  \"photoUrls\": [\"https://example.com/rex.jpg\"],\n  \"tags\": [\n    {\n      \"id\": 1,\n      \"name\": \"friendly\"\n    }\n  ],\n  \"status\": \"available\"\n}"
+        },
+        "Captures": [
+          {
+            "Line": 63,
+            "Name": "petId",
+            "Path": "id",
+            "Source": "body"
+          }
+        ],
+        "DBAssertions": null,
+        "Description": "Create a pet and validate response matches contract",
+        "HTTPVersion": "",
+        "Headers": [
+          {
+            "Key": "Content-Type",
+            "Line": 29,
+            "Value": "application/json"
+          }
+        ],
+        "Line": 23,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "POST",
+        "MockBody": "",
+        "Name": "createPet",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "contract",
+          "pets",
+          "write"
+        ],
+        "URL": "{{baseUrl}}/pet"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 75,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "number",
+            "Line": 76,
+            "Operator": "type",
+            "Subject": "body.id"
+          },
+          {
+            "Expected": "string",
+            "Line": 77,
+            "Operator": "type",
+            "Subject": "body.name"
+          },
+          {
+            "Expected": "array",
+            "Line": 78,
+            "Operator": "type",
+            "Subject": "body.photoUrls"
+          },
+          {
+            "Expected": "string",
+            "Line": 79,
+            "Operator": "type",
+            "Subject": "body.status"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Verify every field has the expected type per the contract",
+        "HTTPVersion": "",
+        "Headers": null,
+        "Line": 66,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": [
+            "createPet"
+          ],
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "getPetById",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "contract",
+          "pets"
+        ],
+        "URL": "{{baseUrl}}/pet/{{createPet.petId}}"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 90,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "object",
+            "Line": 91,
+            "Operator": "type",
+            "Subject": "body"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Verify the inventory endpoint returns a map of status counts",
+        "HTTPVersion": "",
+        "Headers": null,
+        "Line": 82,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "getInventory",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "contract",
+          "store"
+        ],
+        "URL": "{{baseUrl}}/store/inventory"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 112,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "number",
+            "Line": 113,
+            "Operator": "type",
+            "Subject": "body.id"
+          },
+          {
+            "Expected": "number",
+            "Line": 114,
+            "Operator": "type",
+            "Subject": "body.petId"
+          },
+          {
+            "Expected": "number",
+            "Line": 115,
+            "Operator": "type",
+            "Subject": "body.quantity"
+          },
+          {
+            "Expected": [
+              "placed",
+              "approved",
+              "delivered"
+            ],
+            "Line": 116,
+            "Operator": "in",
+            "Subject": "body.status"
+          },
+          {
+            "Expected": "boolean",
+            "Line": 117,
+            "Operator": "type",
+            "Subject": "body.complete"
+          }
+        ],
+        "Body": {
+          "ContentType": "json",
+          "FilePath": "",
+          "GraphQL": null,
+          "Line": 102,
+          "Multipart": null,
+          "Raw": "{\n  \"id\": 10,\n  \"petId\": 99999,\n  \"quantity\": 1,\n  \"shipDate\": \"{{$now()}}\",\n  \"status\": \"placed\",\n  \"complete\": false\n}"
+        },
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Place an order and validate the response contract",
+        "HTTPVersion": "",
+        "Headers": [
+          {
+            "Key": "Content-Type",
+            "Line": 100,
+            "Value": "application/json"
+          }
+        ],
+        "Line": 94,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "POST",
+        "MockBody": "",
+        "Name": "createOrder",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "contract",
+          "store",
+          "write"
+        ],
+        "URL": "{{baseUrl}}/store/order"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 404,
+            "Line": 128,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": null,
+            "Line": 129,
+            "Operator": "exists",
+            "Subject": "body.code"
+          },
+          {
+            "Expected": null,
+            "Line": 130,
+            "Operator": "exists",
+            "Subject": "body.type"
+          },
+          {
+            "Expected": null,
+            "Line": 131,
+            "Operator": "exists",
+            "Subject": "body.message"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Verify error responses follow the expected format",
+        "HTTPVersion": "",
+        "Headers": null,
+        "Line": 120,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "notFoundPet",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "contract",
+          "error"
+        ],
+        "URL": "{{baseUrl}}/pet/0"
+      }
+    ],
+    "Variables": [
+      {
+        "Line": 5,
+        "Name": "baseUrl",
+        "Value": "https://petstore.swagger.io/v2"
+      }
+    ]
+  }
+}

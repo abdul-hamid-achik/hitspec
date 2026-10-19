@@ -89,7 +89,13 @@ func (p *Parser) parseAnnotation(req *Request) error {
 	case "auth":
 		auth, err := parseAuthConfig(value)
 		if err != nil {
-			return err
+			return &ParseError{
+				File:    p.file,
+				Line:    p.curToken.Line,
+				Column:  p.curToken.Column,
+				Message: err.Error(),
+				Snippet: p.getSnippet(),
+			}
 		}
 		req.Metadata.Auth = auth
 	case "before":
@@ -167,45 +173,95 @@ func (p *Parser) parseAnnotation(req *Request) error {
 	return nil
 }
 
+// authSpec describes the argument shape of one auth type.
+type authSpec struct {
+	typ   AuthType
+	args  []string // names of the required arguments, for error messages
+	scope bool     // extra arguments after the required ones are scopes
+}
+
+var authSpecs = map[string]authSpec{
+	"basic":        {typ: AuthBasic, args: []string{"username", "password"}},
+	"bearer":       {typ: AuthBearer, args: []string{"token"}},
+	"apikey":       {typ: AuthAPIKey, args: []string{"headerName", "value"}},
+	"apikey-query": {typ: AuthAPIKeyQuery, args: []string{"paramName", "value"}},
+	"apikeyquery":  {typ: AuthAPIKeyQuery, args: []string{"paramName", "value"}},
+	"digest":       {typ: AuthDigest, args: []string{"username", "password"}},
+	"aws":          {typ: AuthAWS, args: []string{"accessKey", "secretKey", "region", "service"}},
+}
+
+var oauth2Specs = map[string]authSpec{
+	"client_credentials": {typ: AuthOAuth2ClientCredentials, args: []string{"tokenUrl", "clientId", "clientSecret"}, scope: true},
+	"password":           {typ: AuthOAuth2Password, args: []string{"tokenUrl", "clientId", "clientSecret", "username", "password"}, scope: true},
+}
+
 // parseAuthConfig parses an @auth annotation value into an AuthConfig.
+//
+// Arguments are comma-separated ("basic alice, s3cret") when the value has a
+// comma outside {{ }}, otherwise whitespace-separated ("basic alice s3cret").
+// The argument count is validated per type and unknown types are rejected, so a
+// typo fails at parse time instead of silently sending no credentials.
 func parseAuthConfig(value string) (*AuthConfig, error) {
-	parts := strings.Fields(value)
-	if len(parts) == 0 {
-		return nil, nil
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, fmt.Errorf("@auth needs a type: basic, bearer, apiKey, apiKeyQuery, digest, aws, oauth2 client_credentials or oauth2 password")
 	}
 
-	auth := &AuthConfig{}
-	switch strings.ToLower(parts[0]) {
-	case "basic":
-		auth.Type = AuthBasic
-		auth.Params = parts[1:]
-	case "bearer":
-		auth.Type = AuthBearer
-		auth.Params = parts[1:]
-	case "apikey":
-		auth.Type = AuthAPIKey
-		auth.Params = parts[1:]
-	case "apikey-query", "apikeyquery":
-		auth.Type = AuthAPIKeyQuery
-		auth.Params = parts[1:]
-	case "digest":
-		auth.Type = AuthDigest
-		auth.Params = parts[1:]
-	case "aws":
-		auth.Type = AuthAWS
-		auth.Params = parts[1:]
-	case "oauth2":
-		if len(parts) >= 2 {
-			switch strings.ToLower(parts[1]) {
-			case "client_credentials":
-				auth.Type = AuthOAuth2ClientCredentials
-				auth.Params = parts[2:] // tokenUrl, clientId, clientSecret, [scopes]
-			case "password":
-				auth.Type = AuthOAuth2Password
-				auth.Params = parts[2:] // tokenUrl, clientId, clientSecret, username, password, [scopes]
-			}
+	kind, rest := value, ""
+	if i := strings.IndexAny(value, " \t"); i >= 0 {
+		kind, rest = value[:i], strings.TrimSpace(value[i+1:])
+	}
+	label := kind
+
+	spec, ok := authSpecs[strings.ToLower(kind)]
+	if strings.EqualFold(kind, "oauth2") {
+		grant, grantRest := rest, ""
+		if i := strings.IndexAny(rest, " \t"); i >= 0 {
+			grant, grantRest = rest[:i], strings.TrimSpace(rest[i+1:])
 		}
+		spec, ok = oauth2Specs[strings.ToLower(grant)]
+		if !ok {
+			return nil, fmt.Errorf("@auth oauth2 needs a grant type: client_credentials or password (got %q)", grant)
+		}
+		label = "oauth2 " + strings.ToLower(grant)
+		rest = grantRest
+	}
+	if !ok {
+		return nil, fmt.Errorf("unknown @auth type %q (expected basic, bearer, apiKey, apiKeyQuery, digest, aws, oauth2 client_credentials or oauth2 password)", kind)
 	}
 
-	return auth, nil
+	args := splitAuthArgs(rest)
+	n := len(spec.args)
+	if len(args) < n || (!spec.scope && len(args) > n) {
+		want := fmt.Sprintf("%d", n)
+		if spec.scope {
+			want += " or more"
+		}
+		return nil, fmt.Errorf("@auth %s expects %s arguments (%s), got %d", label, want, strings.Join(spec.args, ", "), len(args))
+	}
+	if spec.scope && len(args) > n {
+		// Everything after the required arguments is the scope list, which the
+		// runner reads as one comma-separated parameter.
+		args = append(args[:n:n], strings.Join(args[n:], ","))
+	}
+	return &AuthConfig{Type: spec.typ, Params: args}, nil
+}
+
+// splitAuthArgs splits @auth arguments on commas outside {{ }} when there is
+// one, else on whitespace outside {{ }}. Pieces are trimmed.
+func splitAuthArgs(s string) []string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	isComma := func(c byte) bool { return c == ',' }
+	parts := splitOutsideBraces(s, isComma, false)
+	if len(parts) < 2 {
+		parts = fieldsOutsideBraces(s)
+	}
+	out := make([]string, len(parts))
+	for i, f := range parts {
+		out[i] = strings.TrimSpace(f.text)
+	}
+	return out
 }

@@ -1,0 +1,327 @@
+{
+  "File": {
+    "Path": "petstore/petstore.http",
+    "Requests": [
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 11,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": null,
+            "Line": 12,
+            "Operator": "exists",
+            "Subject": "body[0].id"
+          },
+          {
+            "Expected": "available",
+            "Line": 13,
+            "Operator": "==",
+            "Subject": "body[0].status"
+          }
+        ],
+        "Body": null,
+        "Captures": [
+          {
+            "Line": 17,
+            "Name": "existingPetId",
+            "Path": "[0].id",
+            "Source": "body"
+          }
+        ],
+        "DBAssertions": null,
+        "Description": "Find available pets",
+        "HTTPVersion": "",
+        "Headers": null,
+        "Line": 3,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "findPetsByStatus",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "smoke",
+          "pets"
+        ],
+        "URL": "{{baseUrl}}/pet/findByStatus?status=available"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 29,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": null,
+            "Line": 30,
+            "Operator": "exists",
+            "Subject": "body.id"
+          },
+          {
+            "Expected": null,
+            "Line": 31,
+            "Operator": "exists",
+            "Subject": "body.name"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Get the created pet",
+        "HTTPVersion": "",
+        "Headers": null,
+        "Line": 20,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": [
+            "createPet"
+          ],
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "getPet",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "pets"
+        ],
+        "URL": "{{baseUrl}}/pet/{{createPet.petId}}"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 60,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": 12345,
+            "Line": 61,
+            "Operator": "==",
+            "Subject": "body.id"
+          },
+          {
+            "Expected": "doggie",
+            "Line": 62,
+            "Operator": "==",
+            "Subject": "body.name"
+          }
+        ],
+        "Body": {
+          "ContentType": "json",
+          "FilePath": "",
+          "GraphQL": null,
+          "Line": 42,
+          "Multipart": null,
+          "Raw": "{\n  \"id\": 12345,\n  \"name\": \"doggie\",\n  \"category\": {\n    \"id\": 1,\n    \"name\": \"Dogs\"\n  },\n  \"photoUrls\": [\"http://example.com/photo.jpg\"],\n  \"tags\": [\n    {\n      \"id\": 1,\n      \"name\": \"cute\"\n    }\n  ],\n  \"status\": \"available\"\n}"
+        },
+        "Captures": [
+          {
+            "Line": 66,
+            "Name": "petId",
+            "Path": "id",
+            "Source": "body"
+          }
+        ],
+        "DBAssertions": null,
+        "Description": "Create a new pet",
+        "HTTPVersion": "",
+        "Headers": [
+          {
+            "Key": "Content-Type",
+            "Line": 40,
+            "Value": "application/json"
+          }
+        ],
+        "Line": 34,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "POST",
+        "MockBody": "",
+        "Name": "createPet",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "pets",
+          "write"
+        ],
+        "URL": "{{baseUrl}}/pet"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 86,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "doggie updated",
+            "Line": 87,
+            "Operator": "==",
+            "Subject": "body.name"
+          },
+          {
+            "Expected": "sold",
+            "Line": 88,
+            "Operator": "==",
+            "Subject": "body.status"
+          }
+        ],
+        "Body": {
+          "ContentType": "json",
+          "FilePath": "",
+          "GraphQL": null,
+          "Line": 78,
+          "Multipart": null,
+          "Raw": "{\n  \"id\": {{createPet.petId}},\n  \"name\": \"doggie updated\",\n  \"photoUrls\": [\"http://example.com/photo.jpg\"],\n  \"status\": \"sold\"\n}"
+        },
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Update the pet",
+        "HTTPVersion": "",
+        "Headers": [
+          {
+            "Key": "Content-Type",
+            "Line": 76,
+            "Value": "application/json"
+          }
+        ],
+        "Line": 69,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": [
+            "createPet"
+          ],
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "PUT",
+        "MockBody": "",
+        "Name": "updatePet",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "pets",
+          "write"
+        ],
+        "URL": "{{baseUrl}}/pet"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 100,
+            "Operator": "==",
+            "Subject": "status"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Delete the pet",
+        "HTTPVersion": "",
+        "Headers": null,
+        "Line": 91,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": [
+            "getPet"
+          ],
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "DELETE",
+        "MockBody": "",
+        "Name": "deletePet",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "pets",
+          "write"
+        ],
+        "URL": "{{baseUrl}}/pet/{{createPet.petId}}"
+      }
+    ],
+    "Variables": [
+      {
+        "Line": 1,
+        "Name": "baseUrl",
+        "Value": "https://petstore.swagger.io/v2"
+      }
+    ]
+  }
+}

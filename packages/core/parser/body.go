@@ -1,6 +1,9 @@
 package parser
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 // parseBody parses the request body, dispatching to specialized parsers
 // for multipart, GraphQL, and form block bodies.
@@ -17,38 +20,7 @@ func (p *Parser) parseBody() (*Body, error) {
 		return p.parseFormBlockBody()
 	}
 
-	var builder strings.Builder
-	for p.curToken.Type != TokenAssertionStart &&
-		p.curToken.Type != TokenCaptureStart &&
-		p.curToken.Type != TokenMockStart &&
-		p.curToken.Type != TokenDBStart &&
-		p.curToken.Type != TokenShellStart &&
-		p.curToken.Type != TokenRequestSeparator &&
-		p.curToken.Type != TokenVariable &&
-		p.curToken.Type != TokenEOF {
-
-		switch p.curToken.Type {
-		case TokenVariableRef:
-			builder.WriteString("{{")
-			builder.WriteString(p.curToken.Value)
-			builder.WriteString("}}")
-		case TokenNewline:
-			builder.WriteString("\n")
-		case TokenString:
-			// Preserve quotes for string tokens in body
-			builder.WriteString("\"")
-			builder.WriteString(p.curToken.Value)
-			builder.WriteString("\"")
-		default:
-			// Includes TokenWhitespace: write its literal value so spaces in a
-			// plain-text body aren't lost. nextToken() (which skipped whitespace)
-			// turned "Hello World" into "HelloWorld".
-			builder.WriteString(p.curToken.Value)
-		}
-		p.nextTokenRaw()
-	}
-
-	raw := strings.TrimSpace(builder.String())
+	raw := p.readRawBody()
 	if raw == "" {
 		return nil, nil
 	}
@@ -230,4 +202,37 @@ func (p *Parser) parseGraphQLBody() (*Body, error) {
 	}
 
 	return body, nil
+}
+
+// varDefLineRe matches a file-level "@name = value" variable definition line.
+var varDefLineRe = regexp.MustCompile(`^@[\p{L}\p{N}_.\-]*[ \t]*=`)
+
+// readRawBody reads the request body verbatim, line by line, starting at the
+// line holding the current token, and resyncs the token stream at the line that
+// ends it. The body ends at a request separator, a >>> block marker or a
+// "@name = value" variable line. Nothing inside is interpreted: quotes,
+// apostrophes, '#', '@' and '>>>' mid-line are all body text. Trailing comment
+// lines (a note placed before the assertion block) are not part of the body.
+func (p *Parser) readRawBody() string {
+	l := p.lexer
+	l.seekLineStart(p.curToken.Offset, p.curToken.Line)
+	var lines []string
+	for !l.atEOF() {
+		text := l.peekLine()
+		t := strings.TrimSpace(text)
+		if strings.HasPrefix(t, "###") || strings.HasPrefix(t, ">>>") || varDefLineRe.MatchString(t) {
+			break
+		}
+		lines = append(lines, text)
+		l.skipLine()
+	}
+	for len(lines) > 0 {
+		t := strings.TrimSpace(lines[len(lines)-1])
+		if t != "" && !strings.HasPrefix(t, "#") && !strings.HasPrefix(t, "//") {
+			break
+		}
+		lines = lines[:len(lines)-1]
+	}
+	p.nextToken()
+	return strings.TrimSpace(strings.Join(lines, "\n"))
 }

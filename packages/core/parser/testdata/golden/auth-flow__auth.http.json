@@ -1,0 +1,465 @@
+{
+  "File": {
+    "Path": "auth-flow/auth.http",
+    "Requests": [
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 22,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": true,
+            "Line": 23,
+            "Operator": "==",
+            "Subject": "body.authenticated"
+          },
+          {
+            "Expected": "my-secret-token-123",
+            "Line": 24,
+            "Operator": "==",
+            "Subject": "body.token"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Authenticate with a Bearer token",
+        "HTTPVersion": "",
+        "Headers": null,
+        "Line": 13,
+        "Metadata": {
+          "Auth": {
+            "Params": [
+              "{{token}}"
+            ],
+            "Type": "bearer"
+          },
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "bearerAuth",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "auth",
+          "bearer"
+        ],
+        "URL": "{{baseUrl}}/bearer"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 36,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": true,
+            "Line": 37,
+            "Operator": "==",
+            "Subject": "body.authenticated"
+          },
+          {
+            "Expected": "testuser",
+            "Line": 38,
+            "Operator": "==",
+            "Subject": "body.user"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Authenticate with username and password",
+        "HTTPVersion": "",
+        "Headers": null,
+        "Line": 27,
+        "Metadata": {
+          "Auth": {
+            "Params": [
+              "{{username}}",
+              "{{password}}"
+            ],
+            "Type": "basic"
+          },
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "basicAuth",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "auth",
+          "basic"
+        ],
+        "URL": "{{baseUrl}}/basic-auth/testuser/testpass"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 50,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "json",
+            "Line": 51,
+            "Operator": "contains",
+            "Subject": "header Content-Type"
+          },
+          {
+            "Expected": "sk-test-key-abc123",
+            "Line": 52,
+            "Operator": "==",
+            "Subject": "body.headers.X-Api-Key"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Send API key via custom header",
+        "HTTPVersion": "",
+        "Headers": null,
+        "Line": 41,
+        "Metadata": {
+          "Auth": {
+            "Params": [
+              "X-API-Key",
+              "{{apiKey}}"
+            ],
+            "Type": "apikey"
+          },
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "apiKeyHeader",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "auth",
+          "apikey"
+        ],
+        "URL": "{{baseUrl}}/headers"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 64,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "sk-test-key-abc123",
+            "Line": 65,
+            "Operator": "==",
+            "Subject": "body.args.api_key"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Send API key as query parameter",
+        "HTTPVersion": "",
+        "Headers": null,
+        "Line": 55,
+        "Metadata": {
+          "Auth": {
+            "Params": [
+              "api_key",
+              "{{apiKey}}"
+            ],
+            "Type": "apikey-query"
+          },
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "apiKeyQuery",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "auth",
+          "apikey"
+        ],
+        "URL": "{{baseUrl}}/get"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 77,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": true,
+            "Line": 78,
+            "Operator": "==",
+            "Subject": "body.authenticated"
+          },
+          {
+            "Expected": "user",
+            "Line": 79,
+            "Operator": "==",
+            "Subject": "body.user"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Authenticate with HTTP Digest auth",
+        "HTTPVersion": "",
+        "Headers": null,
+        "Line": 68,
+        "Metadata": {
+          "Auth": {
+            "Params": [
+              "user",
+              "passwd"
+            ],
+            "Type": "digest"
+          },
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "digestAuth",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "auth",
+          "digest"
+        ],
+        "URL": "{{baseUrl}}/digest-auth/auth/user/passwd"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 96,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "admin",
+            "Line": 97,
+            "Operator": "==",
+            "Subject": "body.json.username"
+          }
+        ],
+        "Body": {
+          "ContentType": "json",
+          "FilePath": "",
+          "GraphQL": null,
+          "Line": 90,
+          "Multipart": null,
+          "Raw": "{\n  \"username\": \"admin\",\n  \"password\": \"secret\"\n}"
+        },
+        "Captures": [
+          {
+            "Line": 101,
+            "Name": "sessionToken",
+            "Path": "headers.Host",
+            "Source": "body"
+          }
+        ],
+        "DBAssertions": null,
+        "Description": "Simulate login to get a token",
+        "HTTPVersion": "",
+        "Headers": [
+          {
+            "Key": "Content-Type",
+            "Line": 88,
+            "Value": "application/json"
+          }
+        ],
+        "Line": 82,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "POST",
+        "MockBody": "",
+        "Name": "login",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "auth",
+          "flow"
+        ],
+        "URL": "{{baseUrl}}/post"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 114,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "Bearer",
+            "Line": 115,
+            "Operator": "startsWith",
+            "Subject": "body.headers.Authorization"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Use token from login to access a protected endpoint",
+        "HTTPVersion": "",
+        "Headers": [
+          {
+            "Key": "Authorization",
+            "Line": 111,
+            "Value": "Bearer {{login.sessionToken}}"
+          }
+        ],
+        "Line": 104,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": [
+            "login"
+          ],
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "protectedResource",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "auth",
+          "flow"
+        ],
+        "URL": "{{baseUrl}}/headers"
+      }
+    ],
+    "Variables": [
+      {
+        "Line": 7,
+        "Name": "baseUrl",
+        "Value": "https://httpbin.org"
+      },
+      {
+        "Line": 8,
+        "Name": "token",
+        "Value": "my-secret-token-123"
+      },
+      {
+        "Line": 9,
+        "Name": "username",
+        "Value": "testuser"
+      },
+      {
+        "Line": 10,
+        "Name": "password",
+        "Value": "testpass"
+      },
+      {
+        "Line": 11,
+        "Name": "apiKey",
+        "Value": "sk-test-key-abc123"
+      }
+    ]
+  }
+}

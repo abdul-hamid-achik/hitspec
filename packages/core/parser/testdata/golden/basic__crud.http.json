@@ -1,0 +1,543 @@
+{
+  "File": {
+    "Path": "basic/crud.http",
+    "Requests": [
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 14,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "array",
+            "Line": 15,
+            "Operator": "type",
+            "Subject": "body"
+          },
+          {
+            "Expected": null,
+            "Line": 16,
+            "Operator": "exists",
+            "Subject": "body[0].id"
+          },
+          {
+            "Expected": null,
+            "Line": 17,
+            "Operator": "exists",
+            "Subject": "body[0].title"
+          },
+          {
+            "Expected": null,
+            "Line": 18,
+            "Operator": "exists",
+            "Subject": "body[0].body"
+          },
+          {
+            "Expected": null,
+            "Line": 19,
+            "Operator": "exists",
+            "Subject": "body[0].userId"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Get all posts from the API",
+        "HTTPVersion": "",
+        "Headers": null,
+        "Line": 6,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "listPosts",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "smoke",
+          "read"
+        ],
+        "URL": "{{baseUrl}}/posts"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 30,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": 1,
+            "Line": 31,
+            "Operator": "==",
+            "Subject": "body.id"
+          },
+          {
+            "Expected": null,
+            "Line": 32,
+            "Operator": "exists",
+            "Subject": "body.title"
+          },
+          {
+            "Expected": null,
+            "Line": 33,
+            "Operator": "exists",
+            "Subject": "body.body"
+          },
+          {
+            "Expected": "number",
+            "Line": 34,
+            "Operator": "type",
+            "Subject": "body.userId"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Get a specific post by ID",
+        "HTTPVersion": "",
+        "Headers": null,
+        "Line": 22,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "getPost",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "read"
+        ],
+        "URL": "{{baseUrl}}/posts/1"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 201,
+            "Line": 52,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": null,
+            "Line": 53,
+            "Operator": "exists",
+            "Subject": "body.id"
+          },
+          {
+            "Expected": "My New Post",
+            "Line": 54,
+            "Operator": "==",
+            "Subject": "body.title"
+          },
+          {
+            "Expected": "content",
+            "Line": 55,
+            "Operator": "contains",
+            "Subject": "body.body"
+          },
+          {
+            "Expected": 1,
+            "Line": 56,
+            "Operator": "==",
+            "Subject": "body.userId"
+          }
+        ],
+        "Body": {
+          "ContentType": "json",
+          "FilePath": "",
+          "GraphQL": null,
+          "Line": 45,
+          "Multipart": null,
+          "Raw": "{\n  \"title\": \"My New Post\",\n  \"body\": \"This is the content of my new post.\",\n  \"userId\": 1\n}"
+        },
+        "Captures": [
+          {
+            "Line": 60,
+            "Name": "newPostId",
+            "Path": "id",
+            "Source": "body"
+          }
+        ],
+        "DBAssertions": null,
+        "Description": "Create a new post",
+        "HTTPVersion": "",
+        "Headers": [
+          {
+            "Key": "Content-Type",
+            "Line": 43,
+            "Value": "application/json"
+          }
+        ],
+        "Line": 37,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "POST",
+        "MockBody": "",
+        "Name": "createPost",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "write"
+        ],
+        "URL": "{{baseUrl}}/posts"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 79,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "Updated Post Title",
+            "Line": 80,
+            "Operator": "==",
+            "Subject": "body.title"
+          }
+        ],
+        "Body": {
+          "ContentType": "json",
+          "FilePath": "",
+          "GraphQL": null,
+          "Line": 71,
+          "Multipart": null,
+          "Raw": "{\n  \"id\": 1,\n  \"title\": \"Updated Post Title\",\n  \"body\": \"This post has been updated.\",\n  \"userId\": 1\n}"
+        },
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Update an existing post (using fixed ID since jsonplaceholder doesn't persist)",
+        "HTTPVersion": "",
+        "Headers": [
+          {
+            "Key": "Content-Type",
+            "Line": 69,
+            "Value": "application/json"
+          }
+        ],
+        "Line": 63,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "PUT",
+        "MockBody": "",
+        "Name": "updatePost",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "write"
+        ],
+        "URL": "{{baseUrl}}/posts/1"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 96,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "Patched Title Only",
+            "Line": 97,
+            "Operator": "==",
+            "Subject": "body.title"
+          },
+          {
+            "Expected": 1,
+            "Line": 98,
+            "Operator": "==",
+            "Subject": "body.id"
+          }
+        ],
+        "Body": {
+          "ContentType": "json",
+          "FilePath": "",
+          "GraphQL": null,
+          "Line": 91,
+          "Multipart": null,
+          "Raw": "{\n  \"title\": \"Patched Title Only\"\n}"
+        },
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Partially update a post",
+        "HTTPVersion": "",
+        "Headers": [
+          {
+            "Key": "Content-Type",
+            "Line": 89,
+            "Value": "application/json"
+          }
+        ],
+        "Line": 83,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "PATCH",
+        "MockBody": "",
+        "Name": "patchPost",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "write"
+        ],
+        "URL": "{{baseUrl}}/posts/1"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 109,
+            "Operator": "==",
+            "Subject": "status"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Delete a post (using fixed ID since jsonplaceholder doesn't persist)",
+        "HTTPVersion": "",
+        "Headers": null,
+        "Line": 101,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "DELETE",
+        "MockBody": "",
+        "Name": "deletePost",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "write"
+        ],
+        "URL": "{{baseUrl}}/posts/1"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 120,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "array",
+            "Line": 121,
+            "Operator": "type",
+            "Subject": "body"
+          },
+          {
+            "Expected": 1,
+            "Line": 122,
+            "Operator": "==",
+            "Subject": "body[0].postId"
+          },
+          {
+            "Expected": null,
+            "Line": 123,
+            "Operator": "exists",
+            "Subject": "body[0].email"
+          },
+          {
+            "Expected": null,
+            "Line": 124,
+            "Operator": "exists",
+            "Subject": "body[0].body"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Get comments for a specific post",
+        "HTTPVersion": "",
+        "Headers": null,
+        "Line": 112,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "getPostComments",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "read"
+        ],
+        "URL": "{{baseUrl}}/posts/1/comments"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 136,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "array",
+            "Line": 137,
+            "Operator": "type",
+            "Subject": "body"
+          },
+          {
+            "Expected": 1,
+            "Line": 138,
+            "Operator": "==",
+            "Subject": "body[0].userId"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Get posts filtered by userId query param",
+        "HTTPVersion": "",
+        "Headers": null,
+        "Line": 127,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "filterPostsByUser",
+        "QueryParams": [
+          {
+            "Key": "userId",
+            "Line": 133,
+            "Value": "1"
+          }
+        ],
+        "ShellCommands": null,
+        "Tags": [
+          "read"
+        ],
+        "URL": "{{baseUrl}}/posts"
+      }
+    ],
+    "Variables": [
+      {
+        "Line": 4,
+        "Name": "baseUrl",
+        "Value": "https://jsonplaceholder.typicode.com"
+      }
+    ]
+  }
+}
