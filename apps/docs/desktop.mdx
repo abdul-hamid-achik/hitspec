@@ -96,8 +96,17 @@ becomes available to the desktop app without new native code.
 - Unsaved editor changes are guarded when you switch files, close the window,
   quit or open another workspace, and saving asks before overwriting a file that
   changed on disk since you opened it.
-- If the app is killed without a chance to clean up, the next launch stops the
-  API server it left behind.
+- The API server is started with `--parent-pid`, so it shuts itself down within
+  a second when the app dies without cleaning up (a crash or `kill -9`). A
+  hitspec CLI older than that flag is started without it; the next launch then
+  stops the leftover server instead, after checking its command line and port
+  so an unrelated process that reused the pid is never touched.
+- Launching the app again with a folder (`hitspec-studio ./other-project`, or
+  "Open With" in Finder) opens that folder in the running window, asking first
+  if there are unsaved edits.
+- "Read-only" in Settings protects the workspace and `hitspec.yaml`: saving,
+  creating or deleting files and editing settings are refused, while running
+  requests, stress, mock and history reads keep working.
 
 ## Package it
 

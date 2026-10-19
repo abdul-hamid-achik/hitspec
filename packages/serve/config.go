@@ -19,6 +19,7 @@ type ServeConfig struct {
 	LogFormat     string // "json" or "text" (default: "text")
 	LogLevel      string // "debug", "info", "warn", "error" (default: "info")
 	APIToken      string // if set, all REST/WS requests must present this bearer token
+	ParentPID     int    // if > 0, shut down when this process exits (see WithParentPID)
 }
 
 // Option configures ServeConfig.
@@ -59,7 +60,8 @@ func WithAPIOnly(apiOnly bool) Option {
 	return func(c *ServeConfig) { c.APIOnly = apiOnly }
 }
 
-// WithReadOnly disallows file mutations.
+// WithReadOnly protects the workspace and hitspec.yaml (see readOnlyAllowed in
+// middleware.go for the routes that stay available).
 func WithReadOnly(readOnly bool) Option {
 	return func(c *ServeConfig) { c.ReadOnly = readOnly }
 }
@@ -109,6 +111,14 @@ func WithLogLevel(level string) Option {
 // (localhost-only default, backward compatible).
 func WithAPIToken(token string) Option {
 	return func(c *ServeConfig) { c.APIToken = token }
+}
+
+// WithParentPID makes the server shut down gracefully when the process with
+// this pid exits. A supervisor that dies without running any cleanup (SIGKILL,
+// a crash) would otherwise leave the server running with its port and file
+// watcher. 0 disables the watch.
+func WithParentPID(pid int) Option {
+	return func(c *ServeConfig) { c.ParentPID = pid }
 }
 
 // DefaultConfig returns a ServeConfig with default values.

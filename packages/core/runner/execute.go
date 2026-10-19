@@ -396,6 +396,16 @@ func (r *Runner) executeRequest(ctx context.Context, req *parser.Request, baseDi
 		}()
 	}
 
+	// Confine `< file` bodies and multipart parts to the workspace when the
+	// caller asked for it (serve/studio run files for other people).
+	if r.config.FileRoot != "" {
+		if err := http.CheckFileRefs(req, r.resolver.Resolve, baseDir, r.config.FileRoot); err != nil {
+			result.Error = err
+			result.Passed = false
+			return result
+		}
+	}
+
 	start := time.Now()
 
 	httpReq := http.BuildRequestFromASTWithBaseDir(req, r.resolver.Resolve, baseDir)
@@ -423,6 +433,7 @@ func (r *Runner) executeRequest(ctx context.Context, req *parser.Request, baseDi
 		result.Assertions = assertions.EvaluateAllWithBaseDir(resp, req.Assertions, baseDir,
 			assertions.WithTestFile(filePath),
 			assertions.WithRequestName(req.Name),
+			assertions.WithSnapshotManager(r.snapshots),
 			assertions.WithResolver(r.resolver.Resolve))
 		result.Passed = true
 		for _, a := range result.Assertions {

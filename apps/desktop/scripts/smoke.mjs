@@ -292,6 +292,21 @@ async function main() {
       assert.equal(updated.timeout, 12000);
     });
 
+    await check('PUT /config can set retries to 0 and clear the proxy; retryDelay and maxRedirects round-trip', async () => {
+      const set = await request({ method: 'PUT', path: '/config', body: { retries: 3, proxy: 'http://127.0.0.1:9' } });
+      assert.equal(set.retries, 3);
+      assert.equal(set.proxy, 'http://127.0.0.1:9');
+      const cleared = await request({ method: 'PUT', path: '/config', body: { retries: 0, proxy: '', retryDelay: 250, maxRedirects: 4 } });
+      assert.equal(cleared.retries ?? 0, 0);
+      assert.equal(cleared.proxy ?? '', '');
+      assert.equal(cleared.retryDelay, 250);
+      assert.equal(cleared.maxRedirects, 4);
+      const read = await request({ path: '/config' });
+      assert.equal(read.retries ?? 0, 0);
+      assert.equal(read.proxy ?? '', '');
+      assert.equal(read.retryDelay, 250);
+    });
+
     await check('POST /export/curl produces a runnable command', async () => {
       const result = await request({ method: 'POST', path: '/export/curl', body: { file: 'api/health.http', requestName: 'health' } });
       assert.equal(result.commands.length, 1);
@@ -318,8 +333,8 @@ async function main() {
       assert.ok(page.total >= 3, `expected >= 3 stored runs, got ${page.total}`);
       const run = page.runs.find((r) => r.filePath.includes('users.http'));
       assert.ok(run, 'expected a stored run for api/users.http');
-      // The server persists a run's results in the background after /run
-      // returns, so a fast reader can see the run before all of its rows.
+      // The server commits a run with all its results before /run returns; the
+      // short poll below is only a safety net and is harmless.
       let detail;
       for (let i = 0; i < 40; i++) {
         detail = await request({ path: `/history/runs/${run.id}` });

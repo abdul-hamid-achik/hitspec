@@ -203,6 +203,9 @@ func (m *Manager) publish(msgType string, payload any) {
 	}
 }
 
+// requireWritable guards the operations that change the workspace, hitspec.yaml,
+// the cookie store or the run history. It is deliberately not called by the
+// operations that only run requests.
 func (m *Manager) requireWritable() error {
 	if m.config.ReadOnly {
 		return fmt.Errorf("manager is in read-only mode")
@@ -213,17 +216,11 @@ func (m *Manager) requireWritable() error {
 func (m *Manager) openHistoryStore() {
 	dbPath := m.config.HistoryDBPath
 	if dbPath == "" {
-		home, err := os.UserHomeDir()
-		if err == nil {
-			dir := filepath.Join(home, ".hitspec")
-			_ = os.MkdirAll(dir, 0o755)
-			dbPath = filepath.Join(dir, "history.db")
-		}
+		dbPath, _ = history.DefaultPath()
 	}
 	if dbPath == "" {
 		return
 	}
-	_ = os.MkdirAll(filepath.Dir(dbPath), 0o755)
 	store, err := history.NewStore(dbPath)
 	if err != nil {
 		m.logger.Warn("failed to open history database", "error", err, "path", dbPath)

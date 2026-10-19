@@ -44,6 +44,7 @@ type ContractStatusDTO struct {
 }
 
 func (s *Server) handleContractVerify(w http.ResponseWriter, r *http.Request) {
+	clearWriteDeadline(w) // verification calls the provider for every interaction
 	var req ContractVerifyReq
 	if err := readJSON(r, &req); err != nil {
 		writeReadError(w, err)

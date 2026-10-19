@@ -438,16 +438,10 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	if !noHistoryFlag && !dryRunFlag {
 		dbPath := historyDBFlag
 		if dbPath == "" {
-			home, err := os.UserHomeDir()
-			if err == nil {
-				dir := filepath.Join(home, ".hitspec")
-				_ = os.MkdirAll(dir, 0o755)
-				dbPath = filepath.Join(dir, "history.db")
-			}
+			dbPath, _ = history.DefaultPath()
 		}
 		if dbPath != "" {
-			// Ensure parent directory exists
-			_ = os.MkdirAll(filepath.Dir(dbPath), 0o755)
+			// NewStore creates the parent directory (0700) when it is missing.
 			store, err := history.NewStore(dbPath)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "warning: failed to open history db: %v\n", err)

@@ -88,8 +88,33 @@ backend.on('event', (event) => broadcast('hitspec:event', event));
 backend.on('socket', (info) => broadcast('hitspec:socket', info));
 backend.on('log', (line) => broadcast('hitspec:log', line));
 
-/** Queued workspace open requests that arrive before the window exists. */
+/** Queued workspace open requests that arrive before startup has finished. */
 let pendingWorkspace = null;
+
+/** Set once the window exists and the IPC surface is registered. */
+let ipcApi = null;
+let startupDone = false;
+
+/**
+ * Open `dir` as the workspace when another launch or the OS asks for it (a
+ * second `hitspec-studio <dir>`, Finder "Open With"). Before startup finishes
+ * the request is queued and picked up there; afterwards it goes through the
+ * same path as File > Open Workspace, including the unsaved-edits prompt.
+ */
+async function openRequestedWorkspace(dir) {
+  if (!dir) return;
+  if (!startupDone || !ipcApi) {
+    pendingWorkspace = dir;
+    return;
+  }
+  try {
+    const opened = await ipcApi.openWorkspaceDir(dir);
+    if (opened) buildMenu({ getWindow: getMainWindow, settings });
+  } catch (err) {
+    broadcast('hitspec:status', backend.snapshot());
+    broadcast('hitspec:toast', { severity: 'error', message: err?.message ?? String(err) });
+  }
+}
 
 function clampToDisplay(bounds) {
   const displays = screen.getAllDisplays();
@@ -275,16 +300,16 @@ if (!gotLock) {
       win.focus();
     }
     const dir = workspaceArgFrom(argv);
-    if (dir) pendingWorkspace = dir;
+    if (dir) openRequestedWorkspace(dir);
   });
 
   // macOS: opening a folder/file from Finder or `open -a`.
   app.on('open-file', (event, filePath) => {
     event.preventDefault();
     if (!filePath) return;
-    pendingWorkspace = fs.existsSync(filePath) && fs.statSync(filePath).isDirectory()
+    openRequestedWorkspace(fs.existsSync(filePath) && fs.statSync(filePath).isDirectory()
       ? filePath
-      : path.dirname(filePath);
+      : path.dirname(filePath));
   });
 
   app.whenReady().then(async () => {
@@ -297,7 +322,7 @@ if (!gotLock) {
     if (reaped.reaped) console.warn(`[hitspec] stopped a stale API server left by a previous run (pid ${reaped.pid})`);
 
     registerProtocol();
-    registerIpc({
+    ipcApi = registerIpc({
       backend, settings, getWindow: getMainWindow, broadcast, shellTrust, dirtyGuard, startOptionsFor, startedAt,
     });
     buildMenu({ getWindow: getMainWindow, settings });
@@ -311,6 +336,14 @@ if (!gotLock) {
       await startWithWorkspace(initial);
     } else {
       broadcast('hitspec:status', backend.snapshot());
+    }
+
+    startupDone = true;
+    // A request that arrived while the window was loading.
+    if (pendingWorkspace) {
+      const queued = pendingWorkspace;
+      pendingWorkspace = null;
+      await openRequestedWorkspace(queued);
     }
 
     app.on('activate', () => {

@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
+	"sync/atomic"
 )
 
 const (
@@ -19,8 +21,11 @@ const (
 	SnapshotExt = ".snap.json"
 )
 
-// Manager handles snapshot storage and comparison.
+// Manager handles snapshot storage and comparison. Each run owns its own
+// Manager; a Manager is safe for concurrent use (parallel requests of one file
+// compare through the same instance).
 type Manager struct {
+	mu            sync.Mutex // guards snapshotsRead and serializes file access
 	baseDir       string
 	updateMode    bool
 	snapshotsRead map[string]map[string]any // file -> {name -> value}
@@ -49,6 +54,9 @@ type SnapshotResult struct {
 // If updateMode is true and there's a mismatch, the snapshot is updated.
 // The name parameter is optional; if empty, a hash of the value is used.
 func (m *Manager) Compare(testFile string, requestName string, snapshotName string, actual any) *SnapshotResult {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	result := &SnapshotResult{
 		Actual: actual,
 	}
@@ -210,27 +218,34 @@ type Snapshot struct {
 	Data     map[string]any `json:"data"`
 }
 
-// Global snapshot manager (initialized per test run)
-var globalManager *Manager
+// globalManager is the process-wide fallback used when an evaluator is not
+// given its own manager. The runner no longer sets it: each run passes its own
+// Manager to the evaluator, so concurrent runs (hitspec serve) cannot see each
+// other's update mode or cache.
+var globalManager atomic.Pointer[Manager]
 
-// SetGlobalManager sets the global snapshot manager.
+// SetGlobalManager sets the process-wide fallback snapshot manager.
+//
+// Deprecated: pass a per-run Manager to the evaluator instead
+// (assertions.WithSnapshotManager).
 func SetGlobalManager(m *Manager) {
-	globalManager = m
+	globalManager.Store(m)
 }
 
-// GetGlobalManager returns the global snapshot manager.
+// GetGlobalManager returns the process-wide fallback snapshot manager.
 func GetGlobalManager() *Manager {
-	return globalManager
+	return globalManager.Load()
 }
 
 // CompareSnapshot is a convenience function for comparing snapshots using the global manager.
 func CompareSnapshot(testFile, requestName, snapshotName string, actual any) *SnapshotResult {
-	if globalManager == nil {
+	m := globalManager.Load()
+	if m == nil {
 		return &SnapshotResult{
 			Passed:  false,
 			Message: "snapshot manager not initialized",
 			Actual:  actual,
 		}
 	}
-	return globalManager.Compare(testFile, requestName, snapshotName, actual)
+	return m.Compare(testFile, requestName, snapshotName, actual)
 }

@@ -111,7 +111,7 @@ export function createSettingsView(root) {
             s.status?.error ? h('pre', { class: 'code plain', style: { color: 'var(--danger)', maxHeight: '160px' }, text: s.status.error }) : null,
             h('div', { class: 'row wrap' },
               h('label', { class: 'checkbox' }, watchBox, h('span', { text: 'Watch files' })),
-              h('label', { class: 'checkbox' }, readOnlyBox, h('span', { text: 'Read-only (block writes)' })),
+              h('label', { class: 'checkbox' }, readOnlyBox, h('span', { text: 'Read-only (no file or settings writes)' })),
               h('label', { class: 'checkbox', title: 'Allows shell commands in .http files. Asks for confirmation for this workspace; lasts until you quit.' },
                 allowShellBox, h('span', { text: 'Allow shell execution' })),
               h('div', { class: 'field', style: { width: '130px' } }, h('label', { text: 'Log level' }),

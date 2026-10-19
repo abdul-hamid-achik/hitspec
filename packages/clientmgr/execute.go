@@ -18,9 +18,6 @@ import (
 // RequestIndex selects by source position (used by the studio TUI to run an
 // untitled request that has no @name for the name filter to match).
 func (m *Manager) Execute(ctx context.Context, req ExecuteReq) (*RunResultDTO, error) {
-	if err := m.requireWritable(); err != nil {
-		return nil, err
-	}
 	if req.File == "" {
 		return nil, fmt.Errorf("file is required")
 	}
@@ -29,9 +26,6 @@ func (m *Manager) Execute(ctx context.Context, req ExecuteReq) (*RunResultDTO, e
 
 // RunFile runs all requests in a file.
 func (m *Manager) RunFile(ctx context.Context, req RunReq) (*RunResultDTO, error) {
-	if err := m.requireWritable(); err != nil {
-		return nil, err
-	}
 	if req.File == "" {
 		return nil, fmt.Errorf("file is required")
 	}
@@ -42,9 +36,6 @@ func (m *Manager) RunFile(ctx context.Context, req RunReq) (*RunResultDTO, error
 // resolves variables from the active (or given) environment just like a normal
 // run, by materializing the request into a temporary .http file.
 func (m *Manager) ExecuteAdHoc(ctx context.Context, req AdHocReq) (*RunResultDTO, error) {
-	if err := m.requireWritable(); err != nil {
-		return nil, err
-	}
 	method := strings.ToUpper(strings.TrimSpace(req.Method))
 	if method == "" {
 		method = "GET"
@@ -125,6 +116,8 @@ func (m *Manager) runSettings(environment string) (*runner.Config, []http.Client
 	cfg, clientOpts := runconfig.Build(m.fileConfig, overrides)
 	cfg.AllowShell = m.config.AllowShell
 	cfg.AllowDB = m.config.AllowDB
+	// A `< file` body must not read outside the workspace.
+	cfg.FileRoot = m.config.WorkDir
 	return cfg, clientOpts
 }
 
@@ -209,7 +202,7 @@ func (m *Manager) run(ctx context.Context, file, requestName string, requestInde
 		}
 		m.history.add(entry)
 	}
-	m.recordRunToHistory(file, env, dto)
+	m.recordRunToHistory(ctx, file, env, dto)
 	m.captureCookies(result)
 	return dto, nil
 }
@@ -307,68 +300,55 @@ func (m *Manager) ClearRuns(ctx context.Context) error {
 	return m.historyStore.Queries().ClearAllRuns(ctx)
 }
 
-func (m *Manager) recordRunToHistory(filePath, environment string, result *RunResultDTO) {
+// recordRunToHistory persists a run before Execute/RunFile return, in one
+// transaction: a GetRun right after sees every result. A storage failure is
+// logged and never fails the run.
+func (m *Manager) recordRunToHistory(ctx context.Context, filePath, environment string, result *RunResultDTO) {
 	if m.historyStore == nil {
 		return
 	}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		runID, err := m.historyStore.RecordRun(ctx, filePath, environment)
-		if err != nil {
-			return
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+
+	rec := history.RunRecord{
+		FilePath:    filePath,
+		Environment: environment,
+		Duration:    time.Duration(result.Duration) * time.Millisecond,
+	}
+	for _, rr := range result.Results {
+		r := history.ResultRecord{
+			Name:        rr.Name,
+			DurationMs:  int64(rr.Duration),
+			Passed:      rr.Passed,
+			Skipped:     rr.Skipped,
+			Error:       rr.Error,
+			Description: rr.Description,
 		}
-		var passed, failed, skipped int64
-		for _, rr := range result.Results {
-			statusCode := 0
-			if rr.Response != nil {
-				statusCode = rr.Response.StatusCode
-			}
-			method, url := "", ""
-			if rr.Request != nil {
-				method = rr.Request.Method
-				url = rr.Request.URL
-			}
-			bodyPreview := ""
-			if rr.Response != nil && len(rr.Response.Body) > 0 {
-				bodyPreview = rr.Response.Body
-				if len(bodyPreview) > 65536 {
-					bodyPreview = bodyPreview[:65536]
-				}
-			}
-			resultID, err := m.historyStore.RecordResult(ctx, runID,
-				rr.Name, method, url, statusCode,
-				int64(rr.Duration), rr.Passed, rr.Skipped,
-				rr.Error, rr.Description, bodyPreview,
-			)
-			if err != nil {
-				continue
-			}
-			if len(rr.Assertions) > 0 {
-				records := make([]history.AssertionRecord, 0, len(rr.Assertions))
-				for _, a := range rr.Assertions {
-					records = append(records, history.AssertionRecord{
-						Operator: a.Operator,
-						Subject:  a.Subject,
-						Expected: formatAny(a.Expected),
-						Actual:   formatAny(a.Actual),
-						Passed:   a.Passed,
-						Message:  a.Message,
-					})
-				}
-				_ = m.historyStore.RecordAssertions(ctx, resultID, records)
-			}
-			if rr.Passed {
-				passed++
-			} else if rr.Skipped {
-				skipped++
-			} else {
-				failed++
+		if rr.Request != nil {
+			r.Method, r.URL = rr.Request.Method, rr.Request.URL
+		}
+		if rr.Response != nil {
+			r.StatusCode = rr.Response.StatusCode
+			r.BodyPreview = rr.Response.Body
+			if len(r.BodyPreview) > 65536 {
+				r.BodyPreview = r.BodyPreview[:65536]
 			}
 		}
-		dur := time.Duration(result.Duration) * time.Millisecond
-		_ = m.historyStore.FinishRun(ctx, runID, dur, passed, failed, skipped, passed+failed+skipped)
-	}()
+		for _, a := range rr.Assertions {
+			r.Assertions = append(r.Assertions, history.AssertionRecord{
+				Operator: a.Operator,
+				Subject:  a.Subject,
+				Expected: formatAny(a.Expected),
+				Actual:   formatAny(a.Actual),
+				Passed:   a.Passed,
+				Message:  a.Message,
+			})
+		}
+		rec.Results = append(rec.Results, r)
+	}
+	if _, err := m.historyStore.RecordCompleteRun(ctx, rec); err != nil {
+		m.logger.Warn("failed to record run history", "error", err, "file", filePath)
+	}
 }
 
 func convertRunToDTO(run history.Run) HistoryRunDTO {

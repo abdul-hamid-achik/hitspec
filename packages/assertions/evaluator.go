@@ -39,6 +39,7 @@ type Evaluator struct {
 	testFile    string              // Path to the test file (for snapshots)
 	requestName string              // Name of the current request (for snapshots)
 	resolver    func(string) string // Optional resolver for variable interpolation
+	snapshots   *snapshot.Manager   // Per-run snapshot manager; nil falls back to the global one
 }
 
 // EvaluatorOption is a functional option for configuring an Evaluator.
@@ -55,6 +56,15 @@ func WithTestFile(path string) EvaluatorOption {
 func WithRequestName(name string) EvaluatorOption {
 	return func(e *Evaluator) {
 		e.requestName = name
+	}
+}
+
+// WithSnapshotManager gives the evaluator the snapshot manager of its run.
+// Without it the (deprecated) process-wide manager is used, which concurrent
+// runs would share.
+func WithSnapshotManager(m *snapshot.Manager) EvaluatorOption {
+	return func(e *Evaluator) {
+		e.snapshots = m
 	}
 }
 
@@ -894,8 +904,10 @@ func (e *Evaluator) snapshot(actual, expected any) (bool, string) {
 		snapshotName = fmt.Sprintf("%v", expected)
 	}
 
-	// Use global snapshot manager
-	manager := snapshot.GetGlobalManager()
+	manager := e.snapshots
+	if manager == nil {
+		manager = snapshot.GetGlobalManager()
+	}
 	if manager == nil {
 		return false, "snapshot manager not initialized"
 	}

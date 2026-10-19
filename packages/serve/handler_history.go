@@ -233,88 +233,58 @@ func (s *Server) handleListResultsByRequest(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-// recordRunToHistory persists a run result to the history store in a goroutine.
-// It is safe to call even if historyStore is nil.
-func (s *Server) recordRunToHistory(filePath, environment string, result *RunResultDTO) {
+// recordRunToHistory persists a run result to the history store before the
+// handler responds, in one transaction: a client that fetches the run right
+// after /run or /execute returns sees every result. It is safe to call even if
+// historyStore is nil; a storage failure is logged and never fails the run.
+func (s *Server) recordRunToHistory(ctx context.Context, filePath, environment string, result *RunResultDTO) {
 	if s.historyStore == nil {
 		return
 	}
+	// The client may hang up the moment the run ends; the record is still
+	// worth keeping.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
 
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		runID, err := s.historyStore.RecordRun(ctx, filePath, environment)
-		if err != nil {
-			return
+	rec := history.RunRecord{
+		FilePath:    filePath,
+		Environment: environment,
+		Duration:    time.Duration(result.Duration) * time.Millisecond,
+	}
+	for _, rr := range result.Results {
+		r := history.ResultRecord{
+			Name:        rr.Name,
+			DurationMs:  int64(rr.Duration),
+			Passed:      rr.Passed,
+			Skipped:     rr.Skipped,
+			Error:       rr.Error,
+			Description: rr.Description,
 		}
-
-		var passed, failed, skipped int64
-		for _, rr := range result.Results {
-			statusCode := 0
-			if rr.Response != nil {
-				statusCode = rr.Response.StatusCode
-			}
-			method, url := "", ""
-			if rr.Request != nil {
-				method = rr.Request.Method
-				url = rr.Request.URL
-			}
-
-			bodyPreview := ""
-			if rr.Response != nil && len(rr.Response.Body) > 0 {
-				preview := rr.Response.Body
-				if len(preview) > 65536 {
-					preview = preview[:65536]
-				}
-				bodyPreview = preview
-			}
-
-			resultID, err := s.historyStore.RecordResult(ctx, runID,
-				rr.Name, method, url, statusCode,
-				int64(rr.Duration),
-				rr.Passed, rr.Skipped,
-				rr.Error, rr.Description, bodyPreview,
-			)
-			if err != nil {
-				continue
-			}
-
-			if len(rr.Assertions) > 0 {
-				records := make([]history.AssertionRecord, 0, len(rr.Assertions))
-				for _, a := range rr.Assertions {
-					expected := ""
-					if a.Expected != nil {
-						expected = formatAny(a.Expected)
-					}
-					actual := ""
-					if a.Actual != nil {
-						actual = formatAny(a.Actual)
-					}
-					records = append(records, history.AssertionRecord{
-						Operator: a.Operator,
-						Subject:  a.Subject,
-						Expected: expected,
-						Actual:   actual,
-						Passed:   a.Passed,
-						Message:  a.Message,
-					})
-				}
-				_ = s.historyStore.RecordAssertions(ctx, resultID, records)
-			}
-
-			if rr.Passed {
-				passed++
-			} else if rr.Skipped {
-				skipped++
-			} else {
-				failed++
+		if rr.Request != nil {
+			r.Method, r.URL = rr.Request.Method, rr.Request.URL
+		}
+		if rr.Response != nil {
+			r.StatusCode = rr.Response.StatusCode
+			r.BodyPreview = rr.Response.Body
+			if len(r.BodyPreview) > 65536 {
+				r.BodyPreview = r.BodyPreview[:65536]
 			}
 		}
-
-		dur := time.Duration(result.Duration) * time.Millisecond
-		_ = s.historyStore.FinishRun(ctx, runID, dur, passed, failed, skipped, passed+failed+skipped)
-	}()
+		for _, a := range rr.Assertions {
+			r.Assertions = append(r.Assertions, history.AssertionRecord{
+				Operator: a.Operator,
+				Subject:  a.Subject,
+				Expected: formatAny(a.Expected),
+				Actual:   formatAny(a.Actual),
+				Passed:   a.Passed,
+				Message:  a.Message,
+			})
+		}
+		rec.Results = append(rec.Results, r)
+	}
+	if _, err := s.historyStore.RecordCompleteRun(ctx, rec); err != nil {
+		s.logger.Warn("failed to record run history", "error", err, "file", filePath)
+	}
 }
 
 // --- DTO converters ---

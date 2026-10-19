@@ -212,4 +212,8 @@ export function registerIpc({
   });
 
   return { openWorkspaceDir, approvedWritePaths };
+
+  // The main process opens workspaces too (a second launch, Finder "open with"),
+  // and must go through the same guard and start sequence.
+  return { openWorkspaceDir };
 }

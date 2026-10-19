@@ -221,11 +221,16 @@ type EnvironmentDTO struct {
 }
 
 // ConfigDTO is the hitspec.yaml configuration.
+//
+// Passed to PutConfig, zero values mean "leave unchanged" (a plain int cannot
+// tell 0 from absent). To set retries to 0 or clear the proxy use PatchConfig.
 type ConfigDTO struct {
 	DefaultEnvironment string            `json:"defaultEnvironment,omitempty"`
 	Timeout            int               `json:"timeout,omitempty"`
 	Retries            int               `json:"retries,omitempty"`
+	RetryDelay         int               `json:"retryDelay,omitempty"`
 	FollowRedirects    *bool             `json:"followRedirects,omitempty"`
+	MaxRedirects       int               `json:"maxRedirects,omitempty"`
 	ValidateSSL        *bool             `json:"validateSSL,omitempty"`
 	Proxy              string            `json:"proxy,omitempty"`
 	Headers            map[string]string `json:"headers,omitempty"`

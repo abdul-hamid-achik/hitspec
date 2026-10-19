@@ -447,6 +447,24 @@ test.describe.serial('hitspec Studio desktop app', () => {
     await expect(page.locator('.pill', { hasText: 'unsaved changes' })).toHaveCount(0);
   });
 
+  test('a second launch with a folder opens it in the running app', async () => {
+    // `hitspec-studio <dir>` while the app runs makes Electron emit
+    // 'second-instance' in this process with the new argv. That request used to
+    // be queued and never read again.
+    await app.evaluate(({ app: electronApp }, dir) => {
+      electronApp.emit('second-instance', {}, ['hitspec-studio', dir], process.cwd());
+    }, workspace2.dir);
+    await expect(page.locator('.workspace-chip .name')).toHaveText(path.basename(workspace2.dir), {
+      timeout: 60_000,
+    });
+
+    // back to the first project for the tests that follow
+    await page.evaluate((dir) => window.hitspec.openWorkspacePath(dir), workspace.dir);
+    await expect(page.locator('.workspace-chip .name')).toHaveText(path.basename(workspace.dir), {
+      timeout: 60_000,
+    });
+  });
+
   test('leaves no renderer errors behind', async () => {
     expect(pageErrors, `renderer threw:\n${pageErrors.join('\n')}`).toEqual([]);
     expect(consoleErrors, `console errors:\n${consoleErrors.join('\n')}`).toEqual([]);

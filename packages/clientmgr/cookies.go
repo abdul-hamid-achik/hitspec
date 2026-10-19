@@ -70,7 +70,8 @@ func (m *Manager) DeleteCookie(ctx context.Context, domain, path, name string) (
 // store. It reads the RAW runner result (not the DTO), because the DTO's response
 // headers are redacted — reading the DTO would only ever see "[REDACTED]".
 func (m *Manager) captureCookies(result *runner.RunResult) {
-	if result == nil {
+	if result == nil || m.config.ReadOnly {
+		// A read-only manager runs requests but does not write the cookie store.
 		return
 	}
 	cookies, err := m.loadCookies()

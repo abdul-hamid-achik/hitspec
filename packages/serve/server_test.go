@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -287,24 +289,89 @@ func TestReadOnlyMiddleware(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
+	wrapped := readOnlyMiddleware(true)(handler)
 
-	mw := readOnlyMiddleware(true)
-	wrapped := mw(handler)
-
-	// PUT should be blocked
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/config", nil)
-	w := httptest.NewRecorder()
-	wrapped.ServeHTTP(w, req)
-	if w.Code != http.StatusForbidden {
-		t.Errorf("PUT expected 403, got %d", w.Code)
+	cases := []struct {
+		method, path string
+		want         int
+	}{
+		// Workspace and settings writes are refused.
+		{http.MethodPut, "/api/v1/config", http.StatusForbidden},
+		{http.MethodPost, "/api/v1/files", http.StatusForbidden},
+		{http.MethodPut, "/api/v1/files/a.http", http.StatusForbidden},
+		{http.MethodDelete, "/api/v1/files/a.http", http.StatusForbidden},
+		{http.MethodPut, "/api/v1/environments/dev", http.StatusForbidden},
+		{http.MethodPost, "/api/v1/stress/profiles", http.StatusForbidden},
+		{http.MethodPut, "/api/v1/stress/profiles/p", http.StatusForbidden},
+		{http.MethodDelete, "/api/v1/stress/profiles/p", http.StatusForbidden},
+		{http.MethodDelete, "/api/v1/history/runs", http.StatusForbidden},
+		{http.MethodDelete, "/api/v1/history/runs/3", http.StatusForbidden},
+		{http.MethodPost, "/api/v1/files/../files", http.StatusForbidden},
+		{http.MethodPost, "/api/v1/import/curl", http.StatusForbidden},
+		{http.MethodPost, "/api/v1/import/insomnia", http.StatusForbidden},
+		{http.MethodPost, "/api/v1/import/openapi", http.StatusForbidden},
+		{http.MethodPost, "/api/v1/record/export", http.StatusForbidden},
+		// Running things, and routes that only compute, stay available.
+		{http.MethodPost, "/api/v1/execute", http.StatusOK},
+		{http.MethodPost, "/api/v1/run", http.StatusOK},
+		{http.MethodPut, "/api/v1/environments/active", http.StatusOK},
+		{http.MethodPost, "/api/v1/stress/start", http.StatusOK},
+		{http.MethodPost, "/api/v1/stress/stop", http.StatusOK},
+		{http.MethodPost, "/api/v1/mock/start", http.StatusOK},
+		{http.MethodPost, "/api/v1/contract/verify", http.StatusOK},
+		{http.MethodPost, "/api/v1/record/start", http.StatusOK},
+		{http.MethodPost, "/api/v1/export/curl", http.StatusOK},
+		// Reads always pass.
+		{http.MethodGet, "/api/v1/config", http.StatusOK},
+		{http.MethodGet, "/api/v1/history/runs", http.StatusOK},
+		{http.MethodOptions, "/api/v1/config", http.StatusOK},
+	}
+	for _, c := range cases {
+		w := httptest.NewRecorder()
+		wrapped.ServeHTTP(w, httptest.NewRequest(c.method, c.path, nil))
+		if w.Code != c.want {
+			t.Errorf("%s %s = %d, want %d", c.method, c.path, w.Code, c.want)
+		}
 	}
 
-	// GET should pass through
-	req = httptest.NewRequest(http.MethodGet, "/api/v1/config", nil)
-	w = httptest.NewRecorder()
-	wrapped.ServeHTTP(w, req)
+	// Not read-only: everything passes.
+	open := readOnlyMiddleware(false)(handler)
+	w := httptest.NewRecorder()
+	open.ServeHTTP(w, httptest.NewRequest(http.MethodPut, "/api/v1/config", nil))
 	if w.Code != http.StatusOK {
-		t.Errorf("GET expected 200, got %d", w.Code)
+		t.Errorf("writable PUT /config = %d", w.Code)
+	}
+}
+
+// End to end through the real handler chain: a read-only server still runs
+// requests and records them in history, but refuses to touch the workspace.
+func TestReadOnlyServerRunsButDoesNotWrite(t *testing.T) {
+	dir, backend := runtimeWorkspace(t, map[string]string{
+		"api.http": "### a\n# @name a\nGET {{base}}/a\n\n>>>\nexpect status 200\n<<<\n",
+	})
+	if err := os.WriteFile(filepath.Join(dir, "hitspec.yaml"), []byte("environments:\n  test:\n    base: "+backend+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, base, _ := startSecured(t, WithWorkDir(dir), WithReadOnly(true))
+
+	if resp := postJ(t, base+"/api/v1/run", `{"file":"api.http"}`); resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /run in read-only mode = %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	if resp := postJ(t, base+"/api/v1/execute", `{"file":"api.http","requestName":"a"}`); resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /execute in read-only mode = %d", resp.StatusCode)
+	}
+	if resp := postJ(t, base+"/api/v1/files", `{"path":"new.http","content":"GET http://x\n"}`); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("POST /files in read-only mode = %d, want 403", resp.StatusCode)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "new.http")); err == nil {
+		t.Fatal("read-only server created a file")
+	}
+	if code, _ := putConfig(t, base, `{"timeout":1}`); code != http.StatusForbidden {
+		t.Fatalf("PUT /config in read-only mode = %d, want 403", code)
+	}
+	var list HistoryListDTO
+	if err := json.Unmarshal([]byte(readBody(t, do(t, http.MethodGet, base+"/api/v1/history/runs", ""))), &list); err != nil || list.Total != 2 {
+		t.Fatalf("history after two read-only runs = %+v, %v", list, err)
 	}
 }
 
