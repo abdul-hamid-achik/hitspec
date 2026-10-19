@@ -7,6 +7,23 @@ import (
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/config"
 )
 
+// configToDTO is the wire form of the editable settings.
+func configToDTO(c *config.Config) ConfigDTO {
+	return ConfigDTO{
+		DefaultEnvironment: c.DefaultEnvironment,
+		Timeout:            c.Timeout,
+		Retries:            c.Retries,
+		RetryDelay:         c.RetryDelay,
+		FollowRedirects:    c.FollowRedirects,
+		MaxRedirects:       c.MaxRedirects,
+		ValidateSSL:        c.ValidateSSL,
+		Proxy:              c.Proxy,
+		Headers:            c.Headers,
+		Parallel:           c.Parallel,
+		Concurrency:        c.Concurrency,
+	}
+}
+
 func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	s.configMu.RLock()
 	if s.fileConfig == nil {
@@ -14,76 +31,53 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, ConfigDTO{})
 		return
 	}
-
-	dto := ConfigDTO{
-		DefaultEnvironment: s.fileConfig.DefaultEnvironment,
-		Timeout:            s.fileConfig.Timeout,
-		Retries:            s.fileConfig.Retries,
-		FollowRedirects:    s.fileConfig.FollowRedirects,
-		ValidateSSL:        s.fileConfig.ValidateSSL,
-		Proxy:              s.fileConfig.Proxy,
-		Headers:            s.fileConfig.Headers,
-		Parallel:           s.fileConfig.Parallel,
-		Concurrency:        s.fileConfig.Concurrency,
-	}
+	dto := configToDTO(s.fileConfig)
 	s.configMu.RUnlock()
 
 	writeJSON(w, http.StatusOK, dto)
 }
 
 func (s *Server) handlePutConfig(w http.ResponseWriter, r *http.Request) {
-	var dto ConfigDTO
-	if err := readJSON(r, &dto); err != nil {
+	// Pointer fields: a key that is present in the body is applied even when it
+	// is 0 or "", so retries can be set to 0 and the proxy cleared.
+	var patch config.Patch
+	if err := readJSON(r, &patch); err != nil {
 		writeReadError(w, err)
 		return
 	}
 
 	s.configMu.Lock()
 	// If no config loaded yet, initialize with defaults so we can save
-	if s.fileConfig == nil {
-		s.fileConfig = config.DefaultConfig()
+	current := s.fileConfig
+	if current == nil {
+		current = config.DefaultConfig()
 	}
 
-	if dto.DefaultEnvironment != "" {
-		s.fileConfig.DefaultEnvironment = dto.DefaultEnvironment
-	}
-	if dto.Timeout > 0 {
-		s.fileConfig.Timeout = dto.Timeout
-	}
-	if dto.Retries > 0 {
-		s.fileConfig.Retries = dto.Retries
-	}
-	if dto.FollowRedirects != nil {
-		s.fileConfig.FollowRedirects = dto.FollowRedirects
-	}
-	if dto.ValidateSSL != nil {
-		s.fileConfig.ValidateSSL = dto.ValidateSSL
-	}
-	if dto.Proxy != "" {
-		s.fileConfig.Proxy = dto.Proxy
-	}
-	if dto.Headers != nil {
-		s.fileConfig.Headers = dto.Headers
-	}
-	if dto.Parallel != nil {
-		s.fileConfig.Parallel = dto.Parallel
-	}
-	if dto.Concurrency > 0 {
-		s.fileConfig.Concurrency = dto.Concurrency
+	// Work on a copy so a rejected patch or a failed save leaves the live
+	// config (and what the next run uses) unchanged.
+	next := *current
+	if err := next.Apply(patch); err != nil {
+		s.configMu.Unlock()
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	// If no config path was discovered, create hitspec.yaml in the workspace
-	if s.configPath == "" {
-		s.configPath = filepath.Join(s.config.WorkDir, "hitspec.yaml")
+	configPath := s.configPath
+	if configPath == "" {
+		configPath = filepath.Join(s.config.WorkDir, "hitspec.yaml")
 	}
 
 	// Save while holding the lock to prevent concurrent mutation of fileConfig
-	if err := s.fileConfig.SaveConfig(s.configPath); err != nil {
+	if err := next.SaveConfig(configPath); err != nil {
 		s.configMu.Unlock()
-		s.logger.Error("failed to save config", "error", err, "path", s.configPath)
+		s.logger.Error("failed to save config", "error", err, "path", configPath)
 		writeError(w, http.StatusInternalServerError, "failed to save config to disk")
 		return
 	}
+	s.fileConfig = &next
+	s.configPath = configPath
+	dto := configToDTO(&next)
 	s.configMu.Unlock()
 
 	writeJSON(w, http.StatusOK, dto)

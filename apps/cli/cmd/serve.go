@@ -24,6 +24,7 @@ var (
 	serveLogFormatFlag  string
 	serveLogLevelFlag   string
 	serveAPITokenFlag   string
+	serveParentPIDFlag  int
 )
 
 var serveCmd = &cobra.Command{
@@ -46,7 +47,8 @@ compatibility, but 'hitspec studio' is the dedicated command.)
 Examples:
   hitspec serve --api-only --port 8080 --cors
   HITSPEC_API_TOKEN=secret hitspec serve --api-only
-  hitspec serve --api-only ./tests/ --read-only`,
+  hitspec serve --api-only ./tests/ --read-only
+  hitspec serve --api-only --parent-pid 4242   # exit when process 4242 exits`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: serveCommand,
 }
@@ -57,7 +59,7 @@ func init() {
 	serveCmd.Flags().BoolVarP(&serveWatchFlag, "watch", "w", true, "Watch for file changes")
 	serveCmd.Flags().BoolVar(&serveCORSFlag, "cors", false, "Enable CORS headers (API server)")
 	serveCmd.Flags().BoolVar(&serveAPIOnlyFlag, "api-only", false, "Start the REST/WebSocket API server")
-	serveCmd.Flags().BoolVar(&serveReadOnlyFlag, "read-only", false, "Disallow file mutations")
+	serveCmd.Flags().BoolVar(&serveReadOnlyFlag, "read-only", false, "Refuse workspace and hitspec.yaml writes (running requests, stress, mock and contract stay available)")
 	serveCmd.Flags().StringVarP(&serveEnvFlag, "env", "e", "", "Default environment (default: hitspec.yaml defaultEnvironment, else dev)")
 	serveCmd.Flags().StringVar(&serveConfigFlag, "config", "", "Path to hitspec.yaml")
 	serveCmd.Flags().BoolVarP(&serveVerboseFlag, "verbose", "v", false, "Verbose logging")
@@ -65,6 +67,7 @@ func init() {
 	serveCmd.Flags().BoolVar(&serveAllowDBFlag, "allow-db", false, "Allow database assertions")
 	serveCmd.Flags().StringVar(&serveLogFormatFlag, "log-format", "text", "Log format: text or json")
 	serveCmd.Flags().StringVar(&serveLogLevelFlag, "log-level", "info", "Log level: debug, info, warn, error")
+	serveCmd.Flags().IntVar(&serveParentPIDFlag, "parent-pid", 0, "Shut down when this process exits (for supervisors such as the desktop app that may die without cleaning up)")
 	serveCmd.Flags().StringVar(&serveAPITokenFlag, "api-token", "", "Require a bearer token for all REST/WebSocket requests (env: HITSPEC_API_TOKEN, preferred: argv is visible in ps). Requests must send Authorization: Bearer <token> or ?token=<token>. A random token is generated and printed when the bind address is not loopback or --allow-shell/--allow-db is set")
 }
 
@@ -112,6 +115,7 @@ func serveCommand(cmd *cobra.Command, args []string) error {
 		serve.WithAllowShell(serveAllowShellFlag),
 		serve.WithAllowDB(serveAllowDBFlag),
 		serve.WithAPIToken(resolveAPIToken(serveAPITokenFlag)),
+		serve.WithParentPID(serveParentPIDFlag),
 		serve.WithLogFormat(serveLogFormatFlag),
 		serve.WithLogLevel(serveLogLevelFlag),
 	)

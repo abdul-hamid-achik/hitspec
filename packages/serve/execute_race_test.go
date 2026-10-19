@@ -18,8 +18,8 @@ import (
 // deep-copies the environments, so concurrent execute-vs-PUT must stay race-free.
 //
 // A single execute goroutine races against many PUT /environments goroutines so
-// the test isolates the environments race (concurrent execute-execute runs would
-// separately race on the snapshot package's own global, which is out of scope).
+// the test isolates the environments race (concurrent runs are covered by
+// TestConcurrentRunsKeepSnapshotsSeparate).
 func TestExecuteConcurrentPutEnvironment(t *testing.T) {
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

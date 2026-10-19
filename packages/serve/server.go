@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -60,6 +61,11 @@ type Server struct {
 	// Watcher suppression for server-initiated writes
 	watchSuppress *watchSuppressor
 
+	// writeTimeout overrides defaultWriteTimeout (tests only).
+	writeTimeout time.Duration
+	// onListen, when set, is called with the bound address (tests only).
+	onListen func(net.Addr)
+
 	// Version info set from CLI
 	Version   string
 	BuildTime string
@@ -114,15 +120,9 @@ func NewServer(opts ...Option) *Server {
 	// Open persistent history database
 	dbPath := cfg.HistoryDBPath
 	if dbPath == "" {
-		home, err := os.UserHomeDir()
-		if err == nil {
-			dir := filepath.Join(home, ".hitspec")
-			_ = os.MkdirAll(dir, 0o755)
-			dbPath = filepath.Join(dir, "history.db")
-		}
+		dbPath, _ = history.DefaultPath()
 	}
 	if dbPath != "" {
-		_ = os.MkdirAll(filepath.Dir(dbPath), 0o755)
 		store, err := history.NewStore(dbPath)
 		if err != nil {
 			s.logger.Warn("failed to open history database", "error", err, "path", dbPath)
@@ -179,22 +179,59 @@ func (s *Server) buildHandler(port int) http.Handler {
 	return chain(mux, mws...)
 }
 
+// shutdownGrace is how long Start lets in-flight requests finish after a
+// shutdown is requested (SIGINT/SIGTERM, a cancelled context or the parent
+// exiting) before it cancels them.
+var shutdownGrace = 10 * time.Second
+
+// defaultWriteTimeout bounds writing a response. Routes whose work can
+// legitimately run longer (run, execute, contract verify) lift it per response.
+const defaultWriteTimeout = 60 * time.Second
+
+// newHTTPServer builds the http.Server around the middleware chain. reqCtx is
+// the base context of every request: it outlives s.ctx so that a shutdown
+// drains in-flight runs instead of cancelling them.
+func (s *Server) newHTTPServer(addr string, port int, reqCtx context.Context) *http.Server {
+	writeTimeout := s.writeTimeout
+	if writeTimeout <= 0 {
+		writeTimeout = defaultWriteTimeout
+	}
+	return &http.Server{
+		Addr:         addr,
+		Handler:      s.buildHandler(port),
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: writeTimeout,
+		IdleTimeout:  120 * time.Second,
+		BaseContext: func(l net.Listener) context.Context {
+			return reqCtx
+		},
+	}
+}
+
 // Start runs the server and blocks until shutdown.
+//
+// Shutdown (SIGINT/SIGTERM, ctx cancelled, or --parent-pid exiting) stops
+// accepting connections, lets in-flight requests finish for up to
+// shutdownGrace, then cancels what is left, closes the history database and
+// returns. A second signal skips the wait.
 func (s *Server) Start(ctx context.Context) error {
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	defer s.cancel()
+	// In-flight requests keep running while s.ctx is cancelled; they are only
+	// cancelled once the grace period is over.
+	reqCtx, cancelReqs := context.WithCancel(context.WithoutCancel(ctx))
+	defer cancelReqs()
 
-	// Set up signal handling
-	sigCh := make(chan os.Signal, 1)
+	sigCh := make(chan os.Signal, 2)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		select {
-		case <-sigCh:
-			s.logger.Info("shutting down")
+	defer signal.Stop(sigCh)
+
+	if s.config.ParentPID > 0 {
+		go watchParent(s.ctx, s.config.ParentPID, parentPollInterval, processAlive, func() {
+			s.logger.Info("parent process exited, shutting down", "parent_pid", s.config.ParentPID)
 			s.cancel()
-		case <-s.ctx.Done():
-		}
-	}()
+		})
+	}
 
 	// Start file watcher
 	if s.config.Watch {
@@ -219,28 +256,11 @@ func (s *Server) Start(ctx context.Context) error {
 		port = ta.Port
 	}
 	addr := net.JoinHostPort(s.config.Host, strconv.Itoa(port))
-
-	server := &http.Server{
-		Addr:         addr,
-		Handler:      s.buildHandler(port),
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 60 * time.Second,
-		IdleTimeout:  120 * time.Second,
-		BaseContext: func(l net.Listener) context.Context {
-			return s.ctx
-		},
+	if s.onListen != nil {
+		s.onListen(ln.Addr())
 	}
 
-	// Graceful shutdown goroutine
-	go func() {
-		<-s.ctx.Done()
-		if s.historyStore != nil {
-			_ = s.historyStore.Close()
-		}
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer shutdownCancel()
-		_ = server.Shutdown(shutdownCtx)
-	}()
+	server := s.newHTTPServer(addr, port, reqCtx)
 
 	s.logger.Info("server started", "addr", addr)
 	s.logger.Info("workspace configured", "path", s.config.WorkDir)
@@ -250,9 +270,47 @@ func (s *Server) Start(ctx context.Context) error {
 
 	s.logger.Info("API available", "url", fmt.Sprintf("http://%s/api/v1/", addr))
 
-	if err := server.Serve(ln); err != nil && err != http.ErrServerClosed {
-		return fmt.Errorf("server error: %w", err)
-	}
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- server.Serve(ln) }()
 
+	select {
+	case err := <-serveErr:
+		// The listener failed on its own; there is nothing to drain.
+		s.closeHistory()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("server error: %w", err)
+		}
+		return nil
+	case sig := <-sigCh:
+		s.logger.Info("shutting down", "signal", sig.String())
+	case <-s.ctx.Done():
+		s.logger.Info("shutting down")
+	}
+	s.cancel() // stop background services (watcher) right away
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownGrace)
+	defer shutdownCancel()
+	go func() {
+		select {
+		case <-sigCh: // second signal: stop waiting
+			shutdownCancel()
+		case <-shutdownCtx.Done():
+		}
+	}()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		s.logger.Warn("in-flight requests did not finish in time; cancelling them", "error", err)
+		cancelReqs()
+		_ = server.Close()
+	}
+	<-serveErr // Serve has returned
+	s.closeHistory()
 	return nil
+}
+
+// closeHistory closes the persistent history database once, after the last
+// request that could write to it is done.
+func (s *Server) closeHistory() {
+	if s.historyStore != nil {
+		_ = s.historyStore.Close()
+	}
 }

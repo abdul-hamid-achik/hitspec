@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	// SQLite driver (pure Go, no CGo required)
@@ -21,11 +22,30 @@ type Store struct {
 	q  *Queries
 }
 
+// DefaultPath returns the default database location, ~/.hitspec/history.db.
+// NewStore creates the directory (0700) when it is missing.
+func DefaultPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".hitspec", "history.db"), nil
+}
+
 // NewStore opens (or creates) a SQLite database at dbPath and applies the schema.
-// The database may hold request URLs/bodies (potentially sensitive), so a newly
-// created file is opened with 0600 permissions — the default 0644 left it
-// world-readable.
+// The database may hold request URLs/bodies (potentially sensitive), so the
+// file (and its -wal/-shm sidecars) is kept at 0600, including a database that
+// an older version created world-readable, and the default ~/.hitspec directory
+// at 0700. The parent of a custom path is created 0700 when missing but never
+// re-permissioned: it may be the workspace or the current directory.
 func NewStore(dbPath string) (*Store, error) {
+	dir := filepath.Dir(dbPath)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, fmt.Errorf("history: create directory: %w", err)
+	}
+	if filepath.Base(dir) == ".hitspec" {
+		_ = os.Chmod(dir, 0o700)
+	}
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		if f, err := os.OpenFile(dbPath, os.O_CREATE|os.O_RDWR, 0o600); err == nil {
 			_ = f.Close()
@@ -33,6 +53,7 @@ func NewStore(dbPath string) (*Store, error) {
 			return nil, fmt.Errorf("history: create database: %w", err)
 		}
 	}
+	restrictDBFiles(dbPath)
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("history: open database: %w", err)
@@ -63,7 +84,18 @@ func NewStore(dbPath string) (*Store, error) {
 		return nil, fmt.Errorf("history: apply schema: %w", err)
 	}
 
+	restrictDBFiles(dbPath) // the WAL sidecars exist now
 	return &Store{db: db, q: New(db)}, nil
+}
+
+// restrictDBFiles chmods the database and its SQLite sidecars to 0600. Missing
+// files and chmod failures (e.g. a filesystem without POSIX modes) are ignored.
+func restrictDBFiles(dbPath string) {
+	for _, p := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
+		if fi, err := os.Stat(p); err == nil && fi.Mode().Perm()&0o077 != 0 {
+			_ = os.Chmod(p, 0o600)
+		}
+	}
 }
 
 // Close closes the underlying database connection.
@@ -171,4 +203,106 @@ func nullString(s string) sql.NullString {
 
 func nullInt64(n int64) sql.NullInt64 {
 	return sql.NullInt64{Int64: n, Valid: n != 0}
+}
+
+// ResultRecord is one request result of a run, with its assertions.
+type ResultRecord struct {
+	Name        string
+	Method      string
+	URL         string
+	StatusCode  int
+	DurationMs  int64
+	Passed      bool
+	Skipped     bool
+	Error       string
+	Description string
+	BodyPreview string
+	Assertions  []AssertionRecord
+}
+
+// RunRecord is a finished run, ready to be stored in one transaction.
+type RunRecord struct {
+	FilePath    string
+	Environment string
+	Duration    time.Duration
+	Results     []ResultRecord
+}
+
+// RecordCompleteRun stores a finished run, its results and their assertions in
+// a single transaction and returns the run ID. Either everything is committed
+// or nothing is, so a reader that sees the run sees all of it (a run is never
+// listed with a partial or empty result set). The pass/fail/skip counts are
+// derived from the results.
+func (s *Store) RecordCompleteRun(ctx context.Context, rec RunRecord) (int64, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("history: begin tx: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op after Commit
+
+	qtx := s.q.WithTx(tx)
+	run, err := qtx.InsertRun(ctx, InsertRunParams{
+		FilePath:    rec.FilePath,
+		Environment: sql.NullString{String: rec.Environment, Valid: rec.Environment != ""},
+	})
+	if err != nil {
+		return 0, fmt.Errorf("history: insert run: %w", err)
+	}
+
+	var passed, failed, skipped int64
+	for _, r := range rec.Results {
+		res, err := qtx.InsertResult(ctx, InsertResultParams{
+			RunID:       run.ID,
+			RequestName: r.Name,
+			Method:      r.Method,
+			Url:         r.URL,
+			StatusCode:  nullInt64(int64(r.StatusCode)),
+			DurationMs:  r.DurationMs,
+			Passed:      r.Passed,
+			Skipped:     r.Skipped,
+			Error:       nullString(r.Error),
+			Description: nullString(r.Description),
+			BodyPreview: nullString(r.BodyPreview),
+		})
+		if err != nil {
+			return 0, fmt.Errorf("history: insert result: %w", err)
+		}
+		for _, a := range r.Assertions {
+			if err := qtx.InsertAssertion(ctx, InsertAssertionParams{
+				ResultID: res.ID,
+				Operator: a.Operator,
+				Subject:  a.Subject,
+				Expected: nullString(a.Expected),
+				Actual:   nullString(a.Actual),
+				Passed:   a.Passed,
+				Message:  nullString(a.Message),
+			}); err != nil {
+				return 0, fmt.Errorf("history: insert assertion: %w", err)
+			}
+		}
+		switch {
+		case r.Passed:
+			passed++
+		case r.Skipped:
+			skipped++
+		default:
+			failed++
+		}
+	}
+
+	if err := qtx.UpdateRunFinished(ctx, UpdateRunFinishedParams{
+		ID:         run.ID,
+		FinishedAt: sql.NullTime{Time: time.Now(), Valid: true},
+		DurationMs: rec.Duration.Milliseconds(),
+		Passed:     passed,
+		Failed:     failed,
+		Skipped:    skipped,
+		Total:      passed + failed + skipped,
+	}); err != nil {
+		return 0, fmt.Errorf("history: finish run: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("history: commit: %w", err)
+	}
+	return run.ID, nil
 }

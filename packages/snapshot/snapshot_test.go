@@ -1,8 +1,10 @@
 package snapshot
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -174,5 +176,42 @@ func TestGenerateKey(t *testing.T) {
 		} else if key != tt.expectPrefix {
 			t.Errorf("generateKey(%q, %q): got %q, expected %q", tt.requestName, tt.snapshotName, key, tt.expectPrefix)
 		}
+	}
+}
+
+// Parallel requests in one file compare against the same manager, so Compare
+// must be safe for concurrent use.
+func TestManager_Compare_Concurrent(t *testing.T) {
+	dir := t.TempDir()
+	testFile := filepath.Join(dir, "test.http")
+	m := NewManager(dir, true)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			name := fmt.Sprintf("req%d", i%4)
+			if r := m.Compare(testFile, name, "", map[string]any{"n": i % 4}); !r.Passed {
+				t.Errorf("%s: %s", name, r.Message)
+			}
+		}(i)
+	}
+	wg.Wait()
+}
+
+// Two managers (two concurrent serve runs) never share state, so one run
+// switching to update mode cannot affect the other.
+func TestManager_IndependentInstances(t *testing.T) {
+	dir := t.TempDir()
+	testFile := filepath.Join(dir, "test.http")
+	update := NewManager(dir, true)
+	check := NewManager(dir, false)
+
+	if r := check.Compare(testFile, "a", "", 1); r.Passed {
+		t.Fatal("check-mode manager must not create a baseline")
+	}
+	if r := update.Compare(testFile, "a", "", 1); !r.Passed || !r.IsNew {
+		t.Fatalf("update-mode manager should create a baseline: %+v", r)
 	}
 }

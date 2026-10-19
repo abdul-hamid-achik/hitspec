@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -158,6 +159,10 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 	return n, err
 }
 
+// Unwrap exposes the underlying ResponseWriter to http.ResponseController, so
+// handlers can adjust deadlines and flush through the logging wrapper.
+func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
 // Hijack delegates to the underlying ResponseWriter for WebSocket support.
 func (w *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	if hj, ok := w.ResponseWriter.(http.Hijacker); ok {
@@ -213,17 +218,48 @@ func loggingMiddleware(logger *slog.Logger) Middleware {
 	}
 }
 
-// readOnlyMiddleware blocks mutating methods when read-only.
-// In read-only mode, only GET and OPTIONS requests are allowed.
+// readOnlyAllowed lists the non-GET routes that stay available with
+// --read-only. Read-only protects the workspace and its settings (file
+// create/save/delete, PUT /config, PUT /environments/{name}, stress profiles,
+// history deletion); it does not stop the server from doing its job. These
+// routes run requests or only compute a response: none of them writes a
+// workspace file or hitspec.yaml. Anything not listed is refused, so a route
+// added later is read-only by default.
+var readOnlyAllowed = map[string]bool{
+	"POST /api/v1/execute":            true,
+	"POST /api/v1/run":                true,
+	"PUT /api/v1/environments/active": true, // in-memory selection, nothing is persisted
+	"POST /api/v1/stress/start":       true,
+	"POST /api/v1/stress/stop":        true,
+	"POST /api/v1/mock/start":         true,
+	"POST /api/v1/mock/stop":          true,
+	"POST /api/v1/contract/verify":    true,
+	"POST /api/v1/record/start":       true,
+	"POST /api/v1/record/stop":        true,
+	"DELETE /api/v1/record/clear":     true, // in-memory recordings
+	"POST /api/v1/record/export":      true, // returns the content, writes nothing
+	"POST /api/v1/import/curl":        true, // convert-only: the client decides whether to save
+	"POST /api/v1/import/insomnia":    true,
+	"POST /api/v1/import/openapi":     true,
+	"POST /api/v1/export/curl":        true,
+}
+
+// readOnlyMiddleware refuses the routes that change the workspace or its
+// settings when the server is read-only. GET, HEAD and OPTIONS always pass, as
+// do the routes in readOnlyAllowed.
 func readOnlyMiddleware(readOnly bool) Middleware {
 	return func(next http.Handler) http.Handler {
 		if !readOnly {
 			return next
 		}
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet && r.Method != http.MethodOptions {
-				writeError(w, http.StatusForbidden, "server is in read-only mode")
-				return
+			switch r.Method {
+			case http.MethodGet, http.MethodHead, http.MethodOptions:
+			default:
+				if !readOnlyAllowed[r.Method+" "+path.Clean(r.URL.Path)] {
+					writeError(w, http.StatusForbidden, "server is in read-only mode")
+					return
+				}
 			}
 			next.ServeHTTP(w, r)
 		})

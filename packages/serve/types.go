@@ -210,11 +210,18 @@ type EnvironmentDTO struct {
 // --- Config ---
 
 // ConfigDTO is the hitspec.yaml configuration.
+//
+// As a response (GET, and the result of PUT) a zero value is omitted. As a PUT
+// body, a key that is present is applied even when it is 0 or "" (retries: 0
+// disables retries, proxy: "" clears the proxy) and an absent key is left
+// alone: the handler decodes the body into config.Patch for that.
 type ConfigDTO struct {
 	DefaultEnvironment string            `json:"defaultEnvironment,omitempty"`
 	Timeout            int               `json:"timeout,omitempty"`
 	Retries            int               `json:"retries,omitempty"`
+	RetryDelay         int               `json:"retryDelay,omitempty"`
 	FollowRedirects    *bool             `json:"followRedirects,omitempty"`
+	MaxRedirects       int               `json:"maxRedirects,omitempty"`
 	ValidateSSL        *bool             `json:"validateSSL,omitempty"`
 	Proxy              string            `json:"proxy,omitempty"`
 	Headers            map[string]string `json:"headers,omitempty"`

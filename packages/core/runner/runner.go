@@ -32,7 +32,8 @@ type Runner struct {
 	client    *http.Client
 	resolver  *env.Resolver
 	config    *Config
-	historyWG sync.WaitGroup // tracks in-flight history-record goroutines
+	historyWG sync.WaitGroup    // tracks in-flight history-record goroutines
+	snapshots *snapshot.Manager // snapshot state of the current run (see RunFileContext)
 }
 
 type Config struct {
@@ -55,6 +56,7 @@ type Config struct {
 	DefaultHeaders     map[string]string
 	ConfigEnvironments map[string]map[string]any
 	UpdateSnapshots    bool                      // Update snapshots instead of comparing
+	FileRoot           string                    // when set, `< file` bodies and multipart files must live under this directory (the workspace of serve/studio)
 	AllowShell         bool                      // Allow shell command execution (>>>shell blocks and hooks)
 	AllowDB            bool                      // Allow database assertions (>>>db blocks)
 	HistoryStore       *history.Store            // Optional persistent history store
@@ -186,9 +188,9 @@ func (r *Runner) RunFileContext(ctx context.Context, path string) (*RunResult, e
 		r.resolver.SetVariable(v.Name, v.Value)
 	}
 
-	// Initialize snapshot manager for this file
-	snapshotManager := snapshot.NewManager(filepath.Dir(path), r.config.UpdateSnapshots)
-	snapshot.SetGlobalManager(snapshotManager)
+	// Each run owns its snapshot manager: concurrent runs (hitspec serve) must
+	// not share update mode or the file cache through a process-wide global.
+	r.snapshots = snapshot.NewManager(filepath.Dir(path), r.config.UpdateSnapshots)
 
 	result, err := r.runRequests(ctx, file)
 	if err != nil {
