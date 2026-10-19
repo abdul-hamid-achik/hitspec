@@ -125,7 +125,7 @@ Shell and database blocks are disabled by default for security. You must explici
 
 | Flag | Description | Default | Env Var |
 |------|-------------|---------|---------|
-| `--metrics` | Export format: `prometheus`, `datadog`, `json` | | `HITSPEC_METRICS` |
+| `--metrics` | Export format: `prometheus`, `datadog`, `json`. Only applies with `--stress`; without it a warning is printed and nothing is exported | | `HITSPEC_METRICS` |
 | `--metrics-port` | Port for Prometheus metrics HTTP endpoint | `9090` | `HITSPEC_METRICS_PORT` |
 | `--metrics-host` | Interface the Prometheus endpoint binds; `0.0.0.0` exposes it to the network | `127.0.0.1` | `HITSPEC_METRICS_HOST` |
 | `--metrics-file` | Output file for JSON metrics | | `HITSPEC_METRICS_FILE` |

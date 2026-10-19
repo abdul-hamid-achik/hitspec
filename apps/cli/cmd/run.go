@@ -337,6 +337,11 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		fmt.Fprintln(cmd.ErrOrStderr(), "Error: --dry-run cannot be combined with --stress (a stress test has no dry run; drop --stress to preview the requests)")
 		return newExitError(ExitUsageError, "")
 	}
+	// Metrics export is a stress-test feature: it exports the stress summary.
+	// Say so instead of silently writing nothing.
+	if metricsFlag != "" && !stressFlag {
+		fmt.Fprintln(cmd.ErrOrStderr(), "warning: --metrics only applies with --stress; no metrics are exported for a normal run")
+	}
 
 	// Set up notification manager
 	var notifyManager *notify.Manager
@@ -715,12 +720,13 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 			if reload {
 				reload = false
-				newRunner, newCfg, err := reloadRunSettings(cmd.Flags(), cfg, tagsFilter)
+				newRunner, newCfg, newNoColor, err := reloadRunSettings(cmd.Flags(), cfg, tagsFilter)
 				if err != nil {
 					fmt.Fprintf(stderr, "Error: %v\nKeeping the previous settings until the file is fixed.\n", err)
 				} else {
 					r, cfg = newRunner, newCfg
 					verbosity = verbosityLevel(cmd.Flags(), cfg.Verbose)
+					noColor = newNoColor
 					support = watchSupportFiles(configFlag, cfg.EnvFile)
 					addWatchDirs(watcher, nil, nil, support, stderr)
 				}
@@ -1062,8 +1068,11 @@ func stressResultToMetrics(summary *stress.Summary) *metrics.AggregateMetrics {
 		P50DurationMs:   float64(summary.P50.Milliseconds()),
 		P95DurationMs:   float64(summary.P95.Milliseconds()),
 		P99DurationMs:   float64(summary.P99.Milliseconds()),
-		StatusCodes:     make(map[int]int64),
+		StatusCodes:     make(map[int]int64, len(summary.StatusCodes)),
 		ByTest:          make(map[string]*metrics.TestAggregate),
+	}
+	for code, n := range summary.StatusCodes {
+		aggregate.StatusCodes[code] = n
 	}
 
 	// Copy per-request breakdown as test aggregates

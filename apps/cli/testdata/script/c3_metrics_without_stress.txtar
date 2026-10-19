@@ -1,0 +1,32 @@
+# --metrics only exports a stress test's summary. Without --stress it used to
+# be dropped silently; now it warns on stderr and the run itself is unchanged.
+exitcode 0 hitspec run --no-history --no-color --metrics json --metrics-file m.json api.http
+stderr 'warning: --metrics only applies with --stress'
+! exists m.json
+
+# HITSPEC_METRICS behaves like the flag.
+env HITSPEC_METRICS=prometheus
+exitcode 0 hitspec run --no-history --no-color api.http
+stderr 'warning: --metrics only applies with --stress'
+env HITSPEC_METRICS=
+
+# No metrics requested, no warning.
+exitcode 0 hitspec run --no-history --no-color api.http
+! stderr 'metrics'
+
+# With --stress the file is written and carries the status codes.
+exitcode 0 hitspec run --no-history --no-color --stress --duration 1s --rate 10 --no-progress --metrics json --metrics-file m.json api.http
+! stderr 'only applies'
+exists m.json
+grep '"status_codes": \{' m.json
+grep '"200": [1-9]' m.json
+
+-- api.http --
+@baseUrl = {{$env(SERVER)}}
+
+### One
+GET {{baseUrl}}/json
+
+>>>
+expect status 200
+<<<

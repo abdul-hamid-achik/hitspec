@@ -587,7 +587,7 @@ Connect to `/api/v1/ws` for real-time updates. Message envelope: `{"type": "stri
 | `--history-db` | History database path (default: `~/.hitspec/history.db`) |
 | `--no-history` | Do not record this run in the history database |
 | `--openapi`, `--coverage` | Report API coverage against an OpenAPI spec |
-| `--metrics`, `--metrics-port`, `--metrics-host`, `--metrics-file` | Export metrics: `prometheus`, `datadog` or `json` |
+| `--metrics`, `--metrics-port`, `--metrics-host`, `--metrics-file` | Export a stress run's metrics: `prometheus`, `datadog` or `json` (only with `--stress`; otherwise a warning, nothing exported) |
 | `--notify`, `--notify-on` | Send results to `slack` or `teams` (`always`, `failure`, `success`, `recovery`) |
 | `--slack-webhook`, `--slack-channel`, `--teams-webhook` | Notification targets |
 | `--datadog-api-key`, `--datadog-site`, `--datadog-tags` | DataDog metrics export settings |
@@ -687,7 +687,7 @@ counted as requests, successes or errors. A non-2xx status accepted by the reque
 
 | Flag | Description |
 |------|-------------|
-| `--metrics` | Export format: prometheus, datadog, json |
+| `--metrics` | Export format: prometheus, datadog, json (only with `--stress`; otherwise a warning and nothing is exported) |
 | `--metrics-port` | Prometheus HTTP endpoint port (default: 9090; a port already in use stops the run with exit 3) |
 | `--metrics-host` | Prometheus bind address (default: 127.0.0.1; `0.0.0.0` exposes it; env: HITSPEC_METRICS_HOST) |
 | `--metrics-file` | Output file for JSON metrics |

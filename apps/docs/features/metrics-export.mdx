@@ -13,6 +13,10 @@ hitspec can export test execution metrics to external monitoring systems. This i
 | DataDog | `--metrics datadog` | Sends metrics to DataDog API |
 | JSON | `--metrics json` | Writes metrics to a file or stdout |
 
+<Note>
+Metrics export is part of stress testing: it exports the summary of a `--stress` run. `--metrics` without `--stress` exports nothing and prints a warning on stderr (`--metrics only applies with --stress`); the run itself is unaffected.
+</Note>
+
 ## Prometheus
 
 Exposes metrics on an HTTP endpoint (default port 9090) for Prometheus to scrape.
@@ -98,5 +102,5 @@ The metrics include:
 | Total duration | Overall test duration |
 | Min/Max/Avg latency | Latency statistics |
 | P50/P95/P99 latency | Percentile latencies |
-| Status codes | Breakdown by HTTP status code |
+| Status codes | Count of responses per HTTP status code (requests that got no response, such as timeouts, are not listed) |
 | Per-test breakdown | Metrics for each named request |
