@@ -1,0 +1,69 @@
+# Query and form values keep their spaces (encoded), duplicates and order.
+
+exitcode 0 hitspec run q.http --no-history
+stdout 'Tests: 6 passed, 6 total'
+
+-- q.http --
+### inline
+GET {{$env(SERVER)}}/echo/a?z=1&a=John Smith&tag=x&tag=y
+
+>>>
+expect status 200
+expect body.query == "z=1&a=John%20Smith&tag=x&tag=y"
+<<<
+
+### lines
+GET {{$env(SERVER)}}/echo/b
+? z = 1
+? name = John Smith
+? tag = x
+? tag = y
+? s = a&b=c
+
+>>>
+expect status 200
+expect body.query == "z=1&name=John%20Smith&tag=x&tag=y&s=a%26b%3Dc"
+<<<
+
+### form
+POST {{$env(SERVER)}}/echo/c
+Content-Type: application/x-www-form-urlencoded
+
+name=John Smith&tag=x&tag=y&z=1&a=2
+
+>>>
+expect status 200
+expect body.body == "name=John Smith&tag=x&tag=y&z=1&a=2"
+<<<
+
+### formblock
+POST {{$env(SERVER)}}/echo/d
+
+& name = John Smith
+& tag = x
+& tag = y
+& z = a&b=c
+
+>>>
+expect status 200
+expect body.body == "name=John%20Smith&tag=x&tag=y&z=a%26b%3Dc"
+<<<
+
+### url escapes
+GET {{$env(SERVER)}}/echo/e?a=1%202&b=ü&c="q"&p=1+2
+
+>>>
+expect status 200
+expect body.query == "a=1%202&b=%C3%BC&c=%22q%22&p=1+2"
+<<<
+
+### api key query goes last
+# @auth apikey-query api_key, k e y
+GET {{$env(SERVER)}}/echo/f
+? a = 1
+? a = 2
+
+>>>
+expect status 200
+expect body.query == "a=1&a=2&api_key=k%20e%20y"
+<<<
