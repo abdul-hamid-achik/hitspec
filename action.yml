@@ -99,20 +99,32 @@ runs:
   steps:
     - name: Install hitspec
       shell: bash
+      # Inputs reach the script only through env (never ${{ }} inside the
+      # script), so an input value cannot inject shell code.
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
       run: |
-        set -e
+        set -eu
 
-        VERSION="${{ inputs.version }}"
+        VERSION="$INPUT_VERSION"
 
         # Resolve 'latest' to actual version
         if [ "$VERSION" = "latest" ]; then
           echo "Fetching latest version..."
-          VERSION=$(curl -sL https://api.github.com/repos/abdul-hamid-achik/hitspec/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+          VERSION=$(curl -fsSL https://api.github.com/repos/abdul-hamid-achik/hitspec/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
           if [ -z "$VERSION" ]; then
             echo "::error::Failed to fetch latest version"
             exit 1
           fi
           echo "Latest version: $VERSION"
+        fi
+        case "$VERSION" in
+          v*) ;;
+          *) VERSION="v${VERSION}" ;;
+        esac
+        if ! printf '%s' "$VERSION" | grep -Eq '^v[0-9][0-9A-Za-z._+-]*$'; then
+          echo "::error::Invalid version: $VERSION"
+          exit 1
         fi
 
         # Detect OS
@@ -145,18 +157,37 @@ runs:
           ARCHIVE="hitspec_${VERSION_NUM}_${OS}_${ARCH}.tar.gz"
         fi
 
-        URL="https://github.com/abdul-hamid-achik/hitspec/releases/download/${VERSION}/${ARCHIVE}"
-        echo "Downloading: $URL"
+        BASE_URL="https://github.com/abdul-hamid-achik/hitspec/releases/download/${VERSION}"
+        echo "Downloading: ${BASE_URL}/${ARCHIVE}"
 
-        # Download and extract
+        DL=$(mktemp -d)
+        curl -fsSL --retry 3 "${BASE_URL}/${ARCHIVE}" -o "$DL/$ARCHIVE"
+
+        # Verify the archive against the release checksums when published.
+        if curl -fsSL --retry 3 "${BASE_URL}/checksums.txt" -o "$DL/checksums.txt"; then
+          EXPECTED=$(awk -v f="$ARCHIVE" '$2 == f || $2 == "*" f { print $1 }' "$DL/checksums.txt" | head -n 1)
+          if command -v sha256sum >/dev/null 2>&1; then
+            ACTUAL=$(sha256sum < "$DL/$ARCHIVE" | awk '{ print $1 }')
+          else
+            ACTUAL=$(shasum -a 256 < "$DL/$ARCHIVE" | awk '{ print $1 }')
+          fi
+          if [ -z "$EXPECTED" ] || [ "$EXPECTED" != "$ACTUAL" ]; then
+            echo "::error::Checksum mismatch for $ARCHIVE"
+            exit 1
+          fi
+          echo "Checksum OK"
+        else
+          echo "::warning::No checksums.txt published for ${VERSION}; skipping verification"
+        fi
+
+        # Extract
         INSTALL_DIR="/usr/local/bin"
         if [ "$OS" = "windows" ]; then
-          curl -sL "$URL" -o hitspec.zip
-          unzip -o hitspec.zip hitspec.exe -d "$INSTALL_DIR"
-          rm hitspec.zip
+          unzip -o "$DL/$ARCHIVE" hitspec.exe -d "$INSTALL_DIR"
         else
-          curl -sL "$URL" | tar xz -C "$INSTALL_DIR" hitspec
+          tar -xzf "$DL/$ARCHIVE" -C "$INSTALL_DIR" hitspec
         fi
+        rm -rf "$DL"
 
         # Verify installation
         hitspec version
@@ -165,100 +196,131 @@ runs:
     - name: Run hitspec tests
       id: run-tests
       shell: bash
+      # Inputs are passed through env and argv is a bash array: no eval, so
+      # every value stays a literal argument. Semantics match the original
+      # action: `files` is split on whitespace and globs are expanded.
+      env:
+        INPUT_FILES: ${{ inputs.files }}
+        INPUT_ENV: ${{ inputs.env }}
+        INPUT_ENV_FILE: ${{ inputs.env-file }}
+        INPUT_OUTPUT: ${{ inputs.output }}
+        INPUT_OUTPUT_FILE: ${{ inputs.output-file }}
+        INPUT_TAGS: ${{ inputs.tags }}
+        INPUT_NAME: ${{ inputs.name }}
+        INPUT_TIMEOUT: ${{ inputs.timeout }}
+        INPUT_PARALLEL: ${{ inputs.parallel }}
+        INPUT_CONCURRENCY: ${{ inputs.concurrency }}
+        INPUT_BAIL: ${{ inputs.bail }}
+        INPUT_VERBOSE: ${{ inputs.verbose }}
+        INPUT_INSECURE: ${{ inputs.insecure }}
+        INPUT_PROXY: ${{ inputs.proxy }}
+        INPUT_STRESS: ${{ inputs.stress }}
+        INPUT_DURATION: ${{ inputs.duration }}
+        INPUT_RATE: ${{ inputs.rate }}
+        INPUT_VUS: ${{ inputs.vus }}
+        INPUT_MAX_VUS: ${{ inputs.max-vus }}
+        INPUT_THINK_TIME: ${{ inputs.think-time }}
+        INPUT_RAMP_UP: ${{ inputs.ramp-up }}
+        INPUT_THRESHOLD: ${{ inputs.threshold }}
+        INPUT_PROFILE: ${{ inputs.profile }}
       run: |
-        set -e
+        set -u
 
-        # Build command
-        CMD="hitspec run ${{ inputs.files }}"
+        # Word-split and glob-expand `files`, as the original `eval` did.
+        # shellcheck disable=SC2206
+        files=( $INPUT_FILES )
+
+        args=(hitspec run "${files[@]}")
 
         # Add standard options
-        CMD="$CMD --env ${{ inputs.env }}"
-        CMD="$CMD --output ${{ inputs.output }}"
-        CMD="$CMD --no-color"
+        args+=(--env "$INPUT_ENV")
+        args+=(--output "$INPUT_OUTPUT")
+        args+=(--no-color)
 
         # Add optional flags
-        if [ -n "${{ inputs.env-file }}" ]; then
-          CMD="$CMD --env-file ${{ inputs.env-file }}"
+        if [ -n "$INPUT_ENV_FILE" ]; then
+          args+=(--env-file "$INPUT_ENV_FILE")
         fi
 
-        if [ -n "${{ inputs.output-file }}" ]; then
-          CMD="$CMD --output-file ${{ inputs.output-file }}"
+        if [ -n "$INPUT_OUTPUT_FILE" ]; then
+          args+=(--output-file "$INPUT_OUTPUT_FILE")
         fi
 
-        if [ -n "${{ inputs.tags }}" ]; then
-          CMD="$CMD --tags ${{ inputs.tags }}"
+        if [ -n "$INPUT_TAGS" ]; then
+          args+=(--tags "$INPUT_TAGS")
         fi
 
-        if [ -n "${{ inputs.name }}" ]; then
-          CMD="$CMD --name ${{ inputs.name }}"
+        if [ -n "$INPUT_NAME" ]; then
+          args+=(--name "$INPUT_NAME")
         fi
 
-        if [ -n "${{ inputs.timeout }}" ]; then
-          CMD="$CMD --timeout ${{ inputs.timeout }}"
+        if [ -n "$INPUT_TIMEOUT" ]; then
+          args+=(--timeout "$INPUT_TIMEOUT")
         fi
 
-        if [ "${{ inputs.parallel }}" = "true" ]; then
-          CMD="$CMD --parallel"
-          if [ -n "${{ inputs.concurrency }}" ]; then
-            CMD="$CMD --concurrency ${{ inputs.concurrency }}"
+        if [ "$INPUT_PARALLEL" = "true" ]; then
+          args+=(--parallel)
+          if [ -n "$INPUT_CONCURRENCY" ]; then
+            args+=(--concurrency "$INPUT_CONCURRENCY")
           fi
         fi
 
-        if [ "${{ inputs.bail }}" = "true" ]; then
-          CMD="$CMD --bail"
+        if [ "$INPUT_BAIL" = "true" ]; then
+          args+=(--bail)
         fi
 
-        if [ "${{ inputs.verbose }}" = "true" ]; then
-          CMD="$CMD --verbose"
+        if [ "$INPUT_VERBOSE" = "true" ]; then
+          args+=(--verbose)
         fi
 
-        if [ "${{ inputs.insecure }}" = "true" ]; then
-          CMD="$CMD --insecure"
+        if [ "$INPUT_INSECURE" = "true" ]; then
+          args+=(--insecure)
         fi
 
-        if [ -n "${{ inputs.proxy }}" ]; then
-          CMD="$CMD --proxy ${{ inputs.proxy }}"
+        if [ -n "$INPUT_PROXY" ]; then
+          args+=(--proxy "$INPUT_PROXY")
         fi
 
-        # Stress testing options
-        if [ "${{ inputs.stress }}" = "true" ]; then
-          CMD="$CMD --stress"
-          CMD="$CMD --duration ${{ inputs.duration }}"
-          CMD="$CMD --rate ${{ inputs.rate }}"
-          CMD="$CMD --no-progress"
+        if [ "$INPUT_STRESS" = "true" ]; then
+          args+=(--stress)
+          args+=(--duration "$INPUT_DURATION")
+          args+=(--rate "$INPUT_RATE")
+          args+=(--no-progress)
 
-          if [ -n "${{ inputs.vus }}" ]; then
-            CMD="$CMD --vus ${{ inputs.vus }}"
+          if [ -n "$INPUT_VUS" ]; then
+            args+=(--vus "$INPUT_VUS")
           fi
 
-          if [ -n "${{ inputs.max-vus }}" ]; then
-            CMD="$CMD --max-vus ${{ inputs.max-vus }}"
+          if [ -n "$INPUT_MAX_VUS" ]; then
+            args+=(--max-vus "$INPUT_MAX_VUS")
           fi
 
-          if [ -n "${{ inputs.think-time }}" ]; then
-            CMD="$CMD --think-time ${{ inputs.think-time }}"
+          if [ -n "$INPUT_THINK_TIME" ]; then
+            args+=(--think-time "$INPUT_THINK_TIME")
           fi
 
-          if [ -n "${{ inputs.ramp-up }}" ]; then
-            CMD="$CMD --ramp-up ${{ inputs.ramp-up }}"
+          if [ -n "$INPUT_RAMP_UP" ]; then
+            args+=(--ramp-up "$INPUT_RAMP_UP")
           fi
 
-          if [ -n "${{ inputs.threshold }}" ]; then
-            CMD="$CMD --threshold '${{ inputs.threshold }}'"
+          if [ -n "$INPUT_THRESHOLD" ]; then
+            args+=(--threshold "$INPUT_THRESHOLD")
           fi
 
-          if [ -n "${{ inputs.profile }}" ]; then
-            CMD="$CMD --profile ${{ inputs.profile }}"
+          if [ -n "$INPUT_PROFILE" ]; then
+            args+=(--profile "$INPUT_PROFILE")
           fi
         fi
 
-        echo "Running: $CMD"
+        printf 'Running:'
+        printf ' %q' "${args[@]}"
+        printf '\n'
 
         # Execute and capture exit code
         EXIT_CODE=0
-        eval $CMD || EXIT_CODE=$?
+        "${args[@]}" || EXIT_CODE=$?
 
-        echo "exit-code=$EXIT_CODE" >> $GITHUB_OUTPUT
+        echo "exit-code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
 
         # Exit with the same code to fail the step if tests fail
         exit $EXIT_CODE
