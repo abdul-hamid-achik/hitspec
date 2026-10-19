@@ -27,10 +27,11 @@ The `--allow-db` flag is required for security. Database blocks execute arbitrar
 
 ## Syntax
 
-Use `>>>db` blocks after a request to query the database and assert on results:
+Set the connection with a `# @db` directive on the request, then use a `>>>db` block after it: the SQL query first, then `expect <column> <operator> <value>` lines checked against the first row of the result:
 
 ```http
 ### Create user
+# @db sqlite:./test.db
 POST {{baseUrl}}/users
 Content-Type: application/json
 
@@ -40,14 +41,11 @@ Content-Type: application/json
 expect status 201
 <<<
 
->>>db sqlite:./test.db
-SELECT * FROM users WHERE email = 'john@example.com'
-<<<
-
->>>
-expect db.rows length 1
-expect db.rows[0].name == "John"
-expect db.rows[0].email == "john@example.com"
+>>>db
+SELECT COUNT(*) AS count, name, email FROM users WHERE email = 'john@example.com'
+expect count == 1
+expect name == "John"
+expect email == "john@example.com"
 <<<
 ```
 
@@ -79,6 +77,7 @@ mysql://username:password@localhost:3306/mydb
 ### Verify record creation
 
 ```http
+# @db {{dbUrl}}
 POST {{baseUrl}}/orders
 Content-Type: application/json
 
@@ -88,36 +87,32 @@ Content-Type: application/json
 expect status 201
 <<<
 
->>>db {{dbUrl}}
+>>>db
 SELECT COUNT(*) as count FROM orders WHERE product = 'Widget'
-<<<
-
->>>
-expect db.rows[0].count == 1
+expect count == 1
 <<<
 ```
 
 ### Verify cascade deletes
 
 ```http
+# @db {{dbUrl}}
 DELETE {{baseUrl}}/users/1
 
 >>>
 expect status 204
 <<<
 
->>>db {{dbUrl}}
+>>>db
 SELECT COUNT(*) as count FROM user_sessions WHERE user_id = 1
-<<<
-
->>>
-expect db.rows[0].count == 0
+expect count == 0
 <<<
 ```
 
 ### Verify data transformation
 
 ```http
+# @db {{dbUrl}}
 PUT {{baseUrl}}/users/1
 Content-Type: application/json
 
@@ -127,12 +122,9 @@ Content-Type: application/json
 expect status 200
 <<<
 
->>>db {{dbUrl}}
+>>>db
 SELECT name FROM users WHERE id = 1
-<<<
-
->>>
-expect db.rows[0].name == "John Doe"
+expect name == "John Doe"
 <<<
 ```
 

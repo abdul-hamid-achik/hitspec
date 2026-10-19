@@ -83,6 +83,11 @@ func snapshotValue(v reflect.Value) any {
 			if !v.Type().Field(i).IsExported() {
 				continue
 			}
+			// File.Warnings only appears in a golden when a file produces one,
+			// so adding the field did not touch every snapshot.
+			if v.Type().Field(i).Name == "Warnings" && v.Field(i).Len() == 0 {
+				continue
+			}
 			out[v.Type().Field(i).Name] = snapshotValue(v.Field(i))
 		}
 		return out

@@ -1,0 +1,52 @@
+# Capture paths: bracket indexes, .# counts, #(...) queries, the whole body and
+# jsonpath all capture (they used to capture nothing and say nothing). A capture
+# that finds nothing is a visible warning.
+
+exitcode 0 hitspec run paths.http
+stdout 'Tests: 2 passed, 2 total'
+! stderr 'captured nothing'
+
+exitcode 0 hitspec run miss.http
+stderr 'warning: capture "ghost" \(line 8\) captured nothing: the path "no.such.path" matches nothing'
+stderr 'warning: capture "ghostHeader" \(line 9\) captured nothing: the response has no header "X-Nope"'
+! stderr 'okValue'
+
+-- paths.http --
+### source
+# @name src
+
+GET {{$env(SERVER)}}/json
+
+>>>capture
+firstName from body.items[0].name
+secondId from body.items[1].id
+count from body.items.#
+withTag from body.items.#(id==1).tags[1]
+byQuery from body.items.#(name=="b").id
+everything from body
+jp from jsonpath $.items[0].tags[0]
+statusCode from status
+<<<
+
+### use
+# @name use
+# @depends src
+
+GET {{$env(SERVER)}}/echo/{{firstName}}/{{secondId}}/{{count}}/{{withTag}}/{{byQuery}}/{{jp}}/{{statusCode}}
+
+>>>
+expect status 200
+expect body.path == "/echo/a/2/2/y/2/x/200"
+<<<
+
+-- miss.http --
+### source
+# @name src
+
+GET {{$env(SERVER)}}/json
+
+>>>capture
+okValue from body.name
+ghost from body.no.such.path
+ghostHeader from header X-Nope
+<<<

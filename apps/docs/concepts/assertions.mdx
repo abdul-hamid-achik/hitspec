@@ -26,7 +26,7 @@ Each line inside the block follows this pattern:
 expect <subject> <operator> <value>
 ```
 
-When the operator is `==`, you can omit it:
+When the operator is `==`, you can omit it, as long as the value starts like a value (a number, a quoted string, `true`, `false`, `null`, `[` or `{`):
 
 ```http
 >>>
@@ -35,6 +35,43 @@ expect status == 200       # explicit form
 <<<
 ```
 
+A trailing `# comment` is allowed on any line (the `#` must follow whitespace and be followed by whitespace or the end of the line). Blank lines and lines starting with `#` or `//` inside the block are ignored. Any other line that does not start with `expect` is an error.
+
+### Mistakes are errors, not guesses
+
+hitspec refuses assertion lines it would otherwise have to guess at. `hitspec run` and `hitspec validate` report them with `file:line:column` and exit with code 2:
+
+```
+api.http:6:18: unknown operator "contians" (did you mean "contains"?)
+```
+
+- An unknown operator (`contians`, `=`, `===`, `equals`) is an error. A bare word after the subject is never read as "== word": write `expect body.name == Jane` or `expect body.name "Jane"`.
+- An operator without a value (`expect body.name ==`) is an error. It no longer reads the next line as its value.
+- Extra values are an error: `expect status 200 201` fails with a hint to write `expect status in [200, 201]`.
+- `expect` misspelt (`expcet status 200`) is an error, so a line can never silently assert nothing.
+
+### Expected Values
+
+Every operator that takes a value reads it with one rule. The value is either:
+
+1. a **JSON literal**: a string (`"Jane Doe"` or `'Jane Doe'`), a number, `true`, `false`, `null`, a list `[1, "a", b]`, or an object `{"a": 1}`; or
+2. a **regular expression** `/pattern/flags` after `matches` (flags `i`, `m`, `s`, `U`; `g` is accepted and ignored); or
+3. otherwise, **the rest of the line, trimmed, exactly as written**, as a string.
+
+```http
+>>>
+expect body.name == Jane Doe          # the string "Jane Doe", no quotes needed
+expect body.path == ./files/x         # ./files/x, $HOME, ^start, @handle, #fff are all fine
+expect body.msg == "line\nbreak"      # JSON escapes work inside quotes
+expect body.address == {"city": "Oslo", "zip": "0150"}
+expect status in [200, 201]
+<<<
+```
+
+Quoted strings use JSON escapes; if the text is not valid JSON (a regex such as `"\d+"`), it is used as written. In a list, each element follows the same rule. `{{variable}}` references are filled in before comparing. Text after a closing quote is an error (`"Jane" Doe`), so quote the whole value or none of it.
+
+For `contains`, `!contains`, `startsWith` and `endsWith` the value is always text: a quoted string is decoded, anything else is used exactly as written (`expect body startsWith {`, `expect body.price contains 1.50`).
+
 ## Assertion Subjects
 
 | Subject | Description | Example |
@@ -42,10 +79,12 @@ expect status == 200       # explicit form
 | `status` | HTTP status code | `expect status 200` |
 | `duration` | Response time in milliseconds | `expect duration < 1000` |
 | `header <name>` | Response header value | `expect header Content-Type contains json` |
-| `body` | Full response body (as string) | `expect body contains "success"` |
-| `body.<path>` | JSON path into body | `expect body.user.name == "John"` |
+| `body` | Full response body (parsed when JSON, text otherwise) | `expect body contains "success"` |
+| `body.<path>` | Path into a JSON body (gjson syntax: `.#` counts, `.#(...)` queries) | `expect body.user.name == "John"` |
 | `body[n]` | Array index | `expect body[0].id exists` |
-| `jsonpath $.<path>` | JSONPath expression | `expect jsonpath $.users[0].id exists` |
+| `jsonpath $.<path>` | JSONPath expression (`$.a.b`, `$.a[0]`, `$.a[*].b`) | `expect jsonpath $.users[0].id exists` |
+
+A body path needs a JSON response: `application/json`, `text/json` and any `+json` type such as `application/problem+json`, with or without `; charset=...`. On any other response, `body.x` fails with "response body is not JSON" instead of quietly matching; only the whole `body` can be read. See [Assertion Subjects](/reference/assertion-subjects).
 
 ---
 
@@ -79,6 +118,17 @@ expect body.perPage >= 20
 Use `expect status 200` as shorthand for `expect status == 200`. The `==` operator is implied when omitted.
 </Tip>
 
+`==` and `!=` compare objects and arrays **deeply**, as JSON: key order does not matter, `1` equals `1.0`, and `["a b"]` is not `["a", "b"]`:
+
+```http
+>>>
+expect body.address == {"city": "Oslo", "zip": "0150"}
+expect body.ids == [1, 2, 3]
+<<<
+```
+
+Scalars are compared loosely: `"42"` and `42` are equal. `null` only equals `null` (see [null versus absent](#null-versus-absent)).
+
 ---
 
 ## String Operators
@@ -107,8 +157,18 @@ expect body.phone matches /^\+?[\d\s\-()]+$/
 ```
 
 <Note>
-Regular expressions in `matches` are enclosed in forward slashes: `/pattern/`. The pattern uses Go's regexp syntax.
+Regular expressions in `matches` are enclosed in forward slashes: `/pattern/` or `/pattern/i` (flags `i`, `m`, `s`, `U`). The pattern uses Go's regexp syntax. A value without slashes (`matches "^a"`) is used as the pattern as written.
 </Note>
+
+The string operators work on text. On the whole `body` of a JSON response they see the response's raw JSON text; on an object or array they see its JSON encoding (never Go's `map[...]` form); numbers appear without an exponent:
+
+```http
+>>>
+expect body contains "\"name\":\"Jane\""
+expect body.address contains "\"city\":\"Oslo\""
+expect body.tags endsWith "]"
+<<<
+```
 
 ---
 
@@ -122,7 +182,19 @@ Check whether values exist and validate their types.
 | `!exists` | `expect body.error !exists` | Value is absent or null |
 | `type` | `expect body.items type array` | Check value type |
 
-Supported types for the `type` operator: `null`, `boolean`, `number`, `string`, `array`, `object`.
+Supported types for the `type` operator: `null`, `boolean`, `number`, `string`, `array`, `object`. Anything else is an error (`type strng` suggests `string`).
+
+### null versus absent
+
+A field that is missing and a field that is `null` are different, and the operators treat them differently:
+
+| Body | `exists` | `!exists` | `== null` | `!= null` | `type null` |
+|------|----------|-----------|-----------|-----------|-------------|
+| `{"x": 5}` | pass | fail | fail | pass | fail |
+| `{"x": null}` | fail | pass | pass | fail | pass |
+| `{}` (x is absent) | fail | pass | fail | fail | fail |
+
+`== null` needs a real JSON `null`, and `!= null` needs a present, non-null value, so a misspelt path cannot pass either. To accept "absent or null", use `!exists`. Every other operator fails on an absent path, except the negated ones (`!=`, `!contains`, `!includes`, `!in`), which hold because nothing is there to match.
 
 ```http
 ### Validate response structure
@@ -148,7 +220,7 @@ Validate array lengths and check array contents.
 
 | Operator | Syntax | Description |
 |----------|--------|-------------|
-| `length` | `expect body.items length 10` | Length equals exact value |
+| `length` | `expect body.items length 10` | Length equals exact value (strings count characters, not bytes) |
 | `length >` | `expect body.items length > 0` | Length greater than |
 | `length >=` | `expect body.items length >= 1` | Length greater than or equal |
 | `length <` | `expect body.items length < 100` | Length less than |
@@ -157,7 +229,7 @@ Validate array lengths and check array contents.
 | `!includes` | `expect body.tags !includes "test"` | Array does not contain value |
 | `in` | `expect status in [200, 201, 204]` | Value is one of the listed values |
 | `!in` | `expect status !in [400, 404, 500]` | Value is not one of the listed values |
-| `each` | `expect body.items each type object` | Apply assertion to every element |
+| `each` | `expect body.items each type object` | Apply an assertion to every element |
 
 ```http
 ### Validate paginated list
@@ -173,13 +245,19 @@ expect body.users each type object
 
 ### The `each` Operator
 
-`each` applies an assertion to every element in an array. It is useful for validating the shape of list responses:
+`each` applies an assertion to every element in an array. It is useful for validating the shape of list responses. After `each` write an operator and value, optionally preceded by a path inside the element (`body` or a leading `.` means the element itself):
 
 ```http
 >>>
 expect body.users each type object
+expect body.users each body.id exists
+expect body.users each email matches /^.+@.+\..+$/
+expect body.scores each > 0
+expect body.users each {"operator": "type", "value": "object"}
 <<<
 ```
+
+A failure names the element: `item[2]: expected type string, got number`. An empty array passes (nothing to check); add `length > 0` to require elements.
 
 ### The `in` Operator
 
@@ -247,7 +325,7 @@ Schema file paths are resolved relative to the `.http` file that references them
 
 ## Snapshot Testing
 
-Compare the response body against a previously saved baseline. On first run, the snapshot is created. On subsequent runs, the response is compared against it.
+Compare the response body against a previously saved baseline. A snapshot is never created by a plain run: the first run fails with "snapshot does not exist (run with --update-snapshots to create)". Run once with `--update-snapshots` to save the baseline, then later runs compare against it.
 
 | Operator | Syntax | Description |
 |----------|--------|-------------|
@@ -262,7 +340,7 @@ expect body snapshot "app-config"
 <<<
 ```
 
-Snapshots are stored in a `__snapshots__` directory next to your test file. Update them when the response intentionally changes:
+Snapshots are stored in a `__snapshots__` directory next to your test file. Create them the first time, and update them when the response intentionally changes:
 
 ```bash
 hitspec run tests/ --update-snapshots

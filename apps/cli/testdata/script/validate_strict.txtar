@@ -1,0 +1,144 @@
+# validate: suspicious constructs are warnings (exit 0); --strict makes them
+# errors (exit 2). Constructs run refuses (duplicate names, cycles) are errors
+# in both.
+
+# --- warnings: unknown directive, @depends on a missing request, bad @timeout
+exitcode 0 hitspec validate warn.http
+stdout 'OK    warn.http'
+stdout 'warning: warn.http:2:1: unknown directive @tag \(did you mean @tags\?\)'
+stdout 'warning: warn.http:3:1: unknown directive @nmae \(did you mean @name\?\)'
+stdout 'warning: warn.http:\d+:1: request "second" depends on "nothere", which does not exist'
+stdout 'warning: warn.http:4:1: invalid @timeout value "soon"'
+stdout '1 file\(s\) checked, 0 error\(s\), 4 warning\(s\)'
+
+exitcode 2 hitspec validate --strict warn.http
+stderr 'FAIL  warn.http'
+stderr 'unknown directive @tag'
+
+# --- JSON output carries warnings
+exitcode 0 hitspec validate --json warn.http
+stdout '"warnings"'
+stdout 'unknown directive @tag'
+
+# --- directives at the top of the file that lead into no request
+exitcode 0 hitspec validate orphan.http
+stdout 'warning: orphan.http:1:1: directive @description is not followed by a request'
+exitcode 2 hitspec validate --strict orphan.http
+
+# a request may start with its directives and no ### line
+exitcode 0 hitspec validate --strict nosep.http
+! stdout 'warning'
+
+# --- custom directives are fine
+exitcode 0 hitspec validate --strict custom.http
+! stdout 'warning'
+
+# --- errors without --strict
+exitcode 2 hitspec validate dup.http
+stderr 'duplicate request name "same"'
+exitcode 2 hitspec validate cycle.http
+stderr 'circular @depends: a -> b -> a'
+
+# --- capture note glued to the path
+exitcode 0 hitspec validate note.http
+stdout 'warning: .*capture "token": the path "token   <-- captures to login.token" contains spaces'
+
+# --- undefined variables: only under --strict
+exitcode 0 hitspec validate vars.http
+! stdout 'warning'
+exitcode 2 hitspec validate --strict vars.http
+stderr 'variable \{\{missingVar\}\} is not defined'
+stderr 'request "login" has no capture named "nope"'
+stderr 'is used without "# @depends login"'
+! stderr 'definedInFile'
+! stderr 'fromEnvYaml'
+! stderr 'fromDotenv'
+! stderr 'fromProcess'
+! stderr 'variable \{\{viaCapture'
+
+# variables supplied by the process environment count as defined
+env missingVar=1
+exitcode 2 hitspec validate --strict vars.http
+! stderr 'missingVar'
+stderr 'has no capture named "nope"'
+
+-- hitspec.yaml --
+environments:
+  dev:
+    fromEnvYaml: a
+  prod:
+    other: b
+-- .env --
+fromDotenv=1
+-- warn.http --
+### first
+# @tag smoke
+# @nmae x
+# @timeout soon
+# @name first
+GET http://127.0.0.1:1/a
+
+### second
+# @name second
+# @depends nothere
+GET http://127.0.0.1:1/b
+-- orphan.http --
+# @description file header
+### a
+GET http://127.0.0.1:1/a
+-- nosep.http --
+# @name first
+# @tags smoke
+GET http://127.0.0.1:1/a
+
+### second
+# @name second
+GET http://127.0.0.1:1/b
+-- custom.http --
+### c
+# @name c
+# @x-owner team-a
+# @contract.provider api
+# @contract.state ready
+# @stress.weight 2
+GET http://127.0.0.1:1/a
+-- dup.http --
+### a
+# @name same
+GET http://127.0.0.1:1/a
+
+### b
+# @name same
+GET http://127.0.0.1:1/b
+-- cycle.http --
+### a
+# @name a
+# @depends b
+GET http://127.0.0.1:1/a
+
+### b
+# @name b
+# @depends a
+GET http://127.0.0.1:1/b
+-- note.http --
+### login
+# @name login
+GET http://127.0.0.1:1/a
+
+>>>capture
+token from body.token   <-- captures to login.token
+<<<
+-- vars.http --
+@definedInFile = 1
+
+### login
+# @name login
+GET http://127.0.0.1:1/a/{{definedInFile}}/{{fromEnvYaml}}/{{fromDotenv}}/{{$env(X)}}/{{$uuid()}}
+
+>>>capture
+viaCapture from body.id
+<<<
+
+### use
+# @name use
+GET http://127.0.0.1:1/b/{{missingVar}}/{{viaCapture}}/{{login.viaCapture}}/{{login.nope}}

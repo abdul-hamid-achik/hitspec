@@ -245,24 +245,39 @@ expect body snapshot "response"   # Snapshot comparison
 
 ### Metadata Directives
 
+Directives are `#` comment lines above the request line. A value runs to the
+end of its line, so keep notes on their own `#` lines:
+
 ```http
-# @name myRequest           # Request identifier
-# @tags smoke, auth         # Tags for filtering
-# @depends login            # Run after login request
-# @timeout 5000             # Timeout in ms
-# @retry 3                  # Retry on failure
-# @auth bearer {{token}}    # Authentication
+# Request identifier, used to refer to its captures
+# @name myRequest
+# Tags for filtering with --tags
+# @tags smoke, auth
+# Run after the login request
+# @depends login
+# Timeout in ms
+# @timeout 5000
+# Retry on failure
+# @retry 3
+# Authentication
+# @auth bearer {{token}}
+GET {{baseUrl}}/me
 ```
 
 ### Captures
 
 ```http
+### Login
+# @name login
+POST {{baseUrl}}/login
+
 >>>capture
 token from body.access_token
 userId from body.user.id
 <<<
 
-# Use in subsequent requests:
+### Use the captures in a later request
+# @depends login
 GET {{baseUrl}}/users/{{login.userId}}
 Authorization: Bearer {{login.token}}
 ```

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/jsonbody"
 )
 
 type Response struct {
@@ -74,9 +76,11 @@ func (r *Response) ContentType() string {
 	return r.Header("Content-Type")
 }
 
+// IsJSON reports a JSON media type: application/json, text/json and any
+// +json suffix (application/problem+json, application/vnd.api+json, ...),
+// the same rule assertions and captures use.
 func (r *Response) IsJSON() bool {
-	ct := r.ContentType()
-	return strings.Contains(ct, "application/json")
+	return jsonbody.IsJSONMediaType(r.ContentType())
 }
 
 func (r *Response) IsSuccess() bool {

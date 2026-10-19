@@ -1,154 +1,88 @@
 package parser
 
 import (
-	"strconv"
 	"strings"
 )
 
-// parseDBBlock parses a >>>db ... <<< block containing SQL queries and expectations.
+// dbOperators are the operators a >>>db expectation supports.
+var dbOperators = map[AssertionOperator]bool{
+	OpEquals: true, OpNotEquals: true, OpGreaterThan: true, OpGreaterOrEqual: true,
+	OpLessThan: true, OpLessOrEqual: true, OpContains: true, OpExists: true, OpNotExists: true,
+}
+
+// parseDBBlock parses a >>>db ... <<< block: SQL and "expect column op value"
+// lines. The SQL is read raw, so quotes, braces ({{var}}) and punctuation
+// reach the database exactly as written.
+//
+// A query is "query <sql>" or a bare SQL statement; a line that follows
+// another query line and is not an expect line continues the statement, and a
+// SQL line after an expect line starts the next query.
 func (p *Parser) parseDBBlock() ([]*DBAssertion, error) {
-	p.nextToken()
-	p.skipNewlines()
-
 	var assertions []*DBAssertion
-	var currentQuery string
+	var query string
 	var queryLine int
+	queryHasExpects := false
 
-	for p.curToken.Type != TokenAssertionEnd && p.curToken.Type != TokenEOF {
-		line := p.curToken.Line
-
-		// Read the line
-		lineContent := p.curToken.Value
-		for p.curToken.Type != TokenNewline && p.curToken.Type != TokenEOF && p.curToken.Type != TokenAssertionEnd {
-			p.nextToken()
-			if p.curToken.Type != TokenNewline && p.curToken.Type != TokenEOF && p.curToken.Type != TokenAssertionEnd {
-				lineContent += " " + p.curToken.Value
+	err := p.readBlock("db", func(lineNo int, raw string) error {
+		text := strings.TrimSpace(raw)
+		lower := strings.ToLower(text)
+		switch {
+		case lower == "expect" || strings.HasPrefix(lower, "expect ") || strings.HasPrefix(lower, "expect\t"):
+			if query == "" {
+				return (&exprScanner{p: p, line: lineNo, text: raw}).fail(strings.Index(raw, text), "expect before any query: put the SQL on a line before it")
 			}
-		}
-		lineContent = strings.TrimSpace(lineContent)
-
-		if strings.HasPrefix(lineContent, "query ") {
-			currentQuery = strings.TrimPrefix(lineContent, "query ")
-			currentQuery = strings.TrimSpace(currentQuery)
-			queryLine = line
-		} else if strings.HasPrefix(lineContent, "expect ") && currentQuery != "" {
-			// Parse the expect line: expect column operator expected
-			expectPart := strings.TrimPrefix(lineContent, "expect ")
-			expectPart = strings.TrimSpace(expectPart)
-
-			assertion, err := p.parseDBExpectLine(expectPart, currentQuery, queryLine)
+			a, err := p.parseDBExpectLine(lineNo, raw, query, queryLine)
 			if err != nil {
-				return nil, err
+				return err
 			}
-			assertions = append(assertions, assertion)
+			assertions = append(assertions, a)
+			queryHasExpects = true
+		case strings.HasPrefix(lower, "query ") || strings.HasPrefix(lower, "query\t") || lower == "query":
+			query = strings.TrimSpace(text[len("query"):])
+			queryLine = lineNo
+			queryHasExpects = false
+		case query == "" || queryHasExpects:
+			query, queryLine, queryHasExpects = text, lineNo, false
+		default:
+			query += "\n" + text
 		}
-
-		if p.curToken.Type == TokenNewline {
-			p.nextToken()
-		}
-		p.skipNewlines()
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-
-	if p.curToken.Type == TokenAssertionEnd {
-		p.nextToken()
-	}
-
 	return assertions, nil
 }
 
-// parseDBExpectLine parses a single expect line within a >>>db block.
-func (p *Parser) parseDBExpectLine(line string, query string, queryLine int) (*DBAssertion, error) {
-	// Parse: column operator expected
-	// Example: count > 0, name == "John"
-	parts := strings.Fields(line)
-	if len(parts) < 2 {
-		return nil, &ParseError{
-			File:    p.file,
-			Line:    queryLine,
-			Message: "invalid db expect syntax: " + line,
-			Snippet: p.getSnippet(),
-		}
+// parseDBExpectLine parses "expect <column> <operator> <value>" inside a >>>db
+// block with the same grammar as an HTTP assertion.
+func (p *Parser) parseDBExpectLine(lineNo int, raw string, query string, queryLine int) (*DBAssertion, error) {
+	s := &exprScanner{p: p, line: lineNo, text: raw}
+	if err := s.expectKeyword("expect"); err != nil {
+		return nil, err
 	}
-
-	column := parts[0]
-	operator := OpEquals
-	var expected interface{}
-
-	if len(parts) >= 3 {
-		// Parse operator
-		switch parts[1] {
-		case "==":
-			operator = OpEquals
-		case "!=":
-			operator = OpNotEquals
-		case ">":
-			operator = OpGreaterThan
-		case ">=":
-			operator = OpGreaterOrEqual
-		case "<":
-			operator = OpLessThan
-		case "<=":
-			operator = OpLessOrEqual
-		case "contains":
-			operator = OpContains
-		case "exists":
-			operator = OpExists
-		case "!exists":
-			operator = OpNotExists
-		}
-
-		// Parse expected value
-		expectedStr := strings.Join(parts[2:], " ")
-		expected = parseValue(expectedStr)
-	} else if len(parts) == 2 {
-		// Shorthand: column expected (implies ==)
-		expected = parseValue(parts[1])
+	s.skipSpace()
+	column := s.scanFullSubject(false)
+	if column == "" {
+		return nil, s.fail(s.pos, "missing column after expect")
 	}
-
+	opPos := s.pos
+	op, expected, err := s.parseCondition(column, false)
+	if err != nil {
+		return nil, err
+	}
+	if !dbOperators[op] {
+		return nil, s.fail(opPos, "operator %s is not supported in >>>db blocks (use ==, !=, >, >=, <, <=, contains, exists, !exists)", op.String())
+	}
 	return &DBAssertion{
 		Query:    query,
 		Column:   column,
-		Operator: operator,
+		Operator: op,
 		Expected: expected,
 		Line:     queryLine,
 	}, nil
 }
 
-// parseValue parses a literal value string into a typed Go value.
-func parseValue(s string) interface{} {
-	s = strings.TrimSpace(s)
-
-	// Check for quoted string
-	if (strings.HasPrefix(s, "\"") && strings.HasSuffix(s, "\"")) ||
-		(strings.HasPrefix(s, "'") && strings.HasSuffix(s, "'")) {
-		return s[1 : len(s)-1]
-	}
-
-	// Check for number
-	if i, err := strconv.Atoi(s); err == nil {
-		return i
-	}
-	if f, err := strconv.ParseFloat(s, 64); err == nil {
-		return f
-	}
-
-	// Check for boolean
-	if s == "true" {
-		return true
-	}
-	if s == "false" {
-		return false
-	}
-
-	// Check for null
-	if s == "null" {
-		return nil
-	}
-
-	return s
-}
-
-// parseShellBlock parses a >>>shell ... <<< block into a slice of ShellCommand.
 // parseMockBlock parses a >>>mock ... <<< block, capturing the raw response body
 // the mock server should return for this request. Mirrors the GraphQL block's
 // raw-read so multi-line JSON is preserved verbatim.
@@ -173,47 +107,17 @@ func (p *Parser) parseMockBlock() (string, error) {
 	return strings.TrimSpace(body), nil
 }
 
+// parseShellBlock parses a >>>shell ... <<< block: one command per line, read
+// raw so quotes, repeated spaces and '#' reach the shell exactly as written.
+// Blank lines and lines starting with '#' or '//' are skipped.
 func (p *Parser) parseShellBlock() ([]*ShellCommand, error) {
-	p.nextToken()
-	p.skipNewlines()
-
 	var commands []*ShellCommand
-
-	for p.curToken.Type != TokenAssertionEnd && p.curToken.Type != TokenEOF {
-		line := p.curToken.Line
-
-		// Build the command by reading from current token to end of line
-		var cmdBuilder strings.Builder
-		for p.curToken.Type != TokenNewline && p.curToken.Type != TokenEOF && p.curToken.Type != TokenAssertionEnd {
-			if cmdBuilder.Len() > 0 && p.curToken.Type == TokenWhitespace {
-				cmdBuilder.WriteString(" ")
-			} else if p.curToken.Type == TokenVariableRef {
-				cmdBuilder.WriteString("{{")
-				cmdBuilder.WriteString(p.curToken.Value)
-				cmdBuilder.WriteString("}}")
-			} else if p.curToken.Type != TokenWhitespace {
-				cmdBuilder.WriteString(p.curToken.Value)
-			}
-			p.nextTokenRaw()
-		}
-
-		cmd := strings.TrimSpace(cmdBuilder.String())
-		if cmd != "" {
-			commands = append(commands, &ShellCommand{
-				Command: cmd,
-				Line:    line,
-			})
-		}
-
-		if p.curToken.Type == TokenNewline {
-			p.nextToken()
-		}
-		p.skipNewlines()
+	err := p.readBlock("shell", func(lineNo int, raw string) error {
+		commands = append(commands, &ShellCommand{Command: strings.TrimSpace(raw), Line: lineNo})
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-
-	if p.curToken.Type == TokenAssertionEnd {
-		p.nextToken()
-	}
-
 	return commands, nil
 }

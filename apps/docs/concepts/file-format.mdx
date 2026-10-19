@@ -283,6 +283,8 @@ expect duration < 1000
 <<<
 ```
 
+Every line in the block is an `expect` line, a comment (`#` or `//`) or blank. A block must be closed with `<<<`, must follow a request line, and may appear more than once per request. Unknown operators, operators without a value and misspelt block types (`>>>captur`) are parse errors (exit code 2), not silently ignored.
+
 See [Assertions](/concepts/assertions) for all 26 operators.
 
 ## Capture Blocks
@@ -343,13 +345,15 @@ Content-Type: application/json
 | `@after` | Shell script to run after the request (always runs) | `# @after ./cleanup.sh` |
 | `@db` | Database connection for DB assertions | `# @db sqlite://./test.db` |
 | `@waitFor` | Poll URL until ready before executing | `# @waitFor {{baseUrl}}/health 200 30000 1000` |
-| `@if` | Run only when variable is truthy | `# @if {{runSlow}}` |
-| `@unless` | Skip when variable is truthy | `# @unless {{skipAuth}}` |
+| `@if` | Run only when the condition is true (a truthy value, or a `==` / `!=` comparison) | `# @if {{env}} == "prod"` |
+| `@unless` | Skip when the condition is true | `# @unless {{skipAuth}}` |
 | `@stress.weight` | Relative selection weight for stress tests | `# @stress.weight 3` |
 | `@stress.think` | Think time in ms after this request (stress) | `# @stress.think 500` |
 | `@stress.skip` | Exclude from stress testing | `# @stress.skip` |
 | `@stress.setup` | Run once before stress test starts | `# @stress.setup` |
 | `@stress.teardown` | Run once after stress test ends | `# @stress.teardown` |
+
+Directives not in this table are reported by `hitspec validate` as warnings (`# @tag` is probably `# @tags`), except custom ones starting with `x-` (`# @x-owner team-a`) and `@contract.*`. A request may start with its `# @directives` and omit the `###` line.
 
 ### @waitFor -- Service Readiness Polling
 
@@ -399,7 +403,25 @@ POST {{baseUrl}}/deploy
 GET {{baseUrl}}/admin
 ```
 
-The condition is truthy when the variable is defined and not empty, `"0"`, or `"false"`.
+A bare value is truthy when it is defined and not empty, `"0"`, `"false"`, `"no"` or `"null"`. An undefined variable is falsy.
+
+Conditions can compare with `==` and `!=`, negate with `!`, and combine with `&&` and `||` (`&&` binds tighter):
+
+```http
+### Only against production
+# @if {{env}} == "prod"
+
+POST {{baseUrl}}/deploy
+```
+
+```http
+### Everything except staging, when enabled
+# @if {{env}} != staging && {{runSlow}}
+
+GET {{baseUrl}}/slow
+```
+
+Each side of a comparison is resolved on its own and compared as text (as numbers when both sides are numbers); quotes around either side are ignored. An undefined variable counts as empty, so `{{missing}} == "prod"` is false and `{{missing}} != "prod"` is true. Without a comparison, `# @if {{env}}` is true for any non-empty value, so use `==` to test for a specific one.
 
 ### Stress Test Annotations
 

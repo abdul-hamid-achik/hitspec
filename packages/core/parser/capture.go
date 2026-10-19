@@ -1,90 +1,71 @@
 package parser
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
+
+var captureLineRe = regexp.MustCompile(`^([\p{L}_][\p{L}\p{N}_.\-]*)\s+(?i:from)\s+(.+)$`)
 
 // parseCaptures parses a >>>capture ... <<< block into a slice of Capture.
+// Lines are read raw: a path may contain quotes, '#' and spaces
+// (items.#(name=="Jane Doe").id).
 func (p *Parser) parseCaptures() ([]*Capture, error) {
-	p.nextToken()
-	p.skipNewlines()
-
 	var captures []*Capture
-
-	for p.curToken.Type != TokenAssertionEnd && p.curToken.Type != TokenEOF {
-		if p.curToken.Type == TokenIdentifier {
-			capture, err := p.parseCapture()
-			if err != nil {
-				return nil, err
-			}
-			captures = append(captures, capture)
-		} else {
-			p.nextToken()
+	err := p.readBlock("capture", func(lineNo int, raw string) error {
+		s := &exprScanner{p: p, line: lineNo, text: raw}
+		s.skipSpace()
+		text := strings.TrimSpace(raw)
+		m := captureLineRe.FindStringSubmatch(stripTrailingComment(text))
+		if m == nil {
+			return s.fail(s.pos, "invalid capture %q: expected \"<name> from <source>\" (e.g. token from body.access_token)", text)
 		}
-		p.skipNewlines()
+		c, perr := parseCaptureSource(m[1], strings.TrimSpace(m[2]), lineNo)
+		if perr != nil {
+			return s.fail(s.pos, "%v", perr)
+		}
+		if c.Source == CaptureBody && c.Path != "" {
+			probe := &exprScanner{text: c.Path}
+			if probe.scanSubject() != c.Path {
+				col := strings.Index(raw, m[2]) + 1
+				p.warnAt(lineNo, col, "capture %q: the path %q contains spaces, so it will never match (put comments after #)", c.Name, c.Path)
+			}
+		}
+		captures = append(captures, c)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-
-	if p.curToken.Type == TokenAssertionEnd {
-		p.nextToken()
-	}
-
 	return captures, nil
 }
 
-// parseCapture parses a single "name from source.path" capture line.
-func (p *Parser) parseCapture() (*Capture, error) {
-	line := p.curToken.Line
-	name := p.curToken.Value
-	p.nextToken()
-
-	if p.curToken.Type == TokenWhitespace {
-		p.nextToken()
-	}
-
-	if p.curToken.Type != TokenFrom {
-		return nil, &ParseError{
-			File:    p.file,
-			Line:    p.curToken.Line,
-			Column:  p.curToken.Column,
-			Message: "expected 'from', got " + p.curToken.Value,
-			Snippet: p.getSnippet(),
+// parseCaptureSource turns the source text of "name from <source>" into a Capture.
+func parseCaptureSource(name, path string, line int) (*Capture, error) {
+	c := &Capture{Name: name, Source: CaptureBody, Line: line}
+	lower := strings.ToLower(path)
+	switch {
+	case lower == "header" || strings.HasPrefix(lower, "header "):
+		c.Source = CaptureHeader
+		c.Path = strings.TrimSpace(path[len("header"):])
+	case lower == "status":
+		c.Source = CaptureStatus
+	case lower == "duration":
+		c.Source = CaptureDuration
+	case lower == "body":
+		c.Path = ""
+	case strings.HasPrefix(lower, "body."):
+		c.Path = path[len("body."):]
+	case strings.HasPrefix(lower, "body["):
+		c.Path = path[len("body"):]
+	case strings.HasPrefix(lower, "jsonpath "):
+		gp, err := JSONPathToGJSON(path[len("jsonpath "):])
+		if err != nil {
+			return nil, err
 		}
+		c.Path = gp
+	default:
+		c.Path = path
 	}
-	p.nextTokenRaw()
-	p.skipWhitespace()
-
-	var pathBuilder strings.Builder
-	for p.curToken.Type != TokenNewline && p.curToken.Type != TokenEOF {
-		if p.curToken.Type == TokenWhitespace {
-			pathBuilder.WriteString(" ")
-		} else {
-			pathBuilder.WriteString(p.curToken.Value)
-		}
-		p.nextTokenRaw()
-	}
-	path := strings.TrimSpace(pathBuilder.String())
-
-	source := CaptureBody
-	if strings.HasPrefix(path, "header ") || path == "header" {
-		source = CaptureHeader
-		path = strings.TrimPrefix(path, "header")
-		path = strings.TrimSpace(path)
-	} else if strings.HasPrefix(path, "body.") {
-		path = strings.TrimPrefix(path, "body.")
-	} else if strings.HasPrefix(path, "body") && len(path) > 4 && path[4] == '[' {
-		path = strings.TrimPrefix(path, "body")
-	} else if path == "status" {
-		source = CaptureStatus
-		path = ""
-	} else if path == "duration" {
-		source = CaptureDuration
-		path = ""
-	}
-
-	p.nextToken()
-
-	return &Capture{
-		Name:   name,
-		Source: source,
-		Path:   path,
-		Line:   line,
-	}, nil
+	return c, nil
 }

@@ -65,6 +65,11 @@ var (
 	// warns about a bad @timeout/@retry/@retryDelay, but silently ignores a bad
 	// @stress.weight/@stress.think (e.g. `@stress.think 500ms`).
 	intDirective = regexp.MustCompile(`^#\s*@(stress\.weight|stress\.think)\s+(\S.*)$`)
+
+	// requestLine matches a request line; a snippet without one is a
+	// fragment (just an assertion block, say) and is checked inside a
+	// placeholder request.
+	requestLine = regexp.MustCompile(`^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE|CONNECT)\s+\S`)
 )
 
 // snippet is one fenced block.
@@ -216,11 +221,49 @@ func customOK(name string) bool {
 	return strings.HasPrefix(name, "contract.") || strings.HasPrefix(name, "x-")
 }
 
+// placeholderRequest is the request a fragment is attached to.
+const placeholderRequest = "GET http://docsnippets.invalid/"
+
+// wrapFragment returns body unchanged when it has a request line. Otherwise it
+// is a fragment: the leading comment, directive and variable lines stay on
+// top, a placeholder request follows them, and the rest (blocks, headers)
+// comes after it, so directives and >>> blocks have a request to belong to.
+func wrapFragment(body string) string {
+	lines := strings.Split(body, "\n")
+	for _, line := range lines {
+		if requestLine.MatchString(strings.TrimSpace(line)) {
+			return body
+		}
+	}
+	split := 0
+	for split < len(lines) {
+		t := strings.TrimSpace(lines[split])
+		if t != "" && !strings.HasPrefix(t, "#") && !strings.HasPrefix(t, "//") && !varDef.MatchString(t) {
+			break
+		}
+		split++
+	}
+	out := append([]string{}, lines[:split]...)
+	out = append(out, placeholderRequest)
+	if split < len(lines) && !strings.HasPrefix(strings.TrimSpace(lines[split]), ">>>") {
+		// Header-like lines go right under the request; anything else (a
+		// body, a block) after a blank line.
+		if !strings.Contains(lines[split], ":") {
+			out = append(out, "")
+		}
+	} else {
+		out = append(out, "")
+	}
+	out = append(out, lines[split:]...)
+	return strings.Join(out, "\n")
+}
+
 // check returns the problems found in one snippet.
 func check(s snippet) []string {
 	if s.lang == "hitspec" {
 		s.lang = "http"
 	}
+	s.body = wrapFragment(s.body)
 	parsed, warnings, err := parseCapturing(s)
 	if err != nil {
 		return []string{"parse error: " + oneLine(err.Error())}
@@ -290,6 +333,13 @@ func parseCapturing(s snippet) (*parser.File, []string, error) {
 	for _, line := range strings.Split(captured, "\n") {
 		if line = strings.TrimSpace(line); line != "" {
 			warnings = append(warnings, strings.TrimPrefix(line, "warning: "))
+		}
+	}
+	// Parse itself does not print: the parser collects its warnings (unknown
+	// directives, bad @timeout values, ...) in File.Warnings.
+	if parsed != nil {
+		for _, w := range parsed.Warnings {
+			warnings = append(warnings, w.String())
 		}
 	}
 	return parsed, warnings, perr

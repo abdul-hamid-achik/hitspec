@@ -22,6 +22,7 @@ Run with `--allow-db` to enable database assertions: `hitspec run tests/ --allow
 ### Create a user
 # @name createUser
 # @tags db
+# @db {{dbUrl}}
 
 POST {{baseUrl}}/users
 Content-Type: application/json
@@ -40,14 +41,10 @@ expect body.id exists
 userId from body.id
 <<<
 
->>>db {{dbUrl}}
-SELECT * FROM users WHERE id = {{createUser.userId}}
-<<<
-
->>>
-expect db.rows length 1
-expect db.rows[0].name == "John Doe"
-expect db.rows[0].email == "john@example.com"
+>>>db
+SELECT name, email FROM users WHERE id = {{createUser.userId}}
+expect name == "John Doe"
+expect email == "john@example.com"
 <<<
 ```
 
@@ -58,6 +55,7 @@ expect db.rows[0].email == "john@example.com"
 # @name updateUser
 # @depends createUser
 # @tags db
+# @db {{dbUrl}}
 
 PUT {{baseUrl}}/users/{{createUser.userId}}
 Content-Type: application/json
@@ -70,12 +68,9 @@ Content-Type: application/json
 expect status 200
 <<<
 
->>>db {{dbUrl}}
+>>>db
 SELECT email FROM users WHERE id = {{createUser.userId}}
-<<<
-
->>>
-expect db.rows[0].email == "john.doe@newdomain.com"
+expect email == "john.doe@newdomain.com"
 <<<
 ```
 
@@ -85,6 +80,7 @@ expect db.rows[0].email == "john.doe@newdomain.com"
 ### Delete user
 # @depends updateUser
 # @tags db
+# @db {{dbUrl}}
 
 DELETE {{baseUrl}}/users/{{createUser.userId}}
 
@@ -92,12 +88,9 @@ DELETE {{baseUrl}}/users/{{createUser.userId}}
 expect status 204
 <<<
 
->>>db {{dbUrl}}
+>>>db
 SELECT COUNT(*) as count FROM users WHERE id = {{createUser.userId}}
-<<<
-
->>>
-expect db.rows[0].count == 0
+expect count == 0
 <<<
 ```
 

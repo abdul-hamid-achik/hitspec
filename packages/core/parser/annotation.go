@@ -2,7 +2,6 @@ package parser
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -40,20 +39,20 @@ func (p *Parser) parseAnnotation(req *Request) error {
 	case "timeout":
 		if v, err := strconv.Atoi(value); err == nil {
 			req.Metadata.Timeout = v
-		} else if value != "" {
-			fmt.Fprintf(os.Stderr, "warning: invalid timeout value %q (expected integer): %v\n", value, err)
+		} else if value != "" && !hasTemplate(value) {
+			p.warn(p.curToken, "invalid @timeout value %q (expected an integer number of milliseconds)", value)
 		}
 	case "retry":
 		if v, err := strconv.Atoi(value); err == nil {
 			req.Metadata.Retry = v
-		} else if value != "" {
-			fmt.Fprintf(os.Stderr, "warning: invalid retry value %q (expected integer): %v\n", value, err)
+		} else if value != "" && !hasTemplate(value) {
+			p.warn(p.curToken, "invalid @retry value %q (expected an integer)", value)
 		}
 	case "retrydelay":
 		if v, err := strconv.Atoi(value); err == nil {
 			req.Metadata.RetryDelay = v
-		} else if value != "" {
-			fmt.Fprintf(os.Stderr, "warning: invalid retryDelay value %q (expected integer): %v\n", value, err)
+		} else if value != "" && !hasTemplate(value) {
+			p.warn(p.curToken, "invalid @retryDelay value %q (expected an integer number of milliseconds)", value)
 		}
 	case "retryon":
 		parts := strings.Split(value, ",")
@@ -64,8 +63,8 @@ func (p *Parser) parseAnnotation(req *Request) error {
 			}
 			if code, err := strconv.Atoi(part); err == nil {
 				req.Metadata.RetryOn = append(req.Metadata.RetryOn, code)
-			} else {
-				fmt.Fprintf(os.Stderr, "warning: invalid retryOn status code %q: %v\n", part, err)
+			} else if !hasTemplate(part) {
+				p.warn(p.curToken, "invalid @retryOn status code %q (expected an integer)", part)
 			}
 		}
 	case "depends":
@@ -164,6 +163,15 @@ func (p *Parser) parseAnnotation(req *Request) error {
 	default:
 		// Store unrecognized annotations as custom annotations
 		// This supports @contract.state, @contract.provider, @x-custom, etc.
+		if !customDirective(name) {
+			msg := fmt.Sprintf("unknown directive @%s", p.curToken.Value)
+			if hint := closest(name, knownDirectives, true); hint != "" {
+				msg += fmt.Sprintf(" (did you mean @%s?)", hint)
+			} else {
+				msg += " (custom directives start with x-, e.g. @x-owner)"
+			}
+			p.warn(p.curToken, "%s", msg)
+		}
 		if req.Metadata.Custom == nil {
 			req.Metadata.Custom = make(map[string]string)
 		}
@@ -171,6 +179,20 @@ func (p *Parser) parseAnnotation(req *Request) error {
 	}
 
 	return nil
+}
+
+// knownDirectives are the directives hitspec reads. Names are lower-case, as
+// parseAnnotation compares them.
+var knownDirectives = []string{
+	"name", "description", "tags", "skip", "only", "timeout", "retry", "retrydelay",
+	"retryon", "depends", "if", "unless", "auth", "before", "after", "db", "waitfor",
+	"stress.weight", "stress.think", "stress.skip", "stress.setup", "stress.teardown",
+}
+
+// customDirective reports whether an unrecognized directive is a legitimate
+// custom one: x-* (free for users) and contract.* (read by the contract verifier).
+func customDirective(name string) bool {
+	return strings.HasPrefix(name, "x-") || strings.HasPrefix(name, "contract.")
 }
 
 // authSpec describes the argument shape of one auth type.

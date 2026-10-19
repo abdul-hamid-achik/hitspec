@@ -42,7 +42,8 @@ func TestCheck(t *testing.T) {
 		{"valid contract annotation", "### A\n# @contract.state ready\nGET http://x/y\n", ""},
 		{"unknown directive", "### A\n# @assert status 200\nGET http://x/y\n", "unknown directive"},
 		{"at-line is not syntax", "### A\nGET http://x/y\n\n@capture t <- jsonpath $.t\n", "not hitspec syntax"},
-		{"bad timeout", "### A\n# @timeout {{t}}\nGET http://x/y\n", "parser warning"},
+		{"bad timeout", "### A\n# @timeout soon\nGET http://x/y\n", "parser warning"},
+		{"misspelled directive", "### A\n# @tgas smoke\nGET http://x/y\n", "parser warning"},
 		{"bad think time", "### A\n# @stress.think 500ms\nGET http://x/y\n", "needs an integer"},
 		{"unclosed assertion block", "### A\nGET http://x/y\n\n>>>\nexpect status 200\n", "parse error"},
 	}

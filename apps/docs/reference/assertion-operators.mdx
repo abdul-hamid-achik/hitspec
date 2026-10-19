@@ -9,7 +9,7 @@ hitspec provides 26 assertion operators organized into six categories. Every ass
 expect <subject> <operator> <value>
 ```
 
-When the operator is `==`, you can omit it: `expect status 200` is shorthand for `expect status == 200`.
+When the operator is `==`, you can omit it: `expect status 200` is shorthand for `expect status == 200`. An unknown operator (`contians`, `=`, `equals`) is a parse error with a suggestion, never a silent `==`; see [Assertions](/concepts/assertions) for the full expected-value grammar (a JSON literal, a `/regex/flags`, or the rest of the line verbatim).
 
 ---
 
@@ -35,7 +35,7 @@ expect body.errors != null
 ```
 
 <Note>
-Numeric comparison coerces strings to numbers when possible. `"42"` and `42` are considered equal by `==`.
+Numeric comparison coerces strings to numbers when possible. `"42"` and `42` are considered equal by `==`. Objects and arrays are compared as JSON (key order is ignored, numbers compare as numbers). `== null` matches only a real JSON `null`; a missing field is not null (use `!exists` for "absent or null").
 </Note>
 
 ---
@@ -60,8 +60,10 @@ expect body.phone matches /^\+?[\d\s\-()]+$/
 ```
 
 <Note>
-Regular expressions use Go's `regexp` syntax and are enclosed in forward slashes: `/pattern/`.
+Regular expressions use Go's `regexp` syntax and are enclosed in forward slashes: `/pattern/` or `/pattern/i` (flags `i`, `m`, `s`, `U`).
 </Note>
+
+On a JSON response, `contains`, `startsWith`, `endsWith` and `matches` applied to the whole `body` see the raw JSON text; applied to an object or array they see its compact JSON encoding.
 
 ---
 
@@ -75,7 +77,7 @@ Regular expressions use Go's `regexp` syntax and are enclosed in forward slashes
 
 For `header` subjects, `exists` means the header is present in the response (an empty value still counts) and `!exists` means it is absent.
 
-Supported type values: `null`, `boolean`, `number`, `string`, `array`, `object`.
+Supported type values: `null`, `boolean`, `number`, `string`, `array`, `object`. `expect body.deletedAt type null` passes for a JSON `null` and fails for an absent field.
 
 ```http
 >>>
@@ -101,7 +103,7 @@ expect body.deletedAt !exists
 | `length <` | `expect body.items length < 100` | Length less than |
 | `length <=` | `expect body.items length <= 50` | Length less than or equal |
 
-Works on strings, arrays, and objects (counts keys).
+Works on strings (counting characters, so `"日本語"` has length 3), arrays, and objects (counts keys).
 
 ```http
 >>>
@@ -148,15 +150,18 @@ expect body.status !in ["deleted", "banned"]
 
 ### each
 
-Applies an assertion to every element in an array. Useful for validating list shapes:
+Applies an assertion to every element in an array. Useful for validating list shapes. After `each` write an operator and a value, optionally preceded by a path inside the element:
 
 ```http
 >>>
 expect body.users each type object
+expect body.users each > 0
+expect body.users each body.id exists
+expect body.users each email matches /^.+@.+\..+$/
 <<<
 ```
 
-You can also use `each` with an operator/value map:
+`body` (or a leading `.`) names the element itself. An empty array passes. You can also use `each` with an operator/value map:
 
 ```http
 >>>
@@ -185,7 +190,7 @@ expect body schema ./schemas/user.json
 
 ### snapshot
 
-Compares the response body against a previously saved baseline. On first run, the snapshot is created. On subsequent runs, differences cause failure.
+Compares the response body against a previously saved baseline. A plain run never creates a snapshot: if none exists the assertion fails with "snapshot does not exist (run with --update-snapshots to create)". Create the baseline once with `--update-snapshots`; after that, differences cause failure.
 
 ```http
 >>>
@@ -193,7 +198,7 @@ expect body snapshot "user-profile"
 <<<
 ```
 
-Update snapshots when the response intentionally changes:
+Create snapshots, or update them when the response intentionally changes:
 
 ```bash
 hitspec run tests/ --update-snapshots

@@ -3,6 +3,7 @@ package proxy
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -192,6 +193,9 @@ func formatBody(body, contentType string) string {
 	return body
 }
 
+// plainKey matches a JSON key usable verbatim in a body.path subject.
+var plainKey = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
+
 func generateBodyAssertions(body string) string {
 	if body == "" {
 		return ""
@@ -206,8 +210,18 @@ func generateBodyAssertions(body string) string {
 
 	switch v := data.(type) {
 	case map[string]interface{}:
-		// Generate assertions for top-level keys
+		// Generate assertions for top-level keys, in a stable order. A key that
+		// is not a plain identifier ("first name", "a.b", "x=y") cannot be
+		// written as a body.path subject, so it gets no assertion rather than
+		// one that fails to parse.
+		keys := make([]string, 0, len(v))
 		for key := range v {
+			if plainKey.MatchString(key) {
+				keys = append(keys, key)
+			}
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
 			fmt.Fprintf(&sb, "expect body.%s exists\n", key)
 		}
 	case []interface{}:

@@ -1578,3 +1578,17 @@ func TestRecordGzipResponseDecoded(t *testing.T) {
 		t.Errorf("exported .http should not contain Content-Encoding header:\n%s", exported)
 	}
 }
+
+// Keys that are not plain identifiers would make the recorded file fail to
+// parse ("expect body.first name exists"); they get no assertion, and the
+// rest come out in a stable order.
+func TestGenerateBodyAssertionsSkipsUnwritableKeys(t *testing.T) {
+	got := generateBodyAssertions(`{"zeta":1,"first name":"a","a.b":2,"x=y":3,"id":4,"_ok":5}`)
+	want := "expect body._ok exists\nexpect body.id exists\nexpect body.zeta exists\n"
+	if !strings.HasPrefix(got, want) {
+		t.Fatalf("assertions = %q, want prefix %q", got, want)
+	}
+	if _, err := parser.Parse("GET http://x.test/\n\n>>>\n"+got+"<<<\n", "recorded.http"); err != nil {
+		t.Fatalf("recorded assertions do not parse: %v", err)
+	}
+}
