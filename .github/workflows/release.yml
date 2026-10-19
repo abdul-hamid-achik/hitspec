@@ -3,7 +3,9 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      # Full versions only: the floating major tag (v2) maintained below must
+      # never start a release run of its own.
+      - 'v*.*.*'
 
 permissions:
   contents: write
@@ -36,3 +38,22 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      # Keep the floating major tag (v2, v3, ...) that `uses: owner/hitspec@v2`
+      # resolves to pointed at the latest stable release. Prereleases
+      # (v2.21.0-rc.1) and other tags are ignored. Only the major tag derived
+      # from this release is touched: older majors such as v1 stay as they are.
+      - name: Update floating major tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "$TAG is not a stable release tag; leaving the floating major tag alone"
+            exit 0
+          fi
+          MAJOR="${TAG%%.*}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -fa "$MAJOR" -m "Release $TAG" "$GITHUB_SHA"
+          git push --force origin "refs/tags/$MAJOR"
+          echo "Moved $MAJOR to $TAG ($GITHUB_SHA)"

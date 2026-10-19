@@ -165,3 +165,79 @@ jobs:
 
       - name: Check Mintlify docs (broken links + MDX syntax)
         run: task docs:check
+
+  # Exercises action.yml from this checkout on every OS it supports. The action
+  # installs the latest *released* hitspec, so this validates the action script
+  # (install, checksum, globs, report handling, exit codes) against a real
+  # release. The target is a local static server, so the job is fully offline.
+  action:
+    name: GitHub Action (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Start local fixture server
+        shell: bash
+        run: |
+          PY=python3
+          command -v python3 >/dev/null 2>&1 || PY=python
+          nohup "$PY" -m http.server 8765 --bind 127.0.0.1 --directory .github/action-test/site >/dev/null 2>&1 &
+          for _ in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8765/ok.json >/dev/null 2>&1 && exit 0
+            sleep 1
+          done
+          echo "fixture server did not start" >&2
+          exit 1
+
+      - name: Run passing tests via the action (glob, junit, default report file)
+        id: pass
+        uses: ./
+        with:
+          files: .github/action-test/pass/*.http
+          output: junit
+          timeout: '5000'
+
+      - name: Check report-file output
+        shell: bash
+        env:
+          REPORT_FILE: ${{ steps.pass.outputs.report-file }}
+          EXIT_CODE: ${{ steps.pass.outputs.exit-code }}
+        run: |
+          test "$REPORT_FILE" = "hitspec-results.xml" || { echo "unexpected report-file: '$REPORT_FILE'" >&2; exit 1; }
+          test -s "$REPORT_FILE" || { echo "report file missing or empty" >&2; exit 1; }
+          test "$EXIT_CODE" = "0" || { echo "unexpected exit-code: '$EXIT_CODE'" >&2; exit 1; }
+
+      - name: Run a failing test via the action
+        id: failing
+        uses: ./
+        continue-on-error: true
+        with:
+          files: .github/action-test/fail/
+          timeout: 5s
+
+      - name: Assert the failing run failed the step
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.failing.outcome }}
+          EXIT_CODE: ${{ steps.failing.outputs.exit-code }}
+        run: |
+          test "$OUTCOME" = "failure" || { echo "expected the step to fail, outcome was '$OUTCOME'" >&2; exit 1; }
+          test "$EXIT_CODE" = "1" || { echo "expected exit-code 1, got '$EXIT_CODE'" >&2; exit 1; }
+
+      - name: A glob matching nothing is an error
+        id: noglob
+        uses: ./
+        continue-on-error: true
+        with:
+          files: .github/action-test/missing/*.http
+
+      - name: Assert the empty glob failed the step
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.noglob.outcome }}
+        run: test "$OUTCOME" = "failure" || { echo "expected failure, outcome was '$OUTCOME'" >&2; exit 1; }

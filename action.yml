@@ -7,21 +7,21 @@ branding:
 
 inputs:
   files:
-    description: 'Files or directories to test (required)'
+    description: 'Files, directories or globs to test, separated by whitespace or newlines (e.g. "tests/ api/**/*.http"). A glob that matches nothing is an error. Paths containing spaces are not supported.'
     required: true
   env:
-    description: 'Environment name'
+    description: 'Environment name. When empty, hitspec uses the defaultEnvironment from hitspec.yaml (or "dev").'
     required: false
-    default: 'dev'
+    default: ''
   env-file:
     description: 'Path to .env file for variable interpolation'
     required: false
   output:
-    description: 'Output format (console, json, junit, tap, html)'
+    description: 'Output format (console, json, junit, tap, html). json/junit/tap/html are written to output-file (default hitspec-results.<ext>) instead of the log.'
     required: false
-    default: 'junit'
+    default: 'console'
   output-file:
-    description: 'Write output to file'
+    description: 'Write output to this file. Defaults to hitspec-results.<ext> for json, junit, tap and html.'
     required: false
   tags:
     description: 'Filter by tags (comma-separated)'
@@ -30,7 +30,7 @@ inputs:
     description: 'Filter by request name pattern'
     required: false
   timeout:
-    description: 'Global timeout in milliseconds'
+    description: 'Request timeout: a duration such as 30s or 1m, or a plain integer meaning milliseconds (e.g. 5000). Defaults to the hitspec default (30s).'
     required: false
   parallel:
     description: 'Run requests in parallel'
@@ -85,7 +85,7 @@ inputs:
     description: 'Stress profile name from hitspec.yaml'
     required: false
   version:
-    description: 'hitspec version to use (e.g., v0.9.4 or latest)'
+    description: 'hitspec release to install (e.g. v2.20.0 or latest). The archive is verified against the release checksums.txt.'
     required: false
     default: 'latest'
 
@@ -93,152 +93,294 @@ outputs:
   exit-code:
     description: 'Exit code from hitspec (0 = success, non-zero = failure)'
     value: ${{ steps.run-tests.outputs.exit-code }}
+  report-file:
+    description: 'Path of the report file written by hitspec (empty when output is console and no output-file was given)'
+    value: ${{ steps.run-tests.outputs.report-file }}
+  version:
+    description: 'The hitspec version that was installed (e.g. v2.20.0)'
+    value: ${{ steps.install.outputs.version }}
 
 runs:
   using: 'composite'
   steps:
     - name: Install hitspec
+      id: install
       shell: bash
+      # Inputs reach the script only through the environment, never through
+      # ${{ }} interpolation inside the script body (script injection).
       env:
-        HITSPEC_VERSION: ${{ inputs.version }}
+        INPUT_VERSION: ${{ inputs.version }}
+        GH_TOKEN: ${{ github.token }}
       run: |
-        set -e
+        set -eu
 
-        # Keep action inputs out of the generated shell source. Quoting the
-        # environment value makes even hostile version text inert data.
-        VERSION="$HITSPEC_VERSION"
+        REPO="abdul-hamid-achik/hitspec"
+        VERSION="${INPUT_VERSION:-latest}"
 
-        # Resolve 'latest' to actual version
+        fetch() {
+          # fetch <url> <output-file>
+          curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors --connect-timeout 20 -o "$2" "$1"
+        }
+
+        # Resolve 'latest' without the REST API (no rate limit): the
+        # /releases/latest page redirects to /releases/tag/<tag>.
         if [ "$VERSION" = "latest" ]; then
-          echo "Fetching latest version..."
-          VERSION=$(curl -sL https://api.github.com/repos/abdul-hamid-achik/hitspec/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "Resolving latest hitspec release..."
+          LOCATION=$(curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors -o /dev/null -w '%{url_effective}' "https://github.com/${REPO}/releases/latest" || true)
+          VERSION="${LOCATION##*/}"
+          case "$VERSION" in
+            v[0-9]*) ;;
+            *)
+              # Fall back to the API (authenticated, so it is not rate limited).
+              echo "Redirect lookup failed, trying the GitHub API..."
+              if [ -n "${GH_TOKEN:-}" ]; then
+                BODY=$(curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors -H "Authorization: Bearer ${GH_TOKEN}" "https://api.github.com/repos/${REPO}/releases/latest" || true)
+              else
+                BODY=$(curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors "https://api.github.com/repos/${REPO}/releases/latest" || true)
+              fi
+              VERSION=$(printf '%s' "$BODY" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1)
+              ;;
+          esac
           if [ -z "$VERSION" ]; then
-            echo "::error::Failed to fetch latest version"
+            echo "::error::Failed to resolve the latest hitspec version"
             exit 1
           fi
-          echo "Latest version: $VERSION"
         fi
 
-        # Detect OS
-        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+        # Accept 2.20.0 as well as v2.20.0; reject anything that is not a plain
+        # version string so it cannot alter the download URL.
+        case "$VERSION" in
+          v*) ;;
+          *) VERSION="v${VERSION}" ;;
+        esac
+        if ! printf '%s' "$VERSION" | grep -Eq '^v[0-9][0-9A-Za-z._+-]*$'; then
+          echo "::error::Invalid version: $VERSION"
+          exit 1
+        fi
+        VERSION_NUM="${VERSION#v}"
+        echo "Version: $VERSION"
 
-        # Detect architecture and normalize
-        ARCH=$(uname -m)
-        case $ARCH in
-          x86_64)
-            ARCH="amd64"
-            ;;
-          aarch64|arm64)
-            ARCH="arm64"
-            ;;
+        case "$(uname -s)" in
+          Linux)                    OS=linux ;;
+          Darwin)                   OS=darwin ;;
+          MINGW*|MSYS*|CYGWIN*)     OS=windows ;;
           *)
-            echo "::error::Unsupported architecture: $ARCH"
+            echo "::error::Unsupported OS: $(uname -s)"
             exit 1
             ;;
         esac
-
+        case "$(uname -m)" in
+          x86_64|amd64)             ARCH=amd64 ;;
+          aarch64|arm64)            ARCH=arm64 ;;
+          *)
+            echo "::error::Unsupported architecture: $(uname -m)"
+            exit 1
+            ;;
+        esac
         echo "Platform: ${OS}_${ARCH}"
 
-        # Strip 'v' prefix for download URL (goreleaser uses version without v)
-        VERSION_NUM="${VERSION#v}"
-
-        # Construct download URL
         if [ "$OS" = "windows" ]; then
           ARCHIVE="hitspec_${VERSION_NUM}_${OS}_${ARCH}.zip"
+          BIN="hitspec.exe"
         else
           ARCHIVE="hitspec_${VERSION_NUM}_${OS}_${ARCH}.tar.gz"
+          BIN="hitspec"
         fi
+        BASE_URL="https://github.com/${REPO}/releases/download/${VERSION}"
 
-        URL="https://github.com/abdul-hamid-achik/hitspec/releases/download/${VERSION}/${ARCHIVE}"
-        echo "Downloading: $URL"
+        TMP_ROOT="${RUNNER_TEMP:-$(mktemp -d)}"
+        WORK="${TMP_ROOT}/hitspec-${VERSION}"
+        rm -rf "$WORK"
+        mkdir -p "$WORK/bin" "$WORK/dl"
 
-        # Download and extract
-        INSTALL_DIR="/usr/local/bin"
-        if [ "$OS" = "windows" ]; then
-          curl -sL "$URL" -o hitspec.zip
-          unzip -o hitspec.zip hitspec.exe -d "$INSTALL_DIR"
-          rm hitspec.zip
+        echo "Downloading ${BASE_URL}/${ARCHIVE}"
+        fetch "${BASE_URL}/${ARCHIVE}" "$WORK/dl/$ARCHIVE"
+        fetch "${BASE_URL}/checksums.txt" "$WORK/dl/checksums.txt"
+
+        # Verify the archive against the checksums published with the release.
+        EXPECTED=$(awk -v f="$ARCHIVE" '$2 == f || $2 == "*" f { print $1 }' "$WORK/dl/checksums.txt" | head -n 1)
+        if [ -z "$EXPECTED" ]; then
+          echo "::error::No checksum for $ARCHIVE in checksums.txt"
+          exit 1
+        fi
+        if command -v sha256sum >/dev/null 2>&1; then
+          ACTUAL=$(sha256sum "$WORK/dl/$ARCHIVE" | awk '{ print $1 }')
         else
-          curl -sL "$URL" | tar xz -C "$INSTALL_DIR" hitspec
+          ACTUAL=$(shasum -a 256 "$WORK/dl/$ARCHIVE" | awk '{ print $1 }')
         fi
+        EXPECTED=$(printf '%s' "$EXPECTED" | tr '[:upper:]' '[:lower:]')
+        ACTUAL=$(printf '%s' "$ACTUAL" | tr '[:upper:]' '[:lower:]')
+        if [ "$EXPECTED" != "$ACTUAL" ]; then
+          echo "::error::Checksum mismatch for $ARCHIVE (expected $EXPECTED, got $ACTUAL)"
+          exit 1
+        fi
+        echo "Checksum OK ($ACTUAL)"
 
-        # Verify installation
-        hitspec version
-        echo "hitspec installed successfully"
+        if [ "$OS" = "windows" ]; then
+          if command -v unzip >/dev/null 2>&1; then
+            unzip -o -q "$WORK/dl/$ARCHIVE" "$BIN" -d "$WORK/bin"
+          elif command -v 7z >/dev/null 2>&1; then
+            7z x -y "-o$WORK/bin" "$WORK/dl/$ARCHIVE" "$BIN" >/dev/null
+          else
+            powershell -NoProfile -Command "Expand-Archive -Force -Path '$(cygpath -w "$WORK/dl/$ARCHIVE")' -DestinationPath '$(cygpath -w "$WORK/bin")'"
+          fi
+        else
+          tar -xzf "$WORK/dl/$ARCHIVE" -C "$WORK/bin" "$BIN"
+          chmod +x "$WORK/bin/$BIN"
+        fi
+        rm -rf "$WORK/dl"
+
+        "$WORK/bin/$BIN" version
+
+        BIN_DIR="$WORK/bin"
+        if [ "$OS" = "windows" ] && command -v cygpath >/dev/null 2>&1; then
+          BIN_DIR=$(cygpath -w "$BIN_DIR")
+        fi
+        echo "$BIN_DIR" >> "${GITHUB_PATH:-/dev/null}"
+        echo "version=$VERSION" >> "${GITHUB_OUTPUT:-/dev/null}"
+        echo "hitspec ${VERSION} installed to ${BIN_DIR}"
 
     - name: Run hitspec tests
       id: run-tests
       shell: bash
       # Pass inputs through the environment instead of interpolating them into
-      # the bash string. Interpolating ${{ inputs.* }} directly into CMD and
-      # `eval`-ing it was a shell-injection vector (e.g. a `files` value of
-      # `x.http; rm -rf /` would have executed). Env passing + a bash array for
-      # argv keeps every value a single literal argument.
+      # the script (shell injection). argv is built as a bash array and run
+      # directly: no eval, so every value stays a single literal argument.
+      # The variables are named INPUT_* on purpose: HITSPEC_* are the CLI's own
+      # settings (INPUT_ENV, INPUT_TIMEOUT, ...) and a workflow may set
+      # them on this step, so the action must not overwrite them.
       env:
-        HITSPEC_FILES: ${{ inputs.files }}
-        HITSPEC_ENV: ${{ inputs.env }}
-        HITSPEC_ENV_FILE: ${{ inputs.env-file }}
-        HITSPEC_OUTPUT: ${{ inputs.output }}
-        HITSPEC_OUTPUT_FILE: ${{ inputs.output-file }}
-        HITSPEC_TAGS: ${{ inputs.tags }}
-        HITSPEC_NAME: ${{ inputs.name }}
-        HITSPEC_TIMEOUT: ${{ inputs.timeout }}
-        HITSPEC_PARALLEL: ${{ inputs.parallel }}
-        HITSPEC_CONCURRENCY: ${{ inputs.concurrency }}
-        HITSPEC_BAIL: ${{ inputs.bail }}
-        HITSPEC_VERBOSE: ${{ inputs.verbose }}
-        HITSPEC_INSECURE: ${{ inputs.insecure }}
-        HITSPEC_PROXY: ${{ inputs.proxy }}
-        HITSPEC_STRESS: ${{ inputs.stress }}
-        HITSPEC_DURATION: ${{ inputs.duration }}
-        HITSPEC_RATE: ${{ inputs.rate }}
-        HITSPEC_VUS: ${{ inputs.vus }}
-        HITSPEC_MAX_VUS: ${{ inputs.max-vus }}
-        HITSPEC_THINK_TIME: ${{ inputs.think-time }}
-        HITSPEC_RAMP_UP: ${{ inputs.ramp-up }}
-        HITSPEC_THRESHOLD: ${{ inputs.threshold }}
-        HITSPEC_PROFILE: ${{ inputs.profile }}
+        INPUT_FILES: ${{ inputs.files }}
+        INPUT_ENV: ${{ inputs.env }}
+        INPUT_ENV_FILE: ${{ inputs.env-file }}
+        INPUT_OUTPUT: ${{ inputs.output }}
+        INPUT_OUTPUT_FILE: ${{ inputs.output-file }}
+        INPUT_TAGS: ${{ inputs.tags }}
+        INPUT_NAME: ${{ inputs.name }}
+        INPUT_TIMEOUT: ${{ inputs.timeout }}
+        INPUT_PARALLEL: ${{ inputs.parallel }}
+        INPUT_CONCURRENCY: ${{ inputs.concurrency }}
+        INPUT_BAIL: ${{ inputs.bail }}
+        INPUT_VERBOSE: ${{ inputs.verbose }}
+        INPUT_INSECURE: ${{ inputs.insecure }}
+        INPUT_PROXY: ${{ inputs.proxy }}
+        INPUT_STRESS: ${{ inputs.stress }}
+        INPUT_DURATION: ${{ inputs.duration }}
+        INPUT_RATE: ${{ inputs.rate }}
+        INPUT_VUS: ${{ inputs.vus }}
+        INPUT_MAX_VUS: ${{ inputs.max-vus }}
+        INPUT_THINK_TIME: ${{ inputs.think-time }}
+        INPUT_RAMP_UP: ${{ inputs.ramp-up }}
+        INPUT_THRESHOLD: ${{ inputs.threshold }}
+        INPUT_PROFILE: ${{ inputs.profile }}
       run: |
-        set -e
+        set -u
 
-        # Build argv as a bash array so every value is a single literal argument
-        # (no eval, no word-splitting, no injection).
-        args=(hitspec run "$HITSPEC_FILES" --env "$HITSPEC_ENV" --output "$HITSPEC_OUTPUT" --no-color)
+        is_true() {
+          [ "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" = "true" ]
+        }
 
-        [ -n "$HITSPEC_ENV_FILE" ]      && args+=(--env-file "$HITSPEC_ENV_FILE")
-        [ -n "$HITSPEC_OUTPUT_FILE" ]   && args+=(--output-file "$HITSPEC_OUTPUT_FILE")
-        [ -n "$HITSPEC_TAGS" ]          && args+=(--tags "$HITSPEC_TAGS")
-        [ -n "$HITSPEC_NAME" ]          && args+=(--name "$HITSPEC_NAME")
-        [ -n "$HITSPEC_TIMEOUT" ]       && args+=(--timeout "$HITSPEC_TIMEOUT")
-
-        if [ "$HITSPEC_PARALLEL" = "true" ]; then
-          args+=(--parallel)
-          [ -n "$HITSPEC_CONCURRENCY" ] && args+=(--concurrency "$HITSPEC_CONCURRENCY")
+        # --- files: whitespace/newline separated paths and globs ---------------
+        # `set -f` stops the unquoted expansion below from globbing, so tokens
+        # are only split; globs are expanded explicitly afterwards.
+        shopt -s nullglob
+        shopt -s globstar 2>/dev/null || true # bash >= 4; older bash treats ** like *
+        files=()
+        IFS_SAVE="$IFS"
+        IFS=$' \t\r\n'
+        set -f
+        for token in $INPUT_FILES; do
+          case "$token" in
+            *[\*\?\[]*)
+              set +f
+              # shellcheck disable=SC2206 # intentional: expand the glob
+              matches=( $token )
+              set -f
+              if [ "${#matches[@]}" -eq 0 ]; then
+                echo "::error::files pattern '$token' matched nothing"
+                exit 2
+              fi
+              files+=("${matches[@]}")
+              ;;
+            *)
+              if [ ! -e "$token" ]; then
+                echo "::error::files path '$token' does not exist"
+                exit 2
+              fi
+              files+=("$token")
+              ;;
+          esac
+        done
+        set +f
+        IFS="$IFS_SAVE"
+        if [ "${#files[@]}" -eq 0 ]; then
+          echo "::error::The 'files' input is empty"
+          exit 2
         fi
 
-        [ "$HITSPEC_BAIL" = "true" ]    && args+=(--bail)
-        [ "$HITSPEC_VERBOSE" = "true" ] && args+=(--verbose)
-        [ "$HITSPEC_INSECURE" = "true" ] && args+=(--insecure)
-        [ -n "$HITSPEC_PROXY" ]         && args+=(--proxy "$HITSPEC_PROXY")
+        # --- output format / report file ---------------------------------------
+        FORMAT=$(printf '%s' "${INPUT_OUTPUT:-console}" | tr '[:upper:]' '[:lower:]')
+        REPORT_FILE="$INPUT_OUTPUT_FILE"
+        case "$FORMAT" in
+          console) ;;
+          json)  [ -n "$REPORT_FILE" ] || REPORT_FILE="hitspec-results.json" ;;
+          junit) [ -n "$REPORT_FILE" ] || REPORT_FILE="hitspec-results.xml" ;;
+          tap)   [ -n "$REPORT_FILE" ] || REPORT_FILE="hitspec-results.tap" ;;
+          html)  [ -n "$REPORT_FILE" ] || REPORT_FILE="hitspec-results.html" ;;
+          *)
+            echo "::error::Unsupported output format '$FORMAT' (use console, json, junit, tap or html)"
+            exit 2
+            ;;
+        esac
 
-        if [ "$HITSPEC_STRESS" = "true" ]; then
-          args+=(--stress --duration "$HITSPEC_DURATION" --rate "$HITSPEC_RATE" --no-progress)
-          [ -n "$HITSPEC_VUS" ]        && args+=(--vus "$HITSPEC_VUS")
-          [ -n "$HITSPEC_MAX_VUS" ]    && args+=(--max-vus "$HITSPEC_MAX_VUS")
-          [ -n "$HITSPEC_THINK_TIME" ] && args+=(--think-time "$HITSPEC_THINK_TIME")
-          [ -n "$HITSPEC_RAMP_UP" ]   && args+=(--ramp-up "$HITSPEC_RAMP_UP")
-          [ -n "$HITSPEC_THRESHOLD" ] && args+=(--threshold "$HITSPEC_THRESHOLD")
-          [ -n "$HITSPEC_PROFILE" ]   && args+=(--profile "$HITSPEC_PROFILE")
+        # --- timeout: plain integers are milliseconds, durations pass through --
+        TIMEOUT="$INPUT_TIMEOUT"
+        if printf '%s' "$TIMEOUT" | grep -Eq '^[0-9]+$'; then
+          TIMEOUT="${TIMEOUT}ms"
+        fi
+
+        args=(hitspec run "${files[@]}" --output "$FORMAT" --no-color)
+
+        [ -n "$INPUT_ENV" ]         && args+=(--env "$INPUT_ENV")
+        [ -n "$INPUT_ENV_FILE" ]    && args+=(--env-file "$INPUT_ENV_FILE")
+        [ -n "$REPORT_FILE" ]         && args+=(--output-file "$REPORT_FILE")
+        [ -n "$INPUT_TAGS" ]        && args+=(--tags "$INPUT_TAGS")
+        [ -n "$INPUT_NAME" ]        && args+=(--name "$INPUT_NAME")
+        [ -n "$TIMEOUT" ]             && args+=(--timeout "$TIMEOUT")
+
+        if is_true "$INPUT_PARALLEL"; then
+          args+=(--parallel)
+          [ -n "$INPUT_CONCURRENCY" ] && args+=(--concurrency "$INPUT_CONCURRENCY")
+        fi
+
+        is_true "$INPUT_BAIL"       && args+=(--bail)
+        is_true "$INPUT_VERBOSE"    && args+=(--verbose)
+        is_true "$INPUT_INSECURE"   && args+=(--insecure)
+        [ -n "$INPUT_PROXY" ]       && args+=(--proxy "$INPUT_PROXY")
+
+        if is_true "$INPUT_STRESS"; then
+          args+=(--stress --no-progress)
+          [ -n "$INPUT_DURATION" ]   && args+=(--duration "$INPUT_DURATION")
+          [ -n "$INPUT_RATE" ]       && args+=(--rate "$INPUT_RATE")
+          [ -n "$INPUT_VUS" ]        && args+=(--vus "$INPUT_VUS")
+          [ -n "$INPUT_MAX_VUS" ]    && args+=(--max-vus "$INPUT_MAX_VUS")
+          [ -n "$INPUT_THINK_TIME" ] && args+=(--think-time "$INPUT_THINK_TIME")
+          [ -n "$INPUT_RAMP_UP" ]    && args+=(--ramp-up "$INPUT_RAMP_UP")
+          [ -n "$INPUT_THRESHOLD" ]  && args+=(--threshold "$INPUT_THRESHOLD")
+          [ -n "$INPUT_PROFILE" ]    && args+=(--profile "$INPUT_PROFILE")
         fi
 
         printf 'Running:'
         printf ' %q' "${args[@]}"
         printf '\n'
 
-        # Execute directly (no eval). Capture the exit code without `set -e`
-        # aborting before we record it.
+        # Run without eval and record the exit code; the step fails with it.
         EXIT_CODE=0
         "${args[@]}" || EXIT_CODE=$?
 
-        echo "exit-code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+        echo "exit-code=$EXIT_CODE" >> "${GITHUB_OUTPUT:-/dev/null}"
+        echo "report-file=$REPORT_FILE" >> "${GITHUB_OUTPUT:-/dev/null}"
+        if [ -n "$REPORT_FILE" ]; then
+          echo "Report written to $REPORT_FILE"
+        fi
         exit "$EXIT_CODE"

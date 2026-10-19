@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: abdul-hamid-achik/hitspec@v1
+      - uses: abdul-hamid-achik/hitspec@v2
         with:
           files: tests/
           output: junit
@@ -40,14 +40,14 @@ jobs:
 
 | Input | Description | Default |
 |-------|-------------|---------|
-| `files` | Files or directories to test | (required) |
-| `env` | Environment name | `dev` |
+| `files` | Files, directories or glob patterns, separated by whitespace or newlines (see [Selecting files](#selecting-files)) | (required) |
+| `env` | Environment name. When empty, hitspec uses `defaultEnvironment` from `hitspec.yaml` | - |
 | `env-file` | Path to `.env` file for variable interpolation | - |
-| `output` | Output format (`console`, `json`, `junit`, `tap`, `html`) | `junit` |
-| `output-file` | Write output to file | - |
+| `output` | Output format (`console`, `json`, `junit`, `tap`, `html`) | `console` |
+| `output-file` | Write the report to this file. Defaults to `hitspec-results.<ext>` for `json`, `junit`, `tap` and `html` | - |
 | `tags` | Filter by tags (comma-separated) | - |
 | `name` | Filter by request name pattern | - |
-| `timeout` | Global timeout in milliseconds | - |
+| `timeout` | Request timeout: a duration such as `30s` or `1m`, or a plain integer meaning milliseconds (`5000` is `5000ms`) | - |
 | `parallel` | Run requests in parallel | `false` |
 | `concurrency` | Max concurrent requests when `parallel` is enabled | - |
 | `bail` | Stop on first failure | `false` |
@@ -63,18 +63,76 @@ jobs:
 | `ramp-up` | Ramp-up time to reach target rate/VUs | - |
 | `threshold` | Pass/fail thresholds (e.g. `"p95<200ms,errors<0.1%"`) | - |
 | `profile` | Stress profile name from `hitspec.yaml` | - |
-| `version` | hitspec version to install (e.g. `v0.9.4` or `latest`) | `latest` |
+| `version` | hitspec release to install (e.g. `v2.20.0` or `latest`) | `latest` |
 
-<Note>
-The Action defaults `output` to `junit` (handy for CI test reporting), whereas the
-`hitspec` CLI defaults to `console`.
-</Note>
+### Selecting files
+
+`files` takes one or more paths separated by spaces or newlines. Directories and
+glob patterns are both accepted, and a pattern that matches nothing fails the
+step instead of silently testing nothing:
+
+```yaml
+- uses: abdul-hamid-achik/hitspec@v2
+  with:
+    files: |
+      tests/smoke/
+      services/**/*.http
+```
+
+`**` matches across directories when the runner's `bash` is version 4 or newer
+(Linux and Windows runners); with bash 3.2 (the macOS system shell) it behaves
+like a single `*`, so list one pattern per directory level there. Paths that
+contain spaces are not supported.
+
+### Reports
+
+With the default `output: console` the results are printed in the log. When you
+choose a machine-readable format (`json`, `junit`, `tap` or `html`) the report is
+written to `output-file`, or to `hitspec-results.<ext>` (`.json`, `.xml`, `.tap`,
+`.html`) when you do not set one, so it never floods the log. Use the
+`report-file` output to find it:
+
+```yaml
+- uses: abdul-hamid-achik/hitspec@v2
+  id: hitspec
+  with:
+    files: tests/
+    output: junit
+
+- uses: actions/upload-artifact@v7
+  if: always()
+  with:
+    name: test-results
+    path: ${{ steps.hitspec.outputs.report-file }}
+```
 
 ### Action Outputs
 
 | Output | Description |
 |--------|-------------|
 | `exit-code` | Exit code from hitspec (`0` = success, non-zero = failure) |
+| `report-file` | Path of the report file (empty for `console` output without `output-file`) |
+| `version` | The hitspec release that was installed, for example `v2.20.0` |
+
+### Installation, platforms and verification
+
+The action downloads the hitspec release archive from GitHub Releases (with
+retries), verifies its SHA-256 against the `checksums.txt` published with the
+same release, and adds the binary to `PATH` for the following steps. A checksum
+mismatch fails the step. It supports Linux, macOS and Windows runners on
+`amd64` and `arm64`. With `version: latest` the release is resolved through the
+public `releases/latest` redirect, so no API quota is used.
+
+The step fails whenever hitspec exits non-zero. Combine it with
+`continue-on-error: true` and `steps.<id>.outcome` if a failing test run should
+not stop the job.
+
+### Pinning the action
+
+`@v2` is a floating tag that moves to the latest `v2.x.y` release. Pin to a
+specific release tag (for example `@v2.20.0`) or a commit SHA for fully
+reproducible workflows. The older `@v1` tag is frozen and still contains the
+previous, less robust implementation of the action; move to `@v2`.
 
 ## Using the CLI Directly
 
@@ -137,7 +195,7 @@ Any non-zero exit code causes the GitHub Actions step to fail, which blocks the 
 Use GitHub secrets to pass sensitive values like API tokens and credentials. hitspec supports all major CLI flags as environment variables with the `HITSPEC_` prefix.
 
 ```yaml
-- uses: abdul-hamid-achik/hitspec@v1
+- uses: abdul-hamid-achik/hitspec@v2
   env:
     API_TOKEN: ${{ secrets.API_TOKEN }}
     HITSPEC_ENV: staging
@@ -159,7 +217,7 @@ If your tests rely on an environment file, generate it from secrets at runtime:
     echo "API_TOKEN=${{ secrets.API_TOKEN }}" >> .env.ci
     echo "DB_URL=${{ secrets.DB_URL }}" >> .env.ci
 
-- uses: abdul-hamid-achik/hitspec@v1
+- uses: abdul-hamid-achik/hitspec@v2
   with:
     files: tests/
     env: staging
@@ -257,7 +315,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: abdul-hamid-achik/hitspec@v1
+      - uses: abdul-hamid-achik/hitspec@v2
         with:
           files: tests/
           env: ${{ matrix.environment }}
@@ -293,7 +351,7 @@ strategy:
 steps:
   - uses: actions/checkout@v6
 
-  - uses: abdul-hamid-achik/hitspec@v1
+  - uses: abdul-hamid-achik/hitspec@v2
     env:
       HITSPEC_TIMEOUT: ${{ matrix.timeout }}
     with:
@@ -308,7 +366,7 @@ steps:
 Run load tests in your pipeline to catch performance regressions:
 
 ```yaml
-- uses: abdul-hamid-achik/hitspec@v1
+- uses: abdul-hamid-achik/hitspec@v2
   with:
     files: api.http
     stress: true
@@ -324,7 +382,7 @@ The `threshold` input defines pass/fail criteria. If any threshold is exceeded, 
 Most CI reporting tools understand JUnit XML. To publish results in GitHub pull requests, combine hitspec with a JUnit reporter action:
 
 ```yaml
-- uses: abdul-hamid-achik/hitspec@v1
+- uses: abdul-hamid-achik/hitspec@v2
   with:
     files: tests/
     output: junit
@@ -359,7 +417,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: abdul-hamid-achik/hitspec@v1
+      - uses: abdul-hamid-achik/hitspec@v2
         with:
           files: tests/
           tags: smoke
@@ -384,7 +442,7 @@ jobs:
         run: |
           echo "API_TOKEN=${{ secrets.API_TOKEN }}" >> .env.ci
 
-      - uses: abdul-hamid-achik/hitspec@v1
+      - uses: abdul-hamid-achik/hitspec@v2
         with:
           files: tests/
           env: staging
