@@ -1,0 +1,29 @@
+# Results are printed to stdout without --output-file.
+# Regression: v2.16.0-v2.19.1 passed a nil *os.File as the formatter writer,
+# so `hitspec run` printed nothing at all.
+
+exitcode 0 hitspec run ok.http
+stdout 'hitspec '
+stdout 'ok-request'
+stdout 'Tests: 1 passed, 1 total'
+! stderr .
+
+exitcode 1 hitspec run fail.http
+stdout 'fail-request'
+stdout 'Tests: 1 failed, 1 total'
+
+-- ok.http --
+### ok-request
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 200
+<<<
+
+-- fail.http --
+### fail-request
+GET {{$env(SERVER)}}/status/500
+
+>>>
+expect status 200
+<<<

@@ -71,6 +71,7 @@ hitspec/
 | Add a TUI screen/command | `packages/tui/app.go` (model, keys, `executeCommand`, `secondary*`) |
 | Add a TUI component | `packages/tui/<component>.go` (own file, e.g. `responseviewer.go`, `toast.go`) |
 | Regenerate TUI golden snapshots | `go test ./packages/tui/ -run Golden -update` |
+| Test CLI behavior end to end | `apps/cli/testdata/script/*.txtar` (testscript runs the real binary; `$SERVER` is the offline test server in `apps/cli/testserver_test.go`; `exitcode N cmd ...` asserts exit codes) |
 | Add serve (`--api-only`) endpoint | `packages/serve/handler_*.go`, `packages/serve/routes.go`, `packages/serve/types.go` |
 | Update docs | `apps/docs/` (.mdx files, docs.json) |
 | Add stress feature | `packages/stress/stress.go`, `packages/stress/metrics.go` |
@@ -240,6 +241,10 @@ token from body.access_token
 go test ./...
 go test ./packages/tui/...           # TUI package only
 go test -race ./packages/tui/...     # With the race detector
+
+# CLI scripts: real binary, real stdout/stderr/exit codes, offline server
+go test ./apps/cli -run TestScripts            # all scripts
+go test ./apps/cli -run TestScripts/run_stdout # one script
 
 # Regenerate TUI golden snapshots after intentional render changes
 go test ./packages/tui/ -run Golden -update
