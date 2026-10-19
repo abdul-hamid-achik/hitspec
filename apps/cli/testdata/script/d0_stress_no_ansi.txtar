@@ -1,0 +1,18 @@
+# Output that is not a terminal gets no color codes. 2.23.1 forced the stress
+# reporter's colors on, so `hitspec run --stress > file` was full of escapes.
+exitcode 0 hitspec run --no-history --stress --duration 1s --rate 5 --no-progress api.http
+! stdout '\x1b\['
+stdout 'STRESS TEST SUMMARY'
+
+exitcode 0 hitspec run --no-history api.http
+! stdout '\x1b\['
+
+-- api.http --
+@baseUrl = {{$env(SERVER)}}
+
+### One
+GET {{baseUrl}}/json
+
+>>>
+expect status 200
+<<<

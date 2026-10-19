@@ -50,10 +50,20 @@ func NewConsoleFormatter(opts ...ConsoleOption) *ConsoleFormatter {
 	for _, opt := range opts {
 		opt(f)
 	}
-	if f.noColor {
-		color.NoColor = true
-	}
 	return f
+}
+
+// color returns a color for this formatter. WithNoColor turns it off for this
+// formatter only; the global color.NoColor is left alone, so concurrent
+// formatters do not race on it and a later formatter with colors still gets
+// them. Otherwise the package's own detection (NO_COLOR, TERM=dumb, stdout
+// not a terminal) applies.
+func (f *ConsoleFormatter) color(attrs ...color.Attribute) *color.Color {
+	c := color.New(attrs...)
+	if f.noColor {
+		c.DisableColor()
+	}
+	return c
 }
 
 func WithWriter(w io.Writer) ConsoleOption {
@@ -86,11 +96,11 @@ func WithNoColor(nc bool) ConsoleOption {
 }
 
 func (f *ConsoleFormatter) FormatResult(result *runner.RunResult) {
-	green := color.New(color.FgGreen).SprintFunc()
-	red := color.New(color.FgRed).SprintFunc()
-	yellow := color.New(color.FgYellow).SprintFunc()
-	cyan := color.New(color.FgCyan).SprintFunc()
-	bold := color.New(color.Bold).SprintFunc()
+	green := f.color(color.FgGreen).SprintFunc()
+	red := f.color(color.FgRed).SprintFunc()
+	yellow := f.color(color.FgYellow).SprintFunc()
+	cyan := f.color(color.FgCyan).SprintFunc()
+	bold := f.color(color.Bold).SprintFunc()
 
 	fmt.Fprintf(f.writer, "\n%s\n", bold("Running: "+result.File))
 	fmt.Fprintf(f.writer, "\n")
@@ -120,7 +130,7 @@ func (f *ConsoleFormatter) FormatResult(result *runner.RunResult) {
 		fmt.Fprintf(f.writer, "  %s %s %s\n", symbol, r.Name, cyan(fmt.Sprintf("(%dms)", r.Duration.Milliseconds())))
 
 		if r.Description != "" {
-			fmt.Fprintf(f.writer, "    %s\n", color.New(color.Faint).Sprint(r.Description))
+			fmt.Fprintf(f.writer, "    %s\n", f.color(color.Faint).Sprint(r.Description))
 		}
 
 		if !r.Passed && len(r.Assertions) > 0 {
@@ -201,7 +211,7 @@ func (f *ConsoleFormatter) FormatResult(result *runner.RunResult) {
 // writeWarnings prints a request's warnings (a capture that matched nothing, a
 // {{reference}} that was sent unresolved) in yellow under it.
 func (f *ConsoleFormatter) writeWarnings(r *runner.RequestResult) {
-	yellow := color.New(color.FgYellow).SprintFunc()
+	yellow := f.color(color.FgYellow).SprintFunc()
 	for _, w := range r.Warnings {
 		fmt.Fprintf(f.writer, "    %s\n", yellow("warning: "+sanitize(w)))
 	}
@@ -219,9 +229,9 @@ func (f *ConsoleFormatter) writeExchange(r *runner.RequestResult, failed bool) {
 	if !failed && f.verbose < 1 {
 		return
 	}
-	faint := color.New(color.Faint).SprintFunc()
-	red := color.New(color.FgRed).SprintFunc()
-	green := color.New(color.FgGreen).SprintFunc()
+	faint := f.color(color.Faint).SprintFunc()
+	red := f.color(color.FgRed).SprintFunc()
+	green := f.color(color.FgGreen).SprintFunc()
 
 	if req := r.Request; req != nil {
 		fmt.Fprintf(f.writer, "    Request:  %s %s\n", sanitize(req.Method), sanitize(RedactURL(req.URL)))
@@ -290,17 +300,17 @@ func (f *ConsoleFormatter) writeBody(label string, b bodyText) {
 		fmt.Fprintf(f.writer, "      %s\n", line)
 	}
 	if b.Truncated {
-		fmt.Fprintf(f.writer, "      %s\n", color.New(color.Faint).Sprint(b.Note+" (-vvv prints the whole body)"))
+		fmt.Fprintf(f.writer, "      %s\n", f.color(color.Faint).Sprint(b.Note+" (-vvv prints the whole body)"))
 	}
 }
 
 func (f *ConsoleFormatter) FormatError(err error) {
-	red := color.New(color.FgRed).SprintFunc()
+	red := f.color(color.FgRed).SprintFunc()
 	fmt.Fprintf(f.writer, "%s %v\n", red("Error:"), err)
 }
 
 func (f *ConsoleFormatter) FormatHeader(version string) {
-	bold := color.New(color.Bold).SprintFunc()
+	bold := f.color(color.Bold).SprintFunc()
 	fmt.Fprintf(f.writer, "%s %s\n", bold("hitspec"), version)
 }
 
@@ -435,9 +445,9 @@ func (f *ConsoleFormatter) formatDiff(expected, actual any) string {
 			return diffs[i].Path < diffs[j].Path
 		})
 
-		red := color.New(color.FgRed).SprintFunc()
-		green := color.New(color.FgGreen).SprintFunc()
-		yellow := color.New(color.FgYellow).SprintFunc()
+		red := f.color(color.FgRed).SprintFunc()
+		green := f.color(color.FgGreen).SprintFunc()
+		yellow := f.color(color.FgYellow).SprintFunc()
 
 		var sb strings.Builder
 		sb.WriteString("      Diff:\n")
