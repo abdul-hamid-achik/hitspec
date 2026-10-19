@@ -293,6 +293,36 @@ func TestRecordingCapture_GET(t *testing.T) {
 	}
 }
 
+// A target URL with a path prefix must be honored both when forwarding and in
+// the recorded URL, so replaying a recording hits the same upstream path.
+func TestRecordingCapture_TargetPathPrefix(t *testing.T) {
+	var upstreamPath string
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(backend.Close)
+
+	rec, proxyURL, _ := startRecorderProxy(t, backend, WithTargetURL(backend.URL+"/api"))
+
+	resp, err := http.Get(proxyURL + "/users/1?x=1")
+	if err != nil {
+		t.Fatalf("GET through proxy: %v", err)
+	}
+	resp.Body.Close()
+
+	if upstreamPath != "/api/users/1" {
+		t.Errorf("upstream saw path %q, want /api/users/1", upstreamPath)
+	}
+	recordings := rec.GetRecordings()
+	if len(recordings) != 1 {
+		t.Fatalf("expected 1 recording, got %d", len(recordings))
+	}
+	if want := backend.URL + "/api/users/1?x=1"; recordings[0].URL != want {
+		t.Errorf("recorded URL = %q, want %q", recordings[0].URL, want)
+	}
+}
+
 func TestRecordingCapture_POST_WithBody(t *testing.T) {
 	backend := startBackend(t)
 	rec, proxyURL, _ := startRecorderProxy(t, backend)

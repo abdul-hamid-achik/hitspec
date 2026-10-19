@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Build with Go 1.26.9 and `golang.org/x/net` v0.61.0 to pick up the fix for
+  GO-2026-6617 (HTTP/2 HPACK encoder race in `net/http`).
+
+### Fixed
+
+- `hitspec record` now forwards to the target URL's path prefix
+  (`--target http://host/api` sends `/users` upstream as `/api/users`), matching
+  the URL it records, so replaying a recording hits the same endpoint. The
+  proxy uses `ReverseProxy.Rewrite` (the `Director` hook is deprecated).
+
 ## [2.19.1] - 2026-07-19
 
 ### Fixed
