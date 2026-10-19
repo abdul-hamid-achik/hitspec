@@ -10,7 +10,22 @@ import (
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/http"
+	"github.com/spf13/pflag"
 )
+
+// verbosityLevel is the detail level of `run`: the -v/-vv/-vvv count when the
+// flag was given (so --verbose=0 can switch off a hitspec.yaml `verbose: true`),
+// else 1 when hitspec.yaml sets verbose: true, else 0. Precedence is flag >
+// hitspec.yaml > default; there is no HITSPEC_* variable for it.
+func verbosityLevel(flags *pflag.FlagSet, yamlVerbose bool) int {
+	if verboseFlag > 0 || (flags != nil && flags.Changed("verbose")) {
+		return verboseFlag
+	}
+	if yamlVerbose {
+		return 1
+	}
+	return 0
+}
 
 // runTotals is the accounting for one pass over all files of a `run`.
 type runTotals struct {

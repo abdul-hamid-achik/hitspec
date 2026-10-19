@@ -1,0 +1,24 @@
+# hitspec.yaml `verbose: true` means -v for `run`; the flag beats it.
+
+exitcode 0 hitspec run --no-history --no-color ok.http
+stdout 'Request:  GET http://127\.0\.0\.1:[0-9]+/status/200'
+stdout 'Response: 200'
+
+# --verbose=0 on the command line wins over the file.
+exitcode 0 hitspec run --no-history --no-color --verbose=0 ok.http
+stdout '✓ ok'
+! stdout 'Request:'
+
+# -vv beats the file's -v.
+exitcode 0 hitspec run --no-history --no-color -vv ok.http
+stdout 'Response headers:'
+
+-- hitspec.yaml --
+verbose: true
+-- ok.http --
+### ok
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 200
+<<<

@@ -259,7 +259,7 @@ func buildRunnerConfig(flags *pflag.FlagSet, fileConfig *config.Config, environm
 	if err := checkClientOptions(clientOpts); err != nil {
 		return nil, nil, err
 	}
-	cfg.Verbose = verboseFlag > 0
+	cfg.Verbose = verbosityLevel(flags, fileConfig.GetVerbose()) > 0
 	cfg.NameFilter = nameFlag
 	cfg.TagsFilter = tagsFilter
 	cfg.UpdateSnapshots = updateSnapshotsFlag
@@ -328,6 +328,13 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	if !validFormats[strings.ToLower(outputFlag)] {
 		return fmt.Errorf("unknown output format %q (valid formats: console, json, junit, tap, html)", outputFlag)
 	}
+	// --dry-run sends nothing and --stress sends a flood: there is no plan to
+	// print for a load test, so the combination is refused rather than letting
+	// one flag silently beat the other.
+	if dryRunFlag && stressFlag {
+		fmt.Fprintln(cmd.ErrOrStderr(), "Error: --dry-run cannot be combined with --stress (a stress test has no dry run; drop --stress to preview the requests)")
+		return newExitError(ExitUsageError, "")
+	}
 
 	// Set up notification manager
 	var notifyManager *notify.Manager
@@ -392,6 +399,8 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	// repeated in-process invocations don't mistake a resolved default for an
 	// explicit choice.
 	environment, envExplicit := resolveEnvironment(envFlag, fileConfig)
+	// -v/-vv/-vvv beat hitspec.yaml's `verbose: true` (which means -v).
+	verbosity := verbosityLevel(cmd.Flags(), fileConfig.GetVerbose())
 
 	// Warn if the explicitly chosen environment isn't defined in the config.
 	// Only check when the user picked it (flag or HITSPEC_ENV), so an implicit
@@ -541,12 +550,21 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	// executeRun performs one full pass: open the report destination (fresh
 	// per pass), run, flush, close, and report filters that matched nothing.
 	executeRun := func(header bool) (runTotals, error) {
-		formatter, closeReport, err := openReport(outputFlag, outputFileFlag, verboseFlag, noColorFlag, quietFlag)
+		format, outFile := outputFlag, outputFileFlag
+		if dryRunFlag {
+			// A dry run prints its plan as text; there is no result document
+			// to put in -o json/junit/tap/html or --output-file.
+			if !strings.EqualFold(format, "console") || outFile != "" {
+				fmt.Fprintln(stderr, "note: --dry-run prints the plan as text; -o and --output-file are ignored")
+			}
+			format, outFile = "console", ""
+		}
+		formatter, closeReport, err := openReport(format, outFile, verbosity, noColorFlag, quietFlag)
 		if err != nil {
 			return runTotals{}, err
 		}
 		// --quiet drops the stdout report, but --output-file still gets it.
-		reporting := !quietFlag || outputFileFlag != ""
+		reporting := !quietFlag || outFile != ""
 		if header && reporting {
 			formatter.FormatHeader(version)
 		}
@@ -701,6 +719,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 					fmt.Fprintf(stderr, "Error: %v\nKeeping the previous settings until the file is fixed.\n", err)
 				} else {
 					r, cfg = newRunner, newCfg
+					verbosity = verbosityLevel(cmd.Flags(), cfg.Verbose)
 					support = watchSupportFiles(configFlag, cfg.EnvFile)
 					addWatchDirs(watcher, nil, nil, support, stderr)
 				}
@@ -861,7 +880,7 @@ func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config
 	reporter := stress.NewReporter(
 		stress.WithNoColor(noColorFlag),
 		stress.WithNoProgress(stressNoProgressFlag),
-		stress.WithVerbose(verboseFlag > 0),
+		stress.WithVerbose(verbosityLevel(cmd.Flags(), fileConfig.GetVerbose()) > 0),
 	)
 
 	// Create runner with config environments for proper variable resolution

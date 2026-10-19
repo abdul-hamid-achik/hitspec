@@ -1,0 +1,36 @@
+# --dry-run always prints the text plan: -o json/junit/tap/html add no (empty)
+# result document after it, and --output-file is not created.
+
+exitcode 0 hitspec run --no-history --dry-run -o json api.http
+stdout 'Would run: api\.http \(1 to run, 0 skipped\)'
+! stdout '"summary"'
+! stdout '^\{'
+stderr 'note: --dry-run prints the plan as text'
+
+exitcode 0 hitspec run --no-history --dry-run -o junit api.http
+! stdout '<testsuites'
+! stdout '<\?xml'
+
+exitcode 0 hitspec run --no-history --dry-run -o tap api.http
+! stdout '^TAP version'
+! stdout '^1\.\.'
+
+exitcode 0 hitspec run --no-history --dry-run -o html api.http
+! stdout '<html'
+! stdout '<!DOCTYPE'
+
+exitcode 0 hitspec run --no-history --dry-run -o json --output-file out.json api.http
+stdout 'Would run'
+! exists out.json
+
+# Plain console: no note.
+exitcode 0 hitspec run --no-history --dry-run api.http
+! stderr 'note:'
+
+-- api.http --
+### One
+GET http://127.0.0.1:1/x
+
+>>>
+expect status 200
+<<<
