@@ -50,6 +50,10 @@ type Thresholds struct {
 	P99        time.Duration // 99th percentile latency
 	MaxLatency time.Duration // maximum allowed latency
 	ErrorRate  float64       // maximum error rate (0.0 - 1.0): transport errors and non-2xx statuses, not assertion failures
+	// ErrorRateSet marks ErrorRate as configured even when it is 0 ("no request
+	// may error"). A positive ErrorRate is enforced without it, so callers that
+	// build Thresholds by hand keep working.
+	ErrorRateSet bool
 	// AssertionFailRate is the maximum share (0.0 - 1.0) of checked responses
 	// that may fail an assertion. Only enforced when AssertionFailRateSet, so
 	// that 0 ("no assertion may fail") is expressible.
@@ -186,10 +190,14 @@ func parseThresholdPart(part string, t *Thresholds) error {
 		if strings.Contains(part, "%") {
 			f = f / 100 // Convert percentage to decimal
 		}
+		if f < 0 {
+			return fmt.Errorf("invalid error rate: %s", valueStr)
+		}
 		if op != "<" && op != "<=" {
 			return fmt.Errorf("error rate threshold must use < or <=")
 		}
 		t.ErrorRate = f
+		t.ErrorRateSet = true
 
 	case "assertions", "assertionfailures", "assertionfailrate", "assertfail":
 		pct := strings.HasSuffix(valueStr, "%")
@@ -225,7 +233,7 @@ func parseThresholdPart(part string, t *Thresholds) error {
 
 // HasThresholds returns true if any thresholds are configured
 func (t *Thresholds) HasThresholds() bool {
-	return t.P50 > 0 || t.P95 > 0 || t.P99 > 0 || t.MaxLatency > 0 || t.ErrorRate > 0 || t.AssertionFailRateSet || t.MinRPS > 0
+	return t.P50 > 0 || t.P95 > 0 || t.P99 > 0 || t.MaxLatency > 0 || t.ErrorRate > 0 || t.ErrorRateSet || t.AssertionFailRateSet || t.MinRPS > 0
 }
 
 // ThresholdResult holds the result of evaluating a threshold

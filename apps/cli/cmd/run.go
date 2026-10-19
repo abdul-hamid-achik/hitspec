@@ -1035,13 +1035,36 @@ func buildStressConfig(cmd *cobra.Command, fileConfig *config.Config) (*stress.C
 	return cfg, nil
 }
 
-// buildThresholdString converts threshold map to string format
+// buildThresholdString converts a profile's threshold map ("p95": "200ms",
+// "rps": ">=50") to the "p95<200ms,rps>=50" form stress.ParseThresholds reads.
+// A value that starts with an operator keeps it; a bare value gets the
+// metric's natural one (> for rps, < for everything else). Keys are sorted so
+// the result is stable.
 func buildThresholdString(thresholds map[string]string) string {
-	var parts []string
-	for k, v := range thresholds {
-		parts = append(parts, k+"<"+v)
+	keys := make([]string, 0, len(thresholds))
+	for k := range thresholds {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		v := strings.TrimSpace(thresholds[k])
+		if hasThresholdOperator(v) {
+			parts = append(parts, k+v)
+			continue
+		}
+		op := "<"
+		switch strings.ToLower(k) {
+		case "rps", "rate":
+			op = ">"
+		}
+		parts = append(parts, k+op+v)
 	}
 	return strings.Join(parts, ",")
+}
+
+func hasThresholdOperator(v string) bool {
+	return strings.HasPrefix(v, "<") || strings.HasPrefix(v, ">")
 }
 
 // stressResultToMetrics converts stress test summary to metrics aggregate format

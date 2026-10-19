@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -127,4 +128,39 @@ func TestParseAssertionThreshold(t *testing.T) {
 
 	_, err = ParseThresholds("assertions>1%")
 	assert.Error(t, err)
+}
+
+// errors<0 (and errors<=0, errors<0%) mean "no request may error": a zero
+// threshold is a threshold, not an unset one.
+func TestZeroErrorThresholdIsExpressible(t *testing.T) {
+	for _, expr := range []string{"errors<0", "errors<=0", "errors<0%", "errors<=0%"} {
+		thr, err := ParseThresholds(expr)
+		require.NoError(t, err, expr)
+		assert.True(t, thr.HasThresholds(), expr)
+		assert.True(t, thr.ErrorRateSet, expr)
+		assert.Zero(t, thr.ErrorRate, expr)
+	}
+	_, err := ParseThresholds("errors<-1")
+	assert.Error(t, err)
+
+	// A server that fails one request in ten: errors<0 must fail the run,
+	// errors<50% must not.
+	var n atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if n.Add(1)%10 == 0 {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	defer srv.Close()
+	file := writeHTTP(t, "### A\nGET "+srv.URL+"/a\n")
+
+	for expr, wantPass := range map[string]bool{"errors<0": false, "errors<50%": true} {
+		thr, err := ParseThresholds(expr)
+		require.NoError(t, err)
+		n.Store(0)
+		res, _ := runStress(t, &Config{Mode: VUMode, VUs: 1, MaxVUs: 1, Duration: 600 * time.Millisecond, Thresholds: thr}, file)
+		require.Greater(t, res.Summary.ErrorCount, int64(0), "the server should have failed some requests")
+		require.Len(t, res.Thresholds, 1, expr)
+		assert.Equal(t, wantPass, res.Passed, expr)
+	}
 }

@@ -507,7 +507,7 @@ func (m *Metrics) EvaluateThresholds(t Thresholds) []ThresholdResult {
 		})
 	}
 
-	if t.ErrorRate > 0 {
+	if t.ErrorRate > 0 || t.ErrorRateSet {
 		passed := summary.ErrorRate <= t.ErrorRate
 		results = append(results, ThresholdResult{
 			Name:     "error rate",
