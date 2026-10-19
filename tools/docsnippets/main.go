@@ -292,6 +292,13 @@ func parseCapturing(s snippet) (*parser.File, []string, error) {
 			warnings = append(warnings, strings.TrimPrefix(line, "warning: "))
 		}
 	}
+	// Parse itself does not print: the parser collects its warnings (unknown
+	// directives, bad @timeout values, ...) in File.Warnings.
+	if parsed != nil {
+		for _, w := range parsed.Warnings {
+			warnings = append(warnings, w.String())
+		}
+	}
 	return parsed, warnings, perr
 }
 

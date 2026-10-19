@@ -30,7 +30,7 @@
           {
             "Column": "count",
             "Expected": 1,
-            "Line": 32,
+            "Line": 44,
             "Operator": "==",
             "Query": "SELECT COUNT(*) as count FROM users WHERE name = 'Alice';"
           }
@@ -88,21 +88,21 @@
           {
             "Column": "name",
             "Expected": "Alice",
-            "Line": 49,
+            "Line": 65,
             "Operator": "==",
             "Query": "SELECT name, email, active FROM users WHERE id = 1;"
           },
           {
             "Column": "email",
             "Expected": "alice@example.com",
-            "Line": 49,
+            "Line": 65,
             "Operator": "==",
             "Query": "SELECT name, email, active FROM users WHERE id = 1;"
           },
           {
             "Column": "active",
             "Expected": 1,
-            "Line": 49,
+            "Line": 65,
             "Operator": "==",
             "Query": "SELECT name, email, active FROM users WHERE id = 1;"
           }
@@ -154,7 +154,7 @@
           {
             "Column": "total",
             "Expected": 0,
-            "Line": 68,
+            "Line": 90,
             "Operator": "\u003e",
             "Query": "SELECT COUNT(*) as total FROM users;"
           }
@@ -213,7 +213,7 @@
           {
             "Column": "name",
             "Expected": "Alice",
-            "Line": 92,
+            "Line": 118,
             "Operator": "==",
             "Query": "SELECT name FROM users WHERE id = 1;"
           }
@@ -273,14 +273,14 @@
           {
             "Column": "active_count",
             "Expected": 0,
-            "Line": 109,
+            "Line": 135,
             "Operator": "\u003e",
             "Query": "SELECT COUNT(*) as active_count FROM users WHERE active = 1;"
           },
           {
             "Column": "total",
             "Expected": 0,
-            "Line": 114,
+            "Line": 140,
             "Operator": "\u003e",
             "Query": "SELECT COUNT(*) as total FROM users;"
           }
