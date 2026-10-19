@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"os"
 	"sort"
 	"strconv"
@@ -132,11 +133,11 @@ func diffCommand(cmd *cobra.Command, args []string) error {
 	// Output in requested format
 	switch strings.ToLower(diffOutputFlag) {
 	case "json":
-		return outputDiffJSON(diff)
+		return outputDiffJSON(cmd.OutOrStdout(), diff)
 	case "html":
-		return outputDiffHTML(diff)
+		return outputDiffHTML(cmd.OutOrStdout(), diff)
 	default:
-		return outputDiffConsole(diff)
+		return outputDiffConsole(cmd.OutOrStdout(), diff)
 	}
 }
 
@@ -330,55 +331,59 @@ func getFileFromKey(key string) string {
 	return ""
 }
 
-func outputDiffConsole(diff *DiffResult) error {
-	green := color.New(color.FgGreen).SprintFunc()
-	red := color.New(color.FgRed).SprintFunc()
-	yellow := color.New(color.FgYellow).SprintFunc()
-	cyan := color.New(color.FgCyan).SprintFunc()
-	bold := color.New(color.Bold).SprintFunc()
+func outputDiffConsole(w io.Writer, diff *DiffResult) error {
+	// Colors only on a terminal: a buffer or a pipe gets plain text.
+	paint := func(attr color.Attribute) func(a ...any) string {
+		c := color.New(attr)
+		if f, ok := w.(*os.File); !ok || f != os.Stdout {
+			c.DisableColor()
+		}
+		return c.SprintFunc()
+	}
+	green, red, yellow, cyan, bold := paint(color.FgGreen), paint(color.FgRed), paint(color.FgYellow), paint(color.FgCyan), paint(color.Bold)
 
-	fmt.Printf("\n%s\n", bold("Test Results Comparison"))
-	fmt.Printf("  %s: %s\n", cyan("File 1"), diff.File1)
-	fmt.Printf("  %s: %s\n\n", cyan("File 2"), diff.File2)
+	fmt.Fprintf(w, "\n%s\n", bold("Test Results Comparison"))
+	fmt.Fprintf(w, "  %s: %s\n", cyan("File 1"), diff.File1)
+	fmt.Fprintf(w, "  %s: %s\n\n", cyan("File 2"), diff.File2)
 
 	// Summary
-	fmt.Printf("%s\n", bold("Summary"))
-	fmt.Printf("  Total Tests:    %d\n", diff.Summary.TotalTests)
+	fmt.Fprintf(w, "%s\n", bold("Summary"))
+	fmt.Fprintf(w, "  Total Tests:    %d\n", diff.Summary.TotalTests)
 	if diff.Summary.Improved > 0 {
-		fmt.Printf("  Improved:       %s\n", green(fmt.Sprintf("%d", diff.Summary.Improved)))
+		fmt.Fprintf(w, "  Improved:       %s\n", green(fmt.Sprintf("%d", diff.Summary.Improved)))
 	}
 	if diff.Summary.Regressed > 0 {
-		fmt.Printf("  Regressed:      %s\n", red(fmt.Sprintf("%d", diff.Summary.Regressed)))
+		fmt.Fprintf(w, "  Regressed:      %s\n", red(fmt.Sprintf("%d", diff.Summary.Regressed)))
 	}
 	if diff.Summary.Unchanged > 0 {
-		fmt.Printf("  Unchanged:      %d\n", diff.Summary.Unchanged)
+		fmt.Fprintf(w, "  Unchanged:      %d\n", diff.Summary.Unchanged)
 	}
 	if diff.Summary.Skipped > 0 {
-		fmt.Printf("  Skipped:        %d\n", diff.Summary.Skipped)
+		fmt.Fprintf(w, "  Skipped:        %d\n", diff.Summary.Skipped)
 	}
 	if diff.Summary.NewTests > 0 {
-		fmt.Printf("  New Tests:      %s\n", cyan(fmt.Sprintf("%d", diff.Summary.NewTests)))
+		fmt.Fprintf(w, "  New Tests:      %s\n", cyan(fmt.Sprintf("%d", diff.Summary.NewTests)))
 	}
 	if diff.Summary.RemovedTests > 0 {
-		fmt.Printf("  Removed Tests:  %s\n", yellow(fmt.Sprintf("%d", diff.Summary.RemovedTests)))
+		fmt.Fprintf(w, "  Removed Tests:  %s\n", yellow(fmt.Sprintf("%d", diff.Summary.RemovedTests)))
 	}
-	fmt.Println()
+	fmt.Fprintln(w)
 
 	// Duration comparison
-	fmt.Printf("%s\n", bold("Duration"))
-	fmt.Printf("  Total (File 1): %.0fms\n", diff.Summary.TotalDuration1)
-	fmt.Printf("  Total (File 2): %.0fms\n", diff.Summary.TotalDuration2)
-	fmt.Printf("  Avg (File 1):   %.0fms\n", diff.Summary.AvgDuration1)
-	fmt.Printf("  Avg (File 2):   %.0fms\n", diff.Summary.AvgDuration2)
-	fmt.Println()
+	fmt.Fprintf(w, "%s\n", bold("Duration"))
+	fmt.Fprintf(w, "  Total (File 1): %.0fms\n", diff.Summary.TotalDuration1)
+	fmt.Fprintf(w, "  Total (File 2): %.0fms\n", diff.Summary.TotalDuration2)
+	fmt.Fprintf(w, "  Avg (File 1):   %.0fms\n", diff.Summary.AvgDuration1)
+	fmt.Fprintf(w, "  Avg (File 2):   %.0fms\n", diff.Summary.AvgDuration2)
+	fmt.Fprintln(w)
 
 	// Detailed changes
-	fmt.Printf("%s\n", bold("Test Details"))
+	fmt.Fprintf(w, "%s\n", bold("Test Details"))
 	lastFile, wroteFile := "", false
 	for _, comp := range diff.Comparisons {
 		if !wroteFile || comp.File != lastFile {
 			if comp.File != "" {
-				fmt.Printf(" %s\n", cyan(comp.File))
+				fmt.Fprintf(w, " %s\n", cyan(comp.File))
 			}
 			lastFile, wroteFile = comp.File, true
 		}
@@ -418,7 +423,7 @@ func outputDiffConsole(diff *DiffResult) error {
 				}
 				return fmt.Sprintf("%.0fms", ms)
 			}
-			fmt.Printf("  %s %s  %s → %s\n", statusColor(statusSymbol), name,
+			fmt.Fprintf(w, "  %s %s  %s → %s\n", statusColor(statusSymbol), name,
 				state(comp.Skipped1, comp.Duration1), state(comp.Skipped2, comp.Duration2))
 		} else if comp.InFile1 && comp.InFile2 {
 			changeStr := ""
@@ -429,26 +434,26 @@ func outputDiffConsole(diff *DiffResult) error {
 			} else if comp.DurationChange < 0 {
 				changeStr = fmt.Sprintf("%.1f%%", comp.DurationChange)
 			}
-			fmt.Printf("  %s %s  %.0fms → %.0fms %s\n",
+			fmt.Fprintf(w, "  %s %s  %.0fms → %.0fms %s\n",
 				statusColor(statusSymbol),
 				name,
 				comp.Duration1,
 				comp.Duration2,
 				statusColor(changeStr))
 		} else if comp.InFile1 {
-			fmt.Printf("  %s %s  (removed)\n", statusColor(statusSymbol), name)
+			fmt.Fprintf(w, "  %s %s  (removed)\n", statusColor(statusSymbol), name)
 		} else {
-			fmt.Printf("  %s %s  (new, %.0fms)\n", statusColor(statusSymbol), name, comp.Duration2)
+			fmt.Fprintf(w, "  %s %s  (new, %.0fms)\n", statusColor(statusSymbol), name, comp.Duration2)
 		}
 	}
-	fmt.Println()
+	fmt.Fprintln(w)
 
 	// Threshold check
 	if diff.Summary.ThresholdPercent > 0 {
 		if diff.Summary.ThresholdPassed {
-			fmt.Printf("%s Threshold check passed (max regression: %.1f%%)\n", green("✓"), diff.Summary.ThresholdPercent)
+			fmt.Fprintf(w, "%s Threshold check passed (max regression: %.1f%%)\n", green("✓"), diff.Summary.ThresholdPercent)
 		} else {
-			fmt.Printf("%s Threshold check failed (some tests exceeded %.1f%% regression)\n", red("✗"), diff.Summary.ThresholdPercent)
+			fmt.Fprintf(w, "%s Threshold check failed (some tests exceeded %.1f%% regression)\n", red("✗"), diff.Summary.ThresholdPercent)
 			return fmt.Errorf("threshold exceeded")
 		}
 	}
@@ -456,7 +461,7 @@ func outputDiffConsole(diff *DiffResult) error {
 	return nil
 }
 
-func outputDiffJSON(diff *DiffResult) error {
+func outputDiffJSON(w io.Writer, diff *DiffResult) error {
 	type JSONComparison struct {
 		TestName       string  `json:"testName"`
 		File           string  `json:"file,omitempty"`
@@ -496,12 +501,12 @@ func outputDiffJSON(diff *DiffResult) error {
 		})
 	}
 
-	encoder := json.NewEncoder(os.Stdout)
+	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(output)
 }
 
-func outputDiffHTML(diff *DiffResult) error {
+func outputDiffHTML(w io.Writer, diff *DiffResult) error {
 	const htmlTemplate = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -579,7 +584,7 @@ func outputDiffHTML(diff *DiffResult) error {
                 {{end}}
             </tbody>
         </table>
-        {{if gt .Summary.ThresholdPercent 0}}
+        {{if gt .Summary.ThresholdPercent 0.0}}
         <div class="threshold {{if .Summary.ThresholdPassed}}passed{{else}}failed{{end}}">
             {{if .Summary.ThresholdPassed}}✓ Threshold check passed (max: {{printf "%.1f" .Summary.ThresholdPercent}}%){{else}}✗ Threshold check failed (max: {{printf "%.1f" .Summary.ThresholdPercent}}%){{end}}
         </div>
@@ -592,5 +597,5 @@ func outputDiffHTML(diff *DiffResult) error {
 	if err != nil {
 		return err
 	}
-	return tmpl.Execute(os.Stdout, diff)
+	return tmpl.Execute(w, diff)
 }
