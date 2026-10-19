@@ -217,7 +217,9 @@ func TestRunHTTP_RedirectForwardHeaders(t *testing.T) {
 // directory, so the HTTP keys apply there too.
 func TestContractRunConfigHonorsHTTPClientKeys(t *testing.T) {
 	m := testtls.New(t)
-	dir := t.TempDir()
+	// Canonical: discovery resolves symlinks (/var -> /private/var on macOS).
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
 	m.WriteYAMLDir(t, dir)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "hitspec.yaml"), []byte(testtls.YAML), 0o600))
 

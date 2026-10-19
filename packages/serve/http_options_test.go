@@ -14,7 +14,12 @@ import (
 func TestRunSettingsHonorHTTPClientKeys(t *testing.T) {
 	m := testtls.New(t)
 	srv := m.Server(t, nil, true)
-	dir := t.TempDir()
+	// Canonical: the config is found by discovery, which resolves symlinks
+	// (/var -> /private/var on macOS).
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	m.WriteYAMLDir(t, dir)
 	if err := os.WriteFile(filepath.Join(dir, "hitspec.yaml"), []byte(testtls.YAML), 0o600); err != nil {
 		t.Fatal(err)
