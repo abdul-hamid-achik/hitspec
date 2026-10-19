@@ -47,6 +47,11 @@ go install github.com/abdul-hamid-achik/hitspec/v2/cmd/hitspec@latest
 @token = your-api-token
 ```
 
+- Values are verbatim (`@pw = abc#123` keeps the `#`; quotes are kept).
+- `@baseUrl = {{baseUrl}}` means "use the environment's value": a self-reference
+  resolves against the lower layers (hitspec.yaml environment, then .env, then
+  the OS environment) and stays literal if none defines it.
+
 ### Request Structure
 ```http
 ### Request Name
@@ -71,6 +76,13 @@ expect body.field exists
 varName from body.field
 <<<
 ```
+
+- Request line: `METHOD URL [HTTP/version]`; spaces inside `{{ }}` never split
+  the URL (`{{$urlEncode(hello world)}}` works).
+- Header values are sent verbatim: everything after the first `:`, trimmed
+  (quotes and `#` are kept).
+- `#` and `//` comment lines between the request line and the blank line are
+  skipped; headers after them are still headers.
 
 ## Assertion Operators (26)
 
@@ -258,6 +270,10 @@ echo "Processing complete"
 # @auth oauth2 password {{tokenUrl}}, {{clientId}}, {{clientSecret}}, {{username}}, {{password}}, scope1,scope2
 ```
 
+Arguments may be separated by commas or by spaces (`basic alice, s3cret` and
+`basic alice s3cret` are the same). Unknown types and wrong argument counts are
+parse errors (`hitspec validate` exits 2).
+
 ## Assertion Subjects
 
 | Subject | Example |
@@ -267,7 +283,7 @@ echo "Processing complete"
 | `p50` | `expect p50 < 100` |
 | `p95` | `expect p95 < 200` |
 | `p99` | `expect p99 < 500` |
-| `header Name` | `expect header Content-Type contains json` |
+| `header Name` | `expect header Content-Type contains json` (`exists`: the header is present, an empty value counts; `!exists`: absent) |
 | `body` | `expect body contains "success"` |
 | `body.path` | `expect body.user.name == "John"` |
 | `body[n]` | `expect body[0].id exists` |
@@ -289,6 +305,11 @@ responseTime from duration
 GET {{baseUrl}}/users/{{login.userId}}
 Authorization: Bearer {{login.token}}
 ```
+
+Captured values are inserted literally and never re-expanded (a response
+containing `{{$env(SECRET)}}` stays text). Numbers keep their exact JSON digits
+(`1000000`, not `1e+06`); objects and arrays are inserted as compact JSON; null
+is `null`.
 
 ## CLI Commands
 
@@ -364,7 +385,7 @@ Key bindings: number keys `1`-`9` switch screens; `ctrl+p` command palette;
 |------|---------|-------------|
 | `--watch, -w` | true | Watch for file changes |
 | `--read-only` | false | Disallow file mutations |
-| `--env, -e` | dev | Default environment |
+| `--env, -e` | hitspec.yaml `defaultEnvironment`, else dev | Default environment |
 | `--config` | | Path to hitspec.yaml |
 | `--theme` | | Color theme (Nord, Catppuccin Mocha, Dracula, Tokyo Night, Gruvbox Dark) |
 | `--allow-shell` | false | Allow shell command execution |
@@ -394,16 +415,24 @@ hitspec serve --api-only --read-only --cors  # Safe mode for sharing
 | `--cors` | false | Enable CORS headers |
 | `--watch, -w` | true | Watch for file changes |
 | `--read-only` | false | Disallow file mutations |
-| `--env, -e` | dev | Default environment |
+| `--env, -e` | hitspec.yaml `defaultEnvironment`, else dev | Default environment |
 | `--config` | | Path to hitspec.yaml |
 | `--allow-shell` | false | Allow shell command execution |
 | `--allow-db` | false | Allow database assertions |
+| `--api-token` | env `HITSPEC_API_TOKEN` | Require `Authorization: Bearer <token>` (or `?token=`) on all REST/WS requests. A random token is generated and printed once if the bind is not loopback or `--allow-shell`/`--allow-db` is set |
 | `--log-format` | text | Log format: text or json |
 | `--log-level` | info | Log level: debug, info, warn, error |
 
 ### REST API Endpoints
 
 All endpoints are prefixed with `/api/v1/`.
+
+Requests with a JSON body must send `Content-Type: application/json` (else 415).
+On loopback binds the Host header must be localhost, 127.0.0.1 or [::1] (else
+403). A request carrying an Origin header must come from a localhost origin on
+the server's port, or any localhost port with `--cors` (else 403).
+`POST /contract/verify` accepts a `stateHandler` script path only with
+`--allow-shell`, and it must be inside the workspace (else 403).
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -473,22 +502,36 @@ Connect to `/api/v1/ws` for real-time updates. Message envelope: `{"type": "stri
 
 | Flag | Description |
 |------|-------------|
-| `--env, -e` | Environment name (default: dev) |
+| `--env, -e` | Environment name (default: `HITSPEC_ENV`, then hitspec.yaml `defaultEnvironment`, then dev) |
 | `--env-file` | Path to .env file for variable interpolation |
-| `--name, -n` | Filter by request name pattern |
-| `--tags, -t` | Filter by tags (comma-separated) |
+| `--name, -n` | Filter by request name pattern (dependencies of selected requests run too) |
+| `--tags, -t` | Filter by tags (comma-separated; dependencies of selected requests run too) |
 | `--verbose, -v` | Show detailed output |
 | `--bail` | Stop on first failure |
-| `--timeout` | Global timeout in ms (default: 30000) |
+| `--timeout` | Request timeout as a duration, e.g. `30s`, `1m` (default: 30s) |
 | `--no-color` | Disable colored output |
 | `--dry-run` | Show what would run |
 | `--output, -o` | Format: console, json, junit, tap, html |
-| `--output-file` | Write output to file |
+| `--output-file` | Write output to file (recreated on every watch rerun) |
+| `--quiet, -q` | Suppress the stdout report; failures are still listed on stderr and `--output-file` is still written |
 | `--parallel, -p` | Run requests in parallel |
 | `--concurrency` | Max concurrent requests (default: 5) |
 | `--watch, -w` | Watch files for changes |
 | `--proxy` | Proxy URL for requests |
 | `--insecure, -k` | Disable SSL validation |
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | All requests passed |
+| 1 | A request or assertion failed |
+| 2 | A file could not be loaded (syntax error, duplicate `@name`, `@depends` cycle); other files still run |
+| 3 | Configuration error (hitspec.yaml) |
+| 4 | Network error (reserved: `run` currently reports connection failures as 1) |
+| 64 | Usage error, including `--name`/`--tags` that matched no request |
+
+Precedence when several apply: 2, then 1, then 64.
 
 ## Stress Testing Mode
 
