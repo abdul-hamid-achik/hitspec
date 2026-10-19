@@ -75,6 +75,10 @@ hitspec fetch https://api.example.com/items \
 - `--name` and `--index` are mutually exclusive.
 - The file's variables, selected environment, dotenv file, request auth,
   timeout, proxy, TLS, default headers, and body files are resolved normally.
+- `hitspec fetch` runs as you, so `{{$env(NAME)}}` and `${NAME}` read your
+  process environment. The MCP `hitspec_fetch` tool does not: it resolves saved
+  requests in an isolated mode that ignores the server's environment unless the
+  operator allows a variable (see the [MCP reference](/reference/mcp)).
 - Assertions, captures, conditions, hooks, shell blocks, database assertions,
   and `@waitFor` are not executed.
 - A request declaring `@depends` is rejected. Use `hitspec run` for a dependent

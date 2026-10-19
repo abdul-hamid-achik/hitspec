@@ -7,15 +7,15 @@ import (
 
 var envVarPattern = regexp.MustCompile(`\$\{([^}]+)\}`)
 
-// resolveEnvVars replaces ${VAR} patterns with actual environment variable values
-func resolveEnvVars(value any) any {
+// resolveEnvVarsWith replaces ${VAR} patterns with the values lookup returns.
+func resolveEnvVarsWith(value any, lookup func(string) string) any {
 	str, ok := value.(string)
 	if !ok {
 		return value
 	}
 	return envVarPattern.ReplaceAllStringFunc(str, func(match string) string {
 		varName := match[2 : len(match)-1] // Extract VAR from ${VAR}
-		return os.Getenv(varName)
+		return lookup(varName)
 	})
 }
 
@@ -25,6 +25,14 @@ type Environment struct {
 }
 
 func LoadEnvironment(dir, envName string, configEnvs map[string]map[string]any) (*Environment, error) {
+	return LoadEnvironmentWithLookup(dir, envName, configEnvs, os.Getenv)
+}
+
+// LoadEnvironmentWithLookup is LoadEnvironment with the ${VAR} expansion in the
+// config's environments section routed through lookup instead of os.Getenv, so
+// an isolated resolver (see WithIsolatedEnvironment) can keep config files from
+// reading the process environment.
+func LoadEnvironmentWithLookup(dir, envName string, configEnvs map[string]map[string]any, lookup func(string) string) (*Environment, error) {
 	env := &Environment{
 		Name:      envName,
 		Variables: make(map[string]any),
@@ -34,7 +42,7 @@ func LoadEnvironment(dir, envName string, configEnvs map[string]map[string]any) 
 	if configEnvs != nil {
 		if vars, ok := configEnvs[envName]; ok {
 			for k, v := range vars {
-				env.Variables[k] = resolveEnvVars(v)
+				env.Variables[k] = resolveEnvVarsWith(v, lookup)
 			}
 		}
 	}

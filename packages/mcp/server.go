@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -29,18 +30,38 @@ type Options struct {
 	AllowPrivateNetwork bool
 	SearchProvider      search.Provider
 	ArtifactSink        artifact.Sink
+	// AllowedEnv names the process environment variables that saved requests
+	// may read through {{NAME}}, {{$NAME}}, {{$env(NAME)}} and ${NAME}. Empty
+	// by default: saved requests see only the workspace's own configuration,
+	// .env file and file variables. Operator-owned; never model-controlled.
+	AllowedEnv []string
+	// AllowBroadWorkspace permits a workspace that is the user's home
+	// directory, an ancestor of it, or the filesystem root.
+	AllowBroadWorkspace bool
 }
+
+// ErrBroadWorkspace is returned when the workspace would expose the user's
+// home directory or the whole filesystem.
+var ErrBroadWorkspace = errors.New("workspace is the home directory or the filesystem root (or contains the home directory); pass a project directory, or --allow-broad-workspace to expose it deliberately")
+
+// errPathNotAllowed is the one message for a path that does not exist and for
+// a path outside the workspace, so tool errors are not a file-existence oracle.
+var errPathNotAllowed = errors.New("path not found or not allowed")
 
 // Server wraps the stdio MCP transport and its fixed workspace.
 type Server struct {
-	workspace    string
-	maxBodyBytes int64
-	timeout      time.Duration
-	allowPrivate bool
-	search       search.Provider
-	artifacts    artifact.Sink
-	webFetcher   webFetcher
-	srv          *sdkmcp.Server
+	workspace  string
+	allowedEnv []string
+	// workspaceInput is the absolute, pre-symlink spelling of the workspace;
+	// both spellings are scrubbed from errors.
+	workspaceInput string
+	maxBodyBytes   int64
+	timeout        time.Duration
+	allowPrivate   bool
+	search         search.Provider
+	artifacts      artifact.Sink
+	webFetcher     webFetcher
+	srv            *sdkmcp.Server
 }
 
 // NewServer validates the workspace and constructs the MCP surface.
@@ -49,6 +70,7 @@ func NewServer(version, workspace string, options Options) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	workspaceInput, _ := filepath.Abs(workspace)
 	if strings.TrimSpace(version) == "" {
 		version = "dev"
 	}
@@ -58,7 +80,11 @@ func NewServer(version, workspace string, options Options) (*Server, error) {
 	if options.Timeout <= 0 {
 		options.Timeout = fetch.DefaultTimeout
 	}
+	if !options.AllowBroadWorkspace && broadWorkspace(root) {
+		return nil, ErrBroadWorkspace
+	}
 	server := &Server{
+		allowedEnv: options.AllowedEnv, workspaceInput: workspaceInput,
 		workspace: root, maxBodyBytes: options.MaxBodyBytes,
 		timeout: options.Timeout, allowPrivate: options.AllowPrivateNetwork,
 		search: options.SearchProvider, artifacts: options.ArtifactSink,
@@ -151,11 +177,14 @@ type validateOutput struct {
 
 func (s *Server) register() {
 	destructive, openWorld := false, true
+	// hitspec_fetch can send DELETE, PUT, POST and PATCH to the target, so it
+	// is honestly destructive (and stays approval-gated by the MCP client).
+	fetchDestructive := true
 	sdkmcp.AddTool(s.srv, &sdkmcp.Tool{
 		Name: "hitspec_fetch", Title: "Fetch one HTTP response",
 		Description: "Fetch one direct HTTP(S) URL or one saved Hitspec request and return bounded raw base64, readable text, Markdown, or JSON. Does not persist artifacts or execute shell/database blocks.",
 		Annotations: &sdkmcp.ToolAnnotations{
-			Title: "Fetch one HTTP response", ReadOnlyHint: false, DestructiveHint: &destructive,
+			Title: "Fetch one HTTP response", ReadOnlyHint: false, DestructiveHint: &fetchDestructive,
 			IdempotentHint: false, OpenWorldHint: &openWorld,
 		},
 	}, s.handleFetch)
@@ -181,7 +210,8 @@ func (s *Server) register() {
 	}, s.handleValidate)
 }
 
-func (s *Server) handleFetch(ctx context.Context, _ *sdkmcp.CallToolRequest, input fetchInput) (*sdkmcp.CallToolResult, any, error) {
+func (s *Server) handleFetch(ctx context.Context, _ *sdkmcp.CallToolRequest, input fetchInput) (_ *sdkmcp.CallToolResult, _ any, err error) {
+	defer func() { err = s.scrubError(err) }()
 	if (input.URL == "") == (input.File == "") {
 		return nil, nil, errors.New("provide exactly one of url or file")
 	}
@@ -241,6 +271,9 @@ func (s *Server) handleFetch(ctx context.Context, _ *sdkmcp.CallToolRequest, inp
 			EnvFile: envFile, ConfigFile: configFile, Timeout: s.timeout,
 			MaxBodyBytes: s.maxBodyBytes, MaxRedirects: fetch.DefaultMaxRedirects, NoFollow: input.NoFollow,
 			DefaultUserAgent: "hitspec-mcp", NetworkPolicy: policy, WorkspaceRoot: s.workspace,
+			// Saved requests come from the workspace, which may be a cloned
+			// repository: never let them read the server's process environment.
+			IsolateEnv: true, AllowedEnv: s.allowedEnv,
 		})
 	}
 	if err != nil {
@@ -290,7 +323,8 @@ func renderToolContent(ctx context.Context, result *fetch.Result, format fetch.F
 	return string(rendered), nil
 }
 
-func (s *Server) handleList(_ context.Context, _ *sdkmcp.CallToolRequest, input listInput) (*sdkmcp.CallToolResult, any, error) {
+func (s *Server) handleList(_ context.Context, _ *sdkmcp.CallToolRequest, input listInput) (_ *sdkmcp.CallToolResult, _ any, err error) {
+	defer func() { err = s.scrubError(err) }()
 	target := s.workspace
 	if input.Path != "" {
 		resolved, err := s.resolvePath(input.Path)
@@ -302,7 +336,7 @@ func (s *Server) handleList(_ context.Context, _ *sdkmcp.CallToolRequest, input 
 	var paths []string
 	info, err := os.Lstat(target)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errPathNotAllowed
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
 		return nil, nil, errors.New("symlink paths are not listed")
@@ -349,7 +383,8 @@ func (s *Server) handleList(_ context.Context, _ *sdkmcp.CallToolRequest, input 
 	return result, nil, err
 }
 
-func (s *Server) handleValidate(_ context.Context, _ *sdkmcp.CallToolRequest, input validateInput) (*sdkmcp.CallToolResult, any, error) {
+func (s *Server) handleValidate(_ context.Context, _ *sdkmcp.CallToolRequest, input validateInput) (_ *sdkmcp.CallToolResult, _ any, err error) {
+	defer func() { err = s.scrubError(err) }()
 	path, err := s.resolveFile(input.File, true)
 	if err != nil {
 		return nil, nil, err
@@ -358,7 +393,7 @@ func (s *Server) handleValidate(_ context.Context, _ *sdkmcp.CallToolRequest, in
 	output := &validateOutput{File: filepath.ToSlash(relative)}
 	parsed, parseErr := parser.ParseFile(path)
 	if parseErr != nil {
-		output.Errors = []string{parseErr.Error()}
+		output.Errors = []string{s.scrubText(parseErr.Error())}
 		result, encodeErr := JSONTextResult(output)
 		return result, nil, encodeErr
 	}
@@ -419,7 +454,7 @@ func (s *Server) resolveFile(path string, requireHitspec bool) (string, error) {
 	}
 	info, err := os.Stat(resolved)
 	if err != nil {
-		return "", err
+		return "", errPathNotAllowed
 	}
 	if !info.Mode().IsRegular() {
 		return "", errors.New("path must identify a regular file")
@@ -440,13 +475,62 @@ func (s *Server) resolvePath(path string) (string, error) {
 	candidate := filepath.Join(s.workspace, filepath.Clean(path))
 	canonical, err := filepath.EvalSymlinks(candidate)
 	if err != nil {
-		return "", fmt.Errorf("resolve path: %w", err)
+		return "", errPathNotAllowed
 	}
 	relative, err := filepath.Rel(s.workspace, canonical)
 	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return "", errors.New("path escapes the workspace")
+		return "", errPathNotAllowed
 	}
 	return canonical, nil
+}
+
+// scrubText replaces absolute workspace paths with workspace-relative ones.
+func (s *Server) scrubText(text string) string {
+	for _, root := range s.pathRoots() {
+		if filepath.Dir(root) == root { // the filesystem root: nothing to strip
+			continue
+		}
+		text = strings.ReplaceAll(text, root+string(filepath.Separator), "")
+		bare := regexp.MustCompile(regexp.QuoteMeta(root) + `([^\w./-]|$)`)
+		text = bare.ReplaceAllString(text, ".$1")
+	}
+	return text
+}
+
+func (s *Server) pathRoots() []string {
+	roots := []string{s.workspace}
+	if s.workspaceInput != "" && s.workspaceInput != s.workspace {
+		roots = append(roots, s.workspaceInput)
+	}
+	return roots
+}
+
+// scrubError keeps absolute workspace paths out of tool errors.
+func (s *Server) scrubError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if text := s.scrubText(err.Error()); text != err.Error() {
+		return errors.New(text)
+	}
+	return err
+}
+
+// broadWorkspace reports whether root is the filesystem root, the user's home
+// directory, or a directory that contains the home directory.
+func broadWorkspace(root string) bool {
+	if filepath.Dir(root) == root {
+		return true
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return false
+	}
+	if canonical, err := filepath.EvalSymlinks(home); err == nil {
+		home = canonical
+	}
+	relative, err := filepath.Rel(root, filepath.Clean(home))
+	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
 }
 
 func hitspecFile(path string) bool {
