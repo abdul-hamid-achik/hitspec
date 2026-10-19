@@ -1,0 +1,62 @@
+# -v, -vv and -vvv are three different levels.
+
+# default: a passing request is one line.
+exitcode 0 hitspec run --no-history --no-color ok.http
+stdout '✓ secure'
+! stdout 'Request:'
+! stdout 'Response:'
+
+# -v: the request line and the status of every request, and captures.
+exitcode 0 hitspec run --no-history --no-color -v ok.http
+stdout 'Request:  POST http://127\.0\.0\.1:[0-9]+/b1/secure'
+stdout 'Response: 200 OK \([0-9]+ms\)'
+stdout 'Captures:'
+stdout 'seen = true'
+! stdout 'Request headers:'
+! stdout 'Response headers:'
+! stdout 'Request body:'
+! stdout 'Body:'
+
+# -vv: adds headers, with credentials redacted.
+exitcode 0 hitspec run --no-history --no-color -vv ok.http
+stdout 'Request headers:'
+stdout 'Authorization: \[REDACTED\]'
+stdout 'X-Custom-Api-Key: \[REDACTED\]'
+stdout 'Accept: application/json'
+stdout 'Response headers:'
+stdout 'Set-Cookie: \[REDACTED\]'
+stdout 'X-Api-Key: \[REDACTED\]'
+stdout 'X-Trace: trace-1'
+! stdout 'good-token'
+! stdout 'server-cookie-value'
+! stdout 'server-api-key-value'
+! stdout 'custom-key-value'
+! stdout 'Request body:'
+! stdout 'Body:'
+
+# -vvv: adds the full request and response bodies.
+exitcode 0 hitspec run --no-history --no-color -vvv ok.http
+stdout 'Request headers:'
+stdout 'Request body:'
+stdout '"payload": "hello"'
+stdout 'Body:'
+stdout '"ok": true'
+! stdout 'good-token'
+
+-- ok.http --
+### secure
+# @auth bearer good-token
+POST {{$env(SERVER)}}/b1/secure
+Accept: application/json
+Content-Type: application/json
+X-Custom-Api-Key: custom-key-value
+
+{"payload": "hello"}
+
+>>>
+expect status 200
+<<<
+
+>>>capture
+seen from body.ok
+<<<

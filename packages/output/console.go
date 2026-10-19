@@ -33,8 +33,11 @@ func formatValue(v any, maxLen int) string {
 }
 
 type ConsoleFormatter struct {
-	writer  io.Writer
-	verbose bool
+	writer io.Writer
+	// verbose is the detail level: 0 failures only, 1 (-v) request and status
+	// of every request plus captures, 2 (-vv) adds headers, 3 (-vvv) adds the
+	// full request and response bodies.
+	verbose int
 	noColor bool
 }
 
@@ -59,9 +62,20 @@ func WithWriter(w io.Writer) ConsoleOption {
 	}
 }
 
+// WithVerbose turns on the first verbosity level (-v); false turns it off.
 func WithVerbose(v bool) ConsoleOption {
+	if v {
+		return WithVerbosity(1)
+	}
+	return WithVerbosity(0)
+}
+
+// WithVerbosity sets the detail level: 0 failures only, 1 (-v) the request and
+// status of every request plus captures, 2 (-vv) adds request and response
+// headers, 3 (-vvv) adds the full bodies.
+func WithVerbosity(level int) ConsoleOption {
 	return func(f *ConsoleFormatter) {
-		f.verbose = v
+		f.verbose = max(level, 0)
 	}
 }
 
@@ -92,7 +106,9 @@ func (f *ConsoleFormatter) FormatResult(result *runner.RunResult) {
 		}
 
 		if r.Error != nil {
-			fmt.Fprintf(f.writer, "  %s %s %s\n", red("x"), r.Name, red(fmt.Sprintf("(%v)", r.Error)))
+			fmt.Fprintf(f.writer, "  %s %s %s\n", red("x"), r.Name, red("("+sanitize(RedactText(r.Error.Error()))+")"))
+			f.writeExchange(r, true)
+			f.writeWarnings(r)
 			continue
 		}
 
@@ -105,10 +121,6 @@ func (f *ConsoleFormatter) FormatResult(result *runner.RunResult) {
 
 		if r.Description != "" {
 			fmt.Fprintf(f.writer, "    %s\n", color.New(color.Faint).Sprint(r.Description))
-		}
-
-		if f.verbose && r.Response != nil {
-			fmt.Fprintf(f.writer, "    Status: %d\n", r.Response.StatusCode)
 		}
 
 		if !r.Passed && len(r.Assertions) > 0 {
@@ -125,7 +137,7 @@ func (f *ConsoleFormatter) FormatResult(result *runner.RunResult) {
 						fmt.Fprintf(f.writer, "      %s\n", a.Message)
 					}
 					// Show diff for complex objects when verbose is enabled
-					if f.verbose {
+					if f.verbose > 0 {
 						diff := f.formatDiff(a.Expected, a.Actual)
 						if diff != "" {
 							fmt.Fprint(f.writer, diff)
@@ -135,7 +147,11 @@ func (f *ConsoleFormatter) FormatResult(result *runner.RunResult) {
 			}
 		}
 
-		if f.verbose && len(r.SSEEvents) > 0 {
+		// The request and response: always for a failure, and for every request
+		// from -v up.
+		f.writeExchange(r, !r.Passed)
+
+		if f.verbose > 0 && len(r.SSEEvents) > 0 {
 			fmt.Fprintf(f.writer, "    SSE Events: %d received\n", len(r.SSEEvents))
 			for i, ev := range r.SSEEvents {
 				evType := ev.Type
@@ -150,12 +166,19 @@ func (f *ConsoleFormatter) FormatResult(result *runner.RunResult) {
 			}
 		}
 
-		if f.verbose && len(r.Captures) > 0 {
+		if f.verbose > 0 && len(r.Captures) > 0 {
 			fmt.Fprintf(f.writer, "    Captures:\n")
-			for name, value := range r.Captures {
-				fmt.Fprintf(f.writer, "      %s = %v\n", name, value)
+			names := make([]string, 0, len(r.Captures))
+			for name := range r.Captures {
+				names = append(names, name)
+			}
+			sort.Strings(names)
+			for _, name := range names {
+				fmt.Fprintf(f.writer, "      %s = %v\n", name, r.Captures[name])
 			}
 		}
+
+		f.writeWarnings(r)
 	}
 
 	fmt.Fprintf(f.writer, "\n")
@@ -173,6 +196,102 @@ func (f *ConsoleFormatter) FormatResult(result *runner.RunResult) {
 	fmt.Fprintf(f.writer, "%d total\n", total)
 	fmt.Fprintf(f.writer, "Time:  %dms\n", result.Duration.Milliseconds())
 	fmt.Fprintf(f.writer, "\n")
+}
+
+// writeWarnings prints a request's warnings (a capture that matched nothing, a
+// {{reference}} that was sent unresolved) in yellow under it.
+func (f *ConsoleFormatter) writeWarnings(r *runner.RequestResult) {
+	yellow := color.New(color.FgYellow).SprintFunc()
+	for _, w := range r.Warnings {
+		fmt.Fprintf(f.writer, "    %s\n", yellow("warning: "+sanitize(w)))
+	}
+}
+
+// writeExchange prints what was sent and what came back. failed requests
+// always get the request line, the response status line and a capped body
+// excerpt, so the report alone says why they failed; passing requests get the
+// same from -v up. -vv adds headers (credentials redacted), -vvv the full
+// bodies instead of the excerpt.
+func (f *ConsoleFormatter) writeExchange(r *runner.RequestResult, failed bool) {
+	if r.Request == nil && r.Response == nil {
+		return
+	}
+	if !failed && f.verbose < 1 {
+		return
+	}
+	faint := color.New(color.Faint).SprintFunc()
+	red := color.New(color.FgRed).SprintFunc()
+	green := color.New(color.FgGreen).SprintFunc()
+
+	if req := r.Request; req != nil {
+		fmt.Fprintf(f.writer, "    Request:  %s %s\n", sanitize(req.Method), sanitize(RedactURL(req.URL)))
+		if f.verbose >= 2 {
+			f.writeHeaders("Request headers:", req.Headers)
+		}
+		if f.verbose >= 3 {
+			switch {
+			case len(req.Multipart) > 0:
+				fmt.Fprintf(f.writer, "    Request body: multipart/form-data, %d parts\n", len(req.Multipart))
+			case req.Body != "":
+				f.writeBody("Request body:", formatBody([]byte(req.Body), false))
+			}
+		}
+	}
+
+	resp := r.Response
+	if resp == nil {
+		return
+	}
+	status := sanitize(resp.Status)
+	if status == "" {
+		status = fmt.Sprintf("%d", resp.StatusCode)
+	}
+	if resp.StatusCode >= 400 {
+		status = red(status)
+	} else {
+		status = green(status)
+	}
+	dur := resp.Duration
+	if dur <= 0 {
+		dur = r.Duration
+	}
+	fmt.Fprintf(f.writer, "    Response: %s %s\n", status, faint(fmt.Sprintf("(%dms)", dur.Milliseconds())))
+	if f.verbose >= 2 {
+		f.writeHeaders("Response headers:", resp.Headers)
+	}
+	switch {
+	case f.verbose >= 3:
+		f.writeBody("Body:", formatBody(resp.Body, false))
+	case failed:
+		f.writeBody("Body:", formatBody(resp.Body, true))
+	}
+}
+
+// writeHeaders prints headers sorted by name, credentials redacted.
+func (f *ConsoleFormatter) writeHeaders(label string, headers map[string]string) {
+	if len(headers) == 0 {
+		return
+	}
+	shown := redactHeaders(headers)
+	fmt.Fprintf(f.writer, "    %s\n", label)
+	for _, name := range sortedHeaderNames(shown) {
+		fmt.Fprintf(f.writer, "      %s: %s\n", sanitize(name), sanitize(shown[name]))
+	}
+}
+
+// writeBody prints a body under a label, indented, with a note when it was cut.
+func (f *ConsoleFormatter) writeBody(label string, b bodyText) {
+	if b.Total == 0 {
+		fmt.Fprintf(f.writer, "    %s (empty)\n", label)
+		return
+	}
+	fmt.Fprintf(f.writer, "    %s\n", label)
+	for _, line := range strings.Split(sanitize(b.Text), "\n") {
+		fmt.Fprintf(f.writer, "      %s\n", line)
+	}
+	if b.Truncated {
+		fmt.Fprintf(f.writer, "      %s\n", color.New(color.Faint).Sprint(b.Note+" (-vvv prints the whole body)"))
+	}
 }
 
 func (f *ConsoleFormatter) FormatError(err error) {

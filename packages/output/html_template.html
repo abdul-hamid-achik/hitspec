@@ -421,6 +421,13 @@
                     </div>
                     {{end}}
 
+                    {{if .Warnings}}
+                    <div class="detail-section">
+                        <h4>Warnings</h4>
+                        {{range .Warnings}}<div class="error-message">{{.}}</div>{{end}}
+                    </div>
+                    {{end}}
+
                     {{if .Request}}
                     <div class="detail-section">
                         <h4>Request</h4>

@@ -1,0 +1,80 @@
+# The failure context is in the machine formats too.
+
+# JSON: request method/url, response status, and a body excerpt (additive).
+exitcode 1 hitspec run --no-history -o json fail.http
+stdout '"method": "GET"'
+stdout '"url": "http://127\.0\.0\.1:[0-9]+/b1/missing"'
+stdout '"statusCode": 404'
+stdout '"status": "404 Not Found"'
+stdout '"bodyExcerpt": "\{\\n  \\"error\\": \\"user not found\\",\\n  \\"id\\": 42\\n\}"'
+! stdout 'bodyTruncated'
+
+exitcode 1 hitspec run --no-history -o json big.http
+stdout '"bodyTruncated": true'
+
+# JUnit: <failure> carries the request line, the status and the body excerpt.
+exitcode 1 hitspec run --no-history -o junit fail.http
+stdout '<failure message="Assertion failed" type="AssertionError">'
+stdout 'Request: GET http://127\.0\.0\.1:[0-9]+/b1/missing'
+stdout 'Response: 404 Not Found'
+stdout 'user not found'
+
+# JUnit <error> for a request that never got a response.
+exitcode 1 hitspec run --no-history -o junit refused.http
+stdout '<error message="[^"]*" type="Error">'
+stdout 'Request: GET http://127\.0\.0\.1:1/nothing\?api_key=\[REDACTED\]'
+! stdout 'secret-value'
+
+# TAP: YAMLish diagnostics, the body as a literal block.
+exitcode 1 hitspec run --no-history -o tap fail.http
+stdout 'not ok 1 - missing'
+stdout '  failures:'
+stdout '  request: "GET http://127\.0\.0\.1:[0-9]+/b1/missing"'
+stdout '  response:'
+stdout '    status: "404 Not Found"'
+stdout '    body: \|2-'
+stdout '      "error": "user not found"'
+
+exitcode 1 hitspec run --no-history -o tap refused.http
+stdout 'severity: error'
+stdout '  request: "GET http://127\.0\.0\.1:1/nothing\?api_key=\[REDACTED\]"'
+! stdout 'secret-value'
+
+# HTML never shows credentials.
+exitcode 0 hitspec run --no-history -o html secure.http
+stdout 'Authorization'
+stdout '\[REDACTED\]'
+! stdout 'good-token'
+
+-- fail.http --
+### missing
+GET {{$env(SERVER)}}/b1/missing
+
+>>>
+expect status 200
+<<<
+
+-- big.http --
+### big
+GET {{$env(SERVER)}}/b1/big
+
+>>>
+expect status 200
+<<<
+
+-- refused.http --
+### refused
+GET http://127.0.0.1:1/nothing?api_key=secret-value
+
+>>>
+expect status 200
+<<<
+
+-- secure.http --
+### secure
+# @auth bearer good-token
+GET {{$env(SERVER)}}/b1/secure
+
+>>>
+expect status 200
+<<<
