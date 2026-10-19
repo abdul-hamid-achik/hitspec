@@ -27,8 +27,8 @@ You can pass multiple files and directories as arguments.
 | Flag | Short | Description | Default | Env Var |
 |------|-------|-------------|---------|---------|
 | `--env` | `-e` | Environment name to use. Order: flag, then `HITSPEC_ENV`, then `defaultEnvironment` in `hitspec.yaml`, then `dev` | `defaultEnvironment`, else `dev` | `HITSPEC_ENV` |
-| `--env-file` | | Path to `.env` file for variable interpolation | | `HITSPEC_ENV_FILE` |
-| `--config` | | Path to config file (`hitspec.yaml`) | | `HITSPEC_CONFIG` |
+| `--env-file` | | Path to `.env` file for variable interpolation; a missing file is an error (exit code 3) | | `HITSPEC_ENV_FILE` |
+| `--config` | | Path to config file (`hitspec.yaml`); default: the nearest one from the working directory upward | | `HITSPEC_CONFIG` |
 | `--name` | `-n` | Run only tests matching name pattern | | |
 | `--tags` | `-t` | Run only tests with specified tags (comma-separated) | | `HITSPEC_TAGS` |
 
@@ -309,7 +309,7 @@ hitspec run tests/ --allow-shell
 | `0` | `ExitSuccess` | All tests passed |
 | `1` | `ExitTestFailure` | One or more tests failed |
 | `2` | `ExitParseError` | A file could not be loaded (invalid syntax, duplicate `@name`, `@depends` cycle) |
-| `3` | `ExitConfigError` | Configuration error |
+| `3` | `ExitConfigError` | Configuration error (a `hitspec.yaml` that cannot be parsed, an `--env-file` that does not exist) |
 | `4` | `ExitNetworkError` | Network or connection error |
 | `64` | `ExitUsageError` | Invalid CLI usage, or `--name`/`--tags` matched no request |
 

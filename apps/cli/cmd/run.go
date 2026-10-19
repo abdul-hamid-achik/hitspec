@@ -369,10 +369,9 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load config from file (if present) and apply CLI overrides
-	fileConfig, err := config.LoadConfig(configFlag)
+	fileConfig, err := loadConfigForCommand(cmd, configFlag, verboseFlag > 0)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return newExitError(ExitConfigError, err.Error())
+		return err
 	}
 	// Resolve the environment: --env flag > HITSPEC_ENV (the flag's default)
 	// > hitspec.yaml defaultEnvironment > "dev". envFlag is left untouched so
@@ -393,6 +392,9 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 	cfg, clientOpts, err := buildRunnerConfig(cmd.Flags(), fileConfig, environment, tagsFilter)
 	if err != nil {
+		return err
+	}
+	if err := checkEnvFile(cmd, cfg.EnvFile); err != nil {
 		return err
 	}
 

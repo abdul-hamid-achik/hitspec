@@ -80,6 +80,10 @@ func serveCommand(cmd *cobra.Command, args []string) error {
 		ctx = context.Background()
 	}
 
+	if err := preflightWorkspaceConfig(cmd, workDir, serveConfigFlag); err != nil {
+		return err
+	}
+
 	// Backward compatibility: `serve` without --api-only opened the interactive
 	// app. Keep that working but steer users to the dedicated `studio` command.
 	if !serveAPIOnlyFlag {
