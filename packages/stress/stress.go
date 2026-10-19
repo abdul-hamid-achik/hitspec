@@ -659,6 +659,11 @@ func (r *Runner) GetCurrentStats() CurrentStats {
 	return r.metrics.GetCurrentStats()
 }
 
+// Duration returns how long the run is configured to last.
+func (r *Runner) Duration() time.Duration {
+	return r.config.Duration
+}
+
 // GetSummary returns the final metrics summary
 func (r *Runner) GetSummary() *Summary {
 	return r.metrics.GetSummary()

@@ -110,6 +110,7 @@ func (m *Manager) StartStress(ctx context.Context, req StressStartReq) error {
 					Completed: true,
 					Stats:     convertStressStats(stats),
 					Elapsed:   stats.Elapsed.Seconds(),
+					Duration:  duration.Seconds(),
 					Error:     resultDTO.Error,
 					Timestamp: nowISO(),
 				})
@@ -125,6 +126,7 @@ func (m *Manager) StartStress(ctx context.Context, req StressStartReq) error {
 					Running:   true,
 					Stats:     convertStressStats(stats),
 					Elapsed:   stats.Elapsed.Seconds(),
+					Duration:  duration.Seconds(),
 					Timestamp: nowISO(),
 				})
 			}
@@ -155,7 +157,7 @@ func (m *Manager) StressStatus(ctx context.Context) StressStatusDTO {
 	}
 	stats := runner.GetCurrentStats()
 	dto := convertStressStats(stats)
-	return StressStatusDTO{Running: true, Elapsed: stats.Elapsed.Seconds(), Stats: &dto}
+	return StressStatusDTO{Running: true, Elapsed: stats.Elapsed.Seconds(), Duration: runner.Duration().Seconds(), Stats: &dto}
 }
 
 // StressResult returns the last completed stress result.

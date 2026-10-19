@@ -11,7 +11,6 @@ import (
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/clientmgr"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // plain strips ANSI so golden files capture layout + text deterministically,
@@ -211,22 +210,18 @@ func TestGoldenStressRunning(t *testing.T) {
 		Total: 450, Success: 442, Errors: 8, RPS: 30.5,
 		P50Ms: 12, P95Ms: 48, P99Ms: 90, ErrorRate: 0.018, ActiveVUs: 5,
 	}
-	m.stress = clientmgr.StressStatusDTO{Running: true, Elapsed: 15.0, Stats: &stats}
+	m.stress = clientmgr.StressStatusDTO{Running: true, Elapsed: 15.0, Duration: 30, Stats: &stats}
 	m.preview.SetContent(m.secondaryContent())
 	golden.RequireEqual(t, plain(m.View().Content))
 }
 
-// TestStressProgressBarUsesConfiguredDuration guards the regression where the
-// stress progress bar hardcoded a 30s total: at 30s elapsed with a 60s
-// configured duration it showed 100% (capped at 30s); it must show ~50%.
-func TestStressProgressBarUsesConfiguredDuration(t *testing.T) {
+// TestStressProgressBarUsesRunDuration: the bar follows the duration the run
+// reports (30s elapsed of 60s is 50%), never a hardcoded total.
+func TestStressProgressBarUsesRunDuration(t *testing.T) {
 	m := goldenModel(t, 100, 30)
 	m.setScreen(screenStress)
-	// Configure a 60s stress duration in the form's duration field (index 0).
-	require.NotEmpty(t, m.formInputs)
-	m.formInputs[0].SetValue("60s")
 	stats := clientmgr.StressStatsDTO{Total: 100, Success: 100, RPS: 3.3, ActiveVUs: 1}
-	m.stress = clientmgr.StressStatusDTO{Running: true, Elapsed: 30.0, Stats: &stats}
+	m.stress = clientmgr.StressStatusDTO{Running: true, Elapsed: 30.0, Duration: 60, Stats: &stats}
 	out := plain(m.stressContent())
 	assert.Contains(t, out, "50%", "30s/60s should be 50%%, not capped at 100%%; got: %s", out)
 }

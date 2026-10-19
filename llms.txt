@@ -427,7 +427,9 @@ hitspec studio --theme "Tokyo Night"  # Launch with a color theme
 Key bindings: number keys `1`-`9` switch screens; `ctrl+p` command palette;
 `ctrl+e` environment switcher; `ctrl+t` theme picker; `ctrl+f` search; `?` help;
 `q` quit. Forms submit with `s` or `ctrl+s` (not `enter`); `r`/`R` run the editor buffer,
-including unsaved edits; `x` cancels a run.
+including unsaved edits; `x` cancels a run. Choosing a `ctrl+f` result opens its file
+and selects that request; a file deleted outside studio while it has unsaved edits
+keeps them (a warning appears and `ctrl+s` recreates the file).
 
 ### Studio Flags
 
