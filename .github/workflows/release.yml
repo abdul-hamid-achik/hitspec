@@ -4,8 +4,10 @@ on:
   push:
     tags:
       # Full versions only: the floating major tag (v2) maintained below must
-      # never start a release run of its own.
-      - 'v*.*.*'
+      # never start a release run of its own, and neither may other tag
+      # families such as vscode-v0.2.0 (a bare 'v*.*.*' would match it, since
+      # '*' matches any characters except '/').
+      - 'v[0-9]*.[0-9]*.[0-9]*'
 
 permissions:
   contents: write
