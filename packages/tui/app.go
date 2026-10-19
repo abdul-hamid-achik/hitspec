@@ -189,6 +189,14 @@ type saveConflictMsg struct {
 	content string
 }
 
+// fileSavedUnparsedMsg reports a save that reached the disk but whose content
+// does not parse.
+type fileSavedUnparsedMsg struct {
+	path    string
+	content string
+	err     error
+}
+
 // adhocStartMsg starts an ad-hoc request typed into the quick-request prompt.
 type adhocStartMsg struct{ line string }
 
@@ -446,6 +454,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return writeFile(ctx, mgr, msg.path, msg.content)
 			},
 		}
+	case fileSavedUnparsedMsg:
+		m.loading = false
+		if msg.path == m.selected {
+			m.raw = msg.content
+			m.dirty = m.bufferModified()
+		}
+		m.err = "saved, but it does not parse: " + msg.err.Error()
+		cmds = append(cmds, m.notify(toastWarn, m.err))
 	case proceedMsg:
 		if msg.do != nil {
 			if cmd := msg.do(&m); cmd != nil {
@@ -1331,6 +1347,12 @@ func (m *model) saveCmd() tea.Cmd {
 func writeFile(ctx context.Context, mgr *clientmgr.Manager, path, content string) tea.Msg {
 	parsed, err := mgr.SaveFile(ctx, path, content)
 	if err != nil {
+		// SaveFile writes first and parses afterwards, so content that does not
+		// parse is on disk all the same. Say so: the buffer now matches the file,
+		// and the next ctrl+s must not take that for an outside change.
+		if disk, rerr := mgr.ReadFile(ctx, path); rerr == nil && disk == content {
+			return fileSavedUnparsedMsg{path: path, content: content, err: err}
+		}
 		return fileLoadedMsg{path: path, err: err}
 	}
 	return fileLoadedMsg{path: path, raw: content, parsed: parsed}
@@ -1367,11 +1389,17 @@ func (m model) currentRequestSelection() (name string, index int) {
 	return "", index
 }
 
-// lastResponseBody returns the body of the most recent response, searching from
-// the last request backwards so it survives multi-request runs.
+// lastResponseBody returns the body of the response the viewer is showing (the
+// selected request of a file run), falling back to the most recent response,
+// searching from the last request backwards.
 func (m model) lastResponseBody() string {
 	if m.lastResult == nil {
 		return ""
+	}
+	if m.respView.result == m.lastResult {
+		if p := m.respView.primary(); p != nil && p.Response != nil && p.Response.Body != "" {
+			return p.Response.Body
+		}
 	}
 	for i := len(m.lastResult.Results) - 1; i >= 0; i-- {
 		if r := m.lastResult.Results[i].Response; r != nil && r.Body != "" {

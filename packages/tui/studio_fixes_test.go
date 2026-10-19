@@ -822,3 +822,69 @@ func TestCookiesScreenSaysTheStoreIsGlobal(t *testing.T) {
 		}
 	}
 }
+
+// ---- review follow-ups -----------------------------------------------------
+
+// A buffer that does not parse is still written (SaveFile parses afterwards), so
+// the editor must treat it as saved: the next ctrl+s is not an outside change.
+func TestSavingUnparseableBufferThenFixingItIsNotAConflict(t *testing.T) {
+	srv := okAPI(t)
+	mgr := newTestManager(t)
+	m := openModel(t, mgr, 120, 40, twoFiles(srv.URL), "a.http")
+
+	m.source.SetValue("### A\nNOPE\n")
+	m.dirty = m.bufferModified()
+	msg := m.saveCmd()()
+	un, ok := msg.(fileSavedUnparsedMsg)
+	if !ok {
+		t.Fatalf("saving an unparseable buffer should report it was saved but does not parse, got %T", msg)
+	}
+	next, _ := m.Update(un)
+	m = next.(model)
+	if m.raw != "### A\nNOPE\n" || m.dirty {
+		t.Fatalf("the buffer now matches the file: raw=%q dirty=%v", m.raw, m.dirty)
+	}
+	if !strings.Contains(m.err, "does not parse") {
+		t.Fatalf("the parse error should be shown, err=%q", m.err)
+	}
+
+	// Fix the typo and save again: no "changed on disk" dialog.
+	m.source.SetValue("### A\n# @name A\nGET " + srv.URL + "\n")
+	m.dirty = m.bufferModified()
+	if _, ok := m.saveCmd()().(fileLoadedMsg); !ok {
+		t.Fatalf("saving the fixed buffer must not report a conflict")
+	}
+}
+
+func TestCopyResponseBodyCopiesTheShownResponse(t *testing.T) {
+	m := newModel(context.Background(), newTestManager(t), Options{})
+	mk := func(name, body string, pass bool) clientmgr.RequestResultDTO {
+		return clientmgr.RequestResultDTO{Name: name, Passed: pass, Response: &clientmgr.HTTPResponseDTO{StatusCode: 200, Body: body}}
+	}
+	m.lastResult = &clientmgr.RunResultDTO{Results: []clientmgr.RequestResultDTO{mk("a", "BODY-A", true), mk("b", "BODY-B", true), mk("c", "BODY-C", false)}}
+	m.refreshResultViews()
+	if got := m.lastResponseBody(); got != "BODY-C" { // opens on the first failure
+		t.Fatalf("copy should take the shown (failed) response, got %q", got)
+	}
+	m.respView.selectRelative(-2)
+	if got := m.lastResponseBody(); got != "BODY-A" {
+		t.Fatalf("copy should follow the selection, got %q", got)
+	}
+}
+
+func TestErrorToastsWrapInsteadOfTruncating(t *testing.T) {
+	long := "the quick brown fox jumps over the lazy dog and keeps running through the whole sentence until the end"
+	c, _ := newToastCenter().push(toastError, long)
+	got := c.items[0].text
+	if !strings.Contains(got, "\n") || !strings.Contains(got, "the end") {
+		t.Fatalf("an error toast should wrap and keep its tail: %q", got)
+	}
+	c, _ = newToastCenter().push(toastError, strings.Repeat("word ", 200))
+	if n := strings.Count(c.items[0].text, "\n") + 1; n > toastMaxLines {
+		t.Fatalf("a wrapped toast is capped at %d lines, got %d", toastMaxLines, n)
+	}
+	c, _ = newToastCenter().push(toastSuccess, long)
+	if strings.Contains(c.items[0].text, "\n") {
+		t.Fatal("non-error toasts stay one line")
+	}
+}

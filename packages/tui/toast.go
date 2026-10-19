@@ -1,10 +1,12 @@
 package tui
 
 import (
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // toastSeverity controls a toast's icon and accent color.
@@ -21,6 +23,8 @@ const (
 	toastTTL     = 4 * time.Second
 	toastMax     = 3
 	toastMaxText = 44
+	// toastMaxLines bounds how tall a wrapped error/warning toast may grow.
+	toastMaxLines = 6
 )
 
 // toast is a single transient notification.
@@ -48,7 +52,13 @@ func (c toastCenter) push(severity toastSeverity, text string) (toastCenter, tea
 	c.nextID++
 	id := c.nextID
 	items := append([]toast{}, c.items...)
-	items = append(items, toast{id: id, text: truncateText(text, toastMaxText), severity: severity})
+	// Errors and warnings are the messages worth reading in full, so they wrap
+	// (within a line budget); other toasts stay one short line.
+	shown := truncateText(text, toastMaxText)
+	if severity == toastError || severity == toastWarn {
+		shown = wrapToast(text)
+	}
+	items = append(items, toast{id: id, text: shown, severity: severity})
 	if len(items) > toastMax {
 		items = items[len(items)-toastMax:]
 	}
@@ -119,4 +129,16 @@ func truncateText(s string, n int) string {
 		return s
 	}
 	return string(runes[:n-1]) + "…"
+}
+
+// wrapToast wraps text to the toast width and keeps at most toastMaxLines lines,
+// marking a cut with an ellipsis.
+func wrapToast(text string) string {
+	lines := strings.Split(ansi.Wrap(text, toastMaxText, ""), "\n")
+	if len(lines) <= toastMaxLines {
+		return strings.Join(lines, "\n")
+	}
+	lines = lines[:toastMaxLines]
+	lines[toastMaxLines-1] = truncateText(lines[toastMaxLines-1]+"…", toastMaxText)
+	return strings.Join(lines, "\n")
 }

@@ -41,6 +41,7 @@ and the build/artifact dirs:
 | `glyphrun.config.yml` | terminal defaults, vars (`bin`, `workspace`, …), env |
 | `flows/*.yml` | the behavior specs |
 | `actions/*.yml` | reusable action snippets (imported, invoked via `use:`) |
+| `transforms/` | shell scripts run by a spec's `transform` step (e.g. an outside edit to the open file) |
 | `fixtures/workspace/` | a sample `.http` workspace |
 | `fixtures/empty/` | an empty workspace (triggers the welcome card) |
 | `bin/` | the built `hitspec` binary (gitignored) |
