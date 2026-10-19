@@ -36,7 +36,29 @@ Each line in a `>>>multipart` block is either a field or a file:
 | Type | Syntax | Description |
 |------|--------|-------------|
 | Text field | `field name = value` | Sends a form text field |
-| File upload | `file @./path/to/file` | Uploads a file from disk |
+| File upload | `file @./path/to/file` | Uploads a file from disk as the form field `file` |
+| Named file upload | `file avatar @./path/to/file` | Uploads a file from disk as the form field `avatar` |
+
+### Naming a File Field
+
+Servers read an uploaded file by its form field name. Put the name before the `@` path; without one the field is called `file`:
+
+```http
+### Upload an avatar and a CV
+POST {{baseUrl}}/profile
+
+>>>multipart
+file avatar @./photo.jpg
+file cv @./resume.pdf
+field name = John Doe
+<<<
+
+>>>
+expect status 200
+<<<
+```
+
+The uploaded file name (the `filename` of the part) is the base name of the path. A file that does not exist fails the request with an error naming the path; nothing is sent.
 
 ### Multiple Fields and Files
 

@@ -85,7 +85,8 @@ func snapshotValue(v reflect.Value) any {
 			}
 			// File.Warnings only appears in a golden when a file produces one,
 			// so adding the field did not touch every snapshot.
-			if v.Type().Field(i).Name == "Warnings" && v.Field(i).Len() == 0 {
+			// Body.FormFields is the same: only form-block bodies have any.
+			if name := v.Type().Field(i).Name; (name == "Warnings" || name == "FormFields") && v.Field(i).Len() == 0 {
 				continue
 			}
 			out[v.Type().Field(i).Name] = snapshotValue(v.Field(i))

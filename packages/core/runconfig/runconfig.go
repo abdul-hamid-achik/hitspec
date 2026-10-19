@@ -29,6 +29,16 @@ type Overrides struct {
 	Parallel    *bool
 	Concurrency int
 	Bail        *bool
+
+	// HTTP client settings. Paths are used as given (relative to the working
+	// directory); only paths from hitspec.yaml are resolved against that file.
+	CACert                 string
+	Cert                   string
+	Key                    string
+	HTTP1                  *bool
+	Cookies                *bool
+	MaxResponseBytes       *int64 // 0 = default, -1 = unlimited
+	RedirectForwardHeaders *bool
 }
 
 // Environment variables read by FromEnv.
@@ -39,6 +49,14 @@ const (
 	EnvParallel    = "HITSPEC_PARALLEL"    // run requests in parallel
 	EnvConcurrency = "HITSPEC_CONCURRENCY" // parallel request limit
 	EnvBail        = "HITSPEC_BAIL"        // stop on first failure
+
+	EnvCACert                 = "HITSPEC_CACERT"                   // PEM CA bundle to trust
+	EnvCert                   = "HITSPEC_CERT"                     // PEM client certificate (mTLS)
+	EnvKey                    = "HITSPEC_KEY"                      // PEM client key (mTLS)
+	EnvHTTP1                  = "HITSPEC_HTTP1"                    // true disables HTTP/2
+	EnvCookies                = "HITSPEC_COOKIES"                  // keep a cookie jar for the run
+	EnvMaxResponseBytes       = "HITSPEC_MAX_RESPONSE_BYTES"       // response body bound; -1 = unlimited
+	EnvRedirectForwardHeaders = "HITSPEC_REDIRECT_FORWARD_HEADERS" // keep user headers on cross-origin redirects
 )
 
 // FromEnv reads the HITSPEC_* variables that map to run settings. A variable
@@ -70,6 +88,7 @@ func FromEnv() (Overrides, error) {
 		b := envBool(v)
 		o.Bail = &b
 	}
+	fromEnvHTTP(&o, &errs)
 	if v := os.Getenv(EnvConcurrency); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil {
@@ -83,6 +102,30 @@ func FromEnv() (Overrides, error) {
 		return o, fmt.Errorf("%s", strings.Join(errs, "; "))
 	}
 	return o, nil
+}
+
+// fromEnvHTTP reads the HTTP client variables into o.
+func fromEnvHTTP(o *Overrides, errs *[]string) {
+	o.CACert = os.Getenv(EnvCACert)
+	o.Cert = os.Getenv(EnvCert)
+	o.Key = os.Getenv(EnvKey)
+	for _, b := range []struct {
+		name string
+		dst  **bool
+	}{{EnvHTTP1, &o.HTTP1}, {EnvCookies, &o.Cookies}, {EnvRedirectForwardHeaders, &o.RedirectForwardHeaders}} {
+		if v := os.Getenv(b.name); v != "" {
+			val := envBool(v)
+			*b.dst = &val
+		}
+	}
+	if v := os.Getenv(EnvMaxResponseBytes); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			*errs = append(*errs, fmt.Sprintf("invalid %s %q: %v", EnvMaxResponseBytes, v, err))
+		} else {
+			o.MaxResponseBytes = &n
+		}
+	}
 }
 
 func envBool(v string) bool { return v == "true" || v == "1" || v == "yes" }
@@ -136,6 +179,21 @@ func (o Overrides) Over(lower Overrides) Overrides {
 	if o.Bail == nil {
 		o.Bail = lower.Bail
 	}
+	o.CACert = firstNonEmpty(o.CACert, lower.CACert)
+	o.Cert = firstNonEmpty(o.Cert, lower.Cert)
+	o.Key = firstNonEmpty(o.Key, lower.Key)
+	if o.HTTP1 == nil {
+		o.HTTP1 = lower.HTTP1
+	}
+	if o.Cookies == nil {
+		o.Cookies = lower.Cookies
+	}
+	if o.MaxResponseBytes == nil {
+		o.MaxResponseBytes = lower.MaxResponseBytes
+	}
+	if o.RedirectForwardHeaders == nil {
+		o.RedirectForwardHeaders = lower.RedirectForwardHeaders
+	}
 	return o
 }
 
@@ -179,6 +237,17 @@ func Build(file *config.Config, o Overrides) (*runner.Config, []http.ClientOptio
 		Parallel:           pickBool(o.Parallel, file.GetParallel()),
 		Concurrency:        pickInt(o.Concurrency, file.Concurrency, config.DefaultConcurrency),
 		Bail:               pickBool(o.Bail, file.GetBail()),
+
+		CACert:                 firstNonEmpty(o.CACert, file.ResolvePath(file.CACert)),
+		ClientCert:             firstNonEmpty(o.Cert, file.ResolvePath(file.Cert)),
+		ClientKey:              firstNonEmpty(o.Key, file.ResolvePath(file.Key)),
+		HTTP1:                  pickBool(o.HTTP1, file.GetHTTP1()),
+		Cookies:                pickBool(o.Cookies, file.GetCookies()),
+		MaxResponseBytes:       file.MaxResponseBytes,
+		RedirectForwardHeaders: pickBool(o.RedirectForwardHeaders, file.GetRedirectForwardHeaders()),
+	}
+	if o.MaxResponseBytes != nil {
+		cfg.MaxResponseBytes = *o.MaxResponseBytes
 	}
 	retries := file.Retries
 	if o.Retries != nil {

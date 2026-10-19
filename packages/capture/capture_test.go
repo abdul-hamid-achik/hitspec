@@ -1,7 +1,9 @@
 package capture
 
 import (
+	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -234,4 +236,21 @@ func TestExtract_NumbersAndStructuresKeepExactJSON(t *testing.T) {
 	if _, ok := arr[0].(json.Number); !ok {
 		t.Errorf("arr[0] = %#v, want json.Number", arr[0])
 	}
+}
+
+func TestReport_PrintsEachMissOnce(t *testing.T) {
+	var buf bytes.Buffer
+	old := Warn
+	Warn = &buf
+	defer func() { Warn = old }()
+
+	msg := "capture \"report-once-test\" (line 1) captured nothing: x"
+	Report([]string{msg})
+	Report([]string{msg})
+	if got := strings.Count(buf.String(), "warning: "+msg); got != 1 {
+		t.Errorf("printed %d times, want 1:\n%s", got, buf.String())
+	}
+
+	Warn = nil
+	Report([]string{"anything"}) // must not panic
 }

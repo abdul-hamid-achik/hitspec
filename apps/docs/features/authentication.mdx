@@ -107,11 +107,30 @@ expect status 200
 <<<
 ```
 
-The four parameters are:
+The parameters are:
 1. **Access Key ID** - Your AWS access key
 2. **Secret Access Key** - Your AWS secret key
 3. **Region** - AWS region (e.g., `us-east-1`)
 4. **Service** - AWS service name (e.g., `s3`, `execute-api`)
+5. **Session token** (optional) - The token that goes with temporary credentials (STS, SSO, assumed roles)
+
+With a session token, hitspec sends it as `X-Amz-Security-Token` and includes that header in the signature:
+
+```http
+### AWS request with temporary credentials
+# @name awsTemporary
+# @auth aws {{accessKey}}, {{secretKey}}, {{region}}, {{service}}, {{sessionToken}}
+
+GET https://{{service}}.{{region}}.amazonaws.com/resource
+
+>>>
+expect status 200
+<<<
+```
+
+If you leave the fifth parameter out and the access key equals `$AWS_ACCESS_KEY_ID`, hitspec uses `$AWS_SESSION_TOKEN` when it is set.
+
+The signature covers the exact bytes that are sent, including a `>>>multipart` body.
 
 ## OAuth2 Client Credentials
 
@@ -205,7 +224,7 @@ expect status 200
 | API Key (Header) | `# @auth apiKey <headerName>, <value>` |
 | API Key (Query) | `# @auth apiKeyQuery <paramName>, <value>` |
 | Digest | `# @auth digest <username>, <password>` |
-| AWS Signature v4 | `# @auth aws <accessKey>, <secretKey>, <region>, <service>` |
+| AWS Signature v4 | `# @auth aws <accessKey>, <secretKey>, <region>, <service>[, <sessionToken>]` |
 | OAuth2 Client Credentials | `# @auth oauth2 client_credentials <tokenUrl>, <clientId>, <clientSecret>, <scopes>` |
 | OAuth2 Password | `# @auth oauth2 password <tokenUrl>, <clientId>, <clientSecret>, <username>, <password>, <scopes>` |
 

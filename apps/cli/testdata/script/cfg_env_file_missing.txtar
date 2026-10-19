@@ -1,0 +1,42 @@
+# --env-file / HITSPEC_ENV_FILE naming a file that does not exist is a config
+# error (exit 3), not a warning: the run would otherwise go on with every
+# variable of that file unresolved.
+
+exitcode 3 hitspec run --no-history --env-file nope.env ok.http
+stderr 'Error: env file: .*nope\.env'
+! stdout 'Tests:'
+
+env HITSPEC_ENV_FILE=also-missing.env
+exitcode 3 hitspec run --no-history ok.http
+stderr 'Error: env file: .*also-missing\.env'
+env HITSPEC_ENV_FILE=
+
+# a directory is not an env file either
+exitcode 3 hitspec run --no-history --env-file adir ok.http
+stderr 'is a directory'
+
+# --dry-run checks it too, and an existing file works
+exitcode 3 hitspec run --no-history --dry-run --env-file nope.env ok.http
+exitcode 0 hitspec run --no-history --env-file real.env var.http
+stdout 'Tests: 1 passed, 1 total'
+env HITSPEC_ENV_FILE=real.env
+exitcode 0 hitspec run --no-history var.http
+stdout 'Tests: 1 passed, 1 total'
+
+-- adir/.keep --
+-- real.env --
+STATUS=200
+-- ok.http --
+### ok
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 200
+<<<
+-- var.http --
+### var
+GET {{$env(SERVER)}}/status/{{STATUS}}
+
+>>>
+expect status 200
+<<<
