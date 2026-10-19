@@ -1,0 +1,268 @@
+{
+  "File": {
+    "Path": "database/database.http",
+    "Requests": [
+      {
+        "Assertions": [
+          {
+            "Expected": 201,
+            "Line": 27,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": null,
+            "Line": 28,
+            "Operator": "exists",
+            "Subject": "body.id"
+          }
+        ],
+        "Body": {
+          "ContentType": "json",
+          "FilePath": "",
+          "GraphQL": null,
+          "Line": 21,
+          "Multipart": null,
+          "Raw": "{\n  \"name\": \"Bob Smith\",\n  \"email\": \"bob@example.com\"\n}"
+        },
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Create a user and verify it exists in the database",
+        "Headers": [
+          {
+            "Key": "Content-Type",
+            "Line": 19,
+            "Value": "application/json"
+          }
+        ],
+        "Line": 12,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "{{dbConn}}",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "POST",
+        "MockBody": "",
+        "Name": "createUser",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "db",
+          "write"
+        ],
+        "URL": "{{baseUrl}}/users"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 45,
+            "Operator": "==",
+            "Subject": "status"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Check that specific fields exist in the database",
+        "Headers": null,
+        "Line": 36,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "{{dbConn}}",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "verifyUserFields",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "db",
+          "read"
+        ],
+        "URL": "{{baseUrl}}/users/1"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 64,
+            "Operator": "==",
+            "Subject": "status"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Verify the total number of records in a table",
+        "Headers": null,
+        "Line": 55,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "{{dbConn}}",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "checkRowCount",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "db",
+          "read"
+        ],
+        "URL": "{{baseUrl}}/users"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 88,
+            "Operator": "==",
+            "Subject": "status"
+          }
+        ],
+        "Body": {
+          "ContentType": "json",
+          "FilePath": "",
+          "GraphQL": null,
+          "Line": 82,
+          "Multipart": null,
+          "Raw": "{\n  \"name\": \"Alice Updated\",\n  \"email\": \"alice.updated@example.com\"\n}"
+        },
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Update a resource and confirm DB reflects the change",
+        "Headers": [
+          {
+            "Key": "Content-Type",
+            "Line": 80,
+            "Value": "application/json"
+          }
+        ],
+        "Line": 72,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "{{dbConn}}",
+          "Depends": [
+            "createUser"
+          ],
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "PUT",
+        "MockBody": "",
+        "Name": "verifyUpdate",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "db",
+          "write"
+        ],
+        "URL": "{{baseUrl}}/users/1"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 105,
+            "Operator": "==",
+            "Subject": "status"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Run several database queries against the same request",
+        "Headers": null,
+        "Line": 96,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "{{dbConn}}",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "multipleChecks",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "db",
+          "read"
+        ],
+        "URL": "{{baseUrl}}/users"
+      }
+    ],
+    "Variables": [
+      {
+        "Line": 9,
+        "Name": "baseUrl",
+        "Value": "https://jsonplaceholder.typicode.com"
+      },
+      {
+        "Line": 10,
+        "Name": "dbConn",
+        "Value": "sqlite://./test.db"
+      }
+    ]
+  }
+}

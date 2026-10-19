@@ -1,0 +1,391 @@
+{
+  "File": {
+    "Path": "retry/retry.http",
+    "Requests": [
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 18,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": null,
+            "Line": 19,
+            "Operator": "exists",
+            "Subject": "body.url"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Retries up to 3 times on any non-2xx response",
+        "Headers": null,
+        "Line": 9,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 3,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "basicRetry",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "retry",
+          "basic"
+        ],
+        "URL": "{{baseUrl}}/get"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 33,
+            "Operator": "==",
+            "Subject": "status"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Retries with 2-second delay between attempts",
+        "Headers": null,
+        "Line": 22,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 3,
+          "RetryDelay": 2000,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "retryWithDelay",
+        "QueryParams": [
+          {
+            "Key": "timestamp",
+            "Line": 30,
+            "Value": "{{$timestamp()}}"
+          }
+        ],
+        "ShellCommands": null,
+        "Tags": [
+          "retry",
+          "delay"
+        ],
+        "URL": "{{baseUrl}}/get"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 47,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": null,
+            "Line": 48,
+            "Operator": "exists",
+            "Subject": "body.headers"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Only retries when the server returns 500, 502, or 503",
+        "Headers": null,
+        "Line": 36,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 5,
+          "RetryDelay": 1000,
+          "RetryOn": [
+            500,
+            502,
+            503
+          ],
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "retryOnServerError",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "retry",
+          "selective"
+        ],
+        "URL": "{{baseUrl}}/get"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 63,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": 10000,
+            "Line": 64,
+            "Operator": "\u003c",
+            "Subject": "duration"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Retries specifically on 504 Gateway Timeout",
+        "Headers": null,
+        "Line": 51,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 3,
+          "RetryDelay": 3000,
+          "RetryOn": [
+            504
+          ],
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 10000,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "retryGatewayTimeout",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "retry",
+          "timeout"
+        ],
+        "URL": "{{baseUrl}}/delay/1"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 78,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": 5000,
+            "Line": 79,
+            "Operator": "\u003c",
+            "Subject": "duration"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Combines retry with a per-request timeout",
+        "Headers": null,
+        "Line": 67,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 2,
+          "RetryDelay": 1000,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 5000,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "retryWithTimeout",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "retry",
+          "timeout"
+        ],
+        "URL": "{{baseUrl}}/get"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 93,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "true",
+            "Line": 94,
+            "Operator": "==",
+            "Subject": "body.args.ready"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Wait for a health endpoint, then retry the actual request",
+        "Headers": null,
+        "Line": 82,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 2,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": {
+            "Interval": 1000,
+            "Status": 200,
+            "Timeout": 10000,
+            "URL": "{{baseUrl}}/get"
+          }
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "waitAndRetry",
+        "QueryParams": [
+          {
+            "Key": "ready",
+            "Line": 90,
+            "Value": "true"
+          }
+        ],
+        "ShellCommands": null,
+        "Tags": [
+          "retry",
+          "waitfor"
+        ],
+        "URL": "{{baseUrl}}/get"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 115,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": null,
+            "Line": 116,
+            "Operator": "exists",
+            "Subject": "body.json.idempotencyKey"
+          }
+        ],
+        "Body": {
+          "ContentType": "json",
+          "FilePath": "",
+          "GraphQL": null,
+          "Line": 108,
+          "Multipart": null,
+          "Raw": "{\n  \"idempotencyKey\": \"{{$uuid()}}\",\n  \"action\": \"process\",\n  \"timestamp\": \"{{$now()}}\"\n}"
+        },
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Retry a POST request -- only safe for idempotent endpoints",
+        "Headers": [
+          {
+            "Key": "Content-Type",
+            "Line": 106,
+            "Value": "application/json"
+          }
+        ],
+        "Line": 97,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 2,
+          "RetryDelay": 500,
+          "RetryOn": [
+            500,
+            502,
+            503
+          ],
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "POST",
+        "MockBody": "",
+        "Name": "retryPost",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "retry",
+          "write"
+        ],
+        "URL": "{{baseUrl}}/post"
+      }
+    ],
+    "Variables": [
+      {
+        "Line": 7,
+        "Name": "baseUrl",
+        "Value": "https://httpbin.org"
+      }
+    ]
+  }
+}

@@ -1,0 +1,442 @@
+{
+  "File": {
+    "Path": "graphql/graphql.http",
+    "Requests": [
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 27,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "array",
+            "Line": 28,
+            "Operator": "type",
+            "Subject": "body.data.countries"
+          },
+          {
+            "Expected": 100,
+            "Line": 29,
+            "Operator": "length \u003e",
+            "Subject": "body.data.countries"
+          },
+          {
+            "Expected": null,
+            "Line": 30,
+            "Operator": "exists",
+            "Subject": "body.data.countries[0].code"
+          },
+          {
+            "Expected": null,
+            "Line": 31,
+            "Operator": "exists",
+            "Subject": "body.data.countries[0].name"
+          }
+        ],
+        "Body": {
+          "ContentType": "graphql",
+          "FilePath": "",
+          "GraphQL": {
+            "Query": "query {\n  countries {\n    code\n    name\n    capital\n    emoji\n  }\n}",
+            "Variables": ""
+          },
+          "Line": 15,
+          "Multipart": null,
+          "Raw": ""
+        },
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Fetch all countries with code and name",
+        "Headers": [
+          {
+            "Key": "Content-Type",
+            "Line": 13,
+            "Value": "application/json"
+          }
+        ],
+        "Line": 7,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "POST",
+        "MockBody": "",
+        "Name": "listCountries",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "graphql",
+          "read"
+        ],
+        "URL": "{{baseUrl}}/graphql"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 65,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "US",
+            "Line": 66,
+            "Operator": "==",
+            "Subject": "body.data.country.code"
+          },
+          {
+            "Expected": "United States",
+            "Line": 67,
+            "Operator": "==",
+            "Subject": "body.data.country.name"
+          },
+          {
+            "Expected": "Washington D.C.",
+            "Line": 68,
+            "Operator": "==",
+            "Subject": "body.data.country.capital"
+          },
+          {
+            "Expected": "array",
+            "Line": 69,
+            "Operator": "type",
+            "Subject": "body.data.country.languages"
+          },
+          {
+            "Expected": 0,
+            "Line": 70,
+            "Operator": "length \u003e",
+            "Subject": "body.data.country.languages"
+          },
+          {
+            "Expected": "North America",
+            "Line": 71,
+            "Operator": "==",
+            "Subject": "body.data.country.continent.name"
+          }
+        ],
+        "Body": {
+          "ContentType": "graphql",
+          "FilePath": "",
+          "GraphQL": {
+            "Query": "query GetCountry($code: ID!) {\n  country(code: $code) {\n    code\n    name\n    capital\n    currency\n    languages {\n      name\n    }\n    continent {\n      name\n    }\n  }\n}",
+            "Variables": "{\n  \"code\": \"US\"\n}"
+          },
+          "Line": 42,
+          "Multipart": null,
+          "Raw": ""
+        },
+        "Captures": [
+          {
+            "Line": 75,
+            "Name": "countryName",
+            "Path": "data.country.name",
+            "Source": "body"
+          }
+        ],
+        "DBAssertions": null,
+        "Description": "Fetch a specific country by its code",
+        "Headers": [
+          {
+            "Key": "Content-Type",
+            "Line": 40,
+            "Value": "application/json"
+          }
+        ],
+        "Line": 34,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "POST",
+        "MockBody": "",
+        "Name": "getCountry",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "graphql",
+          "read"
+        ],
+        "URL": "{{baseUrl}}/graphql"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 105,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "Europe",
+            "Line": 106,
+            "Operator": "==",
+            "Subject": "body.data.continent.name"
+          },
+          {
+            "Expected": "array",
+            "Line": 107,
+            "Operator": "type",
+            "Subject": "body.data.continent.countries"
+          },
+          {
+            "Expected": 30,
+            "Line": 108,
+            "Operator": "length \u003e",
+            "Subject": "body.data.continent.countries"
+          }
+        ],
+        "Body": {
+          "ContentType": "graphql",
+          "FilePath": "",
+          "GraphQL": {
+            "Query": "query CountriesByContinent($code: ID!) {\n  continent(code: $code) {\n    name\n    countries {\n      code\n      name\n      capital\n    }\n  }\n}",
+            "Variables": "{\n  \"code\": \"EU\"\n}"
+          },
+          "Line": 86,
+          "Multipart": null,
+          "Raw": ""
+        },
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Get all European countries",
+        "Headers": [
+          {
+            "Key": "Content-Type",
+            "Line": 84,
+            "Value": "application/json"
+          }
+        ],
+        "Line": 78,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "POST",
+        "MockBody": "",
+        "Name": "filterByContinent",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "graphql",
+          "filter"
+        ],
+        "URL": "{{baseUrl}}/graphql"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 130,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "array",
+            "Line": 131,
+            "Operator": "type",
+            "Subject": "body.data.languages"
+          },
+          {
+            "Expected": 0,
+            "Line": 132,
+            "Operator": "length \u003e",
+            "Subject": "body.data.languages"
+          },
+          {
+            "Expected": null,
+            "Line": 133,
+            "Operator": "exists",
+            "Subject": "body.data.languages[0].code"
+          },
+          {
+            "Expected": null,
+            "Line": 134,
+            "Operator": "exists",
+            "Subject": "body.data.languages[0].name"
+          }
+        ],
+        "Body": {
+          "ContentType": "graphql",
+          "FilePath": "",
+          "GraphQL": {
+            "Query": "query {\n  languages {\n    code\n    name\n    native\n  }\n}",
+            "Variables": ""
+          },
+          "Line": 119,
+          "Multipart": null,
+          "Raw": ""
+        },
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Fetch all languages with their associated info",
+        "Headers": [
+          {
+            "Key": "Content-Type",
+            "Line": 117,
+            "Value": "application/json"
+          }
+        ],
+        "Line": 111,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "POST",
+        "MockBody": "",
+        "Name": "listLanguages",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "graphql",
+          "read"
+        ],
+        "URL": "{{baseUrl}}/graphql"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 163,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "Japan",
+            "Line": 164,
+            "Operator": "==",
+            "Subject": "body.data.country.name"
+          },
+          {
+            "Expected": null,
+            "Line": 165,
+            "Operator": "exists",
+            "Subject": "body.data.country.emoji"
+          },
+          {
+            "Expected": "array",
+            "Line": 166,
+            "Operator": "type",
+            "Subject": "body.data.continents"
+          },
+          {
+            "Expected": 7,
+            "Line": 167,
+            "Operator": "length",
+            "Subject": "body.data.continents"
+          }
+        ],
+        "Body": {
+          "ContentType": "graphql",
+          "FilePath": "",
+          "GraphQL": {
+            "Query": "query {\n  country(code: \"JP\") {\n    name\n    capital\n    emoji\n    languages {\n      name\n    }\n  }\n  continents {\n    code\n    name\n  }\n}",
+            "Variables": ""
+          },
+          "Line": 145,
+          "Multipart": null,
+          "Raw": ""
+        },
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Fetch country details alongside continent list",
+        "Headers": [
+          {
+            "Key": "Content-Type",
+            "Line": 143,
+            "Value": "application/json"
+          }
+        ],
+        "Line": 137,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "POST",
+        "MockBody": "",
+        "Name": "multiQuery",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "graphql",
+          "read"
+        ],
+        "URL": "{{baseUrl}}/graphql"
+      }
+    ],
+    "Variables": [
+      {
+        "Line": 5,
+        "Name": "baseUrl",
+        "Value": "https://countries.trevorblades.com"
+      }
+    ]
+  }
+}

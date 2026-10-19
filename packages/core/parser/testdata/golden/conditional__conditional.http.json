@@ -1,0 +1,436 @@
+{
+  "File": {
+    "Path": "conditional/conditional.http",
+    "Requests": [
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 17,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": 1,
+            "Line": 18,
+            "Operator": "==",
+            "Subject": "body.id"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Basic health check that always runs",
+        "Headers": null,
+        "Line": 9,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "healthCheck",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "smoke"
+        ],
+        "URL": "{{baseUrl}}/posts/1"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 30,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": 1,
+            "Line": 31,
+            "Operator": "==",
+            "Subject": "body.id"
+          },
+          {
+            "Expected": null,
+            "Line": 32,
+            "Operator": "exists",
+            "Subject": "body.name"
+          },
+          {
+            "Expected": null,
+            "Line": 33,
+            "Operator": "exists",
+            "Subject": "body.email"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Only runs when runAuthTests is truthy",
+        "Headers": null,
+        "Line": 21,
+        "Metadata": {
+          "Auth": null,
+          "Condition": {
+            "Expression": "{{runAuthTests}}",
+            "Type": "if"
+          },
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "authTest",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "auth",
+          "conditional"
+        ],
+        "URL": "{{baseUrl}}/users/1"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 45,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "array",
+            "Line": 46,
+            "Operator": "type",
+            "Subject": "body"
+          },
+          {
+            "Expected": 50,
+            "Line": 47,
+            "Operator": "length \u003e",
+            "Subject": "body"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Skipped when skipSlowTests is truthy (currently false, so this runs)",
+        "Headers": null,
+        "Line": 36,
+        "Metadata": {
+          "Auth": null,
+          "Condition": {
+            "Expression": "{{skipSlowTests}}",
+            "Type": "unless"
+          },
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "slowQuery",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "slow",
+          "conditional"
+        ],
+        "URL": "{{baseUrl}}/posts"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 60,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "array",
+            "Line": 61,
+            "Operator": "type",
+            "Subject": "body"
+          },
+          {
+            "Expected": 1,
+            "Line": 62,
+            "Operator": "==",
+            "Subject": "body[0].postId"
+          },
+          {
+            "Expected": null,
+            "Line": 63,
+            "Operator": "exists",
+            "Subject": "body[0].email"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Only runs when environment is set to staging",
+        "Headers": null,
+        "Line": 50,
+        "Metadata": {
+          "Auth": null,
+          "Condition": {
+            "Expression": "{{environment}}",
+            "Type": "if"
+          },
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "stagingOnly",
+        "QueryParams": [
+          {
+            "Key": "postId",
+            "Line": 57,
+            "Value": "1"
+          }
+        ],
+        "ShellCommands": null,
+        "Tags": [
+          "staging",
+          "conditional"
+        ],
+        "URL": "{{baseUrl}}/comments"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 75,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "array",
+            "Line": 76,
+            "Operator": "type",
+            "Subject": "body"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Skipped unless debugMode variable is set",
+        "Headers": null,
+        "Line": 66,
+        "Metadata": {
+          "Auth": null,
+          "Condition": {
+            "Expression": "{{debugMode}}",
+            "Type": "if"
+          },
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "debugInfo",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "debug",
+          "conditional"
+        ],
+        "URL": "{{baseUrl}}/posts/1/comments"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 87,
+            "Operator": "==",
+            "Subject": "status"
+          }
+        ],
+        "Body": null,
+        "Captures": [
+          {
+            "Line": 91,
+            "Name": "userName",
+            "Path": "name",
+            "Source": "body"
+          }
+        ],
+        "DBAssertions": null,
+        "Description": "First get a user",
+        "Headers": null,
+        "Line": 79,
+        "Metadata": {
+          "Auth": null,
+          "Condition": null,
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": null,
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "getUser",
+        "QueryParams": null,
+        "ShellCommands": null,
+        "Tags": [
+          "flow"
+        ],
+        "URL": "{{baseUrl}}/users/1"
+      },
+      {
+        "Assertions": [
+          {
+            "Expected": 200,
+            "Line": 105,
+            "Operator": "==",
+            "Subject": "status"
+          },
+          {
+            "Expected": "array",
+            "Line": 106,
+            "Operator": "type",
+            "Subject": "body"
+          },
+          {
+            "Expected": 1,
+            "Line": 107,
+            "Operator": "==",
+            "Subject": "body[0].userId"
+          }
+        ],
+        "Body": null,
+        "Captures": null,
+        "DBAssertions": null,
+        "Description": "Only fetch posts if user was found (depends on getUser)",
+        "Headers": null,
+        "Line": 94,
+        "Metadata": {
+          "Auth": null,
+          "Condition": {
+            "Expression": "{{getUser.userName}}",
+            "Type": "if"
+          },
+          "Custom": null,
+          "DBConnection": "",
+          "Depends": [
+            "getUser"
+          ],
+          "Only": false,
+          "PostHooks": null,
+          "PreHooks": null,
+          "Retry": 0,
+          "RetryDelay": 0,
+          "RetryOn": null,
+          "Skip": "",
+          "Stress": null,
+          "Timeout": 0,
+          "WaitFor": null
+        },
+        "Method": "GET",
+        "MockBody": "",
+        "Name": "getUserPosts",
+        "QueryParams": [
+          {
+            "Key": "userId",
+            "Line": 102,
+            "Value": "1"
+          }
+        ],
+        "ShellCommands": null,
+        "Tags": [
+          "flow",
+          "conditional"
+        ],
+        "URL": "{{baseUrl}}/posts"
+      }
+    ],
+    "Variables": [
+      {
+        "Line": 4,
+        "Name": "baseUrl",
+        "Value": "https://jsonplaceholder.typicode.com"
+      },
+      {
+        "Line": 5,
+        "Name": "runAuthTests",
+        "Value": "true"
+      },
+      {
+        "Line": 6,
+        "Name": "skipSlowTests",
+        "Value": "false"
+      },
+      {
+        "Line": 7,
+        "Name": "environment",
+        "Value": "staging"
+      }
+    ]
+  }
+}
