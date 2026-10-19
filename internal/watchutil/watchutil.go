@@ -6,6 +6,8 @@ import (
 	"io/fs"
 	"path/filepath"
 	"strings"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 // skippedDirs are never watched: they are large, rarely hold hitspec files
@@ -59,4 +61,19 @@ func AddTree(w Adder, root string, onFile func(path string)) error {
 		return nil
 	})
 	return firstErr
+}
+
+// Operation maps the last fsnotify op seen for a path, and whether a Create
+// was seen during the same debounce window, to the created/changed/deleted
+// label carried by file_changed events. inotify reports os.WriteFile as
+// Create followed by Write, which must still read as "created".
+func Operation(last fsnotify.Op, created bool) string {
+	switch {
+	case last.Has(fsnotify.Remove), last.Has(fsnotify.Rename):
+		return "deleted"
+	case created:
+		return "created"
+	default:
+		return "changed"
+	}
 }

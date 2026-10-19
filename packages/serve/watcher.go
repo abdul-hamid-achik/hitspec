@@ -13,8 +13,12 @@ import (
 const watchDebounce = 300 * time.Millisecond
 const suppressDuration = 2 * time.Second
 
+// debounceTimer is the pending event for one path. created stays set when a
+// Create was seen during the debounce window, so a Create followed by Writes
+// (how inotify reports os.WriteFile) is still reported as "created".
 type debounceTimer struct {
-	timer *time.Timer
+	timer   *time.Timer
+	created bool
 }
 
 // suppressedPaths tracks paths that should not trigger watcher broadcasts
@@ -83,10 +87,12 @@ func (s *Server) startWatcher() {
 		schedule := func(name string, op fsnotify.Op) {
 			timersMu.Lock()
 			defer timersMu.Unlock()
-			if entry, exists := timers[name]; exists {
-				entry.timer.Stop()
+			created := op.Has(fsnotify.Create)
+			if prev, exists := timers[name]; exists {
+				prev.timer.Stop()
+				created = created || prev.created
 			}
-			entry := &debounceTimer{}
+			entry := &debounceTimer{created: created}
 			entry.timer = time.AfterFunc(watchDebounce, func() {
 				defer func() {
 					timersMu.Lock()
@@ -101,7 +107,7 @@ func (s *Server) startWatcher() {
 					return
 				}
 
-				operation := fileOperation(op)
+				operation := watchutil.Operation(op, created)
 				relPath, _ := filepath.Rel(s.config.WorkDir, name)
 				if relPath == "" {
 					relPath = name
@@ -159,17 +165,4 @@ func (s *Server) startWatcher() {
 			}
 		}
 	}()
-}
-
-// fileOperation maps an fsnotify op to the created/changed/deleted label
-// carried by file_changed events.
-func fileOperation(op fsnotify.Op) string {
-	switch {
-	case op.Has(fsnotify.Create):
-		return "created"
-	case op.Has(fsnotify.Remove), op.Has(fsnotify.Rename):
-		return "deleted"
-	default:
-		return "changed"
-	}
 }

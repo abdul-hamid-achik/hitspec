@@ -6,6 +6,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -53,4 +54,26 @@ func TestAddTreeRootIsAlwaysAdded(t *testing.T) {
 	var w recordingAdder
 	require.NoError(t, AddTree(&w, root, nil))
 	assert.Equal(t, []string{root}, w.dirs)
+}
+
+func TestOperation(t *testing.T) {
+	tests := []struct {
+		name    string
+		last    fsnotify.Op
+		created bool
+		want    string
+	}{
+		{"create only", fsnotify.Create, true, "created"},
+		{"create then write (inotify WriteFile)", fsnotify.Write, true, "created"},
+		{"write only", fsnotify.Write, false, "changed"},
+		{"chmod only", fsnotify.Chmod, false, "changed"},
+		{"remove", fsnotify.Remove, false, "deleted"},
+		{"create then remove", fsnotify.Remove, true, "deleted"},
+		{"rename away", fsnotify.Rename, false, "deleted"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, Operation(tt.last, tt.created))
+		})
+	}
 }
