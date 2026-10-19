@@ -115,6 +115,12 @@ HEAD {{baseUrl}}/health
 OPTIONS {{baseUrl}}/users
 ```
 
+The method is the first word and the URL is everything after it. An optional final `HTTP/1.1`-style token is read as the protocol version and is not part of the URL. Spaces inside `{{ ... }}` never split the line, so built-in function arguments and padded variable names work in a URL:
+
+```http
+GET {{ baseUrl }}/search?q={{$urlEncode(hello world)}}&n={{$random(1, 100)}}
+```
+
 ## Headers
 
 Headers follow the request line, one per line, using standard `Name: Value` format:
@@ -126,6 +132,16 @@ Authorization: Bearer {{token}}
 Accept: application/json
 X-Request-Id: {{$uuid()}}
 ```
+
+Everything after the first `:` is the header value, trimmed of surrounding whitespace and otherwise sent exactly as written: quotes, `#` and apostrophes are part of the value.
+
+```http
+If-None-Match: "33a64df5"
+Content-Disposition: attachment; filename="report.txt"
+X-Color: #fff
+```
+
+Comment lines (`# ...` or `// ...`) between the request line and the blank line are skipped, and headers after them are still headers. A `# @name x` line in this position is only a comment; put directives before the request line.
 
 <Warning>
 A blank line separates headers from the request body. Any lines after the blank line (until the next block marker or separator) are treated as the body.
