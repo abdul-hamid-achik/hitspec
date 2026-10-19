@@ -692,11 +692,12 @@ func TestParser_ShellBlockMissingClose(t *testing.T) {
 }
 
 func TestParser_DBBlockMissingClose(t *testing.T) {
+	// An unclosed >>>db block is an error, like an unclosed >>> block: it used
+	// to be accepted silently, hiding a missing <<<.
 	input := "### Test\n# @db sqlite3://test.db\nGET http://test.com\n\n>>>db\nquery SELECT count(*) as cnt FROM users\nexpect cnt > 0"
-	file, err := Parse(input, "test.http")
-	require.NoError(t, err)
-	require.Len(t, file.Requests, 1)
-	require.Len(t, file.Requests[0].DBAssertions, 1)
+	_, err := Parse(input, "test.http")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unclosed >>>db")
 }
 
 // TestParser_AssertionBlockMissingClose: an unclosed bare >>> block (no <<<)

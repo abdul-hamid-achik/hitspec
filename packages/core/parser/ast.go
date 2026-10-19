@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -9,6 +11,31 @@ type File struct {
 	Path      string
 	Variables []*Variable
 	Requests  []*Request
+	// Warnings are constructs the parser accepted but that are probably
+	// mistakes (an unknown @directive, an unparsable @timeout). `hitspec
+	// validate --strict` turns them into errors.
+	Warnings []Warning
+}
+
+// Warning is a suspicious construct with its source position.
+type Warning struct {
+	File    string
+	Line    int
+	Column  int
+	Message string
+}
+
+func (w Warning) String() string {
+	loc := strconv.Itoa(w.Line)
+	if w.Column > 0 {
+		loc += ":" + strconv.Itoa(w.Column)
+	}
+	if w.File != "" {
+		loc = w.File + ":" + loc
+	} else {
+		loc = "line " + loc
+	}
+	return loc + ": " + w.Message
 }
 
 type Variable struct {
@@ -188,6 +215,37 @@ type Assertion struct {
 	Operator AssertionOperator
 	Expected interface{}
 	Line     int
+}
+
+// EachSpec is the Expected value of an "each" assertion: Operator and Expected
+// are applied to every element of the array, or to Path inside every element
+// when Path is set.
+type EachSpec struct {
+	Path     string
+	Operator AssertionOperator
+	Expected interface{}
+}
+
+// String renders the spec the way it is written: "type object", "id exists".
+func (s *EachSpec) String() string {
+	out := ""
+	if s.Path != "" {
+		out = s.Path + " "
+	}
+	out += s.Operator.String()
+	if s.Operator != OpExists && s.Operator != OpNotExists {
+		out += fmt.Sprintf(" %v", s.Expected)
+	}
+	return out
+}
+
+// MarshalJSON encodes the spec as {"path", "operator", "value"}.
+func (s *EachSpec) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Path     string `json:"path,omitempty"`
+		Operator string `json:"operator"`
+		Value    any    `json:"value,omitempty"`
+	}{s.Path, s.Operator.String(), s.Expected})
 }
 
 type AssertionOperator int

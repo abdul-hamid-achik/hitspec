@@ -1,0 +1,136 @@
+# validate: unknown operators, operators without a value and extra values are
+# parse errors (exit 2) with file:line:col, never silently reinterpreted.
+
+exitcode 0 hitspec validate good.http
+
+exitcode 2 hitspec validate typo.http
+stderr 'typo.http:6:18: unknown operator "contians" \(did you mean "contains"\?\)'
+stderr 'expect body.name contians "Jane"'
+
+exitcode 2 hitspec validate single_equals.http
+stderr 'unknown operator "=" \(did you mean "=="\?\)'
+
+exitcode 2 hitspec validate triple_equals.http
+stderr 'unknown operator "===" \(did you mean "=="\?\)'
+
+exitcode 2 hitspec validate equals_word.http
+stderr 'unknown operator "equals" \(did you mean "=="\?\)'
+
+exitcode 2 hitspec validate no_value.http
+stderr 'operator == needs a value'
+
+exitcode 2 hitspec validate swallows_next_line.http
+stderr 'operator contains needs a value'
+
+exitcode 2 hitspec validate two_codes.http
+stderr 'status is a number but "200 201" is not'
+stderr 'expect status in \[200, 201\]'
+
+exitcode 2 hitspec validate bad_type.http
+stderr 'did you mean "string"'
+
+exitcode 2 hitspec validate misspelt_expect.http
+stderr 'did you mean "expect"'
+
+exitcode 2 hitspec validate bad_block.http
+stderr 'unknown block type >>>captur \(did you mean >>>capture\?\)'
+
+exitcode 2 hitspec validate bad_regex.http
+stderr 'invalid regular expression'
+
+# run refuses the same files (exit 2: the file failed to load)
+exitcode 2 hitspec run typo.http
+stderr 'unknown operator "contians"'
+
+-- good.http --
+### ok
+GET http://127.0.0.1:1/x
+
+>>>
+expect status 200            # comment
+expect body.name == Jane Doe
+expect body.items.# == 3
+expect body.items.#(name=="Jane Doe").id == 1
+expect body.id matches /^\d+$/i
+expect status in [200, 201]
+<<<
+
+-- typo.http --
+### typo
+GET http://127.0.0.1:1/x
+
+>>>
+expect status 200
+expect body.name contians "Jane"
+<<<
+
+-- single_equals.http --
+GET http://127.0.0.1:1/x
+
+>>>
+expect body.name = "Jane"
+<<<
+
+-- triple_equals.http --
+GET http://127.0.0.1:1/x
+
+>>>
+expect body.name === "Jane"
+<<<
+
+-- equals_word.http --
+GET http://127.0.0.1:1/x
+
+>>>
+expect body.name equals "Jane"
+<<<
+
+-- no_value.http --
+GET http://127.0.0.1:1/x
+
+>>>
+expect body.name ==
+<<<
+
+-- swallows_next_line.http --
+GET http://127.0.0.1:1/x
+
+>>>
+expect body.name contains
+expect status 200
+<<<
+
+-- two_codes.http --
+GET http://127.0.0.1:1/x
+
+>>>
+expect status 200 201
+<<<
+
+-- bad_type.http --
+GET http://127.0.0.1:1/x
+
+>>>
+expect body.name type strng
+<<<
+
+-- misspelt_expect.http --
+GET http://127.0.0.1:1/x
+
+>>>
+expcet status 200
+<<<
+
+-- bad_block.http --
+GET http://127.0.0.1:1/x
+
+>>>captur
+token from body.token
+<<<
+
+-- bad_regex.http --
+GET http://127.0.0.1:1/x
+
+>>>
+expect body.name matches /(unclosed/
+<<<

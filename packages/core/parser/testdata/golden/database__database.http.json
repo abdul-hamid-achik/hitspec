@@ -26,7 +26,15 @@
           "Raw": "{\n  \"name\": \"Bob Smith\",\n  \"email\": \"bob@example.com\"\n}"
         },
         "Captures": null,
-        "DBAssertions": null,
+        "DBAssertions": [
+          {
+            "Column": "count",
+            "Expected": 1,
+            "Line": 32,
+            "Operator": "==",
+            "Query": "SELECT COUNT(*) as count FROM users WHERE name = 'Alice';"
+          }
+        ],
         "Description": "Create a user and verify it exists in the database",
         "HTTPVersion": "",
         "Headers": [
@@ -76,7 +84,29 @@
         ],
         "Body": null,
         "Captures": null,
-        "DBAssertions": null,
+        "DBAssertions": [
+          {
+            "Column": "name",
+            "Expected": "Alice",
+            "Line": 49,
+            "Operator": "==",
+            "Query": "SELECT name, email, active FROM users WHERE id = 1;"
+          },
+          {
+            "Column": "email",
+            "Expected": "alice@example.com",
+            "Line": 49,
+            "Operator": "==",
+            "Query": "SELECT name, email, active FROM users WHERE id = 1;"
+          },
+          {
+            "Column": "active",
+            "Expected": 1,
+            "Line": 49,
+            "Operator": "==",
+            "Query": "SELECT name, email, active FROM users WHERE id = 1;"
+          }
+        ],
         "Description": "Check that specific fields exist in the database",
         "HTTPVersion": "",
         "Headers": null,
@@ -120,7 +150,15 @@
         ],
         "Body": null,
         "Captures": null,
-        "DBAssertions": null,
+        "DBAssertions": [
+          {
+            "Column": "total",
+            "Expected": 0,
+            "Line": 68,
+            "Operator": "\u003e",
+            "Query": "SELECT COUNT(*) as total FROM users;"
+          }
+        ],
         "Description": "Verify the total number of records in a table",
         "HTTPVersion": "",
         "Headers": null,
@@ -171,7 +209,15 @@
           "Raw": "{\n  \"name\": \"Alice Updated\",\n  \"email\": \"alice.updated@example.com\"\n}"
         },
         "Captures": null,
-        "DBAssertions": null,
+        "DBAssertions": [
+          {
+            "Column": "name",
+            "Expected": "Alice",
+            "Line": 92,
+            "Operator": "==",
+            "Query": "SELECT name FROM users WHERE id = 1;"
+          }
+        ],
         "Description": "Update a resource and confirm DB reflects the change",
         "HTTPVersion": "",
         "Headers": [
@@ -223,7 +269,22 @@
         ],
         "Body": null,
         "Captures": null,
-        "DBAssertions": null,
+        "DBAssertions": [
+          {
+            "Column": "active_count",
+            "Expected": 0,
+            "Line": 109,
+            "Operator": "\u003e",
+            "Query": "SELECT COUNT(*) as active_count FROM users WHERE active = 1;"
+          },
+          {
+            "Column": "total",
+            "Expected": 0,
+            "Line": 114,
+            "Operator": "\u003e",
+            "Query": "SELECT COUNT(*) as total FROM users;"
+          }
+        ],
         "Description": "Run several database queries against the same request",
         "HTTPVersion": "",
         "Headers": null,
