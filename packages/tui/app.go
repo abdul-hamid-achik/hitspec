@@ -22,6 +22,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/clientmgr"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/config"
 )
 
 type model struct {
@@ -1730,22 +1731,41 @@ func (m *model) submitFormCmd() tea.Cmd {
 			return cookiesMsg{cookies: cookies, err: err}
 		}
 	case screenSettings:
-		return func() tea.Msg {
-			cfg := clientmgr.ConfigDTO{
-				DefaultEnvironment: values["default env"],
-				Timeout:            atoi(values["timeout ms"], 0),
-				Retries:            atoi(values["retries"], 0),
-				Concurrency:        atoi(values["concurrency"], 0),
+		// The form is pre-filled with the live config, so a field that is
+		// present is applied as written: retries 0 turns retries off. A blank
+		// field leaves the setting unchanged.
+		var patch config.Patch
+		defaultEnv := strings.TrimSpace(values["default env"])
+		if defaultEnv != "" {
+			patch.DefaultEnvironment = &defaultEnv
+		}
+		for _, f := range []struct {
+			label string
+			dst   **int
+		}{
+			{"timeout ms", &patch.Timeout},
+			{"retries", &patch.Retries},
+			{"concurrency", &patch.Concurrency},
+		} {
+			if strings.TrimSpace(values[f.label]) == "" {
+				continue
 			}
-			if _, err := mgr.PutConfig(ctx, cfg); err != nil {
+			n, err := intField(values, f.label, 0)
+			if err != nil {
+				return m.formError(err)
+			}
+			*f.dst = &n
+		}
+		return func() tea.Msg {
+			if _, err := mgr.PatchConfig(ctx, patch); err != nil {
 				return configMsg{err: err}
 			}
-			if cfg.DefaultEnvironment != "" {
-				_ = mgr.SelectEnvironment(ctx, cfg.DefaultEnvironment)
+			if defaultEnv != "" {
+				_ = mgr.SelectEnvironment(ctx, defaultEnv)
 			}
 			// Optionally set/update a single environment variable (read-modify-write).
 			if key := strings.TrimSpace(values["set var key"]); key != "" {
-				envName := defaultString(values["set var env"], cfg.DefaultEnvironment)
+				envName := defaultString(values["set var env"], defaultEnv)
 				if err := setEnvVar(ctx, mgr, envName, key, values["set var value"]); err != nil {
 					return configMsg{err: err}
 				}

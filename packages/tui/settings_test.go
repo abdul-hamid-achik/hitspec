@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/clientmgr"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/config"
 )
 
 func TestSetEnvVarReadModifyWrite(t *testing.T) {
@@ -88,5 +89,41 @@ func TestSettingsFormSetsEnvVar(t *testing.T) {
 	}
 	if env.Variables["apiKey"] != "secret-1" {
 		t.Fatalf("settings form did not set the env var: %+v", env.Variables)
+	}
+}
+
+// TestSettingsFormCanTurnRetriesOff guards the PutConfig era, where a 0 in the
+// form meant "unchanged" and retries could never be set back to 0.
+func TestSettingsFormCanTurnRetriesOff(t *testing.T) {
+	mgr := newTestManager(t)
+	ctx := context.Background()
+	retries := 3
+	if _, err := mgr.PatchConfig(ctx, config.Patch{Retries: &retries}); err != nil {
+		t.Fatalf("seed retries: %v", err)
+	}
+	m := newModel(ctx, mgr, Options{})
+	m.workspace = clientmgr.WorkspaceDTO{Environment: "dev"}
+	m.setScreen(screenSettings)
+
+	// Fields: 0 default env, 1 timeout, 2 retries, 3 concurrency, ...
+	m.formInputs[1].SetValue("")
+	m.formInputs[2].SetValue("0")
+	m.formInputs[3].SetValue("")
+	if msg := m.submitFormCmd()(); msg.(configMsg).err != nil {
+		t.Fatalf("submit errored: %v", msg.(configMsg).err)
+	}
+	cfg, err := mgr.GetConfig(ctx)
+	if err != nil {
+		t.Fatalf("get config: %v", err)
+	}
+	if cfg.Retries != 0 {
+		t.Fatalf("retries = %d, want 0", cfg.Retries)
+	}
+
+	m.formInputs[2].SetValue("many")
+	if msg := m.submitFormCmd()(); msg == nil {
+		t.Fatal("a non-numeric value must be rejected")
+	} else if _, ok := msg.(configMsg); ok {
+		t.Fatalf("a non-numeric value reached the config: %#v", msg)
 	}
 }
