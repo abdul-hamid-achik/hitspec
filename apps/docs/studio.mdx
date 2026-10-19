@@ -153,11 +153,16 @@ work.
 ## Environments
 
 Press `ctrl+e` to open the environment switcher and pick the active environment.
-The default environment is `dev`; override it at launch with `--env`:
+The default environment is the `defaultEnvironment` from `hitspec.yaml`, else `dev`;
+override it at launch with `--env` (and point at a specific config file with `--config`):
 
 ```bash
 hitspec studio ./tests/ --env staging
+hitspec studio ./tests/ --config ./ci/hitspec.yaml
 ```
+
+Requests, stress runs, the mock server and contract verification all resolve
+`{{variables}}` such as `{{baseUrl}}` from the active environment.
 
 The top bar always shows which environment is active, and the Settings screen
 (`9`) lets you view and edit environment variables. See
@@ -191,7 +196,7 @@ the file list and live execution progress as files change on disk. Disable it wi
 |------|-------|-------------|---------|
 | `--watch` | `-w` | Watch for file changes | `true` |
 | `--read-only` | | Disallow file mutations | `false` |
-| `--env` | `-e` | Default environment | `dev` |
+| `--env` | `-e` | Default environment | `defaultEnvironment` from config, else `dev` |
 | `--config` | | Path to `hitspec.yaml` | |
 | `--verbose` | `-v` | Verbose logging | `false` |
 | `--allow-shell` | | Allow shell command execution | `false` |

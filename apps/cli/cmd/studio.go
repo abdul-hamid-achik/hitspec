@@ -3,6 +3,8 @@ package cmd
 import (
 	"context"
 	"io"
+	"log"
+	"os"
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/clientmgr"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/tui"
@@ -85,14 +87,15 @@ type studioLaunchFlags struct {
 	env, config, logFormat, logLevel, theme       string
 }
 
-// launchStudio boots the in-process Manager and runs the interactive app. It is
-// shared by `hitspec studio` and the deprecated `hitspec serve` UI path.
-func launchStudio(ctx context.Context, workDir string, f studioLaunchFlags) error {
-	mgr := clientmgr.New(
+// newStudioManager builds the in-process Manager from the studio flags. It is a
+// separate function so tests can check that every flag reaches the Manager.
+func newStudioManager(workDir string, f studioLaunchFlags) *clientmgr.Manager {
+	return clientmgr.New(
 		clientmgr.WithWorkDir(workDir),
 		clientmgr.WithWatch(f.watch),
 		clientmgr.WithReadOnly(f.readOnly),
-		clientmgr.WithLogLevel(f.logLevel),
+		clientmgr.WithEnv(f.env),
+		clientmgr.WithConfigPath(f.config),
 		clientmgr.WithLogWriter(io.Discard),
 		clientmgr.WithVerbose(f.verbose),
 		clientmgr.WithAllowShell(f.allowShell),
@@ -100,9 +103,42 @@ func launchStudio(ctx context.Context, workDir string, f studioLaunchFlags) erro
 		clientmgr.WithLogFormat(f.logFormat),
 		clientmgr.WithLogLevel(f.logLevel),
 	)
+}
+
+// launchStudio boots the in-process Manager and runs the interactive app. It is
+// shared by `hitspec studio` and the deprecated `hitspec serve` UI path.
+func launchStudio(ctx context.Context, workDir string, f studioLaunchFlags) error {
+	// The engines the studio drives (mock, record proxy, contract verifier,
+	// runner hooks/shell/wait-for, parser and builtin warnings) write to the
+	// std logger, os.Stdout or os.Stderr, which would be painted over the
+	// alt-screen UI. Point them at /dev/null for the lifetime of the app and
+	// hand the real terminal to the UI. Registered first so it is undone last.
+	tuiOut, restoreStdio := silenceStdio()
+	defer restoreStdio()
+
+	mgr := newStudioManager(workDir, f)
 	mgr.Version = version
 	mgr.BuildTime = buildTime
 	mgr.Start(ctx)
 	defer mgr.Close()
-	return tui.Run(ctx, mgr, tui.Options{Mouse: true, Theme: f.theme})
+	return tui.Run(ctx, mgr, tui.Options{Mouse: true, Theme: f.theme, Output: tuiOut})
+}
+
+// silenceStdio redirects os.Stdout, os.Stderr and the std logger to the null
+// device and returns the real stdout (for the UI to draw on) plus a function
+// that undoes the redirection. A pipe would block once full, so the null device
+// is used. If it cannot be opened nothing is redirected.
+func silenceStdio() (*os.File, func()) {
+	realOut, realErr := os.Stdout, os.Stderr
+	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		return realOut, func() {}
+	}
+	os.Stdout, os.Stderr = devNull, devNull
+	log.SetOutput(io.Discard) // the std logger captured os.Stderr at init
+	return realOut, func() {
+		os.Stdout, os.Stderr = realOut, realErr
+		log.SetOutput(realErr)
+		_ = devNull.Close()
+	}
 }

@@ -72,13 +72,7 @@ func (m *Manager) ExecuteAdHoc(ctx context.Context, req AdHocReq) (*RunResultDTO
 	}
 	_ = tmp.Close()
 
-	m.configMu.RLock()
-	env := m.config.Env
-	configEnvs := m.getConfigEnvsLocked()
-	m.configMu.RUnlock()
-	if req.Environment != "" {
-		env = req.Environment
-	}
+	env, configEnvs := m.envSnapshot(req.Environment)
 
 	cfg := &runner.Config{
 		Environment:        env,
@@ -127,13 +121,7 @@ func (m *Manager) run(ctx context.Context, file, requestName string, requestInde
 		return nil, err
 	}
 
-	m.configMu.RLock()
-	env := m.config.Env
-	configEnvs := m.getConfigEnvsLocked()
-	m.configMu.RUnlock()
-	if environment != "" {
-		env = environment
-	}
+	env, configEnvs := m.envSnapshot(environment)
 
 	execID := generateID()
 	m.publish("execution_start", ExecEvent{ID: execID, File: file, Status: "started", Timestamp: nowISO()})

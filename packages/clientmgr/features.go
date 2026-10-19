@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -28,6 +29,7 @@ func (m *Manager) StartStress(ctx context.Context, req StressStartReq) error {
 	if err := m.requireWritable(); err != nil {
 		return err
 	}
+	envName, configEnvs := m.envSnapshot(req.Environment)
 	m.mu.Lock()
 	if m.stressRunner != nil {
 		m.mu.Unlock()
@@ -59,7 +61,21 @@ func (m *Manager) StartStress(ctx context.Context, req StressStartReq) error {
 		}
 		absFiles = append(absFiles, absPath)
 	}
-	stressRunner := stress.NewRunner(cfg)
+	// The runner resolves {{variables}} from the config environments, and its
+	// default reporter prints a header, a live progress bar and a summary to
+	// os.Stdout, which would be painted over the TUI. Progress reaches
+	// subscribers through the stress_update events published below, so the
+	// reporter writes nowhere.
+	runnerOpts := []stress.RunnerOption{
+		stress.WithReporter(stress.NewReporter(stress.WithWriter(io.Discard), stress.WithNoProgress(true))),
+	}
+	if envName != "" {
+		runnerOpts = append(runnerOpts, stress.WithEnvironment(envName))
+	}
+	if len(configEnvs) > 0 {
+		runnerOpts = append(runnerOpts, stress.WithConfigEnvironments(configEnvs))
+	}
+	stressRunner := stress.NewRunner(cfg, runnerOpts...)
 	if err := stressRunner.LoadFiles(absFiles); err != nil {
 		m.mu.Unlock()
 		return err
@@ -230,6 +246,7 @@ func (m *Manager) StartMock(ctx context.Context, req MockStartReq) (MockStatusDT
 	if err := m.requireWritable(); err != nil {
 		return MockStatusDTO{}, err
 	}
+	envName, configEnvs := m.envSnapshot(req.Environment)
 	m.mu.Lock()
 	if m.mockServer != nil {
 		m.mu.Unlock()
@@ -260,7 +277,9 @@ func (m *Manager) StartMock(ctx context.Context, req MockStartReq) (MockStatusDT
 	mockSrv := mock.NewServer(
 		mock.WithPort(port),
 		mock.WithDelay(delay),
-		mock.WithVerbose(m.config.Verbose),
+		// Request lines flow through mock_request events; the engine logs with
+		// the std logger, which must not reach the TUI.
+		mock.WithVerbose(false),
 		mock.WithRequestCallback(func(method, path string, status int, duration time.Duration) {
 			m.publish("mock_request", MockEvent{
 				Event:     "request",
@@ -272,9 +291,19 @@ func (m *Manager) StartMock(ctx context.Context, req MockStartReq) (MockStatusDT
 			})
 		}),
 	)
-	if err := mockSrv.LoadFiles(absFiles); err != nil {
-		m.mu.Unlock()
-		return MockStatusDTO{}, err
+	// The mock server only knows a file's own variables, so inject the
+	// environment's (a route like {{baseUrl}}/users must become /users).
+	for _, path := range absFiles {
+		file, err := parseWithEnv(path, envName, configEnvs)
+		if err == nil {
+			err = mockSrv.LoadParsedFile(file)
+		} else {
+			err = fmt.Errorf("failed to parse file %s: %w", path, err)
+		}
+		if err != nil {
+			m.mu.Unlock()
+			return MockStatusDTO{}, err
+		}
 	}
 	baseCtx := m.ctx
 	if baseCtx == nil {
@@ -358,7 +387,7 @@ func (m *Manager) StartRecord(ctx context.Context, req RecordStartReq) error {
 	opts := []proxy.Option{
 		proxy.WithTargetURL(req.TargetURL),
 		proxy.WithPort(port),
-		proxy.WithVerbose(m.config.Verbose),
+		proxy.WithVerbose(false), // the engine logs via the std logger, which must not reach the TUI
 		proxy.WithDeduplicate(req.Deduplicate),
 	}
 	if len(req.Exclude) > 0 {
@@ -474,9 +503,10 @@ func (m *Manager) VerifyContracts(ctx context.Context, req ContractVerifyReq) ([
 	if req.ProviderURL == "" {
 		return nil, fmt.Errorf("providerUrl is required")
 	}
+	envName, configEnvs := m.envSnapshot(req.Environment)
 	opts := []contract.Option{
 		contract.WithProviderURL(req.ProviderURL),
-		contract.WithVerbose(m.config.Verbose),
+		contract.WithVerbose(false), // verbose state-handler lines go to os.Stdout, which the TUI owns
 	}
 	if req.StateHandler != "" {
 		opts = append(opts, contract.WithStateHandler(req.StateHandler))
@@ -503,7 +533,15 @@ func (m *Manager) VerifyContracts(ctx context.Context, req ContractVerifyReq) ([
 		if !isPathWithin(m.config.WorkDir, absPath) {
 			continue
 		}
-		result, err := verifier.VerifyFile(absPath)
+		// Inject the environment's variables (the verifier only knows the
+		// file's own, plus baseUrl from the provider URL).
+		parsed, err := parseWithEnv(absPath, envName, configEnvs)
+		var result *contract.VerificationResult
+		if err != nil {
+			err = fmt.Errorf("failed to parse contract file: %w", err)
+		} else {
+			result, err = verifier.Verify(parsed)
+		}
 		if err != nil {
 			results = append(results, ContractResultDTO{
 				File: file,
