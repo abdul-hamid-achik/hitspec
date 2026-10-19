@@ -31,7 +31,10 @@ func WithWatch(watch bool) Option {
 	return func(c *Config) { c.Watch = watch }
 }
 
-// WithReadOnly disallows mutating actions.
+// WithReadOnly protects the workspace and its settings: file create/save/
+// delete/rename/copy, scaffolding, hitspec.yaml edits (config, environments,
+// stress profiles), cookie edits and history deletion are refused. Running
+// requests, stress, mock, recording and contract verification stay available.
 func WithReadOnly(readOnly bool) Option {
 	return func(c *Config) { c.ReadOnly = readOnly }
 }

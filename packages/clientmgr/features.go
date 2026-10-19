@@ -26,9 +26,6 @@ import (
 
 // StartStress starts a background stress test.
 func (m *Manager) StartStress(ctx context.Context, req StressStartReq) error {
-	if err := m.requireWritable(); err != nil {
-		return err
-	}
 	runCfg, clientOpts := m.runSettings(req.Environment)
 	envName, configEnvs := runCfg.Environment, runCfg.ConfigEnvironments
 	m.mu.Lock()
@@ -134,9 +131,6 @@ func (m *Manager) StartStress(ctx context.Context, req StressStartReq) error {
 // StopStress stops a stress test.
 func (m *Manager) StopStress(ctx context.Context) error {
 	_ = ctx
-	if err := m.requireWritable(); err != nil {
-		return err
-	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.stressCancel != nil {
@@ -245,9 +239,6 @@ func (m *Manager) DeleteStressProfile(ctx context.Context, name string) error {
 
 // StartMock starts a mock server from files.
 func (m *Manager) StartMock(ctx context.Context, req MockStartReq) (MockStatusDTO, error) {
-	if err := m.requireWritable(); err != nil {
-		return MockStatusDTO{}, err
-	}
 	envName, configEnvs := m.envSnapshot(req.Environment)
 	m.mu.Lock()
 	if m.mockServer != nil {
@@ -333,9 +324,6 @@ func (m *Manager) StartMock(ctx context.Context, req MockStartReq) (MockStatusDT
 // StopMock stops the running mock server.
 func (m *Manager) StopMock(ctx context.Context) error {
 	_ = ctx
-	if err := m.requireWritable(); err != nil {
-		return err
-	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.mockCancel == nil {
@@ -371,9 +359,6 @@ func (m *Manager) MockStatus(ctx context.Context) MockStatusDTO {
 
 // StartRecord starts the recording proxy.
 func (m *Manager) StartRecord(ctx context.Context, req RecordStartReq) error {
-	if err := m.requireWritable(); err != nil {
-		return err
-	}
 	if req.TargetURL == "" {
 		return fmt.Errorf("targetUrl is required")
 	}
@@ -426,9 +411,6 @@ func (m *Manager) StartRecord(ctx context.Context, req RecordStartReq) error {
 // StopRecord stops the recording proxy.
 func (m *Manager) StopRecord(ctx context.Context) error {
 	_ = ctx
-	if err := m.requireWritable(); err != nil {
-		return err
-	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.recorderCancel == nil {
@@ -483,9 +465,6 @@ func (m *Manager) ExportRecordings(ctx context.Context) (string, error) {
 // ClearRecordings clears captured requests.
 func (m *Manager) ClearRecordings(ctx context.Context) error {
 	_ = ctx
-	if err := m.requireWritable(); err != nil {
-		return err
-	}
 	m.mu.Lock()
 	recorder := m.recorder
 	m.mu.Unlock()
@@ -498,9 +477,6 @@ func (m *Manager) ClearRecordings(ctx context.Context) error {
 
 // VerifyContracts verifies contract files against a provider URL.
 func (m *Manager) VerifyContracts(ctx context.Context, req ContractVerifyReq) ([]ContractResultDTO, error) {
-	if err := m.requireWritable(); err != nil {
-		return nil, err
-	}
 	if req.ProviderURL == "" {
 		return nil, fmt.Errorf("providerUrl is required")
 	}
@@ -544,6 +520,11 @@ func (m *Manager) VerifyContracts(ctx context.Context, req ContractVerifyReq) ([
 			err = fmt.Errorf("failed to parse contract file: %w", err)
 		} else {
 			result, err = verifier.VerifyContext(ctx, parsed)
+		}
+		if err != nil && ctx.Err() != nil {
+			// A cancelled run is not a parse failure: stop and say so, without
+			// a bogus "parse" entry for the file that was running.
+			return results, ctx.Err()
 		}
 		if err != nil {
 			results = append(results, ContractResultDTO{

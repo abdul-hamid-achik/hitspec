@@ -23,6 +23,8 @@ hitspec mock <file|directory> [flags]
 | Flag | Short | Description | Default |
 |------|-------|-------------|---------|
 | `--port` | `-p` | Port to run the mock server on | `3000` |
+| `--host` | | Address to bind. Use `0.0.0.0` to accept connections from other machines or from outside a container | `127.0.0.1` |
+| `--cors` | | Answer CORS preflights and add `Access-Control-Allow-*` headers to every response | `false` |
 | `--delay` | `-d` | Artificial delay for all responses (e.g., `100ms`, `1s`) | `0` |
 | `--verbose` | `-v` | Enable verbose logging | `false` |
 
@@ -34,6 +36,10 @@ The mock server:
 - Generates mock responses from assertion blocks or explicit mock definitions
 - Supports path parameters (e.g., `/users/{{id}}`)
 - Adds configurable response delays to simulate network latency
+- Answers `405 Method Not Allowed` with an `Allow` header when the path exists for another method
+- Serves `HEAD` from the `GET` route of the same path
+- Listens on `127.0.0.1` only; pass `--host 0.0.0.0` to expose it (for example in Docker)
+- Exits with an error when the port is already in use
 - Handles graceful shutdown on `Ctrl+C` (SIGINT/SIGTERM)
 
 ## Examples
@@ -54,13 +60,21 @@ hitspec mock api.http --port 3000 --delay 100ms
 ```bash From a directory
 hitspec mock tests/ --verbose
 ```
+
+```bash Reachable from a container or another machine
+hitspec mock api.http --host 0.0.0.0
+```
+
+```bash For a browser app on another origin
+hitspec mock api.http --cors
+```
 </CodeGroup>
 
 ### Sample Output
 
 ```
-Loaded 12 routes from 3 files
-Mock server started on http://localhost:3000
+Mock server: loaded 12 route(s) from 3 file(s)
+Mock server listening on http://127.0.0.1:3000
 ```
 
 ## Use Cases
@@ -85,6 +99,8 @@ hitspec record [flags]
 | Flag | Short | Description | Default |
 |------|-------|-------------|---------|
 | `--port` | `-p` | Port to run the proxy on | `8080` |
+| `--host` | | Address to bind. Use `0.0.0.0` to expose the proxy beyond this machine | `127.0.0.1` |
+| `--no-redact` | | Record secrets verbatim instead of replacing them with `{{PLACEHOLDER}}` references | `false` |
 | `--target` | `-t` | Target URL to proxy to (required) | |
 | `--output` | `-o` | Output file path | stdout |
 | `--exclude` | | Paths to exclude from recording (comma-separated) | |
@@ -98,7 +114,11 @@ The recording proxy:
 
 - Forwards all requests to the target server (reverse proxy mode)
 - Records both requests and responses
-- Sanitizes sensitive headers (Authorization, Cookie, etc.)
+- Streams responses to the client as they arrive: server-sent events and chunked bodies are not buffered. The recording keeps up to 1 MiB of each body (the client always gets all of it), and the recording is stored when the response ends
+- Redacts secrets by default: the `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key` and `Api-Key` headers, and JSON fields named `password`, `secret`, `token` or `apiKey` (including `access_token`, `clientSecret` and similar names that end in one of those) in request and response bodies. Values become `{{AUTHORIZATION}}`, `{{ACCESS_TOKEN}}`, ... so the exported file can be run with those variables defined. Use `--no-redact` to keep everything
+- Records the full target URL, including a path prefix in `--target` (`--target https://api.example.com/v2` records `https://api.example.com/v2/users`)
+- Listens on `127.0.0.1` only; pass `--host 0.0.0.0` to expose it
+- Exits with an error when the port is already in use
 - Exports to `.http` format on shutdown (`Ctrl+C`)
 - Supports deduplication of repeated requests
 
@@ -144,8 +164,8 @@ hitspec record --target https://api.example.com --json -o recordings.json
 ### Sample Output
 
 ```
-Proxy listening on http://localhost:8080
-Forwarding to https://api.example.com
+Recording proxy listening on http://127.0.0.1:8080
+Proxying to: https://api.example.com
 
 Recorded 5 requests
 Exported to tests/api.http

@@ -131,21 +131,17 @@ func TestRunFilePersistsHistoryCRUD(t *testing.T) {
 		t.Fatalf("RunFile: %v", err)
 	}
 
-	// recordRunToHistory persists asynchronously and in stages (run row, then
-	// results, then finish), so poll until a run with its results is fully written.
-	var id int64
-	waitFor(t, 3*time.Second, "run with results to persist", func() bool {
-		list, _ := m.ListRuns(ctx, 30, 0)
-		if list.Total < 1 || len(list.Runs) == 0 {
-			return false
-		}
-		run, err := m.GetRun(ctx, list.Runs[0].ID)
-		if err != nil || len(run.Results) == 0 {
-			return false
-		}
-		id = run.ID
-		return true
-	})
+	// The run is committed, with every result, before RunFile returns: no
+	// polling.
+	list, err := m.ListRuns(ctx, 30, 0)
+	if err != nil || list.Total != 1 || len(list.Runs) != 1 {
+		t.Fatalf("ListRuns right after RunFile = %+v, err %v; want exactly the finished run", list, err)
+	}
+	run, err := m.GetRun(ctx, list.Runs[0].ID)
+	if err != nil || len(run.Results) == 0 || run.FinishedAt == "" || run.Total != int64(len(run.Results)) {
+		t.Fatalf("GetRun right after RunFile = %+v, err %v; want all results and a finished run", run, err)
+	}
+	id := run.ID
 
 	if err := m.DeleteRun(ctx, id); err != nil {
 		t.Fatalf("DeleteRun: %v", err)
@@ -154,14 +150,13 @@ func TestRunFilePersistsHistoryCRUD(t *testing.T) {
 		t.Fatal("GetRun after delete should error")
 	}
 
-	// Re-run, wait for the async persist to land, then clear all.
+	// Re-run, then clear all.
 	if _, err := m.RunFile(ctx, RunReq{File: "api.http"}); err != nil {
 		t.Fatalf("RunFile (2): %v", err)
 	}
-	waitFor(t, 3*time.Second, "second run to persist", func() bool {
-		l, _ := m.ListRuns(ctx, 30, 0)
-		return l.Total >= 1
-	})
+	if l, _ := m.ListRuns(ctx, 30, 0); l.Total != 1 {
+		t.Fatalf("second run not persisted before RunFile returned: total %d", l.Total)
+	}
 	if err := m.ClearRuns(ctx); err != nil {
 		t.Fatalf("ClearRuns: %v", err)
 	}

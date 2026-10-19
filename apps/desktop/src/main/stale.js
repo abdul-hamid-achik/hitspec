@@ -6,9 +6,9 @@ import path from 'node:path';
  * Orphan handling for the `hitspec serve --api-only` child.
  *
  * If Electron is killed with SIGKILL (or crashes hard) nothing runs on the
- * way out, and the Go server keeps its port and file watcher. Without a
- * cooperating child (see README "Known limitation") the best we can do is to
- * remember the child in a pidfile and reap it on the next launch.
+ * way out. The server is started with `--parent-pid` and exits by itself, but
+ * an older CLI ignores that, so the child is also remembered in a pidfile and
+ * reaped on the next launch (after verifying its identity).
  */
 
 export function writePidFile(file, record) {
@@ -49,17 +49,24 @@ function defaultIsAlive(pid) {
   }
 }
 
-function defaultGetCommand(pid, platform = process.platform) {
+/**
+ * The full command line of `pid`, or null when it cannot be read. Identity
+ * checks need the whole command line, not an image name: on Windows
+ * `tasklist` only gives "hitspec.exe", which is also a user's `hitspec run`.
+ * `run` is injectable for tests.
+ */
+export function defaultGetCommand(pid, platform = process.platform, run = execFile) {
   return new Promise((resolve) => {
     if (platform === 'win32') {
-      execFile('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], { windowsHide: true }, (err, stdout) => {
+      // pid comes from a validated integer in the pid file.
+      const script = `(Get-CimInstance Win32_Process -Filter 'ProcessId=${Number(pid)}').CommandLine`;
+      run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 10000 }, (err, stdout) => {
         if (err) return resolve(null);
-        const m = /^"([^"]+)"/.exec(String(stdout).trim());
-        resolve(m ? m[1] : null);
+        resolve(String(stdout).trim() || null);
       });
       return;
     }
-    execFile('ps', ['-p', String(pid), '-o', 'command='], (err, stdout) => {
+    run('ps', ['-p', String(pid), '-o', 'command='], (err, stdout) => {
       if (err) return resolve(null);
       resolve(String(stdout).trim() || null);
     });
@@ -67,13 +74,19 @@ function defaultGetCommand(pid, platform = process.platform) {
 }
 
 /**
- * Is `command` (ps output, or an image name on Windows) really a hitspec API
- * server? Guards against PID reuse: we must never signal an unrelated process.
+ * Is `command` (the process's full command line) really a hitspec API server?
+ * Guards against PID reuse: we must never signal an unrelated process, nor
+ * another hitspec invocation. The executable may be quoted (Windows).
  */
 export function looksLikeHitspecServe(command) {
   if (!command) return false;
-  if (/^hitspec(\.exe)?$/i.test(command.trim())) return true; // tasklist image name
-  return /(^|[\\/\s])hitspec(\.exe)?\s/i.test(command) && /\sserve\s/.test(command) && /--api-only/.test(command);
+  return /(^|[\\/\s"])hitspec(\.exe)?"?\s/i.test(command) && /\sserve\s/.test(command) && /--api-only/.test(command);
+}
+
+/** The server we recorded listened on `port`: a reused pid running another server must not match. */
+function matchesRecord(command, rec) {
+  if (!Number.isInteger(rec?.port)) return true;
+  return new RegExp(`--port[= ]${rec.port}(\\s|$)`).test(command);
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -97,7 +110,8 @@ export async function reapStaleServer(file, deps = {}) {
     removePidFile(file);
     return { reaped: false, pid: rec.pid, reason: 'not running' };
   }
-  if (!looksLikeHitspecServe(await getCommand(rec.pid))) {
+  const command = await getCommand(rec.pid);
+  if (!looksLikeHitspecServe(command) || !matchesRecord(command, rec)) {
     removePidFile(file);
     return { reaped: false, pid: rec.pid, reason: 'pid was reused by another program' };
   }

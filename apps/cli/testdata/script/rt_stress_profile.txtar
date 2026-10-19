@@ -1,0 +1,21 @@
+# hitspec.yaml stress profiles are not masked by the flag defaults, and a flag
+# given explicitly wins even when it equals the default.
+exitcode 0 hitspec run fast.http --stress --profile load --no-progress --no-color
+stdout 'Target: 4 req/s \| Duration: 1s \| Max VUs: 7'
+
+exitcode 0 hitspec run fast.http --stress --profile load --rate 10 --max-vus 100 --no-progress --no-color
+stdout 'Target: 10 req/s \| Duration: 1s \| Max VUs: 100'
+
+-- hitspec.yaml --
+stress:
+  profiles:
+    load:
+      duration: 1s
+      rate: 4
+      maxVUs: 7
+
+-- fast.http --
+@baseUrl = {{$env(SERVER)}}
+
+### Fast
+GET {{baseUrl}}/status/200

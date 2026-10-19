@@ -2,6 +2,7 @@ package mock
 
 import (
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -55,6 +56,30 @@ func (r *Router) Match(method, path string) (*Route, map[string]string) {
 	}
 
 	return nil, nil
+}
+
+// AllowedMethods lists, sorted, the methods that have a route for path (HEAD is
+// included when GET is, since the server answers HEAD from GET routes).
+func (r *Router) AllowedMethods(path string) []string {
+	path = normalizePath(path)
+	seen := map[string]bool{}
+	for _, route := range r.routes {
+		if matchPath(route, path) != nil {
+			seen[strings.ToUpper(route.Method)] = true
+		}
+	}
+	if seen["GET"] {
+		seen["HEAD"] = true
+	}
+	if len(seen) == 0 {
+		return nil
+	}
+	methods := make([]string, 0, len(seen))
+	for m := range seen {
+		methods = append(methods, m)
+	}
+	sort.Strings(methods)
+	return methods
 }
 
 func normalizePath(path string) string {

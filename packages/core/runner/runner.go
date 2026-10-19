@@ -11,6 +11,7 @@ import (
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/assertions"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/env"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/history"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/http"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/snapshot"
@@ -31,7 +32,8 @@ type Runner struct {
 	client    *http.Client
 	resolver  *env.Resolver
 	config    *Config
-	historyWG sync.WaitGroup // tracks in-flight history-record goroutines
+	historyWG sync.WaitGroup    // tracks in-flight history-record goroutines
+	snapshots *snapshot.Manager // snapshot state of the current run (see RunFileContext)
 }
 
 type Config struct {
@@ -54,11 +56,20 @@ type Config struct {
 	DefaultHeaders     map[string]string
 	ConfigEnvironments map[string]map[string]any
 	UpdateSnapshots    bool                      // Update snapshots instead of comparing
+	FileRoot           string                    // when set, `< file` bodies and multipart files must live under this directory (the workspace of serve/studio)
 	AllowShell         bool                      // Allow shell command execution (>>>shell blocks and hooks)
 	AllowDB            bool                      // Allow database assertions (>>>db blocks)
 	HistoryStore       *history.Store            // Optional persistent history store
 	OnProgress         func(event ProgressEvent) // Optional callback for per-request progress
-	MaxResponseBytes   int64                     // Optional response-body bound
+	MaxResponseBytes   int64                     // Response-body bound: 0 = http default (100 MiB), < 0 = unlimited
+
+	// HTTP client settings that have no per-request equivalent.
+	CACert                 string // PEM CA bundle trusted in addition to the system roots
+	ClientCert             string // PEM client certificate for mutual TLS (needs ClientKey)
+	ClientKey              string // PEM private key for ClientCert
+	HTTP1                  bool   // disable HTTP/2
+	Cookies                bool   // keep a cookie jar for the runner's lifetime
+	RedirectForwardHeaders bool   // keep user headers on cross-origin redirects
 }
 
 // ClientOptions returns the HTTP client options this configuration implies. The
@@ -80,8 +91,23 @@ func (c *Config) ClientOptions() []http.ClientOption {
 	if len(c.DefaultHeaders) > 0 {
 		opts = append(opts, http.WithDefaultHeaders(c.DefaultHeaders))
 	}
-	if c.MaxResponseBytes > 0 {
+	if c.MaxResponseBytes != 0 {
 		opts = append(opts, http.WithMaxBodyBytes(c.MaxResponseBytes))
+	}
+	if c.CACert != "" {
+		opts = append(opts, http.WithCACert(c.CACert))
+	}
+	if c.ClientCert != "" || c.ClientKey != "" {
+		opts = append(opts, http.WithClientCert(c.ClientCert, c.ClientKey))
+	}
+	if c.HTTP1 {
+		opts = append(opts, http.WithHTTP2(false))
+	}
+	if c.Cookies {
+		opts = append(opts, http.WithCookies(true))
+	}
+	if c.RedirectForwardHeaders {
+		opts = append(opts, http.WithForwardRedirectHeaders(true))
 	}
 	return opts
 }
@@ -148,7 +174,11 @@ type RequestResult struct {
 	ShellResults []*ShellResult
 	SSEEvents    []sse.Event
 	Captures     map[string]any
-	Error        error
+	// Warnings are non-fatal findings about the request: a capture that matched
+	// nothing, a {{reference}} that was sent unresolved. They never change
+	// Passed or the exit code.
+	Warnings []string
+	Error    error
 }
 
 // ProgressEvent is fired before and after each request execution.
@@ -173,7 +203,27 @@ func (r *Runner) RunFileContext(ctx context.Context, path string) (*RunResult, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse %s: %w", path, err)
 	}
+	return r.runParsedFile(ctx, file, path)
+}
 
+// RunSourceContext runs a hitspec document that did not come from a file on
+// disk (`hitspec run -` reads it from stdin). name is what reports call the
+// document, and relative paths inside it (environments, @file bodies,
+// snapshots) resolve against its directory, so name should be a path in the
+// directory they belong to, e.g. "<stdin>" for the working directory.
+func (r *Runner) RunSourceContext(ctx context.Context, name string, src []byte) (*RunResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	file, err := parser.ParseSource(string(src), name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse %s: %w", name, err)
+	}
+	return r.runParsedFile(ctx, file, name)
+}
+
+// runParsedFile runs a parsed document; path locates it for relative paths.
+func (r *Runner) runParsedFile(ctx context.Context, file *parser.File, path string) (*RunResult, error) {
 	environment, err := env.LoadEnvironment(filepath.Dir(path), r.config.Environment, r.config.ConfigEnvironments)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load environment %q: %w", r.config.Environment, err)
@@ -185,9 +235,9 @@ func (r *Runner) RunFileContext(ctx context.Context, path string) (*RunResult, e
 		r.resolver.SetVariable(v.Name, v.Value)
 	}
 
-	// Initialize snapshot manager for this file
-	snapshotManager := snapshot.NewManager(filepath.Dir(path), r.config.UpdateSnapshots)
-	snapshot.SetGlobalManager(snapshotManager)
+	// Each run owns its snapshot manager: concurrent runs (hitspec serve) must
+	// not share update mode or the file cache through a process-wide global.
+	r.snapshots = snapshot.NewManager(filepath.Dir(path), r.config.UpdateSnapshots)
 
 	result, err := r.runRequests(ctx, file)
 	if err != nil {

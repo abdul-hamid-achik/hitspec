@@ -16,10 +16,12 @@ import (
 	"net"
 	"net/http"
 	"net/http/cookiejar"
+	"net/http/httptrace"
 	neturl "net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/http/httpproxy"
@@ -376,6 +378,9 @@ func (c *Client) DoWithContext(ctx context.Context, req *Request) (*Response, er
 	if c.configErr != nil {
 		return nil, c.configErr
 	}
+	if req.Err != nil {
+		return nil, req.Err
+	}
 	// The effective timeout is the per-request @timeout when set, otherwise the
 	// client-level timeout. A per-request timeout longer than the client default
 	// (e.g. @timeout 60000 with a 30s default) must not be silently capped, so the
@@ -432,12 +437,23 @@ func bodyReadError(ctx context.Context, err error, read int, contentLength int64
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		if timeout, ok := ctx.Value(timeoutKey{}).(time.Duration); ok {
-			return fmt.Errorf("timeout reading response body after %s (%s): %w", timeout, progress, err)
+			return &BodyReadError{msg: fmt.Sprintf("timeout reading response body after %s (%s)", timeout, progress), err: err}
 		}
-		return fmt.Errorf("timeout reading response body (%s): %w", progress, err)
+		return &BodyReadError{msg: fmt.Sprintf("timeout reading response body (%s)", progress), err: err}
 	}
-	return fmt.Errorf("error reading response body (%s): %w", progress, err)
+	return &BodyReadError{msg: fmt.Sprintf("error reading response body (%s)", progress), err: err}
 }
+
+// BodyReadError reports a failure while reading a response body, after the
+// response headers arrived. It unwraps to the underlying read error, and
+// IsNetworkError never classifies it as a network error: a response did arrive.
+type BodyReadError struct {
+	msg string
+	err error
+}
+
+func (e *BodyReadError) Error() string { return e.msg + ": " + e.err.Error() }
+func (e *BodyReadError) Unwrap() error { return e.err }
 
 func (c *Client) doRequest(ctx context.Context, req *Request, authHeader string) (*Response, error) {
 	// Validate URL before making request
@@ -483,10 +499,20 @@ func (c *Client) doRequest(ctx context.Context, req *Request, authHeader string)
 		httpReq.Header.Set("Authorization", authHeader)
 	}
 
+	// Remember whether a connection was ever obtained, to tell a deadline that
+	// expired while connecting (unreachable host) from one after connecting.
+	var connected atomic.Bool
+	httpReq = httpReq.WithContext(httptrace.WithClientTrace(httpReq.Context(), &httptrace.ClientTrace{
+		GotConn: func(httptrace.GotConnInfo) { connected.Store(true) },
+	}))
+
 	start := time.Now()
 	httpResp, err := c.httpClient.Do(httpReq)
 
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) && !connected.Load() {
+			err = &ConnectTimeoutError{err: err}
+		}
 		return nil, err
 	}
 	defer httpResp.Body.Close()
@@ -681,6 +707,27 @@ func (c *Client) doWithDigestAuth(ctx context.Context, req *Request) (*Response,
 }
 
 func (c *Client) doWithAWSAuth(ctx context.Context, req *Request) (*Response, error) {
+	// SigV4 signs a hash of the exact bytes sent. A multipart body is normally
+	// assembled at send time with a random boundary, so assemble it now and
+	// sign (and send) those bytes.
+	if len(req.Multipart) > 0 {
+		body, contentType, err := BuildMultipartBody(req.Multipart, req.BaseDir)
+		if err != nil {
+			return nil, err
+		}
+		fixed := *req
+		fixed.Body = body.String()
+		fixed.Multipart = nil
+		fixed.Headers = make(map[string]string, len(req.Headers)+1)
+		for k, v := range req.Headers {
+			if !strings.EqualFold(k, "Content-Type") {
+				fixed.Headers[k] = v
+			}
+		}
+		fixed.Headers["Content-Type"] = contentType
+		req = &fixed
+	}
+
 	// Sign the request with AWS Signature v4
 	authHeader, err := SignAWSRequest(req)
 	if err != nil {
@@ -805,12 +852,12 @@ func BuildMultipartBody(fields []*parser.MultipartField, baseDir string) (*bytes
 
 			// Validate path doesn't escape base directory (prevent path traversal)
 			if err := pathutil.ValidateWithinBase(filePath, baseDir); err != nil {
-				return nil, "", err
+				return nil, "", fmt.Errorf("multipart file %q: %w", field.Path, err)
 			}
 
 			file, err := os.Open(filePath)
 			if err != nil {
-				return nil, "", err
+				return nil, "", fmt.Errorf("multipart file %q: %w", field.Path, err)
 			}
 
 			part, err := writer.CreateFormFile(field.Name, filepath.Base(filePath))

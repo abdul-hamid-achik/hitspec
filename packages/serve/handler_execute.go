@@ -28,10 +28,13 @@ func (s *Server) runSettings(environment string) (*runner.Config, []hitspechttp.
 	cfg, clientOpts := runconfig.Build(s.fileConfig, overrides)
 	cfg.AllowShell = s.config.AllowShell
 	cfg.AllowDB = s.config.AllowDB
+	// A `< file` body must not read outside the workspace the API serves.
+	cfg.FileRoot = s.config.WorkDir
 	return cfg, clientOpts
 }
 
 func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
+	clearWriteDeadline(w) // a run lasts as long as the API it calls
 	var req ExecuteReq
 	if err := readJSON(r, &req); err != nil {
 		writeReadError(w, err)
@@ -143,8 +146,8 @@ func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 		s.history.Add(entry)
 	}
 
-	// Record to persistent history (non-blocking)
-	s.recordRunToHistory(req.File, env, dto)
+	// Record to persistent history (committed before we respond)
+	s.recordRunToHistory(r.Context(), req.File, env, dto)
 
 	s.logger.Info("execution completed", "exec_id", execID, "file", req.File, "duration_ms", result.Duration.Milliseconds(), "passed", result.Passed, "failed", result.Failed, "skipped", result.Skipped)
 
@@ -152,6 +155,7 @@ func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRunFile(w http.ResponseWriter, r *http.Request) {
+	clearWriteDeadline(w) // a run lasts as long as the API it calls
 	var req RunReq
 	if err := readJSON(r, &req); err != nil {
 		writeReadError(w, err)
@@ -244,8 +248,8 @@ func (s *Server) handleRunFile(w http.ResponseWriter, r *http.Request) {
 		s.history.Add(entry)
 	}
 
-	// Record to persistent history (non-blocking)
-	s.recordRunToHistory(req.File, env, dto)
+	// Record to persistent history (committed before we respond)
+	s.recordRunToHistory(r.Context(), req.File, env, dto)
 
 	s.logger.Info("run file completed", "exec_id", execID, "file", req.File, "duration_ms", result.Duration.Milliseconds(), "passed", result.Passed, "failed", result.Failed, "skipped", result.Skipped)
 

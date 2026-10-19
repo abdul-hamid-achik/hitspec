@@ -11,12 +11,21 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v) // headers already sent; can't write error response
+}
+
+// clearWriteDeadline lifts the per-response write deadline for a handler whose
+// work legitimately outlasts it (a run or execute of a slow API). The server's
+// WriteTimeout still protects every other route. Failure is not an error: a
+// writer that cannot change deadlines (httptest.ResponseRecorder) has none.
+func clearWriteDeadline(w http.ResponseWriter) {
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 }
 
 // maxRequestBody is the maximum size for JSON request bodies (10MB).

@@ -1,0 +1,46 @@
+# A YAML syntax (or type) error in hitspec.yaml is exit 3 with file:line,
+# whether the file was discovered or named with --config.
+
+# discovered in the working directory
+exitcode 3 hitspec run --no-history ok.http
+stderr 'Error: hitspec\.yaml:2: '
+! stdout 'Tests:'
+
+# discovered in a parent directory
+cd sub
+exitcode 3 hitspec run --no-history ../ok.http
+stderr 'Error: \.\.[/\\]hitspec\.yaml:2: '
+cd ..
+
+# explicit --config
+exitcode 3 hitspec run --no-history --config typed.yaml ok.http
+stderr 'Error: typed\.yaml:2: .*cannot unmarshal'
+
+# validate reports it the same way
+exitcode 3 hitspec validate ok.http
+stderr 'Error: hitspec\.yaml:2: '
+
+# studio, serve and contract refuse to start on it, before any UI is drawn
+exitcode 3 hitspec studio
+stderr 'Error: hitspec\.yaml:2: '
+exitcode 3 hitspec serve --api-only --port 0
+stderr 'Error: hitspec\.yaml:2: '
+exitcode 3 hitspec contract verify sub --provider http://127.0.0.1:9
+stderr 'hitspec\.yaml:2: '
+
+-- .git/HEAD --
+ref: refs/heads/main
+-- hitspec.yaml --
+timeout: 1
+retries: 2: 3
+-- typed.yaml --
+retries: 1
+timeout: not-a-number
+-- sub/.keep --
+-- ok.http --
+### ok
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 200
+<<<

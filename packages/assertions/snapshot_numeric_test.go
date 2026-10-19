@@ -27,20 +27,20 @@ func TestEvaluator_NumericCoercion(t *testing.T) {
 // creates the baseline, a second identical run passes, a changed body fails.
 func TestEvaluator_Snapshot(t *testing.T) {
 	dir := t.TempDir()
-	defer snapshot.SetGlobalManager(nil)
 
 	mkResp := func(body string) *http.Response { return createResponse(200, body, nil) }
+	var manager *snapshot.Manager
 	opts := func() []EvaluatorOption {
-		return []EvaluatorOption{WithTestFile(filepath.Join(dir, "test.http")), WithRequestName("getUser")}
+		return []EvaluatorOption{WithTestFile(filepath.Join(dir, "test.http")), WithRequestName("getUser"), WithSnapshotManager(manager)}
 	}
 
 	// Update mode: the first evaluation creates the baseline snapshot and passes.
-	snapshot.SetGlobalManager(snapshot.NewManager(dir, true))
+	manager = snapshot.NewManager(dir, true)
 	e := NewEvaluatorWithBaseDir(mkResp(`{"id": 1, "name": "alice"}`), "", opts()...)
 	r1 := e.Evaluate(&parser.Assertion{Subject: "body", Operator: parser.OpSnapshot, Expected: "getUserResponse"})
 	assert.True(t, r1.Passed, "first snapshot should pass (baseline created): %s", r1.Message)
 	// Check mode: identical body matches the baseline; a changed body fails.
-	snapshot.SetGlobalManager(snapshot.NewManager(dir, false))
+	manager = snapshot.NewManager(dir, false)
 	e2 := NewEvaluatorWithBaseDir(mkResp(`{"id": 1, "name": "alice"}`), "", opts()...)
 	r2 := e2.Evaluate(&parser.Assertion{Subject: "body", Operator: parser.OpSnapshot, Expected: "getUserResponse"})
 	assert.True(t, r2.Passed, "unchanged body should match snapshot: %s", r2.Message)

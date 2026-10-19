@@ -1,0 +1,39 @@
+# Ctrl-C (SIGINT) while a request is in flight: the results so far are printed
+# with the unfinished requests marked, --output-file is written, and the process
+# exits non-zero (130; the exact code is asserted by TestRun_InterruptWritesPartialResultsAndExits130).
+
+! exec hitspec run slow.http --no-history --no-color --output-file out.txt &run&
+sleep 2s
+kill -INT run
+wait run
+stderr 'Interrupted'
+grep 'first-request' out.txt
+grep 'second-request' out.txt
+grep 'third-request \(cancelled\)' out.txt
+grep 'Tests:' out.txt
+
+# JSON output stays one valid document.
+! exec hitspec run slow.http --no-history -o json --output-file out.json &json&
+sleep 2s
+kill -INT json
+wait json
+grep '"file"' out.json
+grep 'cancelled' out.json
+
+-- slow.http --
+### first-request
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 200
+<<<
+
+### second-request
+GET {{$env(SERVER)}}/slow?ms=20000
+
+>>>
+expect status 200
+<<<
+
+### third-request
+GET {{$env(SERVER)}}/status/200

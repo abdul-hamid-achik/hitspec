@@ -49,8 +49,13 @@ type Thresholds struct {
 	P95        time.Duration // 95th percentile latency
 	P99        time.Duration // 99th percentile latency
 	MaxLatency time.Duration // maximum allowed latency
-	ErrorRate  float64       // maximum error rate (0.0 - 1.0)
-	MinRPS     float64       // minimum requests per second
+	ErrorRate  float64       // maximum error rate (0.0 - 1.0): transport errors and non-2xx statuses, not assertion failures
+	// AssertionFailRate is the maximum share (0.0 - 1.0) of checked responses
+	// that may fail an assertion. Only enforced when AssertionFailRateSet, so
+	// that 0 ("no assertion may fail") is expressible.
+	AssertionFailRate    float64
+	AssertionFailRateSet bool
+	MinRPS               float64 // minimum requests per second
 }
 
 // DefaultConfig returns a Config with sensible defaults
@@ -186,6 +191,21 @@ func parseThresholdPart(part string, t *Thresholds) error {
 		}
 		t.ErrorRate = f
 
+	case "assertions", "assertionfailures", "assertionfailrate", "assertfail":
+		pct := strings.HasSuffix(valueStr, "%")
+		f, err := strconv.ParseFloat(strings.TrimSuffix(valueStr, "%"), 64)
+		if err != nil || f < 0 {
+			return fmt.Errorf("invalid assertion failure rate: %s", valueStr)
+		}
+		if pct {
+			f /= 100
+		}
+		if op != "<" && op != "<=" {
+			return fmt.Errorf("assertion failure rate threshold must use < or <=")
+		}
+		t.AssertionFailRate = f
+		t.AssertionFailRateSet = true
+
 	case "rps", "rate":
 		f, err := strconv.ParseFloat(valueStr, 64)
 		if err != nil {
@@ -205,7 +225,7 @@ func parseThresholdPart(part string, t *Thresholds) error {
 
 // HasThresholds returns true if any thresholds are configured
 func (t *Thresholds) HasThresholds() bool {
-	return t.P50 > 0 || t.P95 > 0 || t.P99 > 0 || t.MaxLatency > 0 || t.ErrorRate > 0 || t.MinRPS > 0
+	return t.P50 > 0 || t.P95 > 0 || t.P99 > 0 || t.MaxLatency > 0 || t.ErrorRate > 0 || t.AssertionFailRateSet || t.MinRPS > 0
 }
 
 // ThresholdResult holds the result of evaluating a threshold

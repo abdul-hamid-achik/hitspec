@@ -396,10 +396,21 @@ func (r *Runner) executeRequest(ctx context.Context, req *parser.Request, baseDi
 		}()
 	}
 
+	// Confine `< file` bodies and multipart parts to the workspace when the
+	// caller asked for it (serve/studio run files for other people).
+	if r.config.FileRoot != "" {
+		if err := http.CheckFileRefs(req, r.resolver.Resolve, baseDir, r.config.FileRoot); err != nil {
+			result.Error = err
+			result.Passed = false
+			return result
+		}
+	}
+
 	start := time.Now()
 
 	httpReq := http.BuildRequestFromASTWithBaseDir(req, r.resolver.Resolve, baseDir)
 	result.Request = httpReq
+	result.Warnings = append(result.Warnings, unresolvedWarnings(httpReq)...)
 
 	resp, err := r.client.DoWithContext(ctx, httpReq)
 	result.Duration = time.Since(start)
@@ -422,6 +433,7 @@ func (r *Runner) executeRequest(ctx context.Context, req *parser.Request, baseDi
 		result.Assertions = assertions.EvaluateAllWithBaseDir(resp, req.Assertions, baseDir,
 			assertions.WithTestFile(filePath),
 			assertions.WithRequestName(req.Name),
+			assertions.WithSnapshotManager(r.snapshots),
 			assertions.WithResolver(r.resolver.Resolve))
 		result.Passed = true
 		for _, a := range result.Assertions {
@@ -462,7 +474,9 @@ func (r *Runner) executeRequest(ctx context.Context, req *parser.Request, baseDi
 	}
 
 	if len(req.Captures) > 0 {
-		captures := capture.ExtractAll(resp, req.Captures)
+		captures, misses := capture.ExtractAllReport(resp, req.Captures)
+		capture.Report(misses)
+		result.Warnings = append(result.Warnings, misses...)
 		for name, value := range captures {
 			result.Captures[name] = value
 			if !parallel {

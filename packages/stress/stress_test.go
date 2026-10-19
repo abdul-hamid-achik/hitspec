@@ -561,8 +561,12 @@ GET {{baseUrl}}/slow
 	// default timeout). With the fix the request is cancelled at ~150ms.
 	assert.Less(t, elapsed, 2*time.Second,
 		"run should stop shortly after duration once ctx cancellation propagates to requests, took %v", elapsed)
-	// Timeouts are recorded rather than bogus generic errors.
-	assert.True(t, result.Summary.TotalRequests > 0, "should have attempted requests")
-	t.Logf("Run stopped after %v with %d requests (%d timeouts)",
-		elapsed, result.Summary.TotalRequests, result.Summary.TimeoutCount)
+	// Requests cut off by the end of the window are counted as incomplete, not
+	// as errors or timeouts of the server under test.
+	assert.True(t, result.Summary.IncompleteCount > 0, "should have in-flight requests when the window closed")
+	assert.Zero(t, result.Summary.ErrorCount, "requests cut off by the window are not errors")
+	assert.Zero(t, result.Summary.TimeoutCount)
+	assert.Zero(t, result.Summary.TotalRequests)
+	t.Logf("Run stopped after %v with %d incomplete requests",
+		elapsed, result.Summary.IncompleteCount)
 }

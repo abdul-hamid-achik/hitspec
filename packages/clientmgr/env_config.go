@@ -51,9 +51,6 @@ func (m *Manager) GetEnvironment(ctx context.Context, name string) (EnvironmentD
 // SelectEnvironment sets the active environment.
 func (m *Manager) SelectEnvironment(ctx context.Context, name string) error {
 	_ = ctx
-	if err := m.requireWritable(); err != nil {
-		return err
-	}
 	if name == "" {
 		return fmt.Errorf("name is required")
 	}
@@ -96,59 +93,82 @@ func (m *Manager) GetConfig(ctx context.Context) (ConfigDTO, error) {
 	if m.fileConfig == nil {
 		return ConfigDTO{}, nil
 	}
-	return ConfigDTO{
-		DefaultEnvironment: m.fileConfig.DefaultEnvironment,
-		Timeout:            m.fileConfig.Timeout,
-		Retries:            m.fileConfig.Retries,
-		FollowRedirects:    m.fileConfig.FollowRedirects,
-		ValidateSSL:        m.fileConfig.ValidateSSL,
-		Proxy:              m.fileConfig.Proxy,
-		Headers:            m.fileConfig.Headers,
-		Parallel:           m.fileConfig.Parallel,
-		Concurrency:        m.fileConfig.Concurrency,
-	}, nil
+	return configToDTO(m.fileConfig), nil
 }
 
-// PutConfig partially updates and persists hitspec.yaml settings.
+func configToDTO(c *config.Config) ConfigDTO {
+	return ConfigDTO{
+		DefaultEnvironment: c.DefaultEnvironment,
+		Timeout:            c.Timeout,
+		Retries:            c.Retries,
+		RetryDelay:         c.RetryDelay,
+		FollowRedirects:    c.FollowRedirects,
+		MaxRedirects:       c.MaxRedirects,
+		ValidateSSL:        c.ValidateSSL,
+		Proxy:              c.Proxy,
+		Headers:            c.Headers,
+		Parallel:           c.Parallel,
+		Concurrency:        c.Concurrency,
+	}
+}
+
+// PutConfig partially updates and persists hitspec.yaml settings. Zero values
+// in dto are left unchanged; use PatchConfig to set retries to 0 or clear the
+// proxy. It returns the resulting settings.
 func (m *Manager) PutConfig(ctx context.Context, dto ConfigDTO) (ConfigDTO, error) {
+	var patch config.Patch
+	if dto.DefaultEnvironment != "" {
+		patch.DefaultEnvironment = &dto.DefaultEnvironment
+	}
+	if dto.Timeout > 0 {
+		patch.Timeout = &dto.Timeout
+	}
+	if dto.Retries > 0 {
+		patch.Retries = &dto.Retries
+	}
+	if dto.RetryDelay > 0 {
+		patch.RetryDelay = &dto.RetryDelay
+	}
+	patch.FollowRedirects = dto.FollowRedirects
+	if dto.MaxRedirects > 0 {
+		patch.MaxRedirects = &dto.MaxRedirects
+	}
+	patch.ValidateSSL = dto.ValidateSSL
+	if dto.Proxy != "" {
+		patch.Proxy = &dto.Proxy
+	}
+	patch.Headers = dto.Headers
+	patch.Parallel = dto.Parallel
+	if dto.Concurrency > 0 {
+		patch.Concurrency = &dto.Concurrency
+	}
+	return m.PatchConfig(ctx, patch)
+}
+
+// PatchConfig applies a partial update where only the fields that are set
+// (non-nil) change, so retries can be set to 0 and the proxy cleared. The
+// change is persisted to hitspec.yaml and the resulting settings returned; a
+// rejected patch (negative number) changes nothing.
+func (m *Manager) PatchConfig(ctx context.Context, patch config.Patch) (ConfigDTO, error) {
 	_ = ctx
 	if err := m.requireWritable(); err != nil {
 		return ConfigDTO{}, err
 	}
 	m.configMu.Lock()
 	defer m.configMu.Unlock()
-	if m.fileConfig == nil {
-		m.fileConfig = config.DefaultConfig()
+	current := m.fileConfig
+	if current == nil {
+		current = config.DefaultConfig()
 	}
-	if dto.DefaultEnvironment != "" {
-		m.fileConfig.DefaultEnvironment = dto.DefaultEnvironment
-	}
-	if dto.Timeout > 0 {
-		m.fileConfig.Timeout = dto.Timeout
-	}
-	if dto.Retries > 0 {
-		m.fileConfig.Retries = dto.Retries
-	}
-	if dto.FollowRedirects != nil {
-		m.fileConfig.FollowRedirects = dto.FollowRedirects
-	}
-	if dto.ValidateSSL != nil {
-		m.fileConfig.ValidateSSL = dto.ValidateSSL
-	}
-	if dto.Proxy != "" {
-		m.fileConfig.Proxy = dto.Proxy
-	}
-	if dto.Headers != nil {
-		m.fileConfig.Headers = dto.Headers
-	}
-	if dto.Parallel != nil {
-		m.fileConfig.Parallel = dto.Parallel
-	}
-	if dto.Concurrency > 0 {
-		m.fileConfig.Concurrency = dto.Concurrency
-	}
-	if err := m.saveConfigLocked(); err != nil {
+	next := *current
+	if err := next.Apply(patch); err != nil {
 		return ConfigDTO{}, err
 	}
-	return dto, nil
+	prev := m.fileConfig
+	m.fileConfig = &next
+	if err := m.saveConfigLocked(); err != nil {
+		m.fileConfig = prev
+		return ConfigDTO{}, err
+	}
+	return configToDTO(&next), nil
 }

@@ -174,7 +174,10 @@ type Body struct {
 	FilePath    string // For BodyFile: path to external file (e.g. < ./body.json)
 	Multipart   []*MultipartField
 	GraphQL     *GraphQLBody
-	Line        int
+	// FormFields are the "& key = value" lines of a BodyFormBlock, unencoded
+	// and in source order (repeated keys are kept).
+	FormFields []*QueryParam
+	Line       int
 }
 
 type BodyType int

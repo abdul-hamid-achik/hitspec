@@ -3,14 +3,19 @@ package runner
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/http"
 )
 
+// waitForRequestTimeout bounds each poll.
+const waitForRequestTimeout = 5 * time.Second
+
 // waitForService polls a URL until it returns the expected status code, times
-// out, or ctx ends.
+// out, or ctx ends. Each poll goes through the runner's own HTTP client, so it
+// uses the run's proxy, CA/client certificates, TLS validation, redirect policy
+// and default headers instead of a bare net/http client.
 func (r *Runner) waitForService(ctx context.Context, cfg *parser.WaitForConfig, resolver func(string) string) error {
 	if cfg == nil {
 		return nil
@@ -27,19 +32,14 @@ func (r *Runner) waitForService(ctx context.Context, cfg *parser.WaitForConfig, 
 	}
 
 	deadline := time.Now().Add(timeout)
-	client := &http.Client{
-		Timeout: 5 * time.Second, // Per-request timeout
-	}
-
 	var lastErr error
 	var lastStatus int
 
 	for time.Now().Before(deadline) {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-		if err != nil {
+		if err := http.ValidateURL(url); err != nil {
 			return fmt.Errorf("service %s: %w", url, err)
 		}
-		resp, err := client.Do(req)
+		resp, err := r.client.DoWithContext(ctx, &http.Request{Method: "GET", URL: url, Timeout: waitForRequestTimeout})
 		if err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
@@ -51,7 +51,6 @@ func (r *Runner) waitForService(ctx context.Context, cfg *parser.WaitForConfig, 
 			continue
 		}
 		lastStatus = resp.StatusCode
-		resp.Body.Close()
 
 		if resp.StatusCode == expectedStatus {
 			if r.config.Verbose {

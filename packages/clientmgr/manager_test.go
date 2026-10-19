@@ -89,11 +89,16 @@ func TestReadOnlyBlocksMutations(t *testing.T) {
 	if _, err := m.CreateFile(ctx, "readonly.http", "GET https://example.com\n"); err == nil {
 		t.Fatal("expected create in read-only mode to fail")
 	}
-	if err := m.SelectEnvironment(ctx, "prod"); err == nil {
-		t.Fatal("expected environment mutation in read-only mode to fail")
+	if _, err := m.PutEnvironment(ctx, "prod", map[string]any{"a": "b"}); err == nil {
+		t.Fatal("expected environment edit in read-only mode to fail")
 	}
 	if _, err := m.PutConfig(ctx, ConfigDTO{Timeout: 1000}); err == nil {
 		t.Fatal("expected config mutation in read-only mode to fail")
+	}
+	// Switching the active environment only changes in-memory state, so a
+	// read-only session can still pick the environment it runs against.
+	if err := m.SelectEnvironment(ctx, "prod"); err != nil {
+		t.Fatalf("SelectEnvironment in read-only mode: %v", err)
 	}
 }
 

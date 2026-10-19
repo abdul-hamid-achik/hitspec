@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -28,6 +29,30 @@ type Config struct {
 	NoColor            *bool                     `json:"noColor,omitempty" yaml:"noColor,omitempty"`
 	Environments       map[string]map[string]any `json:"environments,omitempty" yaml:"environments,omitempty"` // Inline environments
 	Stress             *StressConfig             `json:"stress,omitempty" yaml:"stress,omitempty"`             // Stress test configuration
+
+	// HTTP client options. Paths are relative to the directory of the file
+	// they were written in.
+	CACert                 string `json:"cacert,omitempty" yaml:"cacert,omitempty"` // PEM CA bundle trusted in addition to the system roots
+	Cert                   string `json:"cert,omitempty" yaml:"cert,omitempty"`     // PEM client certificate for mutual TLS
+	Key                    string `json:"key,omitempty" yaml:"key,omitempty"`       // PEM private key for cert
+	HTTP1                  *bool  `json:"http1,omitempty" yaml:"http1,omitempty"`   // true disables HTTP/2
+	Cookies                *bool  `json:"cookies,omitempty" yaml:"cookies,omitempty"`
+	MaxResponseBytes       int64  `json:"maxResponseBytes,omitempty" yaml:"maxResponseBytes,omitempty"` // 0 = default (100 MiB), -1 = unlimited
+	RedirectForwardHeaders *bool  `json:"redirectForwardHeaders,omitempty" yaml:"redirectForwardHeaders,omitempty"`
+
+	// dir is the directory of the file this config was loaded from; relative
+	// paths inside it (cacert, cert, key) resolve against it.
+	dir string
+}
+
+// ResolvePath resolves a path written in hitspec.yaml: a relative path is taken
+// relative to the directory of the file it came from. Absolute and empty paths,
+// and paths in a config that was not loaded from a file, are returned as is.
+func (c *Config) ResolvePath(p string) string {
+	if p == "" || filepath.IsAbs(p) || c == nil || c.dir == "" {
+		return p
+	}
+	return filepath.Join(c.dir, p)
 }
 
 // StressConfig holds stress testing configuration
@@ -74,6 +99,22 @@ func (c *Config) GetValidateSSL() bool {
 	return getBool(c.ValidateSSL, true)
 }
 
+// GetHTTP1 returns whether HTTP/2 is disabled, defaulting to false
+func (c *Config) GetHTTP1() bool {
+	return getBool(c.HTTP1, false)
+}
+
+// GetCookies returns whether the run keeps a cookie jar, defaulting to false
+func (c *Config) GetCookies() bool {
+	return getBool(c.Cookies, false)
+}
+
+// GetRedirectForwardHeaders returns whether user headers are kept on
+// cross-origin redirects, defaulting to false
+func (c *Config) GetRedirectForwardHeaders() bool {
+	return getBool(c.RedirectForwardHeaders, false)
+}
+
 // GetParallel returns the parallel setting, defaulting to false
 func (c *Config) GetParallel() bool {
 	return getBool(c.Parallel, false)
@@ -100,17 +141,22 @@ var ConfigFilenames = []string{
 	"hitspec.yml",
 }
 
-// LoadConfig loads configuration from the specified path or searches for config files
+// LoadConfig loads configuration from the specified path. With an empty path
+// it discovers hitspec.yaml from the working directory upward (see Discover).
 func LoadConfig(path string) (*Config, error) {
 	if path != "" {
 		return loadConfigFromFile(path)
 	}
 
-	// Search for config file in current directory
-	return FindAndLoadConfig(".")
+	l, err := Discover(".")
+	if err != nil {
+		return nil, err
+	}
+	return l.Config, nil
 }
 
-// FindAndLoadConfig searches for a config file in the given directory
+// FindAndLoadConfig loads the config file that lives directly in dir (no
+// parent search; see Discover for that), or the defaults when there is none.
 func FindAndLoadConfig(dir string) (*Config, error) {
 	for _, filename := range ConfigFilenames {
 		configPath := filepath.Join(dir, filename)
@@ -125,17 +171,32 @@ func FindAndLoadConfig(dir string) (*Config, error) {
 
 // loadConfigFromFile loads configuration from a specific file
 func loadConfigFromFile(path string) (*Config, error) {
+	l, err := loadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return l.Config, nil
+}
+
+// loadFile reads and decodes one config file. A syntax or type error is
+// reported as "<file>:<line>: <message>"; unknown keys are returned as
+// warnings (the file still loads).
+func loadFile(path string) (*Loaded, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read config %s: %w", path, err)
 	}
 
+	name := DisplayPath(path)
 	config := DefaultConfig()
 	if err := yaml.Unmarshal(data, config); err != nil {
-		return nil, fmt.Errorf("parse config %s: %w", path, err)
+		return nil, errors.New(formatParseError(name, err))
+	}
+	if abs, aerr := filepath.Abs(path); aerr == nil {
+		config.dir = filepath.Dir(abs)
 	}
 
-	return config, nil
+	return &Loaded{Config: config, Path: path, Warnings: unknownKeyWarnings(name, data)}, nil
 }
 
 // Merge merges another config into this one, with other taking precedence
@@ -164,6 +225,20 @@ func (c *Config) Merge(other *Config) *Config {
 	if other.Proxy != "" {
 		result.Proxy = other.Proxy
 	}
+	// Paths are copied as written, so a Merge followed by SaveConfig does not
+	// turn them into machine-local absolute paths.
+	if other.CACert != "" {
+		result.CACert = other.CACert
+	}
+	if other.Cert != "" {
+		result.Cert = other.Cert
+	}
+	if other.Key != "" {
+		result.Key = other.Key
+	}
+	if other.MaxResponseBytes != 0 {
+		result.MaxResponseBytes = other.MaxResponseBytes
+	}
 	if other.OutputDir != "" {
 		result.OutputDir = other.OutputDir
 	}
@@ -177,6 +252,15 @@ func (c *Config) Merge(other *Config) *Config {
 	}
 	if other.ValidateSSL != nil {
 		result.ValidateSSL = other.ValidateSSL
+	}
+	if other.HTTP1 != nil {
+		result.HTTP1 = other.HTTP1
+	}
+	if other.Cookies != nil {
+		result.Cookies = other.Cookies
+	}
+	if other.RedirectForwardHeaders != nil {
+		result.RedirectForwardHeaders = other.RedirectForwardHeaders
 	}
 	if other.Parallel != nil {
 		result.Parallel = other.Parallel

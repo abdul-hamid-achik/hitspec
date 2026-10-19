@@ -1,0 +1,96 @@
+# A failed request shows what was sent and what came back, so the report alone
+# says why it failed: request line, response status and duration, body excerpt.
+
+exitcode 1 hitspec run --no-history --no-color fail.http
+stdout '✗ missing'
+stdout 'Expected: 200'
+stdout 'Actual:   404'
+stdout 'Request:  GET http://127\.0\.0\.1:[0-9]+/b1/missing'
+stdout 'Response: 404 Not Found \([0-9]+ms\)'
+# JSON bodies are pretty-printed.
+stdout '"error": "user not found"'
+# Credentials in the URL are masked; other query parameters are not.
+stdout 'api_key=\[REDACTED\]'
+stdout 'page=2'
+! stdout 'secret-value'
+# A passing request in the same file stays terse without -v.
+stdout '✓ fine'
+! stdout 'Request:  GET .*/b1/ping'
+
+# A large body is capped and says how much was cut.
+exitcode 1 hitspec run --no-history --no-color big.http
+stdout 'item-000'
+! stdout 'item-199'
+stdout '\.\.\. [0-9]+ more bytes, [0-9]+ more lines'
+stdout '-vvv prints the whole body'
+
+# -vvv prints it all.
+exitcode 1 hitspec run --no-history --no-color -vvv big.http
+stdout 'item-199'
+! stdout 'more bytes'
+
+# Binary bodies are described, not dumped.
+exitcode 1 hitspec run --no-history --no-color binary.http
+stdout 'Response: 500'
+stdout '\[9 bytes, binary\]'
+
+# Terminal escape sequences in a response never reach the terminal.
+exitcode 1 hitspec run --no-history --no-color ansi.http
+stdout 'bad.*red.* gateway'
+! stdout '\x1b'
+
+# A request that errors (nothing listening) still shows the request line. It is a
+# network error, so the run exits 4.
+exitcode 4 hitspec run --no-history --no-color refused.http
+stdout 'x refused'
+stdout 'Request:  GET http://127\.0\.0\.1:1/nothing\?api_key=\[REDACTED\]'
+! stdout 'Response:'
+# ...and so does the error text, which Go builds from the full URL.
+! stdout 'secret-value'
+
+-- fail.http --
+### missing
+GET {{$env(SERVER)}}/b1/missing?api_key=secret-value&page=2
+
+>>>
+expect status 200
+<<<
+
+### fine
+GET {{$env(SERVER)}}/b1/ping
+
+>>>
+expect status 200
+<<<
+
+-- big.http --
+### big
+GET {{$env(SERVER)}}/b1/big
+
+>>>
+expect status 200
+<<<
+
+-- binary.http --
+### binary
+GET {{$env(SERVER)}}/b1/binary
+
+>>>
+expect status 200
+<<<
+
+-- ansi.http --
+### ansi
+GET {{$env(SERVER)}}/b1/ansi
+
+>>>
+expect status 200
+<<<
+
+-- refused.http --
+### refused
+GET http://127.0.0.1:1/nothing?api_key=secret-value
+
+>>>
+expect status 200
+<<<

@@ -19,6 +19,10 @@ const (
 
 	// ExitUsageError indicates invalid CLI usage
 	ExitUsageError = 64
+
+	// ExitInterrupted indicates the run was stopped by SIGINT/SIGTERM
+	// (128 + SIGINT, the shell convention for Ctrl-C).
+	ExitInterrupted = 130
 )
 
 // ExitCoder is an error that carries a process exit code. Commands that want

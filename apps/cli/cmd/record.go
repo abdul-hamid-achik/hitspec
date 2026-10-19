@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"strings"
@@ -13,13 +14,15 @@ import (
 )
 
 var (
-	recordPortFlag    int
-	recordTargetFlag  string
-	recordOutputFlag  string
-	recordExcludeFlag string
-	recordVerboseFlag bool
-	recordDedupeFlag  bool
-	recordJSONFlag    bool
+	recordHostFlag     string
+	recordNoRedactFlag bool
+	recordPortFlag     int
+	recordTargetFlag   string
+	recordOutputFlag   string
+	recordExcludeFlag  string
+	recordVerboseFlag  bool
+	recordDedupeFlag   bool
+	recordJSONFlag     bool
 )
 
 var recordCmd = &cobra.Command{
@@ -31,8 +34,14 @@ them to hitspec format. Press Ctrl+C to stop and export.
 The proxy:
   - Forwards all requests to the target server
   - Records requests and responses
-  - Sanitizes sensitive headers (Authorization, Cookie, etc.)
+  - Streams responses (SSE, chunked) to the client as they arrive; the recording
+    keeps up to 1 MiB of each body
+  - Redacts Authorization, Cookie, Set-Cookie and X-Api-Key headers and JSON
+    fields named password, secret, token or apiKey (use --no-redact to keep them)
   - Exports to .http format on exit
+
+It listens on 127.0.0.1 only; use --host 0.0.0.0 to expose it. A port that is
+already in use is an error.
 
 Examples:
   hitspec record --target https://api.example.com
@@ -43,6 +52,8 @@ Examples:
 }
 
 func init() {
+	recordCmd.Flags().StringVar(&recordHostFlag, "host", proxy.DefaultHost, "Address to bind (use 0.0.0.0 to expose the proxy beyond this machine)")
+	recordCmd.Flags().BoolVar(&recordNoRedactFlag, "no-redact", false, "Record secrets verbatim (Authorization/Cookie headers, password/token JSON fields)")
 	recordCmd.Flags().IntVarP(&recordPortFlag, "port", "p", 8080, "Port to run the proxy on")
 	recordCmd.Flags().StringVarP(&recordTargetFlag, "target", "t", "", "Target URL to proxy to (required)")
 	recordCmd.Flags().StringVarP(&recordOutputFlag, "output", "o", "", "Output file path (default: stdout)")
@@ -72,12 +83,22 @@ func recordCommand(cmd *cobra.Command, args []string) error {
 
 	// Create recorder
 	recorder := proxy.NewRecorder(
+		proxy.WithHost(recordHostFlag),
 		proxy.WithPort(recordPortFlag),
+		proxy.WithRedact(!recordNoRedactFlag),
 		proxy.WithTargetURL(recordTargetFlag),
 		proxy.WithVerbose(recordVerboseFlag),
 		proxy.WithExclude(excludePaths),
 		proxy.WithDeduplicate(recordDedupeFlag),
 	)
+
+	// Bind before announcing anything, so a busy port is an error up front.
+	if _, err := recorder.Listen(); err != nil {
+		return err
+	}
+	if ip := net.ParseIP(recordHostFlag); recordHostFlag == "" || (ip != nil && ip.IsUnspecified()) {
+		fmt.Fprintln(cmd.ErrOrStderr(), "warning: the recording proxy is listening on all network interfaces")
+	}
 
 	// Setup graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
