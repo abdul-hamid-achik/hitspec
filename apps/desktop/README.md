@@ -123,7 +123,12 @@ default (`identity: null`); clear the quarantine flag after installing locally:
 - Renderer loads from a custom `hitspec://` scheme with a strict CSP; external
   navigation is denied and handed to the OS browser.
 - The API token is generated per launch in the main process and never exposed
-  to the renderer; the server binds to `127.0.0.1` only.
+  to the renderer; it reaches the Go child through the `HITSPEC_API_TOKEN`
+  environment variable (never argv, which `ps` shows), and the server binds to
+  `127.0.0.1` only. The server also enforces a Host allowlist, rejects foreign
+  `Origin` headers and requires `Content-Type: application/json` on JSON
+  bodies; the main process's `fetch`/`ws` calls satisfy all three
+  (`test/unit/backend.test.js` pins this).
 - `fs.writeFile` from the renderer only accepts paths the user picked in a
   native save dialog during the session; workspace paths are confined to the
   workspace root.

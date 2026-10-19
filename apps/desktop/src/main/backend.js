@@ -28,8 +28,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * REST proxying and the realtime WebSocket bridge.
  *
  * The token never reaches the renderer — every HTTP call is made here on the
- * renderer's behalf over IPC, which also sidesteps CORS and origin checks on
- * the Go side.
+ * renderer's behalf over IPC, which also sidesteps CORS on the Go side. The
+ * token reaches the child only through its HITSPEC_API_TOKEN environment
+ * variable (argv would be visible to every local user in `ps`).
+ *
+ * The Go server rejects any request whose Host is not 127.0.0.1/localhost on
+ * its port and any request carrying a foreign Origin header. Node's fetch and
+ * the `ws` client send `Host: 127.0.0.1:<port>` and no Origin, so they pass;
+ * this class must keep talking to the literal loopback address and must never
+ * set an Origin header. Every request with a JSON body sends
+ * `Content-Type: application/json` (the server answers 415 otherwise).
  *
  * Events: `status` ({state, ...}), `event` (WS payload), `log` (line object).
  */
@@ -142,7 +150,6 @@ export class Backend extends EventEmitter {
         '--api-only',
         '--host', '127.0.0.1',
         '--port', String(port),
-        '--api-token', this.token,
         '--log-format', 'json',
         '--log-level', options.logLevel ?? 'info',
       ];

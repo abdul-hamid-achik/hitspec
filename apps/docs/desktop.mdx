@@ -67,7 +67,8 @@ the welcome screen.
 ## How it works
 
 The app spawns `hitspec serve --api-only` as a child process on a random
-loopback port with a freshly generated bearer token, then drives the REST and
+loopback port with a freshly generated bearer token (handed over through the
+child's environment, never its command line), then drives the REST and
 WebSocket API from `packages/serve`. The renderer never talks to the network
 and never sees the token: every call crosses a small IPC bridge in the main
 process, and file writes outside the workspace are only allowed for paths you
