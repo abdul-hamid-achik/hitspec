@@ -7,6 +7,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.24.0] - 2026-10-19
+
+`reporters` and `outputDir` in `hitspec.yaml` now take effect in `hitspec run`:
+console on stdout plus JUnit, JSON, TAP or HTML files for CI, without flags.
+The studio stress screen runs saved stress profiles, and workspace search no
+longer re-parses every file on each keystroke. On Windows, a connection reset
+before any response is a network error (exit 4) as on other platforms. **Read
+the upgrade notes below before you bump hitspec in CI.**
+
+### Upgrade notes: tests that may start failing
+
+Nothing changes for a `hitspec.yaml` without `reporters` and `outputDir`, or
+with the defaults (`reporters: [console]`, no `outputDir`). Check the items
+below if yours sets either key: they used to be read and ignored.
+
+**`reporters` and `outputDir` apply in `hitspec run`**
+
+- **A `reporters` entry that is not `console`, `json`, `junit`, `tap` or
+  `html` exits 3** with `Error: hitspec.yaml: unknown reporter "xml" (valid:
+  console, json, junit, tap, html)`. It used to be ignored. Fix the name, or
+  pass `-o` (which skips the keys).
+- **Two or more reporters without `outputDir` exit 3**: without `outputDir`
+  every reporter writes to stdout, and only one can. Set `outputDir`, or keep
+  one reporter.
+- **One non-console reporter without `outputDir` replaces the console report
+  on stdout.** `reporters: [json]` now behaves like `-o json`. A script that
+  reads the console report of such a project gets JSON.
+- **With `outputDir`, report files are written there**:
+  `hitspec-results.json`, `hitspec-junit.xml`, `hitspec-results.tap` and
+  `hitspec-report.html`, one per listed reporter, replaced on every run. A
+  relative `outputDir` is relative to the config file. hitspec creates it
+  when a report goes there; if it cannot, the run exits 3. Add it to
+  `.gitignore` if needed.
+- **When no report goes to stdout** (for example `reporters: [junit]` with
+  `outputDir: reports`), failed requests are listed on stderr as
+  `FAIL file: name: reason`, as with `--quiet`. Exit codes are unchanged.
+- `-o`/`--output`, `--output-file`, or a non-empty `HITSPEC_OUTPUT` or
+  `HITSPEC_OUTPUT_FILE` still decide alone: the yaml keys are then not even
+  read. `--stress`, `--dry-run`, `validate`, `studio` and `serve` ignore them.
+
+**Windows**
+
+- **A connection the server resets before any response exits 4** (network
+  error), as on Linux and macOS. It used to exit 1 when Winsock reported the
+  reset (`wsasend: An existing connection was forcibly closed by the remote
+  host`), for example a server that rejects the client certificate. A CI step
+  that expected exit 1 there must expect 4.
+
+**hitspec studio**
+
+- The stress form has a new last field, `profile`. The other fields keep their
+  order, so `e` and typing a duration work as before. Scripts that tab through
+  the form see one more field. The placeholders read `30s or profile's`,
+  `5 or profile's`, and so on.
+- Workspace search re-parses a file only when its modification time or size
+  changed or studio wrote it. An edit by another tool that keeps both the same
+  shows up after the next change to the file.
+
+### Added
+
+- `reporters` and `outputDir` in `hitspec.yaml` (see the upgrade notes and
+  [Configuration](https://hitspec.dev/reference/configuration#reporters-and-outputdir)).
+- hitspec studio: type a saved stress profile's name in the stress form's
+  `profile` field. Its duration, rate, VUs and thresholds apply; values typed
+  in the form win. The idle stress screen lists the saved profiles.
+
+### Fixed
+
+- On Windows, a Winsock connection reset or abort before any response counts
+  as a network error.
+- hitspec studio: an error for a search query the user has already typed past
+  no longer shows a toast. Search honors cancellation between files.
+- The stress-testing guide said the studio TUI edits profiles; it runs them by
+  name, and the desktop app edits them.
+
+### Changed
+
+- hitspec studio: workspace search caches parsed files, so typing in the
+  search overlay no longer re-parses the whole workspace.
+- The macOS test job is required in CI, like Windows (it passed 60 runs in a
+  row first).
+
 ## [2.23.2] - 2026-10-19
 
 Fixes a 2.23.1 regression: `hitspec run --stress` printed color codes into
@@ -1369,7 +1451,8 @@ before upgrading CI.
 - `hitspec init` - Initialize a new project
 - `hitspec version` - Show version information
 
-[Unreleased]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.23.2...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.24.0...HEAD
+[2.24.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.23.2...v2.24.0
 [2.23.2]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.23.1...v2.23.2
 [2.23.1]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.23.0...v2.23.1
 [2.23.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.22.0...v2.23.0
