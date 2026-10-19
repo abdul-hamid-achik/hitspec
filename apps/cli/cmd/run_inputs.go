@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -102,7 +103,9 @@ func collectFiles(args []string) ([]string, error) {
 	for _, arg := range args {
 		info, err := os.Stat(arg)
 		if err != nil {
-			if os.IsNotExist(err) && hasGlobMeta(arg) {
+			if hasGlobMeta(arg) && (os.IsNotExist(err) || runtime.GOOS == "windows") {
+				// Windows rejects '*' and '?' in a path with "filename syntax is
+				// incorrect" instead of "not found": still a pattern, not an error.
 				matches, gerr := expandGlob(arg)
 				if gerr != nil {
 					return nil, gerr

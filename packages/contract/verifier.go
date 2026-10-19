@@ -5,11 +5,11 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/shellcmd"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/assertions"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/env"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
@@ -266,7 +266,7 @@ func (v *Verifier) setupStateContext(ctx context.Context, state string) error {
 		fmt.Printf("Setting up state: %s\n", state)
 	}
 
-	cmd := exec.CommandContext(ctx, v.stateHandler, state)
+	cmd := shellcmd.ScriptContext(ctx, v.stateHandler, state)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 

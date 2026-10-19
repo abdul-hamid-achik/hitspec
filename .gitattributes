@@ -1,0 +1,13 @@
+# Check text files out with LF on every platform. The golden files under
+# testdata/ (parser, importers, TUI, config surfaces), the txtar CLI scripts and
+# the shell scripts are compared byte for byte with generated output or run by
+# sh, so a Windows checkout with core.autocrlf=true (the default there) would
+# otherwise turn every one of them into CRLF and fail the suite.
+* text=auto eol=lf
+
+# Never touch binary assets.
+*.png binary
+*.ico binary
+*.icns binary
+*.jpg binary
+*.gif binary

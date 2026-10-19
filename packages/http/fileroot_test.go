@@ -57,12 +57,14 @@ func TestCheckFileRefs(t *testing.T) {
 	}
 
 	// Variables are resolved before the check.
-	if err := CheckFileRefs(bodyFileReq("{{f}}"), func(string) string { return "/etc/hosts" }, base, root); err == nil {
+	// (An absolute path needs a drive on Windows, so use a real outside file.)
+	outsideFile := filepath.Join(outside, "secret.txt")
+	if err := CheckFileRefs(bodyFileReq("{{f}}"), func(string) string { return outsideFile }, base, root); err == nil {
 		t.Error("variable resolving to an outside path accepted")
 	}
 
 	// No root: nothing is enforced (the CLI keeps its behavior).
-	if err := CheckFileRefs(bodyFileReq("/etc/hosts"), id, base, ""); err != nil {
+	if err := CheckFileRefs(bodyFileReq(outsideFile), id, base, ""); err != nil {
 		t.Errorf("empty root should disable the check: %v", err)
 	}
 }

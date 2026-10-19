@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/shellcmd"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
 )
 
@@ -64,20 +65,20 @@ func (r *Runner) executeHook(hook *parser.Hook, baseDir string, resolver func(st
 		executable := parts[0]
 		if strings.HasPrefix(executable, "./") || strings.HasPrefix(executable, "../") {
 			// Relative path - join with baseDir
-			parts[0] = filepath.Join(baseDir, executable)
+			parts[0] = shellcmd.ShellPath(filepath.Join(baseDir, executable))
 			cmdStr = strings.Join(parts, " ")
 		} else if !filepath.IsAbs(executable) && !isInPath(executable) {
 			// Check if it's a script in the base directory
 			potentialPath := filepath.Join(baseDir, executable)
 			if _, err := os.Stat(potentialPath); err == nil {
-				parts[0] = potentialPath
+				parts[0] = shellcmd.ShellPath(potentialPath)
 				cmdStr = strings.Join(parts, " ")
 			}
 		}
 	}
 
 	// Execute the command using sh -c for proper shell handling
-	cmd := exec.Command("sh", "-c", cmdStr)
+	cmd := shellcmd.Command(cmdStr)
 	cmd.Dir = baseDir
 	cmd.Env = os.Environ()
 

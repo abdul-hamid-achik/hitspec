@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/testhome"
 )
 
 func TestExportSnippetFormats(t *testing.T) {
@@ -61,7 +63,7 @@ func TestManagerOptionSetters(t *testing.T) {
 }
 
 func TestCaptureCookiesFromResponse(t *testing.T) {
-	t.Setenv("HOME", t.TempDir()) // isolate the cookie store
+	testhome.Set(t, t.TempDir()) // isolate the cookie store
 	ctx := context.Background()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.SetCookie(w, &http.Cookie{Name: "session", Value: "xyz", Path: "/"})

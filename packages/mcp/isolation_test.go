@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/testhome"
 )
 
 const isolationSecret = "tvly-super-secret-value"
@@ -180,7 +182,7 @@ func TestFetchAnnotationsAreTruthful(t *testing.T) {
 
 func TestWorkspaceRefusesHomeAncestorsAndRoot(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testhome.Set(t, home)
 	project := filepath.Join(home, "project")
 	if err := os.Mkdir(project, 0o700); err != nil {
 		t.Fatal(err)

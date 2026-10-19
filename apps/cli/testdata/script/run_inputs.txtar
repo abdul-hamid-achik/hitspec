@@ -55,7 +55,8 @@ stdout -count=1 'a-request'
 # First-seen order is kept: b first, then the directory's remaining files.
 exitcode 0 hitspec run suite/sub/b.http suite --no-color
 stdout -count=3 'Running:'
-stdout 'Running: suite/sub/b.http\n(.|\n)*Running: suite/a.http'
+# (Windows spells the walked paths with backslashes.)
+stdout 'Running: suite[/\\]sub[/\\]b\.http\n(.|\n)*Running: suite[/\\]a\.http'
 
 # node_modules, vendor and .git are skipped when walking a directory ...
 exitcode 0 hitspec run suite --no-color

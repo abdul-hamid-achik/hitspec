@@ -465,11 +465,19 @@ func (s *Server) resolveFile(path string, requireHitspec bool) (string, error) {
 	return resolved, nil
 }
 
+// rootedPath reports whether path names a location outside any base directory:
+// an absolute path, or on Windows also a rooted one ("/etc/x", `\x`) or one with a
+// drive ("C:x"), none of which filepath.IsAbs accepts there.
+func rootedPath(path string) bool {
+	return filepath.IsAbs(path) || filepath.VolumeName(path) != "" ||
+		strings.HasPrefix(path, "/") || (os.PathSeparator == '\\' && strings.HasPrefix(path, `\`))
+}
+
 func (s *Server) resolvePath(path string) (string, error) {
 	if strings.TrimSpace(path) == "" {
 		return "", errors.New("path is required")
 	}
-	if filepath.IsAbs(path) {
+	if rootedPath(path) {
 		return "", errors.New("path must be workspace-relative")
 	}
 	candidate := filepath.Join(s.workspace, filepath.Clean(path))

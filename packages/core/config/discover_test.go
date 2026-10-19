@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/testhome"
 )
 
 func write(t *testing.T, path, content string) {
@@ -29,7 +31,7 @@ func resolved(t *testing.T, p string) string {
 
 func TestDiscoverWalksUp(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("HOME", filepath.Join(root, "home"))
+	testhome.Set(t, filepath.Join(root, "home"))
 	write(t, filepath.Join(root, "proj", "hitspec.yaml"), "timeout: 1234\n")
 	sub := filepath.Join(root, "proj", "a", "b")
 	if err := os.MkdirAll(sub, 0o755); err != nil {
@@ -50,7 +52,7 @@ func TestDiscoverWalksUp(t *testing.T) {
 
 func TestDiscoverNearestWinsAndYml(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("HOME", filepath.Join(root, "home"))
+	testhome.Set(t, filepath.Join(root, "home"))
 	write(t, filepath.Join(root, "hitspec.yaml"), "timeout: 1\n")
 	write(t, filepath.Join(root, "a", "hitspec.yml"), "timeout: 2\n")
 	if err := os.MkdirAll(filepath.Join(root, "a", "b"), 0o755); err != nil {
@@ -67,7 +69,7 @@ func TestDiscoverNearestWinsAndYml(t *testing.T) {
 
 func TestDiscoverStopsAtGit(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("HOME", filepath.Join(root, "home"))
+	testhome.Set(t, filepath.Join(root, "home"))
 	write(t, filepath.Join(root, "hitspec.yaml"), "timeout: 99\n") // outside the repo
 	write(t, filepath.Join(root, "repo", ".git", "HEAD"), "ref\n")
 	sub := filepath.Join(root, "repo", "src")
@@ -88,7 +90,7 @@ func TestDiscoverStopsAtGit(t *testing.T) {
 func TestDiscoverNeverReadsHomeOrAbove(t *testing.T) {
 	root := t.TempDir()
 	home := filepath.Join(root, "home")
-	t.Setenv("HOME", home)
+	testhome.Set(t, home)
 	write(t, filepath.Join(root, "hitspec.yaml"), "timeout: 1\n") // above $HOME
 	write(t, filepath.Join(home, "hitspec.yaml"), "timeout: 2\n") // $HOME itself
 	write(t, filepath.Join(home, "work", "x", ".keep"), "")
@@ -105,7 +107,7 @@ func TestDiscoverNeverReadsHomeOrAbove(t *testing.T) {
 
 func TestDiscoverWithinStopsAtRoot(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("HOME", filepath.Join(root, "home"))
+	testhome.Set(t, filepath.Join(root, "home"))
 	write(t, filepath.Join(root, "hitspec.yaml"), "timeout: 7\n") // parent of the workspace
 	ws := filepath.Join(root, "ws")
 	sub := filepath.Join(ws, "sub")

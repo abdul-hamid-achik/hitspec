@@ -264,12 +264,12 @@ func emitImport(cmd *cobra.Command, res *result.Result, source, fallback string)
 	}
 	if !envOnly {
 		if fileRefLine.MatchString(res.Content) && filepath.Dir(outPath) != "." {
-			printWarnings(stderr, []string{fmt.Sprintf("the output refers to files (< ./x or file @./x); hitspec resolves them relative to %s, so keep those files in %s", outPath, filepath.Dir(outPath))})
+			printWarnings(stderr, []string{fmt.Sprintf("the output refers to files (< ./x or file @./x); hitspec resolves them relative to %s, so keep those files in %s", filepath.ToSlash(outPath), filepath.ToSlash(filepath.Dir(outPath)))})
 		}
 		if err := os.WriteFile(outPath, []byte(res.Content), 0o644); err != nil {
 			return fmt.Errorf("failed to write output file: %w", err)
 		}
-		fmt.Fprintf(stdout, "Successfully imported to %s\n", outPath)
+		fmt.Fprintf(stdout, "Successfully imported to %s\n", filepath.ToSlash(outPath))
 	}
 
 	if res.HasEnvironments() {
@@ -287,12 +287,12 @@ func emitImport(cmd *cobra.Command, res *result.Result, source, fallback string)
 		if err := os.WriteFile(cfg, []byte(y), 0o644); err != nil {
 			return fmt.Errorf("failed to write environments: %w", err)
 		}
-		fmt.Fprintf(stdout, "Wrote %d environment(s) to %s%s\n", len(res.Environments), cfg, note)
+		fmt.Fprintf(stdout, "Wrote %d environment(s) to %s%s\n", len(res.Environments), filepath.ToSlash(cfg), note)
 		// hitspec only finds hitspec.yaml in the current directory, so say how
 		// to use one that sits next to the output.
-		hint := "--config " + cfg
+		hint := "--config " + filepath.ToSlash(cfg)
 		if importOutputFlag != "" && !envOnly {
-			hint = "hitspec run " + outPath + " " + hint
+			hint = "hitspec run " + filepath.ToSlash(outPath) + " " + hint
 		} else {
 			hint = "hitspec run <file> " + hint
 		}
@@ -343,7 +343,7 @@ func importOpenAPICommand(cmd *cobra.Command, args []string) error {
 			if err := os.WriteFile(target, []byte(f.Content), 0o644); err != nil {
 				return fmt.Errorf("failed to write output file: %w", err)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Successfully imported to %s\n", target)
+			fmt.Fprintf(cmd.OutOrStdout(), "Successfully imported to %s\n", filepath.ToSlash(target))
 		}
 		return nil
 	}

@@ -2,7 +2,6 @@ package serve
 
 import (
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -108,10 +107,7 @@ func (s *Server) startWatcher() {
 				}
 
 				operation := watchutil.Operation(op, created)
-				relPath, _ := filepath.Rel(s.config.WorkDir, name)
-				if relPath == "" {
-					relPath = name
-				}
+				relPath := relSlash(s.config.WorkDir, name)
 
 				s.hub.Broadcast("file_changed", WSFileEvent{
 					Path:      relPath,
