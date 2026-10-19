@@ -35,6 +35,11 @@ This converts all requests in the collection, including folders, headers, and bo
 | Dynamic variables `{{$timestamp}}` | `{{$timestamp()}}` |
 | Dynamic variables `{{$randomInt}}` | `{{$random(0, 1000)}}` |
 | Dynamic variables `{{$randomEmail}}` | `{{$randomEmail()}}` |
+| Collection variables | `@name = value` lines |
+| Environment export | `hitspec.yaml` environments (use `--config`) |
+| Bearer/Basic/API key auth | `# @auth ...` (collection, folder, request) |
+| `pm.test` status/body/header checks | `expect ...` lines; the rest as `# TODO: untranslated test` |
+| form-data / GraphQL / file bodies | `>>>multipart` / `>>>graphql` / `< ./file` |
 
 ## Other Import Formats
 
@@ -128,3 +133,5 @@ You can also export hitspec files to curl for debugging:
 hitspec export curl tests/api.http
 hitspec export curl tests/api.http --name "Login" --exec
 ```
+
+Other formats work the same way: `hitspec export --format python tests/api.http`.

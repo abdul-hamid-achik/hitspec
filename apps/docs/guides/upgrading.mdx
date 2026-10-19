@@ -15,8 +15,9 @@ checking what it says.
 <Steps>
   <Step title="Validate with the new version">
     `hitspec validate` reports every file that no longer loads, with
-    `file:line:col` and a suggested fix. `--strict` also reports warnings such
-    as unknown directives and undefined variables.
+    `file:line:col` and a suggested fix, and prints warnings such as unknown
+    directives. `--strict` turns the warnings into errors and also checks that
+    every `{{variable}}` is defined. See [validate](/reference/validate-list).
 
     ```bash
     hitspec validate tests/ --strict
@@ -48,7 +49,8 @@ checking what it says.
 
 Every release lists its changes in the
 [changelog](https://github.com/abdul-hamid-achik/hitspec/blob/main/CHANGELOG.md),
-and the GitHub release page of each version shows the same notes.
+and from 2.20.0 on the GitHub release page of each version shows the same
+notes.
 
 ## 2.21.0
 

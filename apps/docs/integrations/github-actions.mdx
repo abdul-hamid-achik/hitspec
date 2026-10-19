@@ -243,6 +243,10 @@ If your tests rely on an environment file, generate it from secrets at runtime:
 | `HITSPEC_PROXY` | `--proxy` | Proxy URL |
 | `HITSPEC_INSECURE` | `--insecure` | Skip SSL verification |
 
+Each variable sits between its flag and hitspec.yaml: the flag wins over the
+variable, and the variable wins over hitspec.yaml. `HITSPEC_BAIL=false` turns
+off a `bail: true` in hitspec.yaml.
+
 ### Metrics and Notification Variables
 
 | Environment Variable | CLI Flag | Description |

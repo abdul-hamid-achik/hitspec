@@ -96,8 +96,8 @@ hitspec mcp serve --workspace /absolute/path/to/api-workspace
 ```
 
 stdout is reserved exclusively for MCP JSON-RPC. The server does not start run
-history or a file watcher or execute shell hooks or database assertions. In
-v2.18.0, web search and durable capture are registered only when their
+history or a file watcher or execute shell hooks or database assertions. Web
+search and durable capture are registered only when their
 operator-owned provider and artifact sink, respectively, are configured at
 startup. MCP initialization instructions are built from that registered
 surface, so clients are not prompted to use unconfigured search or capture

@@ -349,12 +349,12 @@ hitspec run tests/ --parallel         # Run in parallel
 hitspec run tests/ --watch            # Watch mode
 hitspec run tests/ -o json            # JSON output
 hitspec run tests/ --update-snapshots # Update snapshot files
-hitspec validate tests/               # Validate syntax
+hitspec validate tests/               # Validate syntax (--strict: warnings are errors)
 hitspec list tests/                   # List all requests
 hitspec import curl "curl ..."        # Import from curl
 hitspec import insomnia export.json   # Import from Insomnia
 hitspec import openapi spec.yaml     # Import from OpenAPI spec
-hitspec export curl tests/api.http   # Export as curl commands
+hitspec export curl tests/api.http   # curl, fetch, wget, python, httpie, go, ruby via --format
 hitspec fetch https://example.com --format markdown -o response.md
 hitspec fetch tests/api.http --name getUser --format json
 hitspec diff baseline.json current.json  # Compare test results

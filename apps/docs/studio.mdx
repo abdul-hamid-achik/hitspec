@@ -138,10 +138,11 @@ Each snippet includes the request's method, URL, headers, and body, so it is a
 runnable copy you can paste and tweak.
 
 <Note>
-  The **curl** export is the most complete -- it also renders any configured
-  `@auth` (for example, a bearer token). The other languages include the request's
-  explicit headers and body; add auth headers yourself if your request relies on
-  the `@auth` directive.
+  Every format includes query parameters and renders `@auth bearer`, `basic`,
+  `apiKey` and `apiKeyQuery` as the matching header or query parameter; other
+  `@auth` types get a comment asking you to add the credentials. The **curl**
+  export is the most complete: the other formats skip requests with multipart or
+  file bodies and show a `SKIPPED` comment in their place.
 </Note>
 
 ## Ad-hoc requests

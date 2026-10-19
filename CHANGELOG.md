@@ -22,8 +22,9 @@ fails, or its file fails to load (exit code 2), even though the file did not
 change. To find them before your CI does:
 
 1. Run `hitspec validate <dir>` with the new version. It reports every file
-   that no longer loads, with file:line:col and a fix. `hitspec validate
-   --strict` also reports warnings (unknown directives, undefined variables).
+   that no longer loads, with file:line:col and a fix, and prints warnings
+   such as unknown directives. `hitspec validate --strict` turns the warnings
+   into errors and also checks that every `{{variable}}` is defined.
 2. Run the suite once locally with the new version and read the failures.
 3. Pin the version in CI (the GitHub Action's `version:` input, or
    `go install .../cmd/hitspec@v2.21.0`) and bump it on purpose.
