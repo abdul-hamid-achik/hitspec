@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
 )
@@ -214,11 +215,22 @@ func yamlString(s string) string {
 	return strings.TrimSuffix(buf.String(), "\n")
 }
 
+// escapeYAML renders s as a YAML scalar: plain when that is safe, otherwise a
+// double-quoted string with backslashes, quotes, newlines and control
+// characters escaped, so a multi-line message cannot break out of the YAMLish
+// diagnostic block.
 func escapeYAML(s string) string {
-	// Simple YAML escaping - wrap in quotes if contains special chars
-	if strings.ContainsAny(s, ":\n\"'[]{}#&*!|>%@`") {
-		s = strings.ReplaceAll(s, "\"", "\\\"")
-		return "\"" + s + "\""
+	if s == "" || strings.ContainsAny(s, ":\n\r\t\\\"'[]{}#&*!|>%@`") || strings.TrimSpace(s) != s || hasControl(s) {
+		return yamlString(s)
 	}
 	return s
+}
+
+func hasControl(s string) bool {
+	for _, r := range s {
+		if unicode.IsControl(r) {
+			return true
+		}
+	}
+	return false
 }

@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"encoding/xml"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/assertions"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/http"
 )
 
 func TestJUnitFormatter_PassingTest(t *testing.T) {
@@ -208,4 +210,49 @@ func stripXMLHeader(data []byte) []byte {
 		return []byte(s[idx:])
 	}
 	return data
+}
+
+// Each failed assertion is stated once: the evaluator's message carries the
+// expected and actual values, so they are not repeated beside it.
+func TestJUnitFormatter_FailureTextNotRepeated(t *testing.T) {
+	var buf bytes.Buffer
+	f := NewJUnitFormatter(JUnitWithWriter(&buf))
+
+	f.FormatResult(makeRunResult([]*runner.RequestResult{
+		{
+			Name:   "POST /login",
+			Passed: false,
+			Assertions: []*assertions.Result{
+				{Subject: "status", Operator: "==", Expected: 200, Actual: 401, Passed: false, Message: "expected 200, got 401"},
+				{Subject: "body.id", Operator: "exists", Passed: false},
+			},
+			Request:  &http.Request{Method: "POST", URL: "http://x.test/login"},
+			Response: &http.Response{StatusCode: 401, Status: "401 Unauthorized", Body: []byte("denied")},
+		},
+	}))
+	if err := f.Flush(time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+
+	var suites JUnitTestSuites
+	if err := xml.Unmarshal(stripXMLHeader(buf.Bytes()), &suites); err != nil {
+		t.Fatalf("invalid XML: %v", err)
+	}
+	body := suites.TestSuites[0].TestCases[0].Failure.Content
+	if n := strings.Count(body, "expected 200, got 401"); n != 1 {
+		t.Errorf("assertion text appears %d times, want 1:\n%s", n, body)
+	}
+	if !strings.Contains(body, "status ==: expected 200, got 401\n") {
+		t.Errorf("missing assertion line:\n%s", body)
+	}
+	// With no message, expected/actual are spelled out once.
+	if !strings.Contains(body, "body.id exists: expected <nil>, got <nil>") {
+		t.Errorf("missing fallback line:\n%s", body)
+	}
+	// Request/response context is kept.
+	for _, want := range []string{"Request: POST http://x.test/login", "Response: 401 Unauthorized", "denied"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("context lost, missing %q:\n%s", want, body)
+		}
+	}
 }

@@ -1,0 +1,27 @@
+# JUnit states each assertion once and keeps the request/response context.
+exitcode 1 hitspec run --no-history -o junit fail.http
+stdout 'status ==: expected 200, got 404'
+! stdout 'got 404\. expected'
+! stdout 'got 404.*got 404'
+stdout 'Request: GET http://127\.0\.0\.1:[0-9]+/status/404'
+stdout 'Response: 404'
+
+# TAP keeps a multi-line failure inside one quoted YAML scalar.
+exitcode 1 hitspec run --no-history -o tap multi.http
+stdout 'not ok 1 - multi'
+stdout '    - "body ==: expected a\\nb, got plain text body"'
+
+-- fail.http --
+### missing
+GET {{$env(SERVER)}}/status/404
+
+>>>
+expect status 200
+<<<
+-- multi.http --
+### multi
+GET {{$env(SERVER)}}/text
+
+>>>
+expect body == "a\nb"
+<<<
