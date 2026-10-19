@@ -10,8 +10,8 @@ All hitspec CLI flags that support environment variables are listed here. Enviro
 | Variable | Flag | Default | Description |
 |----------|------|---------|-------------|
 | `HITSPEC_ENV` | `--env` | `dev` | Active environment name |
-| `HITSPEC_ENV_FILE` | `--env-file` | | Path to `.env` file |
-| `HITSPEC_CONFIG` | `--config` | | Path to config file |
+| `HITSPEC_ENV_FILE` | `--env-file` | | Path to `.env` file; a file that does not exist is an error (exit code 3) |
+| `HITSPEC_CONFIG` | `--config` | | Path to config file (default: the nearest `hitspec.yaml` from the working directory upward) |
 | `HITSPEC_TAGS` | `--tags` | | Tags filter (comma-separated) |
 
 ## Output Variables

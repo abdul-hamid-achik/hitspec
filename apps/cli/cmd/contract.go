@@ -65,23 +65,28 @@ func init() {
 }
 
 // contractRunConfig resolves the HTTP settings for `contract verify`: the
-// hitspec.yaml found in dir (or HITSPEC_CONFIG) under the HITSPEC_* variables.
+// hitspec.yaml discovered from dir upward (or HITSPEC_CONFIG) under the HITSPEC_* variables.
 func contractRunConfig(dir string) (*runner.Config, error) {
-	var fileConfig *config.Config
-	var err error
+	var (
+		loaded *config.Loaded
+		err    error
+	)
 	if path := os.Getenv("HITSPEC_CONFIG"); path != "" {
-		fileConfig, err = config.LoadConfig(path)
+		loaded, err = config.Load(path)
 	} else {
-		fileConfig, err = config.FindAndLoadConfig(dir)
+		loaded, err = config.Discover(dir)
 	}
 	if err != nil {
+		// An ExitCoder is not printed by the root command; say why here.
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return nil, newExitError(ExitConfigError, err.Error())
 	}
+	printConfigWarnings(os.Stderr, loaded.Warnings)
 	overrides, err := runconfig.FromEnv()
 	if err != nil {
 		return nil, err
 	}
-	cfg, _ := runconfig.Build(fileConfig, overrides)
+	cfg, _ := runconfig.Build(loaded.Config, overrides)
 	return cfg, nil
 }
 
