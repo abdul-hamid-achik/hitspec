@@ -138,22 +138,23 @@ func NewServer(opts ...Option) *Server {
 // loopback address, or when any --allow-* flag is set, and none was configured.
 // The token is printed once to w. Without it such a server would be open to
 // anything that can reach it.
-func (s *Server) ensureAPIToken(w io.Writer) {
+func (s *Server) ensureAPIToken(w io.Writer) error {
 	if s.config.APIToken != "" {
-		return
+		return nil
 	}
 	if isLoopbackBind(s.config.Host) && !s.config.AllowShell && !s.config.AllowDB {
-		return
+		return nil
 	}
 	buf := make([]byte, 32)
 	if _, err := rand.Read(buf); err != nil {
 		// No entropy: refuse to run unauthenticated rather than fall back.
-		panic("serve: crypto/rand failed: " + err.Error())
+		return fmt.Errorf("generating API token: %w", err)
 	}
 	s.config.APIToken = hex.EncodeToString(buf)
 	fmt.Fprintf(w, "hitspec: no --api-token / HITSPEC_API_TOKEN set, but this server is not loopback-only or has --allow-* enabled.\n"+
 		"hitspec: generated API token (shown once): %s\n"+
 		"hitspec: send it as 'Authorization: Bearer <token>' (or '?token=<token>' for WebSockets); set --api-token to choose your own.\n", s.config.APIToken)
+	return nil
 }
 
 // buildHandler assembles the middleware chain around the routes. port is the
@@ -202,7 +203,9 @@ func (s *Server) Start(ctx context.Context) error {
 
 	// A server that is reachable beyond the local machine, or that can run
 	// shell commands / reach databases, must not be open.
-	s.ensureAPIToken(os.Stderr)
+	if err := s.ensureAPIToken(os.Stderr); err != nil {
+		return err
+	}
 
 	// Bind first so the middleware knows the real listening port (Host/Origin
 	// checks), even for --port 0.

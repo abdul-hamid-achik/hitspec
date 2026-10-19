@@ -6,6 +6,9 @@ import { test } from 'node:test';
 
 import { Backend } from '../../src/main/backend.js';
 
+// The stand-in server is an extensionless shebang script.
+const opts = { skip: process.platform === 'win32' && 'needs a POSIX shebang executable' };
+
 /**
  * A stand-in for `hitspec serve --api-only` that applies the same request
  * policy as the Go server (Host allowlist, no foreign Origin, bearer token,
@@ -91,7 +94,7 @@ async function waitFor(fn, ms = 3000) {
   return false;
 }
 
-test('the API token goes to the child through HITSPEC_API_TOKEN, never argv', async () => {
+test('the API token goes to the child through HITSPEC_API_TOKEN, never argv', opts, async () => {
   const { backend, records, start } = fakeBackend();
   try {
     await start();
@@ -111,7 +114,7 @@ test('the API token goes to the child through HITSPEC_API_TOKEN, never argv', as
   }
 });
 
-test('requests satisfy the server Host/Origin/Content-Type policy', async () => {
+test('requests satisfy the server Host/Origin/Content-Type policy', opts, async () => {
   const { backend, records, start } = fakeBackend();
   try {
     await start();
@@ -144,7 +147,7 @@ test('requests satisfy the server Host/Origin/Content-Type policy', async () => 
   }
 });
 
-test('the WebSocket upgrade has a loopback Host, no Origin and the token', async () => {
+test('the WebSocket upgrade has a loopback Host, no Origin and the token', opts, async () => {
   const { backend, records, start } = fakeBackend();
   try {
     await start();
@@ -159,7 +162,7 @@ test('the WebSocket upgrade has a loopback Host, no Origin and the token', async
   }
 });
 
-test('each start generates a fresh token', async () => {
+test('each start generates a fresh token', opts, async () => {
   const { backend, start } = fakeBackend();
   try {
     await start();

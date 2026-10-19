@@ -97,13 +97,6 @@ func serveCommand(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	// The env var is read here rather than used as the flag default so that
-	// `--help` never prints the secret.
-	apiToken := serveAPITokenFlag
-	if apiToken == "" {
-		apiToken = os.Getenv("HITSPEC_API_TOKEN")
-	}
-
 	s := serve.NewServer(
 		serve.WithPort(servePortFlag),
 		serve.WithHost(serveHostFlag),
@@ -118,13 +111,23 @@ func serveCommand(cmd *cobra.Command, args []string) error {
 		serve.WithVerbose(serveVerboseFlag),
 		serve.WithAllowShell(serveAllowShellFlag),
 		serve.WithAllowDB(serveAllowDBFlag),
-		serve.WithAPIToken(apiToken),
+		serve.WithAPIToken(resolveAPIToken(serveAPITokenFlag)),
 		serve.WithLogFormat(serveLogFormatFlag),
 		serve.WithLogLevel(serveLogLevelFlag),
 	)
 	s.Version = version
 	s.BuildTime = buildTime
 	return s.Start(ctx)
+}
+
+// resolveAPIToken returns the --api-token flag, falling back to the
+// HITSPEC_API_TOKEN environment variable. The env var is read here rather than
+// used as the flag default so that `--help` never prints the secret.
+func resolveAPIToken(flagValue string) string {
+	if flagValue != "" {
+		return flagValue
+	}
+	return os.Getenv("HITSPEC_API_TOKEN")
 }
 
 func normalizeServeWorkDir(path string) string {

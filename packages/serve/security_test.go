@@ -369,7 +369,9 @@ func TestEnsureAPIToken(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newTestServer(t, append([]Option{WithHistoryDBPath(filepath.Join(t.TempDir(), "h.db"))}, tc.opts...)...)
 			var out bytes.Buffer
-			s.ensureAPIToken(&out)
+			if err := s.ensureAPIToken(&out); err != nil {
+				t.Fatal(err)
+			}
 			tok := s.config.APIToken
 			switch {
 			case tc.wantTok:
@@ -394,8 +396,12 @@ func TestEnsureAPIToken(t *testing.T) {
 	// Two servers must not share a token.
 	a := newTestServer(t, WithHost("0.0.0.0"), WithHistoryDBPath(filepath.Join(t.TempDir(), "a.db")))
 	b := newTestServer(t, WithHost("0.0.0.0"), WithHistoryDBPath(filepath.Join(t.TempDir(), "b.db")))
-	a.ensureAPIToken(io.Discard)
-	b.ensureAPIToken(io.Discard)
+	if err := a.ensureAPIToken(io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.ensureAPIToken(io.Discard); err != nil {
+		t.Fatal(err)
+	}
 	if a.config.APIToken == b.config.APIToken {
 		t.Fatal("generated tokens must differ")
 	}
@@ -449,6 +455,23 @@ func TestContractStateHandler(t *testing.T) {
 		}
 		if _, err := os.Stat(marker); err == nil {
 			t.Fatal("state handler was executed although --allow-shell is off")
+		}
+	})
+
+	t.Run("text/plain POST with a body is 415 even from a clean origin and Host", func(t *testing.T) {
+		s, base, _ := startSecured(t, WithAllowShell(true))
+		provider := contractFixture(t, s.config.WorkDir)
+		marker := filepath.Join(t.TempDir(), "PWNED")
+		script := markerScript(t, s.config.WorkDir, marker)
+
+		// The original exploit minus the Origin/Host tells: only the Content-Type
+		// check stands between a "simple request" and execution.
+		resp := do(t, http.MethodPost, base+"/api/v1/contract/verify", verifyBody(t, provider, script), withHeader("Content-Type", "text/plain"))
+		if resp.StatusCode != http.StatusUnsupportedMediaType {
+			t.Fatalf("status = %d, want 415", resp.StatusCode)
+		}
+		if _, err := os.Stat(marker); err == nil {
+			t.Fatal("state handler was executed")
 		}
 	})
 
