@@ -897,7 +897,7 @@ curl -X POST http://localhost:8080/api/v1/stress/start \
 ```typescript
 {
   files: string[];       // Required. List of .http/.hitspec files (relative paths)
-  duration: string;      // Required. Go duration string (e.g., "30s", "5m", "1h")
+  duration?: string;     // Required unless profile is set. Go duration string (e.g., "30s", "5m", "1h")
   rate?: number;         // Optional. Target requests per second
   vus?: number;          // Optional. Number of virtual users (switches to VU mode)
   maxVUs?: number;       // Optional. Maximum concurrent virtual users
@@ -909,8 +909,8 @@ curl -X POST http://localhost:8080/api/v1/stress/start \
   List of `.http` or `.hitspec` file paths relative to the workspace.
 </ParamField>
 
-<ParamField body="duration" type="string" required>
-  Duration of the stress test as a Go duration string (e.g., `"30s"`, `"5m"`, `"1h"`). Optional when `profile` is set: the profile's duration is used.
+<ParamField body="duration" type="string">
+  Duration of the stress test as a Go duration string (e.g., `"30s"`, `"5m"`, `"1h"`). Required unless `profile` is set, in which case the profile's duration is used.
 </ParamField>
 
 <ParamField body="profile" type="string">
