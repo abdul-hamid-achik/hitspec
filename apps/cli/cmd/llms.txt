@@ -6,6 +6,7 @@
 
 1. Create `test.http`:
 ```http
+### Get something
 GET https://httpbin.org/get
 
 >>>
@@ -15,22 +16,32 @@ expect status 200
 
 2. Run: `hitspec run test.http`
 
-3. Output on success:
+3. Output on success (exit code 0):
 ```
-✓ test.http (125ms)
+hitspec dev
 
-1 passed, 0 failed
+Running: test.http
+
+  ✓ Get something (125ms)
+
+Tests: 1 passed, 1 total
+Time:  125ms
 ```
 
-4. Output on failure:
+4. Output on failure (exit code 1):
 ```
-✗ test.http (89ms)
-  → status ==
-    Expected: 201
-    Actual:   200
+  ✗ Get something (89ms)
+    → status == (line 5)
+      Expected: 201
+      Actual:   200
+      expected 201, got 200
 
-0 passed, 1 failed
+Tests: 1 failed, 1 total
 ```
+
+No API handy? `hitspec init` scaffolds a project whose requests carry `>>>mock`
+blocks: `hitspec mock example.http --port 3000` in one terminal and
+`hitspec run example.http` in another runs green fully offline.
 
 ## Install
 
@@ -139,7 +150,7 @@ Types: `null`, `boolean`, `number`, `string`, `array`, `object`
 | `{{$json(value)}}` | JSON passthrough |
 | `{{$env(VAR, default)}}` | Environment variable with optional default |
 
-## Metadata Directives (14) + Blocks
+## Metadata Directives (22) + Blocks
 
 | Directive | Description |
 |-----------|-------------|
@@ -151,12 +162,26 @@ Types: `null`, `boolean`, `number`, `string`, `array`, `object`
 | `# @timeout 5000` | Timeout in milliseconds |
 | `# @retry 3` | Retry attempts on failure |
 | `# @retryDelay 1000` | Delay between retries (ms) |
+| `# @retryOn 500, 502, 503` | Only retry on these status codes |
 | `# @depends login, setup` | Dependencies (request names) |
+| `# @if {{flag}}` | Run only when the expression is truthy |
+| `# @unless {{flag}}` | Skip when the expression is truthy |
 | `# @auth type args` | Authentication method |
 | `# @before script.sh` | Run script before request |
 | `# @after script.sh` | Run script after request (always runs) |
 | `# @db connection` | Database connection for db assertions |
 | `# @waitFor url status timeout interval` | Poll until service ready |
+| `# @stress.weight 5` | Relative selection weight in stress mode (integer) |
+| `# @stress.think 500` | Think time after this request in stress mode (integer ms) |
+| `# @stress.skip` | Exclude from stress runs |
+| `# @stress.setup` | Run once before the stress test |
+| `# @stress.teardown` | Run once after the stress test |
+
+Any other `@name` in a comment is kept as a custom annotation and ignored by the
+runner (`@contract.*` and `@x-*` are the supported extension namespaces).
+Directive values are read to the end of the line: do not append `# comments`.
+There is no `@assert`, `@capture` or `@import`: assertions are `>>>` blocks and
+captures are `>>>capture` blocks.
 
 ## Hooks (Setup/Teardown)
 
@@ -519,6 +544,23 @@ Connect to `/api/v1/ws` for real-time updates. Message envelope: `{"type": "stri
 | `--watch, -w` | Watch files for changes |
 | `--proxy` | Proxy URL for requests |
 | `--insecure, -k` | Disable SSL validation |
+| `--config` | Path to the config file (default: `hitspec.yaml` in the current directory) |
+| `--allow-shell` | Allow `>>>shell` blocks and `@before`/`@after` hooks (refused otherwise) |
+| `--allow-db` | Allow `>>>db` blocks (refused otherwise) |
+| `--update-snapshots` | Write snapshot files instead of comparing |
+| `--no-progress` | Disable the real-time progress display |
+| `--history-db` | History database path (default: `~/.hitspec/history.db`) |
+| `--no-history` | Do not record this run in the history database |
+| `--openapi`, `--coverage` | Report API coverage against an OpenAPI spec |
+| `--metrics`, `--metrics-port`, `--metrics-file` | Export metrics: `prometheus`, `datadog` or `json` |
+| `--notify`, `--notify-on` | Send results to `slack` or `teams` (`always`, `failure`, `success`, `recovery`) |
+| `--slack-webhook`, `--slack-channel`, `--teams-webhook` | Notification targets |
+| `--datadog-api-key`, `--datadog-site`, `--datadog-tags` | DataDog metrics export settings |
+
+Most flags have a `HITSPEC_*` environment variable (see `hitspec run --help`), for
+example `HITSPEC_ENV`, `HITSPEC_TAGS`, `HITSPEC_OUTPUT`, `HITSPEC_QUIET`,
+`HITSPEC_TIMEOUT`, `HITSPEC_CONFIG` and `HITSPEC_NO_HISTORY`. Stress flags
+(`--stress`, `--duration`, `--rate`, `--vus`, ...) are listed in the next section.
 
 ## Exit Codes
 
@@ -608,7 +650,7 @@ Configure individual request behavior in stress tests:
 ### Main Request
 # @name apiCall
 # @stress.weight 10
-# @stress.think 500ms
+# @stress.think 500
 
 GET {{baseUrl}}/api/data
 
@@ -1218,9 +1260,6 @@ hitspec import openapi spec.yaml --tags users,auth --base-url http://localhost:3
 ```bash
 # Basic import
 hitspec import postman collection.json -o tests/
-
-# With environment file
-hitspec import postman collection.json --env environment.json -o tests/
 ```
 
 ## Fetch One Response

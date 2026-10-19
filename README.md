@@ -30,9 +30,32 @@ brew install --cask abdul-hamid-achik/tap/hitspec
 go install github.com/abdul-hamid-achik/hitspec/v2/cmd/hitspec@latest
 ```
 
+The module path ends in `/v2`. Go downloads the pinned Go 1.26 toolchain automatically
+if yours is older. The binary lands in `$(go env GOPATH)/bin`.
+
 ### Download Binary
 
-Download from [GitHub Releases](https://github.com/abdul-hamid-achik/hitspec/releases).
+Download the archive for your OS and architecture (Linux, macOS and Windows; amd64 and
+arm64) from [GitHub Releases](https://github.com/abdul-hamid-achik/hitspec/releases),
+verify it against `checksums.txt`, and put `hitspec` on your `PATH`:
+
+```bash
+VERSION=2.20.0
+curl -fsSLO "https://github.com/abdul-hamid-achik/hitspec/releases/download/v${VERSION}/hitspec_${VERSION}_linux_amd64.tar.gz"
+curl -fsSLO "https://github.com/abdul-hamid-achik/hitspec/releases/download/v${VERSION}/checksums.txt"
+sha256sum --ignore-missing -c checksums.txt   # macOS: shasum -a 256 -c --ignore-missing checksums.txt
+tar -xzf "hitspec_${VERSION}_linux_amd64.tar.gz" hitspec
+```
+
+Check the install with `hitspec version`.
+
+### GitHub Action
+
+```yaml
+- uses: abdul-hamid-achik/hitspec@v2
+  with:
+    files: tests/
+```
 
 ## Quick Start
 
@@ -92,6 +115,10 @@ Run it:
 hitspec run api.http
 ```
 
+No API at hand? `hitspec init` scaffolds a project whose requests carry `>>>mock` blocks, so it
+runs green offline: `hitspec mock example.http --port 3000` in one terminal and
+`hitspec run example.http` in another. Every project in [`examples/`](examples/) works the same way.
+
 ## Documentation
 
 | Document | Description |
@@ -130,10 +157,11 @@ hitspec run api.http
 
 ### VSCode
 
-Install the official hitspec VSCode extension for full syntax support:
+The hitspec VSCode extension (syntax highlighting and snippets) is not on the Marketplace yet,
+so install it from a `.vsix`:
 
 **From VSIX (manual install):**
-1. Build the extension: `cd apps/vscode && npm run package`
+1. Build the extension: `cd apps/vscode && npm install && npm run package`
 2. In VSCode, open Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`)
 3. Run "Extensions: Install from VSIX..."
 4. Select the generated `.vsix` file
@@ -141,11 +169,27 @@ Install the official hitspec VSCode extension for full syntax support:
 **Features:**
 - Full syntax highlighting for `.http` and `.hitspec` files
 - Code snippets for requests, assertions, captures
-- Support for hitspec-specific syntax: `>>>`, `<<<`, `[[[`, `]]]`
+- Support for hitspec-specific syntax: `>>>` / `<<<` assertion blocks and typed blocks (`>>>capture`, `>>>mock`, ...)
 - Variable interpolation highlighting (`{{variable}}`)
 - Built-in function highlighting (`$uuid()`, `$timestamp()`, etc.)
 
 Alternatively, the [REST Client extension](https://marketplace.visualstudio.com/items?itemName=humao.rest-client) provides basic HTTP syntax highlighting.
+
+### Neovim
+
+`apps/nvim` holds a Vim syntax file, filetype detection and LuaSnip snippets. It lives in a
+repository subdirectory, so tell your plugin manager to add it to `runtimepath`
+(lazy.nvim shown; see [apps/nvim/README.md](apps/nvim/README.md) for packer and manual setups):
+
+```lua
+{
+  "abdul-hamid-achik/hitspec",
+  config = function(plugin)
+    vim.opt.rtp:append(plugin.dir .. "/apps/nvim")
+    require("hitspec").setup()
+  end,
+}
+```
 
 ### Shell Completion
 

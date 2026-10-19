@@ -11,14 +11,14 @@ icon: 'wrench'
 If `{{variableName}}` appears literally in your request instead of being substituted:
 
 1. **Check your environment file** — Variables must be defined in a `.env` or `hitspec.yaml` file.
-2. **Verify the environment is active** — Use `hitspec run --env production` or select it in the UI.
+2. **Verify the environment is active** — Use `hitspec run --env production` (or `HITSPEC_ENV`), or press `ctrl+e` in `hitspec studio`.
 3. **Check for typos** — Variable names are case-sensitive. `{{baseUrl}}` and `{{baseURL}}` are different.
 
 ```http
-# Correct — variable defined in environment
+### Correct: baseUrl is defined in the active environment
 GET {{baseUrl}}/users
 
-# Wrong — double-check the variable name matches your env file
+### Wrong: base_url is not the same variable as baseUrl
 GET {{base_url}}/users
 ```
 
@@ -28,12 +28,12 @@ Use `hitspec run --verbose` to see which variables are resolved and which are mi
 
 ### Circular variable references
 
-If you get a "circular reference" error, check that your variables don't reference each other:
+If you see a `circular variable reference` warning, check that your variables don't reference each other:
 
 ```yaml
-# hitspec.yaml — this will cause a circular reference error
+# hitspec.yaml — this will cause a circular reference warning
 environments:
-  default:
+  dev:
     a: "{{b}}"
     b: "{{a}}"
 ```
@@ -44,43 +44,54 @@ environments:
 
 ### Capture value is empty
 
-If a `@capture` directive isn't extracting the expected value:
+If a `>>>capture` block isn't extracting the expected value:
 
-1. **Verify the JSONPath** — Use `jsonpath $.data.id` and ensure the response actually contains that path.
-2. **Check response content type** — Captures only work on JSON responses for JSONPath expressions.
+1. **Verify the path** — Use `name from body.data.id` and ensure the response actually contains that path.
+2. **Check response content type** — Body paths only work on JSON responses.
 3. **Ensure the request succeeds** — If the request returns an error status, the response body may not contain the expected structure.
 
 ```http
+### Login
+# @name login
+
 POST {{baseUrl}}/auth/login
 Content-Type: application/json
 
 {"email": "test@example.com", "password": "secret"}
 
-@capture token <- jsonpath $.accessToken
+>>>capture
+token from body.accessToken
+<<<
 ```
 
 <Warning>
-Captures are evaluated after assertions. If an assertion fails and you're using `--fail-fast`, subsequent requests that depend on the capture won't run.
+Captures are evaluated after assertions. If an assertion fails and you're running with `--bail`, later requests that depend on the capture won't run.
 </Warning>
 
 ### Dependency order issues
 
-Requests run top-to-bottom within a file. If request B depends on a capture from request A, make sure A comes first:
+Requests run top-to-bottom within a file, and `@depends` makes sure the request it names has run first. If request B uses a capture from request A, B must declare `# @depends A`:
+
+Declare the dependency with `@depends` and read the value as `{{<request name>.<capture name>}}`:
 
 ```http
 ### Login (must come first)
+# @name login
+
 POST {{baseUrl}}/auth/login
 Content-Type: application/json
 
 {"email": "admin@test.com", "password": "pass"}
 
-@capture token <- jsonpath $.token
-
-###
+>>>capture
+token from body.token
+<<<
 
 ### Use the token (depends on Login)
+# @depends login
+
 GET {{baseUrl}}/profile
-Authorization: Bearer {{token}}
+Authorization: Bearer {{login.token}}
 ```
 
 ---
@@ -132,17 +143,14 @@ Or set it in `hitspec.yaml`:
 timeout: 60000  # milliseconds
 ```
 
+A single request can override both with `# @timeout 60000` (milliseconds).
+
 ### Stress test timeout
 
-During stress testing, individual request timeouts may need to be higher. Configure in your stress profile:
+During stress testing, individual request timeouts may need to be higher. Raise `--timeout` for the run, or `# @timeout` on the slow request:
 
-```yaml
-stress:
-  profiles:
-    heavy:
-      duration: 60s
-      rate: 100
-      timeout: 10000
+```bash
+hitspec run api.http --stress --duration 60s --rate 100 --timeout 10s
 ```
 
 ---
@@ -161,19 +169,11 @@ hitspec serve --api-only --port 8080
 lsof -ti:4000 | xargs kill
 ```
 
-### WebSocket disconnects
+### The API server rejects my request
 
-The status bar shows "Disconnected" in red:
+`hitspec serve --api-only` only answers requests whose `Host` is a loopback address and whose JSON bodies carry `Content-Type: application/json`. Bind to another address with `--host` and send `Authorization: Bearer <token>` (see `--api-token`).
 
-1. **Check if the server is still running** in your terminal.
-2. **Check for proxy/firewall** — Some corporate proxies block WebSocket connections.
-3. **The client auto-reconnects** with exponential backoff (1s to 30s). Wait a moment.
-
-<Tip>
-If you're behind a reverse proxy (nginx, Caddy), ensure WebSocket upgrade headers are forwarded.
-</Tip>
-
-### Files not appearing in sidebar
+### Files not appearing in the file list
 
 If your `.http` or `.hitspec` files don't appear:
 
@@ -190,24 +190,26 @@ If your `.http` or `.hitspec` files don't appear:
 Common issues with assertions:
 
 ```http
+### Get user
 GET {{baseUrl}}/users/1
 
-# Wrong — comparing string to number
-@assert status == "200"
+>>>
+expect status 200
 
-# Correct — status is a number
-@assert status == 200
+# Wrong: compares the whole body to a string, which is almost never what you want
+# expect body == "John"
 
-# Wrong — body is the raw string, use jsonpath for JSON
-@assert body == {"name": "John"}
-
-# Correct — use jsonpath to extract values
-@assert jsonpath $.name == "John"
+# Correct: address the JSON field with body.<path>
+expect body.name == "John"
+expect body.roles[0] == "admin"
+<<<
 ```
+
+`hitspec run -v` prints the expected and actual value of every failed assertion.
 
 ### Schema validation failures
 
-If `@assert body matchesSchema` fails:
+If `expect body schema ./schemas/user.json` fails:
 
 1. **Check the schema path** — Relative paths are resolved from the file's directory.
 2. **Validate your schema** — Ensure it's valid JSON Schema (draft-07).
@@ -226,7 +228,9 @@ hitspec uses these exit codes:
 | 0 | All tests passed |
 | 1 | One or more assertions failed |
 | 2 | Parse error (invalid .http file syntax) |
-| 3 | Runtime error (network, timeout, etc.) |
+| 3 | Configuration error (bad `hitspec.yaml`, unknown environment) |
+| 4 | Network error |
+| 64 | Usage error (bad flags, or `--tags`/`--name` matched nothing) |
 
 ### GitHub Actions fails but works locally
 
@@ -236,7 +240,7 @@ hitspec uses these exit codes:
 
 ```yaml
 - name: Run API tests
-  run: hitspec run --timeout 60000 --env ci tests/
+  run: hitspec run --timeout 60s --env ci tests/
   env:
     BASE_URL: ${{ vars.API_URL }}
 ```
@@ -248,7 +252,7 @@ hitspec uses these exit codes:
 ### Slow test execution
 
 1. **Enable parallel execution** — `hitspec run --parallel tests/`
-2. **Reduce timeout** for fast-failing — `hitspec run --timeout 5000`
+2. **Reduce timeout** for fast-failing — `hitspec run --timeout 5s`
 3. **Use `@if`/`@unless`** to skip irrelevant tests conditionally.
 
 ### Large response bodies
@@ -256,11 +260,16 @@ hitspec uses these exit codes:
 For endpoints returning large responses, assertions on the full body may be slow. Use specific JSONPath queries instead:
 
 ```http
-# Slow — validates entire body
-@assert body != ""
+### List items
+GET {{baseUrl}}/items
 
-# Fast — only checks the field you care about
-@assert jsonpath $.data[0].id exists
+>>>
+# Slow: compares the entire body
+# expect body == "..."
+
+# Fast: only checks the field you care about
+expect body.data[0].id exists
+<<<
 ```
 
 ---

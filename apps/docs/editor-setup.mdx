@@ -5,12 +5,12 @@ description: "Configure syntax highlighting, snippets, and shell completions for
 
 ## VSCode Extension
 
-The official hitspec VSCode extension (v0.2.0) provides syntax highlighting, snippets, and language configuration for `.http` and `.hitspec` files.
+The hitspec VSCode extension (v0.2.0, not yet on the Marketplace) provides syntax highlighting, snippets, and language configuration for `.http` and `.hitspec` files.
 
 ### Features
 
 - Full syntax highlighting via TextMate grammar
-- 46 code snippets covering requests, assertions, captures, annotations, blocks, and built-in functions
+- 45 code snippets covering requests, assertions, captures, annotations, blocks, and built-in functions
 - Comment toggling (`#`)
 - Bracket matching and auto-closing for `{}`, `[]`, `()`, `""`, `''`, `{{}}`, and `>>>` / `<<<`
 - Code folding for request separators (`###`) and assertion blocks
@@ -19,9 +19,9 @@ The official hitspec VSCode extension (v0.2.0) provides syntax highlighting, sni
 
 The TextMate grammar highlights these elements:
 
-- **HTTP methods** -- GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, TRACE, CONNECT, WS
+- **HTTP methods** -- GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, TRACE, CONNECT
 - **Request separators** -- `###` lines
-- **Annotations** -- `@name`, `@tags`, `@auth`, `@depends`, `@if`, `@unless`, `@import`, `@stress.*`, `@contract.*`, and others
+- **Annotations** -- `@name`, `@tags`, `@auth`, `@depends`, `@if`, `@unless`, `@retryOn`, `@stress.*`, `@contract.*`, and others
 - **Headers** -- key-value pairs like `Content-Type: application/json`
 - **Assertion blocks** (`>>>` / `<<<`) -- `expect` keyword, comparison operators (`==`, `!=`, `>`, `<`, `>=`, `<=`), matchers (`contains`, `matches`, `exists`, `type`, `schema`, `snapshot`, etc.), and subjects (`status`, `body`, `header`, `duration`)
 - **Typed blocks** -- `>>>capture`, `>>>graphql`, `>>>db`, `>>>shell`, `>>>mock`, `>>>multipart`, `>>>variables`
@@ -41,7 +41,7 @@ npm install
 npm run package
 ```
 
-This generates a `.vsix` file in the `apps/vscode` directory.
+This generates a `.vsix` file in the `apps/vscode` directory. (The `VS Code extension` GitHub workflow builds the same file; publishing to the Marketplace and Open VSX needs the maintainer's tokens and is not set up yet.)
 </Step>
 
 <Step title="Install in VSCode">
@@ -64,17 +64,21 @@ The hitspec Neovim plugin provides syntax highlighting, filetype detection, buff
 - Syntax highlighting via Vim syntax file (not TreeSitter)
 - Filetype detection for `.http` and `.hitspec`
 - Buffer settings: `commentstring` (`# %s`), 2-space indentation
-- 57 LuaSnip snippets (optional) covering HTTP methods, assertion/capture blocks, annotations, built-in functions, and a complete request template
+- 55 LuaSnip snippets (optional) covering HTTP methods, assertion/capture blocks, annotations, built-in functions, and a complete request template
 
 ### Installation
+
+The plugin lives in the `apps/nvim/` subdirectory of the hitspec repository, so
+the plugin manager must add that subdirectory to `runtimepath`. Listing
+`"abdul-hamid-achik/hitspec"` on its own installs the repository but loads nothing.
 
 <Tabs>
 <Tab title="lazy.nvim">
 ```lua
 {
   "abdul-hamid-achik/hitspec",
-  ft = { "http", "hitspec" },
-  config = function()
+  config = function(plugin)
+    vim.opt.rtp:append(plugin.dir .. "/apps/nvim")
     require("hitspec").setup()
   end,
 }
@@ -85,6 +89,7 @@ The hitspec Neovim plugin provides syntax highlighting, filetype detection, buff
 ```lua
 use {
   "abdul-hamid-achik/hitspec",
+  rtp = "apps/nvim",
   config = function()
     require("hitspec").setup()
   end,
@@ -93,18 +98,14 @@ use {
 </Tab>
 
 <Tab title="Manual">
-Copy the plugin directories to your Neovim config:
+Clone the repository and add the subdirectory to `runtimepath`:
 
 ```bash
-cp -r apps/nvim/ftdetect ~/.config/nvim/
-cp -r apps/nvim/syntax ~/.config/nvim/
-cp -r apps/nvim/ftplugin ~/.config/nvim/
-cp -r apps/nvim/lua ~/.config/nvim/
+git clone https://github.com/abdul-hamid-achik/hitspec.git ~/.local/share/hitspec
 ```
 
-Then add to your `init.lua`:
-
 ```lua
+vim.opt.rtp:append(vim.fn.expand("~/.local/share/hitspec/apps/nvim"))
 require("hitspec").setup()
 ```
 </Tab>
