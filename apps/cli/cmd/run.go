@@ -154,6 +154,7 @@ func registerRunFlags(f *pflag.FlagSet) {
 	// Network flags
 	f.StringVar(&proxyFlag, "proxy", "", "Proxy URL for HTTP requests (env: HITSPEC_PROXY; default: hitspec.yaml proxy)")
 	f.BoolVarP(&insecureFlag, "insecure", "k", false, "Disable SSL certificate validation (env: HITSPEC_INSECURE; default: hitspec.yaml validateSSL, else validate)")
+	registerHTTPFlags(f)
 
 	// Stress testing flags
 	f.BoolVar(&stressFlag, "stress", false, "Enable stress testing mode")
@@ -230,6 +231,7 @@ func runOverrides(flags *pflag.FlagSet, environment string) (runconfig.Overrides
 	if bailFlag || flags.Changed("bail") {
 		o.Bail = &bailFlag
 	}
+	applyHTTPFlags(flags, &o)
 	fromEnv, err := runconfig.FromEnv()
 	if err != nil {
 		return o, err
@@ -245,6 +247,9 @@ func buildRunnerConfig(flags *pflag.FlagSet, fileConfig *config.Config, environm
 		return nil, nil, err
 	}
 	cfg, clientOpts := runconfig.Build(fileConfig, overrides)
+	if err := checkClientOptions(clientOpts); err != nil {
+		return nil, nil, err
+	}
 	cfg.Verbose = verboseFlag > 0
 	cfg.NameFilter = nameFlag
 	cfg.TagsFilter = tagsFilter
@@ -392,6 +397,10 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 	cfg, clientOpts, err := buildRunnerConfig(cmd.Flags(), fileConfig, environment, tagsFilter)
 	if err != nil {
+		// Execute exits with an ExitCoder's code without printing it.
+		if _, ok := err.(ExitCoder); ok {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		}
 		return err
 	}
 	if err := checkEnvFile(cmd, cfg.EnvFile); err != nil {

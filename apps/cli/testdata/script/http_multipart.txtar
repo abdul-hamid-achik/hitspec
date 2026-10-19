@@ -1,0 +1,90 @@
+# Multipart file parts carry a field name and a missing file is a request error.
+
+exitcode 0 hitspec run ok.http --no-history
+stdout 'Tests: 4 passed, 4 total'
+
+exitcode 1 hitspec run missing.http --no-history
+stdout 'nope\.png'
+! stdout 'Tests: 1 passed'
+
+exitcode 1 hitspec run missingbody.http --no-history
+stdout 'nope\.json'
+
+-- avatar.png --
+PNGDATA
+-- body.json --
+{"from":"file"}
+-- ok.http --
+### named
+POST {{$env(SERVER)}}/b3/multipart
+
+>>>multipart
+file avatar @./avatar.png
+field title = Hello World
+<<<
+
+>>>
+expect status 200
+expect body.parts[0].name == "avatar"
+expect body.parts[0].filename == "avatar.png"
+expect body.parts[0].body contains "PNGDATA"
+expect body.parts[1].name == "title"
+expect body.parts[1].body == "Hello World"
+<<<
+
+### default name
+POST {{$env(SERVER)}}/b3/multipart
+
+>>>multipart
+file @./avatar.png
+<<<
+
+>>>
+expect status 200
+expect body.parts[0].name == "file"
+expect body.parts[0].filename == "avatar.png"
+<<<
+
+### no at sign
+POST {{$env(SERVER)}}/b3/multipart
+
+>>>multipart
+file ./avatar.png
+<<<
+
+>>>
+expect status 200
+expect body.parts[0].name == "file"
+<<<
+
+### body from file
+POST {{$env(SERVER)}}/echo/body
+Content-Type: application/json
+
+< ./body.json
+
+>>>
+expect status 200
+expect body.body contains "from"
+<<<
+-- missing.http --
+### missing part
+POST {{$env(SERVER)}}/b3/multipart
+
+>>>multipart
+file doc @./nope.png
+<<<
+
+>>>
+expect status 200
+<<<
+-- missingbody.http --
+### missing body file
+POST {{$env(SERVER)}}/echo/body
+Content-Type: application/json
+
+< ./nope.json
+
+>>>
+expect status 200
+<<<
