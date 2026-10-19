@@ -4,7 +4,7 @@ Thank you for your interest in contributing to hitspec! This document provides g
 
 ## Prerequisites
 
-- **Go 1.26** — [golang.org/dl](https://go.dev/dl/) (`go.mod` pins the `go1.26.9` toolchain, which Go downloads automatically; `.tool-versions` matches for asdf users)
+- **Go 1.26** — [golang.org/dl](https://go.dev/dl/) (`go.mod` pins the `go1.26.9` toolchain, which Go downloads automatically; asdf users get it the same way through `.tool-versions`, which only needs a Go 1.26 release)
 - **Task** — [taskfile.dev](https://taskfile.dev/) — task runner for all dev commands
 - Optional: **Node.js 24** for the docs (`task docs:check`) and the desktop app (`apps/desktop`), `sqlite3` for the database example, [`glyph`](https://github.com/abdul-hamid-achik/glyphrun) for the studio e2e specs (`task e2e`)
 
