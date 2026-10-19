@@ -59,7 +59,15 @@ type Config struct {
 	AllowDB            bool                      // Allow database assertions (>>>db blocks)
 	HistoryStore       *history.Store            // Optional persistent history store
 	OnProgress         func(event ProgressEvent) // Optional callback for per-request progress
-	MaxResponseBytes   int64                     // Optional response-body bound
+	MaxResponseBytes   int64                     // Response-body bound: 0 = http default (100 MiB), < 0 = unlimited
+
+	// HTTP client settings that have no per-request equivalent.
+	CACert                 string // PEM CA bundle trusted in addition to the system roots
+	ClientCert             string // PEM client certificate for mutual TLS (needs ClientKey)
+	ClientKey              string // PEM private key for ClientCert
+	HTTP1                  bool   // disable HTTP/2
+	Cookies                bool   // keep a cookie jar for the runner's lifetime
+	RedirectForwardHeaders bool   // keep user headers on cross-origin redirects
 }
 
 // ClientOptions returns the HTTP client options this configuration implies. The
@@ -81,8 +89,23 @@ func (c *Config) ClientOptions() []http.ClientOption {
 	if len(c.DefaultHeaders) > 0 {
 		opts = append(opts, http.WithDefaultHeaders(c.DefaultHeaders))
 	}
-	if c.MaxResponseBytes > 0 {
+	if c.MaxResponseBytes != 0 {
 		opts = append(opts, http.WithMaxBodyBytes(c.MaxResponseBytes))
+	}
+	if c.CACert != "" {
+		opts = append(opts, http.WithCACert(c.CACert))
+	}
+	if c.ClientCert != "" || c.ClientKey != "" {
+		opts = append(opts, http.WithClientCert(c.ClientCert, c.ClientKey))
+	}
+	if c.HTTP1 {
+		opts = append(opts, http.WithHTTP2(false))
+	}
+	if c.Cookies {
+		opts = append(opts, http.WithCookies(true))
+	}
+	if c.RedirectForwardHeaders {
+		opts = append(opts, http.WithForwardRedirectHeaders(true))
 	}
 	return opts
 }

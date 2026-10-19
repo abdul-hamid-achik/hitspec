@@ -1,0 +1,106 @@
+---
+title: "TLS, cookies and HTTP options"
+description: "Trust a private CA, present a client certificate, turn off HTTP/2, keep cookies between requests, bound response size and control redirect headers."
+keywords:
+  - "hitspec tls"
+  - "mutual tls api testing"
+  - "custom ca certificate"
+  - "cookie jar"
+---
+
+These options control how hitspec's HTTP client behaves for a whole run. Each one is a `hitspec run` flag, a `HITSPEC_*` environment variable and a `hitspec.yaml` key; the same keys apply when the client is driven by `hitspec studio`, `hitspec serve`, `--stress` and `hitspec contract`.
+
+Precedence is the usual one: flag, then environment variable, then `hitspec.yaml`, then the default.
+
+| Setting | Flag | Environment variable | `hitspec.yaml` | Default |
+|---------|------|----------------------|----------------|---------|
+| Extra CA bundle | `--cacert <pem>` | `HITSPEC_CACERT` | `cacert` | system roots only |
+| Client certificate | `--cert <pem>` | `HITSPEC_CERT` | `cert` | none |
+| Client key | `--key <pem>` | `HITSPEC_KEY` | `key` | none |
+| Disable HTTP/2 | `--http1.1` | `HITSPEC_HTTP1` | `http1: true` | HTTP/2 over TLS |
+| Cookie jar | `--cookies` | `HITSPEC_COOKIES` | `cookies: true` | off |
+| Response size limit | `--max-response-bytes <n>` | `HITSPEC_MAX_RESPONSE_BYTES` | `maxResponseBytes` | 104857600 (100 MiB) |
+| Keep headers on cross-origin redirects | `--redirect-forward-headers` | `HITSPEC_REDIRECT_FORWARD_HEADERS` | `redirectForwardHeaders: true` | off |
+
+## Private CAs
+
+`--cacert` adds a PEM bundle to the system roots, so an API served with a company or test CA is verified instead of being run with `--insecure`.
+
+```bash
+hitspec run api.http --cacert ./certs/ca.pem
+```
+
+## Mutual TLS
+
+Give both halves of the client certificate:
+
+```bash
+hitspec run api.http --cacert ./certs/ca.pem --cert ./certs/client.pem --key ./certs/client-key.pem
+```
+
+A certificate without a key (or the reverse), or a file that is missing or is not valid PEM, stops the run before any request is sent. hitspec prints the error, naming the file, and exits with code 3.
+
+## In hitspec.yaml
+
+```yaml
+cacert: certs/ca.pem
+cert: certs/client.pem
+key: certs/client-key.pem
+http1: false
+cookies: true
+maxResponseBytes: 5242880
+redirectForwardHeaders: false
+```
+
+Relative paths for `cacert`, `cert` and `key` are resolved against the directory of the `hitspec.yaml` they are written in, not the directory you run hitspec from. Paths given as flags or environment variables are relative to the working directory.
+
+## HTTP/1.1 only
+
+By default hitspec negotiates HTTP/2 over TLS. `--http1.1` turns that off, which helps when a proxy or server misbehaves on HTTP/2 or when you want to reproduce an HTTP/1.1 client.
+
+```bash
+hitspec run api.http --http1.1
+```
+
+## Cookies
+
+Cookies are off by default: a `Set-Cookie` response header is not sent back on later requests. `--cookies` gives the run a cookie jar, so a login request can start a session that the requests after it use. The jar lives for one run and is shared by every file in it.
+
+```http
+### Log in
+# @name login
+POST {{baseUrl}}/login
+Content-Type: application/json
+
+{"user": "alice", "password": "{{password}}"}
+
+>>>
+expect status 200
+<<<
+
+### Read the session
+GET {{baseUrl}}/me
+
+>>>
+expect status 200
+expect body.user == "alice"
+<<<
+```
+
+```bash
+hitspec run session.http --cookies
+```
+
+Turn it back off for one run with `--cookies=false` when `hitspec.yaml` enables it.
+
+## Response size limit
+
+A response body larger than 100 MiB fails the request. `--max-response-bytes` changes the limit; `-1` removes it. The limit applies to the bytes on the wire and to the decoded size of a gzip or deflate response.
+
+```bash
+hitspec run api.http --max-response-bytes 1048576
+```
+
+## Redirects and your headers
+
+When a redirect goes to a different origin (scheme, host or port), hitspec drops the headers you set on the request, such as API keys and `Authorization`, so they are not leaked to another site. Content negotiation headers (`Accept`, `Content-Type`, `User-Agent`, ...) are kept. `--redirect-forward-headers` keeps all of them; use it only for redirects you trust.
