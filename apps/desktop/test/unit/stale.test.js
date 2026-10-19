@@ -6,7 +6,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 
 import {
-  looksLikeHitspecServe, readPidFile, reapStaleServer, removePidFile, writePidFile,
+  defaultGetCommand, looksLikeHitspecServe, readPidFile, reapStaleServer, removePidFile, writePidFile,
 } from '../../src/main/stale.js';
 
 const posix = { skip: process.platform === 'win32' && 'needs POSIX processes' };
@@ -15,7 +15,9 @@ const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'hitspec-stale-'));
 test('looksLikeHitspecServe only matches a real API server command line', () => {
   assert.equal(looksLikeHitspecServe('/Applications/hitspec Studio.app/Contents/Resources/hitspec serve --api-only --host 127.0.0.1 --port 5'), true);
   assert.equal(looksLikeHitspecServe('C:\\app\\resources\\hitspec.exe serve --api-only'), true);
-  assert.equal(looksLikeHitspecServe('hitspec.exe'), true, 'tasklist image name');
+  assert.equal(looksLikeHitspecServe('"C:\\Program Files\\hitspec Studio\\resources\\hitspec.exe" serve --api-only --port 7'), true, 'quoted Windows path');
+  assert.equal(looksLikeHitspecServe('hitspec.exe'), false, 'an image name proves nothing: it is also `hitspec run`');
+  assert.equal(looksLikeHitspecServe('"C:\\app\\hitspec.exe" run tests\\'), false);
   assert.equal(looksLikeHitspecServe('/usr/bin/vim notes.txt'), false);
   assert.equal(looksLikeHitspecServe('/opt/homebrew/bin/hitspec mcp serve --workspace /x'), false);
   assert.equal(looksLikeHitspecServe('/bin/hitspec run tests/'), false);
@@ -103,4 +105,63 @@ test('reap really kills an orphaned process (real pid, real ps lookup)', posix, 
   } finally {
     child.kill('SIGKILL');
   }
+});
+
+test('reap does not touch another hitspec server that reused the pid (port differs)', async () => {
+  const file = path.join(tmp(), 'serve.pid.json');
+  writePidFile(file, { pid: 777, port: 5555 });
+  const signals = [];
+  const res = await reapStaleServer(file, {
+    isAlive: () => true,
+    getCommand: async () => '/x/hitspec serve --api-only --host 127.0.0.1 --port 6000',
+    kill: (_p, sig) => signals.push(sig),
+  });
+  assert.equal(res.reaped, false);
+  assert.deepEqual(signals, []);
+  // the same server (matching port) is reaped
+  writePidFile(file, { pid: 777, port: 5555 });
+  const alive = new Set([777]);
+  const killed = await reapStaleServer(file, {
+    isAlive: (pid) => alive.has(pid),
+    getCommand: async () => '/x/hitspec serve --api-only --port 5555 --log-format json',
+    kill: (pid) => alive.delete(pid),
+  });
+  assert.equal(killed.reaped, true);
+});
+
+test('on Windows the identity comes from the full command line, not the image name', async () => {
+  const calls = [];
+  const run = (cmd, args, opts, cb) => {
+    calls.push({ cmd, args });
+    cb(null, '"C:\\app\\hitspec.exe" serve --api-only --port 9\r\n');
+  };
+  const command = await defaultGetCommand(1234, 'win32', run);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].cmd, 'powershell.exe');
+  assert.match(calls[0].args.join(' '), /Win32_Process.*ProcessId=1234.*CommandLine/);
+  assert.equal(looksLikeHitspecServe(command), true);
+
+  // an unreadable command line (access denied, powershell missing) never matches
+  const failing = (_c, _a, _o, cb) => cb(new Error('denied'));
+  assert.equal(await defaultGetCommand(1234, 'win32', failing), null);
+  const empty = (_c, _a, _o, cb) => cb(null, '\r\n');
+  assert.equal(await defaultGetCommand(1234, 'win32', empty), null);
+
+  // POSIX keeps using ps
+  let psArgs;
+  await defaultGetCommand(42, 'linux', (cmd, args, cb) => { psArgs = [cmd, ...args]; cb(null, 'x\n'); });
+  assert.deepEqual(psArgs, ['ps', '-p', '42', '-o', 'command=']);
+});
+
+test('on Windows a reused pid running `hitspec run` is not killed', async () => {
+  const file = path.join(tmp(), 'serve.pid.json');
+  writePidFile(file, { pid: 888, port: 1 });
+  const signals = [];
+  const res = await reapStaleServer(file, {
+    isAlive: () => true,
+    getCommand: (pid) => defaultGetCommand(pid, 'win32', (_c, _a, _o, cb) => cb(null, '"C:\\bin\\hitspec.exe" run tests\\\r\n')),
+    kill: (_p, sig) => signals.push(sig),
+  });
+  assert.equal(res.reaped, false);
+  assert.deepEqual(signals, []);
 });

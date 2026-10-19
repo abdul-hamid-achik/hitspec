@@ -23,6 +23,10 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 
 const argv = process.argv.slice(2);
+if (process.env.FAKE_REJECT_PARENT_PID && argv.includes('--parent-pid')) {
+  process.stderr.write('Error: unknown flag: --parent-pid\\n');
+  process.exit(1);
+}
 const port = Number(argv[argv.indexOf('--port') + 1]);
 const token = process.env.HITSPEC_API_TOKEN;
 const logFile = process.env.FAKE_LOG;
@@ -110,6 +114,34 @@ test('the API token goes to the child through HITSPEC_API_TOKEN, never argv', op
     );
     assert.deepEqual(started.argv.slice(0, 2), ['serve', '--api-only']);
     assert.equal(started.argv[started.argv.indexOf('--host') + 1], '127.0.0.1');
+  } finally {
+    await backend.stop();
+  }
+});
+
+test('the child is told to exit with this process (--parent-pid)', opts, async () => {
+  const { backend, records, start } = fakeBackend();
+  try {
+    await start();
+    const started = records().find((r) => r.kind === 'start');
+    assert.equal(started.argv[started.argv.indexOf('--parent-pid') + 1], String(process.pid));
+  } finally {
+    await backend.stop();
+  }
+});
+
+test('a CLI that predates --parent-pid is started without it, and remembered', opts, async () => {
+  const { backend, records, start } = fakeBackend();
+  try {
+    await start({ FAKE_REJECT_PARENT_PID: '1' });
+    const starts = records().filter((r) => r.kind === 'start');
+    assert.equal(starts.length, 1, 'only the retry without the flag gets as far as logging');
+    assert.ok(!starts[0].argv.includes('--parent-pid'));
+    assert.equal(backend.state, 'ready');
+    assert.equal(backend.noParentPidFor, backend.binary);
+    // the next start does not try the flag again (it would only fail once more)
+    await start({ FAKE_REJECT_PARENT_PID: '1' });
+    assert.equal(records().filter((r) => r.kind === 'start').length, 2);
   } finally {
     await backend.stop();
   }

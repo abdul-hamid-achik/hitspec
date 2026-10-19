@@ -191,21 +191,25 @@ and publishes only when the credentials exist in the repository secrets.
   "Highlight" button, the pretty-printed body is memoised, and stress/mock
   events no longer re-render views that are not on screen.
 
-### Known limitation: orphaned API server after SIGKILL
+### Orphaned API server after SIGKILL
 
 If Electron dies without running any code (SIGKILL, kernel OOM kill, power
-loss), the `hitspec serve --api-only` child keeps running, because the Go
-server does not watch its parent. Handled without Go changes:
+loss), the `hitspec serve --api-only` child would keep its port and file
+watcher. Two layers handle it:
 
-- graceful quit, `SIGINT`/`SIGTERM`/`SIGHUP`, and `process.on('exit')` stop the
-  child;
-- the child's pid is written to `<userData>/serve.pid.json`, and the next launch
-  stops a leftover server after verifying with `ps` that the pid still belongs
-  to a `hitspec serve --api-only` (never a reused pid).
+- the desktop starts the server with `--parent-pid <electron pid>`; the server
+  polls that process every second and shuts down gracefully when it is gone. A
+  CLI older than the flag is detected (`unknown flag: --parent-pid`) and started
+  without it;
+- the child's pid and port are written to `<userData>/serve.pid.json`, and the
+  next launch stops a leftover server after verifying its full command line
+  (`hitspec serve --api-only ... --port <recorded port>`, read with `ps` or, on
+  Windows, `Get-CimInstance Win32_Process`). A reused pid that now belongs to
+  another program, or to another hitspec command, is never signalled.
 
-Not solved until the server cooperates: between the crash and the next launch the
-orphan keeps its port and file watcher (it is bound to 127.0.0.1 and protected
-by a token nobody else knows). Proposed Go-side change for a follow-up PR: a
-`hitspec serve --parent-pid N` flag (poll the pid every second, shut down when it
-is gone) or `--exit-on-stdin-eof` (the desktop would then keep a stdin pipe open
-instead of `stdio[0] = 'ignore'`, and the OS closes it when the parent dies).
+Graceful quit, `SIGINT`/`SIGTERM`/`SIGHUP` and `process.on('exit')` still stop
+the child directly.
+
+Launching the app again with a folder (`hitspec-studio <dir>`, or macOS "Open
+With") opens it in the running window through the same guarded path as File >
+Open Workspace.

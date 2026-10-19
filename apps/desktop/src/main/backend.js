@@ -111,6 +111,7 @@ export class Backend extends EventEmitter {
     this.startedAt = null;
     this.binary = null;
     this.binarySource = null;
+    this.noParentPidFor = null; // binary known to reject --parent-pid
 
     this.child = null;
     this.ws = null;
@@ -203,6 +204,11 @@ export class Backend extends EventEmitter {
     this.binarySource = resolved.source;
     this.token = crypto.randomBytes(24).toString('base64url');
 
+    // `--parent-pid` makes the server exit when this process dies without
+    // cleanup (SIGKILL, a crash). A CLI older than the flag fails with
+    // "unknown flag": remember that for this binary and start it without.
+    let useParentPid = this.noParentPidFor !== this.binary;
+
     const attempt = async (retriesLeft) => {
       const port = await pickFreePort();
       this.port = port;
@@ -215,6 +221,7 @@ export class Backend extends EventEmitter {
         '--log-format', 'json',
         '--log-level', options.logLevel ?? 'info',
       ];
+      if (useParentPid) args.push('--parent-pid', String(process.pid));
       if (options.watch === false) args.push('--watch=false');
       if (options.readOnly) args.push('--read-only');
       if (options.allowShell) args.push('--allow-shell');
@@ -257,6 +264,12 @@ export class Backend extends EventEmitter {
         this.child = null;
         if (this.pidFile && child.pid) removePidFile(this.pidFile, child.pid);
         const msg = String(err?.message ?? err);
+        if (useParentPid && /unknown flag: --parent-pid/i.test(msg)) {
+          useParentPid = false;
+          this.noParentPidFor = this.binary;
+          this.pushLine('stderr', 'this hitspec CLI predates --parent-pid; starting the API server without it');
+          return attempt(retriesLeft);
+        }
         if (retriesLeft > 0 && /address already in use|bind/i.test(msg)) {
           return attempt(retriesLeft - 1);
         }
