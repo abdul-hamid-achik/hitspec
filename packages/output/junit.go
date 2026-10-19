@@ -48,6 +48,8 @@ type JUnitTestCase struct {
 	Failure   *JUnitFailure `xml:"failure,omitempty"`
 	Error     *JUnitError   `xml:"error,omitempty"`
 	Skipped   *JUnitSkipped `xml:"skipped,omitempty"`
+	// SystemOut carries the request's warnings.
+	SystemOut string `xml:"system-out,omitempty"`
 }
 
 // JUnitFailure represents a test failure
@@ -119,8 +121,9 @@ func (f *JUnitFormatter) FormatResult(result *runner.RunResult) {
 		} else if r.Error != nil {
 			suite.Errors++
 			tc.Error = &JUnitError{
-				Message: r.Error.Error(),
+				Message: RedactText(r.Error.Error()),
 				Type:    "Error",
+				Content: failureContext(r),
 			}
 		} else if !r.Passed {
 			// Collect failure messages from assertions
@@ -131,11 +134,20 @@ func (f *JUnitFormatter) FormatResult(result *runner.RunResult) {
 						a.Subject, a.Operator, a.Expected, a.Actual, a.Message)
 				}
 			}
+			failureMsg.WriteString(failureContext(r))
 			tc.Failure = &JUnitFailure{
 				Message: "Assertion failed",
 				Type:    "AssertionError",
 				Content: failureMsg.String(),
 			}
+		}
+
+		if len(r.Warnings) > 0 && !r.Skipped {
+			lines := make([]string, len(r.Warnings))
+			for i, w := range r.Warnings {
+				lines[i] = "warning: " + sanitize(w)
+			}
+			tc.SystemOut = strings.Join(lines, "\n")
 		}
 
 		suite.TestCases = append(suite.TestCases, tc)

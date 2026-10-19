@@ -1,0 +1,52 @@
+# Warnings ride on the request result: a capture that matched nothing, a
+# {{reference}} sent unresolved. They never change pass/fail or the exit code.
+
+exitcode 0 hitspec run --no-history --no-color warn.http
+stdout '✓ ping'
+stdout 'warning: capture "ghost" \(line [0-9]+\) captured nothing: the path "no\.such" matches nothing'
+stdout 'warning: \{\{nobody\.token\}\} was not resolved and was sent literally \(in the URL\)'
+stdout 'warning: \{\{nobody\.token\}\} was not resolved and was sent literally \(in header X-Token\)'
+stdout 'warning: \{\{nobody\.token\}\} was not resolved and was sent literally \(in the body\)'
+stdout 'Tests: 1 passed, 1 total'
+# The unchanged stderr line for the capture is still there.
+stderr 'captured nothing'
+
+# A clean request has none.
+exitcode 0 hitspec run --no-history --no-color clean.http
+! stdout 'warning'
+
+# JSON: "warnings" on the test.
+exitcode 0 hitspec run --no-history -o json warn.http
+stdout '"warnings": \['
+stdout 'was not resolved and was sent literally \(in the URL\)'
+stdout '"passed": true'
+
+# JUnit: <system-out>, the test still passes.
+exitcode 0 hitspec run --no-history -o junit warn.http
+stdout '<system-out>'
+stdout 'warning: capture &#34;ghost&#34;'
+! stdout '<failure'
+! stdout '<error'
+
+-- warn.http --
+### ping
+GET {{$env(SERVER)}}/b1/ping?t={{nobody.token}}
+X-Token: {{nobody.token}}
+
+{{nobody.token}}
+
+>>>
+expect status 200
+<<<
+
+>>>capture
+ghost from body.no.such
+<<<
+
+-- clean.http --
+### ping
+GET {{$env(SERVER)}}/b1/ping
+
+>>>
+expect status 200
+<<<

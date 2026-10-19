@@ -126,15 +126,23 @@ var warned sync.Map
 // later as an unresolved {{variable}} in another request.
 func ExtractAll(resp *http.Response, captures []*parser.Capture) map[string]any {
 	values, misses := ExtractAllReport(resp, captures)
-	if Warn != nil {
-		for _, m := range misses {
-			if _, dup := warned.LoadOrStore(m, true); dup {
-				continue
-			}
-			fmt.Fprintf(Warn, "warning: %s\n", m)
-		}
-	}
+	Report(misses)
 	return values
+}
+
+// Report prints capture misses (from ExtractAllReport) on Warn, each message
+// once per process. Callers that also keep the misses, as the runner does for
+// RequestResult.Warnings, use it to preserve the stderr line.
+func Report(misses []string) {
+	if Warn == nil {
+		return
+	}
+	for _, m := range misses {
+		if _, dup := warned.LoadOrStore(m, true); dup {
+			continue
+		}
+		fmt.Fprintf(Warn, "warning: %s\n", m)
+	}
 }
 
 // ExtractAllReport is ExtractAll that returns the miss descriptions instead of
