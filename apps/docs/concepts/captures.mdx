@@ -119,6 +119,17 @@ expect body.id == "{{login.userId}}"
 <<<
 ```
 
+### How values are inserted
+
+A captured value is inserted into the next request exactly as the response had it:
+
+- Strings are inserted as-is.
+- Numbers keep their exact JSON digits, so `1000000` stays `1000000` and `123456789012` is not rounded or written as `1e+06`.
+- Booleans are `true` or `false`, and `null` is `null`.
+- Objects and arrays are inserted as compact JSON, for example `{"id":1,"tags":["x","y"]}`.
+
+Captured values are data, not templates. If a response contains `{{HOME}}` or `{{$env(SECRET)}}`, that text is sent literally and never expanded.
+
 <Warning>
 Three things are required for captures to work across requests:
 1. The source request must have a `# @name` directive.

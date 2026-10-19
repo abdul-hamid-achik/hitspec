@@ -208,6 +208,14 @@ When the same variable name is defined in multiple places, hitspec resolves it i
 
 Built-in functions (`$uuid()`, `$timestamp()`, `$env()`, …) and system variables (`{{$VAR}}`) are evaluated wherever they appear.
 
+When an inline variable references its own name, the reference resolves against the layers below it (the `hitspec.yaml` environment, then `.env` files, then the OS environment) instead of being treated as a loop. This lets a file default to whatever the environment provides:
+
+```http
+@baseUrl = {{baseUrl}}
+```
+
+If no lower layer defines the name, the reference stays literal. A loop between two different variables (`@a = {{b}}`, `@b = {{a}}`) is still an error.
+
 <Tip>
 Inline variables (`@var = value`) override `hitspec.yaml` environment values. This is useful for local overrides during development, but be careful not to accidentally shadow environment-specific configuration.
 </Tip>

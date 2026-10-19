@@ -1,0 +1,38 @@
+# Values captured from a response are data: they are inserted literally and
+# never scanned for {{...}}. Regression: a hostile server could return
+# "{{$env(SECRET_X)}}" and have the client expand it into the next request.
+
+env SECRET_X=leak
+exitcode 0 hitspec run evil.http
+stdout 'Tests: 2 passed, 2 total'
+
+-- evil.http --
+### take
+# @name take
+
+GET {{$env(SERVER)}}/p0b/evil
+
+>>>
+expect status 200
+<<<
+
+>>>capture
+v from body.v
+h from body.h
+<<<
+
+### send
+# @name send
+# @depends take
+
+POST {{$env(SERVER)}}/echo/x
+Content-Type: text/plain
+
+{{v}}|{{h}}
+
+>>>
+expect status 200
+expect body.body !contains "leak"
+expect body.body matches "SECRET_X"
+expect body.body matches "\{\{HOME\}\}"
+<<<

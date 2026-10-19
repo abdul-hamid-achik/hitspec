@@ -1,6 +1,7 @@
 package capture
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -46,7 +47,7 @@ func TestExtract_BodyJSON(t *testing.T) {
 		{
 			name:    "numeric field",
 			capture: parser.Capture{Name: "age", Source: parser.CaptureBody, Path: "user.age"},
-			want:    float64(30),
+			want:    json.Number("30"),
 			wantOK:  true,
 		},
 		{
@@ -188,5 +189,49 @@ func TestExtractAll_Empty(t *testing.T) {
 	results := ExtractAll(resp, nil)
 	if len(results) != 0 {
 		t.Errorf("expected empty results, got %v", results)
+	}
+}
+
+// B3: numbers keep their exact JSON text (no float64 round trip), and objects
+// and arrays decode with exact numbers too.
+func TestExtract_NumbersAndStructuresKeepExactJSON(t *testing.T) {
+	resp := jsonResponse(`{"id":1000000,"big":123456789012,"huge":12345678901234567890,"f":1.5,"t":true,"n":null,"o":{"a":1,"b":[2,"x"]},"arr":[1,{"k":3}]}`)
+	ex := NewExtractor(resp)
+	get := func(path string) any {
+		t.Helper()
+		v, ok := ex.Extract(&parser.Capture{Name: "x", Source: parser.CaptureBody, Path: path})
+		if !ok {
+			t.Fatalf("%s: not found", path)
+		}
+		return v
+	}
+
+	for path, want := range map[string]string{
+		"id": "1000000", "big": "123456789012", "huge": "12345678901234567890", "f": "1.5",
+	} {
+		n, ok := get(path).(json.Number)
+		if !ok || n.String() != want {
+			t.Errorf("%s = %#v, want json.Number(%s)", path, get(path), want)
+		}
+	}
+	if get("t") != true {
+		t.Errorf("t = %#v", get("t"))
+	}
+	if v, ok := ex.Extract(&parser.Capture{Name: "n", Source: parser.CaptureBody, Path: "n"}); !ok || v != nil {
+		t.Errorf("n = %#v ok=%v, want nil true", v, ok)
+	}
+	o, ok := get("o").(map[string]any)
+	if !ok {
+		t.Fatalf("o = %#v", get("o"))
+	}
+	if _, ok := o["a"].(json.Number); !ok {
+		t.Errorf("o.a = %#v, want json.Number", o["a"])
+	}
+	arr, ok := get("arr").([]any)
+	if !ok || len(arr) != 2 {
+		t.Fatalf("arr = %#v", get("arr"))
+	}
+	if _, ok := arr[0].(json.Number); !ok {
+		t.Errorf("arr[0] = %#v, want json.Number", arr[0])
 	}
 }

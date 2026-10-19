@@ -1,6 +1,9 @@
 package capture
 
 import (
+	"bytes"
+	"encoding/json"
+
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/http"
 	"github.com/tidwall/gjson"
@@ -45,14 +48,34 @@ func (e *Extractor) extractFromBody(path string) (any, bool) {
 	}
 
 	if path == "" {
-		return e.bodyJSON.Value(), true
+		return jsonValue(e.bodyJSON), true
 	}
 
 	result := e.bodyJSON.Get(path)
 	if !result.Exists() {
 		return nil, false
 	}
-	return result.Value(), true
+	return jsonValue(result), true
+}
+
+// jsonValue converts a gjson result to a Go value without losing numeric
+// precision. gjson's Value() turns every number into a float64, so
+// 123456789012 later formats as "1.23456789012e+11" and integers above 2^53
+// are silently rounded. Numbers are returned as json.Number carrying the
+// exact JSON text; objects and arrays are decoded with the same guarantee.
+func jsonValue(r gjson.Result) any {
+	switch r.Type {
+	case gjson.Number:
+		return json.Number(r.Raw)
+	case gjson.JSON:
+		dec := json.NewDecoder(bytes.NewReader([]byte(r.Raw)))
+		dec.UseNumber()
+		var v any
+		if err := dec.Decode(&v); err == nil {
+			return v
+		}
+	}
+	return r.Value()
 }
 
 func (e *Extractor) extractFromHeader(name string) (any, bool) {
