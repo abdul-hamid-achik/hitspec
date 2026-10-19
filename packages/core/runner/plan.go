@@ -90,7 +90,7 @@ func (r *Runner) PlanFile(path string) (*Plan, error) {
 		if req.Metadata != nil {
 			p.Depends = req.Metadata.Depends
 		}
-		p.URL = http.BuildRequestFromASTWithBaseDir(req, r.resolver.Resolve, baseDir).URL
+		p.URL = templateMarkers.Replace(http.BuildRequestFromASTWithBaseDir(req, r.resolver.Resolve, baseDir).URL)
 
 		switch {
 		case !include[req]:
@@ -147,3 +147,8 @@ func refsCapture(text string) bool {
 	}
 	return false
 }
+
+// templateMarkers undoes the percent-encoding of the {{ }} around a capture
+// reference the plan cannot resolve, so the URL shows {{login.token}} as the
+// user wrote it rather than %7B%7Blogin.token%7D%7D.
+var templateMarkers = strings.NewReplacer("%7B%7B", "{{", "%7D%7D", "}}", "%7b%7b", "{{", "%7d%7d", "}}")
