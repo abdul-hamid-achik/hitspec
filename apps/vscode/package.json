@@ -23,7 +23,6 @@
     "testing",
     "rest",
     "hitspec",
-    "websocket",
     "graphql"
   ],
   "activationEvents": [],

@@ -7,7 +7,7 @@ Syntax highlighting and snippets for hitspec HTTP API testing files.
 - **Syntax Highlighting** for `.http` and `.hitspec` files
 - **Code Snippets** for common patterns
 - **Language Configuration** for comments, brackets, and folding
-- Support for all HTTP methods including **WebSocket** (`WS`)
+- Support for the HTTP methods hitspec runs (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, TRACE, CONNECT)
 - Typed block highlighting: `>>>capture`, `>>>graphql`, `>>>db`, `>>>shell`, `>>>multipart`, `>>>variables`
 - Comment support for both `#` and `//` styles
 
@@ -20,9 +20,9 @@ Syntax highlighting and snippets for hitspec HTTP API testing files.
 
 The extension provides highlighting for:
 
-- HTTP methods (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, WS, etc.)
+- HTTP methods (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, TRACE, CONNECT)
 - Request separators (`###`)
-- Annotations (`@name`, `@tags`, `@auth`, `@if`, `@unless`, `@retryOn`, `@description`, `@import`, etc.)
+- Annotations (`@name`, `@tags`, `@auth`, `@if`, `@unless`, `@retryOn`, `@description`, `@stress.*`, `@contract.*`, etc.)
 - Headers
 - Assertion blocks (`>>>` ... `<<<`)
 - Typed blocks (`>>>capture`, `>>>graphql`, `>>>db`, `>>>shell`, `>>>multipart`)
@@ -43,7 +43,6 @@ The extension provides highlighting for:
 | `delete` | DELETE request template |
 | `head` | HEAD request template |
 | `options` | OPTIONS request template |
-| `ws` | WebSocket request template |
 | `jsonrequest` | Complete request with assertions and captures |
 
 ### Block Snippets
@@ -112,14 +111,21 @@ The extension provides highlighting for:
 3. Run "Extensions: Install from VSIX..."
 4. Select the downloaded file
 
-### From Marketplace
+### From the Marketplace
 
-Search for "hitspec" in the VSCode Extensions marketplace.
+Not published yet: publishing needs the maintainer's Visual Studio Marketplace
+and Open VSX tokens (`VSCE_PAT` / `OVSX_PAT` repository secrets). Until then,
+install the `.vsix` that the `VS Code extension` workflow
+(`.github/workflows/vscode-publish.yml`) builds, or package it yourself
+(see below). Pushing a `vscode-v<version>` tag publishes automatically once the
+secrets exist.
 
 ## Development
 
 ```bash
-# Package the extension
+# Package the extension into a .vsix
+cd apps/vscode
+npm install
 npm run package
 ```
 
