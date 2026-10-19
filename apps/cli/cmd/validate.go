@@ -69,13 +69,7 @@ func validateCommand(cmd *cobra.Command, args []string) error {
 
 	errorCount, warningCount := 0, 0
 	var jsonOut []validateResult
-	for _, file := range files {
-		errs, warns := validateFile(file, validateStrictFlag)
-		if validateStrictFlag && len(warns) > 0 {
-			// --strict: a warning is an error.
-			errs = append(errs, warns...)
-			warns = nil
-		}
+	report := func(file string, errs, warns []string) {
 		warningCount += len(warns)
 		if len(errs) > 0 {
 			errorCount++
@@ -98,6 +92,33 @@ func validateCommand(cmd *cobra.Command, args []string) error {
 				fmt.Fprintf(cmd.OutOrStdout(), "      warning: %s\n", w)
 			}
 		}
+	}
+
+	// hitspec.yaml is checked too: a syntax error stops here (exit 3, as for
+	// "run"); its unknown keys are warnings, errors under --strict.
+	loaded, err := config.Discover(".")
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return newExitError(ExitConfigError, err.Error())
+	}
+	if len(loaded.Warnings) > 0 {
+		var errs, warns []string
+		if validateStrictFlag {
+			errs = loaded.Warnings
+		} else {
+			warns = loaded.Warnings
+		}
+		report(config.DisplayPath(loaded.Path), errs, warns)
+	}
+
+	for _, file := range files {
+		errs, warns := validateFile(file, validateStrictFlag)
+		if validateStrictFlag && len(warns) > 0 {
+			// --strict: a warning is an error.
+			errs = append(errs, warns...)
+			warns = nil
+		}
+		report(file, errs, warns)
 	}
 
 	if validateJSONFlag {
@@ -180,19 +201,13 @@ func definedElsewhere(file string) func(string) bool {
 	if err != nil {
 		dir = filepath.Dir(file)
 	}
-	for d := dir; ; d = filepath.Dir(d) {
-		if path := config.FindConfigPath(d); path != "" {
-			if cfg, cerr := config.LoadConfig(path); cerr == nil && cfg != nil {
-				for _, vars := range cfg.Environments {
-					for k := range vars {
-						names[k] = true
-					}
+	if path := config.FindConfigPathUp(dir); path != "" {
+		if cfg, cerr := config.LoadConfig(path); cerr == nil && cfg != nil {
+			for _, vars := range cfg.Environments {
+				for k := range vars {
+					names[k] = true
 				}
 			}
-			break
-		}
-		if filepath.Dir(d) == d {
-			break
 		}
 	}
 

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -140,17 +141,22 @@ var ConfigFilenames = []string{
 	"hitspec.yml",
 }
 
-// LoadConfig loads configuration from the specified path or searches for config files
+// LoadConfig loads configuration from the specified path. With an empty path
+// it discovers hitspec.yaml from the working directory upward (see Discover).
 func LoadConfig(path string) (*Config, error) {
 	if path != "" {
 		return loadConfigFromFile(path)
 	}
 
-	// Search for config file in current directory
-	return FindAndLoadConfig(".")
+	l, err := Discover(".")
+	if err != nil {
+		return nil, err
+	}
+	return l.Config, nil
 }
 
-// FindAndLoadConfig searches for a config file in the given directory
+// FindAndLoadConfig loads the config file that lives directly in dir (no
+// parent search; see Discover for that), or the defaults when there is none.
 func FindAndLoadConfig(dir string) (*Config, error) {
 	for _, filename := range ConfigFilenames {
 		configPath := filepath.Join(dir, filename)
@@ -165,20 +171,32 @@ func FindAndLoadConfig(dir string) (*Config, error) {
 
 // loadConfigFromFile loads configuration from a specific file
 func loadConfigFromFile(path string) (*Config, error) {
+	l, err := loadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return l.Config, nil
+}
+
+// loadFile reads and decodes one config file. A syntax or type error is
+// reported as "<file>:<line>: <message>"; unknown keys are returned as
+// warnings (the file still loads).
+func loadFile(path string) (*Loaded, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read config %s: %w", path, err)
 	}
 
+	name := DisplayPath(path)
 	config := DefaultConfig()
 	if err := yaml.Unmarshal(data, config); err != nil {
-		return nil, fmt.Errorf("parse config %s: %w", path, err)
+		return nil, errors.New(formatParseError(name, err))
 	}
 	if abs, aerr := filepath.Abs(path); aerr == nil {
 		config.dir = filepath.Dir(abs)
 	}
 
-	return config, nil
+	return &Loaded{Config: config, Path: path, Warnings: unknownKeyWarnings(name, data)}, nil
 }
 
 // Merge merges another config into this one, with other taking precedence
