@@ -1,0 +1,60 @@
+# Captured non-string JSON values interpolate as their JSON text.
+# Regression: numbers went through Go's %v (1000000 -> "1e+06"), objects
+# became "map[...]" and null "<nil>".
+
+exitcode 0 hitspec run numbers.http
+stdout 'Tests: 4 passed, 4 total'
+
+-- numbers.http --
+### read
+# @name read
+
+GET {{$env(SERVER)}}/json
+
+>>>
+expect status 200
+<<<
+
+>>>capture
+id from body.id
+big from body.big
+first from body.items.0
+tags from body.items.0.tags
+missing from body.nullv
+<<<
+
+### number path
+# @name numberPath
+# @depends read
+
+GET {{$env(SERVER)}}/echo/{{id}}/{{big}}
+
+>>>
+expect status 200
+expect body.path == "/echo/1000000/123456789012"
+<<<
+
+### structures
+# @name structures
+# @depends read
+
+POST {{$env(SERVER)}}/echo/structures
+Content-Type: application/json
+
+{"first":{{first}},"tags":{{tags}},"missing":{{missing}},"id":{{id}}}
+
+>>>
+expect status 200
+expect body.body == '{"first":{"id":1,"name":"a","tags":["x","y"]},"tags":["x","y"],"missing":null,"id":1000000}'
+<<<
+
+### dotted capture name
+# @name dotted
+# @depends read
+
+GET {{$env(SERVER)}}/echo/{{read.id}}
+
+>>>
+expect status 200
+expect body.path == "/echo/1000000"
+<<<

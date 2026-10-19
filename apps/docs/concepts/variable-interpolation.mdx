@@ -91,6 +91,10 @@ When the same variable name exists in multiple sources, hitspec resolves in this
 
 Built-in functions (`$uuid()`, `$timestamp()`, `$env()`, …) and system variables (`{{$VAR}}`) are evaluated wherever they appear.
 
+An inline variable that references its own name, such as `@baseUrl = {{baseUrl}}`, resolves that reference against the lower layers (the config environment, then `.env`, then the OS environment). The file default therefore delegates to the environment.
+
+Captured values are inserted literally. A captured value that contains `{{...}}` (for example a response body with `{{$env(SECRET)}}`) is never expanded, so a server cannot read your local variables through a capture.
+
 ## Capture Chains
 
 Chain captures across dependent requests:
@@ -145,6 +149,8 @@ Variables can reference other variables:
 
 GET {{usersEndpoint}}
 ```
+
+Captured and interpolated non-string values are inserted as their JSON text: numbers keep their exact digits (`1000000`, `123456789012`), booleans are `true` or `false`, `null` is `null`, and objects and arrays are compact JSON.
 
 ## Unresolved Variables
 

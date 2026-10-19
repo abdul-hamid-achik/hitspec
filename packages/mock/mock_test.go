@@ -1384,3 +1384,40 @@ func TestHandler_MultipleMethodsSamePath(t *testing.T) {
 		t.Errorf("PUT body = %q", string(putBody))
 	}
 }
+
+// An unresolved leading {{baseUrl}} (supplied by the client's environment) is
+// dropped so the route is the path the client will actually request, and a
+// dotted placeholder like {{createResource.resourceId}} is a path parameter.
+func TestMock_LeadingBaseVarAndDottedParam(t *testing.T) {
+	file, err := parser.Parse(`@baseUrl = {{baseUrl}}
+
+### health
+GET {{baseUrl}}/health
+
+>>>mock
+{"status": "ok"}
+<<<
+
+### one
+GET {{baseUrl}}/resources/{{create.id}}
+
+>>>mock
+{"id": 1}
+<<<
+`, "t.http")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := NewServer()
+	if err := s.LoadParsedFile(file); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ method, path string }{
+		{"GET", "/health"},
+		{"GET", "/resources/42"},
+	} {
+		if route, _ := s.router.Match(c.method, c.path); route == nil {
+			t.Errorf("no route for %s %s", c.method, c.path)
+		}
+	}
+}

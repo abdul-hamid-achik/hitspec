@@ -166,7 +166,19 @@ func (s *Server) resolveVariables(input string, vars map[string]string) string {
 	return result
 }
 
+// leadingVarPattern matches an unresolved {{name}} at the very start of a URL.
+var leadingVarPattern = regexp.MustCompile(`^\{\{[^}]+\}\}`)
+
 func extractPathPattern(url string) string {
+	// An unresolved leading {{baseUrl}} (the base URL comes from the client's
+	// environment, which the mock server does not know) is dropped, leaving
+	// the path the client will request.
+	if loc := leadingVarPattern.FindStringIndex(url); loc != nil {
+		if rest := url[loc[1]:]; rest == "" || rest[0] == '/' {
+			url = rest
+		}
+	}
+
 	// Remove scheme and host
 	if idx := strings.Index(url, "://"); idx != -1 {
 		url = url[idx+3:]
@@ -209,7 +221,7 @@ func createPathRegex(pattern string) *regexp.Regexp {
 		b.WriteString(regexp.QuoteMeta(pattern[last:m[0]]))
 		name := pattern[m[2]:m[3]]
 		b.WriteString("(?P<")
-		b.WriteString(name)
+		b.WriteString(groupName(name))
 		b.WriteString(">[^/]+)")
 		last = m[1]
 	}
@@ -222,6 +234,18 @@ func createPathRegex(pattern string) *regexp.Regexp {
 		return regexp.MustCompile("^" + regexp.QuoteMeta(pattern) + "$")
 	}
 	return regex
+}
+
+// groupName makes a placeholder usable as a regexp group name: Go only allows
+// word characters, so {{createResource.resourceId}} becomes
+// createResource_resourceId.
+func groupName(name string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '_' || (r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+			return r
+		}
+		return '_'
+	}, strings.TrimSpace(name))
 }
 
 func (s *Server) createMockResponse(req *parser.Request) *MockResponse {

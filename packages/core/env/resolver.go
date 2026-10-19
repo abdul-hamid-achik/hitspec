@@ -1,9 +1,13 @@
 package env
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -21,15 +25,20 @@ type WarnFunc func(format string, args ...any)
 type Resolver struct {
 	mu        sync.RWMutex
 	variables map[string]any
-	captures  map[string]any
-	dotenv    map[string]string
-	funcs     *builtin.Registry
-	warnFunc  WarnFunc
+	// shadowed keeps the values a self-referencing definition (e.g.
+	// `@baseUrl = {{baseUrl}}`) replaced in variables, newest last, so the
+	// self-reference can be resolved against the lower-precedence layers.
+	shadowed map[string][]any
+	captures map[string]any
+	dotenv   map[string]string
+	funcs    *builtin.Registry
+	warnFunc WarnFunc
 }
 
 func NewResolver() *Resolver {
 	return &Resolver{
 		variables: make(map[string]any),
+		shadowed:  make(map[string][]any),
 		captures:  make(map[string]any),
 		dotenv:    make(map[string]string),
 		funcs:     builtin.NewRegistry(),
@@ -73,13 +82,80 @@ func (r *Resolver) SetVariables(vars map[string]any) {
 	defer r.mu.Unlock()
 	for k, v := range vars {
 		r.variables[k] = v
+		delete(r.shadowed, k)
 	}
 }
 
+// SetVariable defines name, replacing any earlier definition. When the new
+// value references name itself (`@baseUrl = {{baseUrl}}`, the REST Client
+// idiom for "default to whatever the environment says"), the replaced value is
+// kept as a lower layer that the self-reference resolves against.
 func (r *Resolver) SetVariable(name string, value any) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	old, had := r.variables[name]
+	if had && referencesVariable(value, name) {
+		r.shadowed[name] = append(r.shadowed[name], old)
+	} else {
+		delete(r.shadowed, name)
+	}
 	r.variables[name] = value
+}
+
+// referencesVariable reports whether a value is a string containing {{name}}.
+func referencesVariable(value any, name string) bool {
+	s, ok := value.(string)
+	if !ok {
+		return false
+	}
+	for _, m := range variablePattern.FindAllStringSubmatch(s, -1) {
+		if strings.TrimSpace(m[1]) == name {
+			return true
+		}
+	}
+	return false
+}
+
+// FormatValue renders a variable or captured value for interpolation into a
+// request. Strings are inserted verbatim; numbers keep their exact JSON text
+// (1000000, never 1e+06); booleans are true/false; nil is null; maps and
+// slices become compact JSON.
+func FormatValue(v any) string {
+	switch x := v.(type) {
+	case nil:
+		return "null"
+	case string:
+		return x
+	case json.Number:
+		return x.String()
+	case bool:
+		return strconv.FormatBool(x)
+	case []byte:
+		return string(x)
+	case float64, float32:
+		if b, ok := marshalCompact(x); ok {
+			return b
+		}
+		return fmt.Sprintf("%v", x)
+	}
+	switch reflect.ValueOf(v).Kind() {
+	case reflect.Map, reflect.Slice, reflect.Array, reflect.Struct:
+		if b, ok := marshalCompact(v); ok {
+			return b
+		}
+	}
+	return fmt.Sprintf("%v", v)
+}
+
+// marshalCompact encodes v as JSON without HTML escaping or a trailing newline.
+func marshalCompact(v any) (string, bool) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return "", false
+	}
+	return strings.TrimRight(buf.String(), "\n"), true
 }
 
 func (r *Resolver) SetCapture(requestName, captureName string, value any) {
@@ -102,13 +178,30 @@ func (r *Resolver) GetCapture(name string) (any, bool) {
 // contain {{...}} references (e.g. @apiUrl = {{base}}/v1 where @base =
 // {{scheme}}://api.example.com). A single pass left nested references literal,
 // so {{apiUrl}} resolved to "{{base}}/v1" instead of "https://api.example.com/v1".
-// Self-referential loops (e.g. @baseUrl = {{baseUrl}}) are broken by a visited
-// set so they resolve to a stable literal instead of recursing forever.
+//
+// Precedence, highest first: captures, variables (the hitspec.yaml environment,
+// overridden by the file's own @variables), dotenv, the OS environment.
+//
+// A definition that references its own name (@baseUrl = {{baseUrl}}) resolves
+// that reference against the next lower layer, so a file can default to the
+// environment. If no lower layer defines it, the reference stays literal.
+// Loops between distinct variables (a -> b -> a) are broken by a visited set
+// and also stay literal.
+//
+// Captured values come from server responses, so they are inserted literally
+// and never scanned again: a response containing "{{$env(SECRET)}}" must not
+// make hitspec read local state.
 func (r *Resolver) Resolve(input string) string {
-	return r.resolve(input, map[string]bool{})
+	return r.resolve(input, &resolveState{seen: map[string]bool{}, skip: map[string]int{}})
 }
 
-func (r *Resolver) resolve(input string, seen map[string]bool) string {
+// resolveState tracks one top-level Resolve call.
+type resolveState struct {
+	seen map[string]bool // variables being expanded (cycle guard)
+	skip map[string]int  // per name: how many upper layers a self-reference skips
+}
+
+func (r *Resolver) resolve(input string, st *resolveState) string {
 	return variablePattern.ReplaceAllStringFunc(input, func(match string) string {
 		expr := match[2 : len(match)-2]
 		expr = strings.TrimSpace(expr)
@@ -149,34 +242,40 @@ func (r *Resolver) resolve(input string, seen map[string]bool) string {
 
 		// Cycle guard: a variable that (transitively) references itself must not
 		// recurse forever. Leave the literal {{expr}} in place for this branch.
-		if seen[expr] {
+		if st.seen[expr] {
 			r.warn("circular variable reference: %s", expr)
 			return match
 		}
 
 		r.mu.RLock()
-		var sub any
-		var ok bool
-		if val, cok := r.captures[expr]; cok {
-			sub, ok = val, true
-		} else if val, vok := r.variables[expr]; vok {
-			sub, ok = val, true
-		} else if val, dok := r.dotenv[expr]; dok {
-			sub, ok = val, true
-		}
+		capVal, isCapture := r.captures[expr]
+		layers := r.layersLocked(expr)
 		r.mu.RUnlock()
 
-		if ok {
-			replaced := fmt.Sprintf("%v", sub)
-			// If the value itself contains {{...}}, resolve it recursively so
-			// nested variable references expand.
-			if variablePattern.MatchString(replaced) {
-				seen[expr] = true
-				resolved := r.resolve(replaced, seen)
-				delete(seen, expr)
+		// Captures hold response data: literal, never re-expanded.
+		if isCapture && st.skip[expr] == 0 {
+			return FormatValue(capVal)
+		}
+
+		// The first layer not skipped by an enclosing self-reference decides.
+		if i := st.skip[expr]; i < len(layers) {
+			replaced := FormatValue(layers[i])
+			if !variablePattern.MatchString(replaced) {
+				return replaced
+			}
+			// The value itself contains {{...}}: expand nested references. A
+			// self-reference continues with the layers below this one.
+			if referencesVariable(replaced, expr) {
+				prev := st.skip[expr]
+				st.skip[expr] = i + 1
+				resolved := r.resolve(replaced, st)
+				st.skip[expr] = prev
 				return resolved
 			}
-			return replaced
+			st.seen[expr] = true
+			resolved := r.resolve(replaced, st)
+			delete(st.seen, expr)
+			return resolved
 		}
 
 		// Fallback to OS environment variable
@@ -189,6 +288,24 @@ func (r *Resolver) resolve(input string, seen map[string]bool) string {
 		}
 		return match
 	})
+}
+
+// layersLocked returns the definitions of name below the captures, highest
+// precedence first: the current variable, any definitions it shadowed, dotenv.
+// Callers must hold r.mu.
+func (r *Resolver) layersLocked(name string) []any {
+	var layers []any
+	if v, ok := r.variables[name]; ok {
+		layers = append(layers, v)
+		sh := r.shadowed[name]
+		for i := len(sh) - 1; i >= 0; i-- {
+			layers = append(layers, sh[i])
+		}
+	}
+	if v, ok := r.dotenv[name]; ok {
+		layers = append(layers, v)
+	}
+	return layers
 }
 
 func (r *Resolver) ResolveAll(values map[string]string) map[string]string {
@@ -229,6 +346,9 @@ func (r *Resolver) Clone() *Resolver {
 	clone := NewResolver()
 	for k, v := range r.variables {
 		clone.variables[k] = v
+	}
+	for k, v := range r.shadowed {
+		clone.shadowed[k] = append([]any(nil), v...)
 	}
 	for k, v := range r.captures {
 		clone.captures[k] = v

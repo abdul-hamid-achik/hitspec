@@ -1,0 +1,79 @@
+# `@baseUrl = {{baseUrl}}` (the REST Client idiom) delegates to the lower
+# layers: hitspec.yaml environment, then dotenv, then the OS environment.
+# Regression: it was treated as a cycle, the URL stayed literal and the
+# request failed with "unsupported URL scheme".
+
+# 1. hitspec.yaml environment
+cd yaml
+exitcode 0 hitspec run api.http
+stdout 'Tests: 1 passed, 1 total'
+! stderr 'unsupported'
+
+# 2. OS environment, no config at all
+cd ../os
+env baseUrl=$SERVER
+exitcode 0 hitspec run api.http
+stdout 'Tests: 1 passed, 1 total'
+
+# 3. A self-reference with a suffix keeps the suffix.
+cd ../suffix
+exitcode 0 hitspec run api.http
+stdout 'Tests: 1 passed, 1 total'
+
+# 4. Real cycles between two variables are still an error.
+cd ../cycle
+env baseUrl=
+exitcode 1 hitspec run api.http
+stderr 'circular variable reference'
+stdout 'Tests: 1 failed, 1 total'
+
+-- yaml/hitspec.yaml --
+defaultEnvironment: dev
+environments:
+  dev:
+    baseUrl: ${SERVER}
+-- yaml/api.http --
+@baseUrl = {{baseUrl}}
+
+### ping
+GET {{baseUrl}}/echo/ping
+
+>>>
+expect status 200
+expect body.path == "/echo/ping"
+<<<
+-- os/api.http --
+@baseUrl = {{baseUrl}}
+
+### ping
+GET {{baseUrl}}/echo/ping
+
+>>>
+expect status 200
+<<<
+-- suffix/hitspec.yaml --
+defaultEnvironment: dev
+environments:
+  dev:
+    host: ${SERVER}
+-- suffix/api.http --
+@host = {{host}}
+@baseUrl = {{host}}/echo
+
+### ping
+GET {{baseUrl}}/ping
+
+>>>
+expect status 200
+expect body.path == "/echo/ping"
+<<<
+-- cycle/api.http --
+@a = {{b}}
+@b = {{a}}
+
+### ping
+GET {{a}}/echo/ping
+
+>>>
+expect status 200
+<<<
