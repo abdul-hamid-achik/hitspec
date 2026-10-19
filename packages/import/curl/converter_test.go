@@ -226,3 +226,13 @@ func TestGenerateName(t *testing.T) {
 		}
 	}
 }
+
+func TestTokenizeANSICHexEscapes(t *testing.T) {
+	r, err := NewConverter().ConvertCommand(`curl $'https://x.test/\x41é' -H $'X-Q: \x7a'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(r, "https://x.test/Aé") || !strings.Contains(r, "X-Q: z") {
+		t.Fatalf("escapes not decoded:\n%s", r)
+	}
+}
