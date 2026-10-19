@@ -89,24 +89,43 @@ func (f adderFunc) Add(name string) error { return f(name) }
 // color setting, which lives outside the runner configuration. On error the
 // caller keeps the previous runner.
 func reloadRunSettings(flags *pflag.FlagSet, previous *runner.Config, tagsFilter []string) (*runner.Runner, *runner.Config, bool, error) {
+	r, cfg, noColor, _, err := reloadSettings(flags, previous, tagsFilter)
+	return r, cfg, noColor, err
+}
+
+// reloadSettings is reloadRunSettings that also resolves the report
+// destinations (hitspec.yaml `reporters` and `outputDir`) as they are now, so
+// an edit to them takes effect on the next pass. The plan is nil for a dry
+// run, which ignores them. An invalid value is an error like any other config
+// error, so the previous settings stay.
+func reloadSettings(flags *pflag.FlagSet, previous *runner.Config, tagsFilter []string) (*runner.Runner, *runner.Config, bool, *reportPlan, error) {
 	fileConfig, err := config.LoadConfig(configFlag)
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, false, nil, err
+	}
+	var plan *reportPlan
+	if !dryRunFlag {
+		if plan, err = resolveReportPlan(flags, os.LookupEnv, fileConfig, reportConfigLabel()); err != nil {
+			return nil, nil, false, nil, err
+		}
+		if err = plan.ensureDir(); err != nil {
+			return nil, nil, false, nil, fmt.Errorf("cannot create outputDir: %w", err)
+		}
 	}
 	environment, _ := resolveEnvironment(envFlag, fileConfig)
 	cfg, _, err := buildRunnerConfig(flags, fileConfig, environment, tagsFilter)
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, false, nil, err
 	}
 	// Same rule as the first pass: a missing env file is a config error, so
 	// the previous settings stay rather than running without its variables.
 	if cfg.EnvFile != "" {
 		if _, err := os.Stat(cfg.EnvFile); err != nil {
-			return nil, nil, false, fmt.Errorf("env file: %w", err)
+			return nil, nil, false, nil, fmt.Errorf("env file: %w", err)
 		}
 	}
 	if previous != nil {
 		cfg.HistoryStore = previous.HistoryStore
 	}
-	return runner.NewRunner(cfg), cfg, noColorEnabled(flags, fileConfig.GetNoColor()), nil
+	return runner.NewRunner(cfg), cfg, noColorEnabled(flags, fileConfig.GetNoColor()), plan, nil
 }

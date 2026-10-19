@@ -41,8 +41,8 @@ You can pass multiple files, directories and patterns as arguments. See [Inputs]
 | `--verbose` | `-v` | Verbose output, repeatable: `-v`, `-vv`, `-vvv` for more detail (see [Verbose Output](#verbose-output)) | `false` | |
 | `--quiet` | `-q` | Suppress the report on stdout. Failures are still listed on stderr and `--output-file` is still written | `false` | `HITSPEC_QUIET` |
 | `--no-color` | | Disable colored output | `false` | `HITSPEC_NO_COLOR` |
-| `--output` | `-o` | Output format: `console`, `json`, `junit`, `tap`, `html` | `console` | `HITSPEC_OUTPUT` |
-| `--output-file` | | Write output to a file instead of stdout | | `HITSPEC_OUTPUT_FILE` |
+| `--output` | `-o` | Output format: `console`, `json`, `junit`, `tap`, `html`. Overrides `reporters` and `outputDir` in `hitspec.yaml` | `console` | `HITSPEC_OUTPUT` |
+| `--output-file` | | Write output to a file instead of stdout. Overrides `reporters` and `outputDir` in `hitspec.yaml` | | `HITSPEC_OUTPUT_FILE` |
 
 ### Execution Flags
 

@@ -565,8 +565,8 @@ Connect to `/api/v1/ws` for real-time updates. Message envelope: `{"type": "stri
 | `--timeout` | Request timeout as a duration, e.g. `30s`, `1m` (env: HITSPEC_TIMEOUT; default: hitspec.yaml `timeout`, else 30s) |
 | `--no-color` | Disable colored output |
 | `--dry-run` | Parse each file and list the requests that would run (method, resolved URL, tags, depends, skip reasons); sends nothing. Not with `--stress` (exit 64); `-o`/`--output-file` are ignored (plan is text) |
-| `--output, -o` | Format: console, json, junit, tap, html |
-| `--output-file` | Write output to file (recreated on every watch rerun) |
+| `--output, -o` | Format: console, json, junit, tap, html (overrides hitspec.yaml `reporters`/`outputDir`) |
+| `--output-file` | Write output to file (recreated on every watch rerun; overrides hitspec.yaml `reporters`/`outputDir`) |
 | `--quiet, -q` | Suppress the stdout report; failures are still listed on stderr and `--output-file` is still written |
 | `--parallel, -p` | Run requests in parallel (default: hitspec.yaml `parallel`) |
 | `--concurrency` | Max concurrent requests (default: hitspec.yaml `concurrency`, else 5) |
@@ -626,7 +626,7 @@ are listed in the next section.
 | 0 | All requests passed |
 | 1 | A request or assertion failed |
 | 2 | A file could not be loaded (syntax error, duplicate `@name`, `@depends` cycle); other files still run |
-| 3 | Configuration error: unparseable or missing hitspec.yaml/`--config`, missing `--env-file`, bad `--cacert`/`--cert`/`--key`/`--proxy` |
+| 3 | Configuration error: unparseable or missing hitspec.yaml/`--config`, missing `--env-file`, bad `--cacert`/`--cert`/`--key`/`--proxy`, unknown or conflicting hitspec.yaml `reporters` |
 | 4 | Network error: a request got no response because the connection failed (refused, unreachable, DNS, TLS, reset before a response, timeout before connecting, OAuth2 token endpoint or `@waitFor` target unreachable). A timeout after connecting is a failure (1) |
 | 64 | Usage error (unknown flag or command, bad flag value, missing required flag, wrong number of arguments, `--dry-run` with `--stress`), including `--name`/`--tags` that matched no request. Errors found while working (missing file, unknown export format) keep exit 1 |
 | 130 | Interrupted (Ctrl+C / SIGTERM): partial results printed, `--output-file` written |
@@ -831,6 +831,13 @@ http1: false
 cookies: false
 maxResponseBytes: 104857600
 redirectForwardHeaders: false
+# Reports of `hitspec run`: console goes to stdout; with outputDir every other
+# reporter writes hitspec-results.json / hitspec-junit.xml / hitspec-results.tap /
+# hitspec-report.html there (relative to this file). Without outputDir only one
+# reporter is allowed (all write to stdout). -o / --output-file / HITSPEC_OUTPUT*
+# override both keys.
+# reporters: [console, junit]
+# outputDir: reports
 
 # Environments
 environments:

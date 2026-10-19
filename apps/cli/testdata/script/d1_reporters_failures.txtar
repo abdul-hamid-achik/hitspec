@@ -1,0 +1,43 @@
+# With no report on stdout the failures are still listed on stderr, and the
+# exit codes are unchanged.
+
+cd junit
+exitcode 1 hitspec run --no-history ../fail.http
+! stdout .
+stderr 'FAIL .*fail\.http: failing'
+grep '<failure' reports/hitspec-junit.xml
+
+# console + file: the console report is on stdout, no failure list on stderr.
+cd ../mixed
+exitcode 1 hitspec run --no-history --no-color ../fail.http
+stdout 'failing'
+! stderr 'FAIL '
+grep '<failure' reports/hitspec-junit.xml
+
+# a broken file: stderr has the error; the console report on stdout does not
+# repeat it, and the structured file lists it as a failed result.
+exitcode 2 hitspec run --no-history --no-color ../broken.http
+stderr 'Error: '
+! stdout 'broken\.http'
+grep 'broken.http' reports/hitspec-junit.xml
+
+-- .git/HEAD --
+ref: refs/heads/main
+-- fail.http --
+### failing
+GET {{$env(SERVER)}}/status/404
+
+>>>
+expect status 200
+<<<
+-- broken.http --
+### a
+GET {{$env(SERVER)}}/status/200
+>>>
+expect
+-- junit/hitspec.yaml --
+reporters: [junit]
+outputDir: reports
+-- mixed/hitspec.yaml --
+reporters: [console, junit]
+outputDir: reports

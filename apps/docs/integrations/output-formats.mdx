@@ -236,6 +236,23 @@ The HTML report includes:
 | `tap` | Unix pipelines | Yes | Partially | TAP consumers |
 | `html` | Reports, sharing | No | Yes | Upload as artifact |
 
+## From hitspec.yaml
+
+Set `reporters` and `outputDir` in `hitspec.yaml` to choose the reports without flags. This prints the console report and writes a JUnit file for CI:
+
+```yaml
+reporters:
+  - console
+  - junit
+outputDir: reports
+```
+
+```bash
+hitspec run tests/   # console report on stdout, reports/hitspec-junit.xml for CI
+```
+
+Each reporter other than `console` writes a fixed file name in `outputDir`: `hitspec-results.json`, `hitspec-junit.xml`, `hitspec-results.tap` or `hitspec-report.html`. Without `outputDir`, all reporters write to stdout, so only one is allowed (`reporters: [json]` is the same as `--output json`). `--output`, `--output-file`, `HITSPEC_OUTPUT` and `HITSPEC_OUTPUT_FILE` take precedence and ignore both keys. See [Configuration](/reference/configuration#reporters-and-outputdir) for the rules and exit codes.
+
 ## Setting a Default Format
 
 Use the `HITSPEC_OUTPUT` environment variable to avoid passing `--output` on every invocation:
