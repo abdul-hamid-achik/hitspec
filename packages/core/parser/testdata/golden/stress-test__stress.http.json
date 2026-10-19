@@ -6,13 +6,13 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 16,
+            "Line": 23,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": 5000,
-            "Line": 17,
+            "Line": 24,
             "Operator": "\u003c",
             "Subject": "duration"
           }
@@ -23,7 +23,7 @@
         "Description": "Quick health check endpoint - runs most frequently",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 7,
+        "Line": 14,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -48,7 +48,7 @@
           "WaitFor": null
         },
         "Method": "GET",
-        "MockBody": "",
+        "MockBody": "{ \"url\": \"http://localhost:3000/get\", \"args\": { \"page\": \"1\", \"limit\": \"20\", \"sort\": \"created_at\" } }",
         "Name": "healthCheck",
         "QueryParams": null,
         "ShellCommands": null,
@@ -62,19 +62,19 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 32,
+            "Line": 43,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": "1",
-            "Line": 33,
+            "Line": 44,
             "Operator": "==",
             "Subject": "body.args.page"
           },
           {
             "Expected": "20",
-            "Line": 34,
+            "Line": 45,
             "Operator": "==",
             "Subject": "body.args.limit"
           }
@@ -85,7 +85,7 @@
         "Description": "GET request with query parameters",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 20,
+        "Line": 31,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -115,17 +115,17 @@
         "QueryParams": [
           {
             "Key": "page",
-            "Line": 27,
+            "Line": 38,
             "Value": "1"
           },
           {
             "Key": "limit",
-            "Line": 28,
+            "Line": 39,
             "Value": "20"
           },
           {
             "Key": "sort",
-            "Line": 29,
+            "Line": 40,
             "Value": "created_at"
           }
         ],
@@ -140,13 +140,13 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 53,
+            "Line": 64,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": null,
-            "Line": 54,
+            "Line": 65,
             "Operator": "exists",
             "Subject": "body.json.name"
           }
@@ -155,7 +155,7 @@
           "ContentType": "json",
           "FilePath": "",
           "GraphQL": null,
-          "Line": 46,
+          "Line": 57,
           "Multipart": null,
           "Raw": "{\n  \"name\": \"Stress Test Item {{$uuid()}}\",\n  \"timestamp\": \"{{$now()}}\",\n  \"value\": {{$random(1, 1000)}}\n}"
         },
@@ -166,11 +166,11 @@
         "Headers": [
           {
             "Key": "Content-Type",
-            "Line": 44,
+            "Line": 55,
             "Value": "application/json"
           }
         ],
-        "Line": 37,
+        "Line": 48,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -195,7 +195,7 @@
           "WaitFor": null
         },
         "Method": "POST",
-        "MockBody": "",
+        "MockBody": "{ \"json\": { \"name\": \"Stress Test Item\" } }",
         "Name": "createResource",
         "QueryParams": null,
         "ShellCommands": null,
@@ -209,13 +209,13 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 67,
+            "Line": 82,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": 5000,
-            "Line": 68,
+            "Line": 83,
             "Operator": "\u003c",
             "Subject": "duration"
           }
@@ -226,7 +226,7 @@
         "Description": "Test a slow endpoint under load",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 57,
+        "Line": 72,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -251,7 +251,7 @@
           "WaitFor": null
         },
         "Method": "GET",
-        "MockBody": "",
+        "MockBody": "{ \"url\": \"http://localhost:3000/delay/1\" }",
         "Name": "delayedEndpoint",
         "QueryParams": null,
         "ShellCommands": null,
@@ -265,7 +265,7 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 86,
+            "Line": 105,
             "Operator": "==",
             "Subject": "status"
           }
@@ -274,7 +274,7 @@
           "ContentType": "json",
           "FilePath": "",
           "GraphQL": null,
-          "Line": 80,
+          "Line": 99,
           "Multipart": null,
           "Raw": "{\n  \"action\": \"setup\",\n  \"testId\": \"{{$uuid()}}\"\n}"
         },
@@ -285,11 +285,11 @@
         "Headers": [
           {
             "Key": "Content-Type",
-            "Line": 78,
+            "Line": 97,
             "Value": "application/json"
           }
         ],
-        "Line": 71,
+        "Line": 90,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -328,7 +328,7 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 103,
+            "Line": 122,
             "Operator": "==",
             "Subject": "status"
           }
@@ -337,7 +337,7 @@
           "ContentType": "json",
           "FilePath": "",
           "GraphQL": null,
-          "Line": 98,
+          "Line": 117,
           "Multipart": null,
           "Raw": "{\n  \"action\": \"teardown\"\n}"
         },
@@ -348,11 +348,11 @@
         "Headers": [
           {
             "Key": "Content-Type",
-            "Line": 96,
+            "Line": 115,
             "Value": "application/json"
           }
         ],
-        "Line": 89,
+        "Line": 108,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -391,13 +391,13 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 115,
+            "Line": 134,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": null,
-            "Line": 116,
+            "Line": 135,
             "Operator": "exists",
             "Subject": "body.headers"
           }
@@ -408,7 +408,7 @@
         "Description": "This request is skipped during stress testing",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 106,
+        "Line": 125,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -433,7 +433,7 @@
           "WaitFor": null
         },
         "Method": "GET",
-        "MockBody": "",
+        "MockBody": "{ \"headers\": { \"Host\": \"localhost:3000\" } }",
         "Name": "debugEndpoint",
         "QueryParams": null,
         "ShellCommands": null,
@@ -445,9 +445,9 @@
     ],
     "Variables": [
       {
-        "Line": 5,
+        "Line": 12,
         "Name": "baseUrl",
-        "Value": "https://httpbin.org"
+        "Value": "http://localhost:3000"
       }
     ]
   }

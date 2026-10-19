@@ -6,13 +6,13 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 17,
+            "Line": 24,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": 1,
-            "Line": 18,
+            "Line": 25,
             "Operator": "==",
             "Subject": "body.id"
           }
@@ -23,7 +23,7 @@
         "Description": "Basic health check that always runs",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 9,
+        "Line": 16,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -42,7 +42,7 @@
           "WaitFor": null
         },
         "Method": "GET",
-        "MockBody": "",
+        "MockBody": "{ \"userId\": 1, \"id\": 1, \"title\": \"First post\", \"body\": \"Hello from the mock server\" }",
         "Name": "healthCheck",
         "QueryParams": null,
         "ShellCommands": null,
@@ -55,25 +55,25 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 30,
+            "Line": 41,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": 1,
-            "Line": 31,
+            "Line": 42,
             "Operator": "==",
             "Subject": "body.id"
           },
           {
             "Expected": null,
-            "Line": 32,
+            "Line": 43,
             "Operator": "exists",
             "Subject": "body.name"
           },
           {
             "Expected": null,
-            "Line": 33,
+            "Line": 44,
             "Operator": "exists",
             "Subject": "body.email"
           }
@@ -84,7 +84,7 @@
         "Description": "Only runs when runAuthTests is truthy",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 21,
+        "Line": 32,
         "Metadata": {
           "Auth": null,
           "Condition": {
@@ -106,7 +106,7 @@
           "WaitFor": null
         },
         "Method": "GET",
-        "MockBody": "",
+        "MockBody": "{ \"id\": 1, \"name\": \"Ada Lovelace\", \"email\": \"ada@example.com\" }",
         "Name": "authTest",
         "QueryParams": null,
         "ShellCommands": null,
@@ -120,19 +120,19 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 45,
+            "Line": 60,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": "array",
-            "Line": 46,
+            "Line": 61,
             "Operator": "type",
             "Subject": "body"
           },
           {
-            "Expected": 50,
-            "Line": 47,
+            "Expected": 2,
+            "Line": 62,
             "Operator": "length \u003e",
             "Subject": "body"
           }
@@ -143,7 +143,7 @@
         "Description": "Skipped when skipSlowTests is truthy (currently false, so this runs)",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 36,
+        "Line": 51,
         "Metadata": {
           "Auth": null,
           "Condition": {
@@ -165,7 +165,7 @@
           "WaitFor": null
         },
         "Method": "GET",
-        "MockBody": "",
+        "MockBody": "[\n  { \"userId\": 1, \"id\": 1, \"title\": \"First post\" },\n  { \"userId\": 1, \"id\": 2, \"title\": \"Second post\" },\n  { \"userId\": 1, \"id\": 3, \"title\": \"Third post\" }\n]",
         "Name": "slowQuery",
         "QueryParams": null,
         "ShellCommands": null,
@@ -179,25 +179,25 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 60,
+            "Line": 83,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": "array",
-            "Line": 61,
+            "Line": 84,
             "Operator": "type",
             "Subject": "body"
           },
           {
             "Expected": 1,
-            "Line": 62,
+            "Line": 85,
             "Operator": "==",
             "Subject": "body[0].postId"
           },
           {
             "Expected": null,
-            "Line": 63,
+            "Line": 86,
             "Operator": "exists",
             "Subject": "body[0].email"
           }
@@ -208,7 +208,7 @@
         "Description": "Only runs when environment is set to staging",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 50,
+        "Line": 73,
         "Metadata": {
           "Auth": null,
           "Condition": {
@@ -230,12 +230,12 @@
           "WaitFor": null
         },
         "Method": "GET",
-        "MockBody": "",
+        "MockBody": "[\n  { \"postId\": 1, \"id\": 1, \"email\": \"ada@example.com\" }\n]",
         "Name": "stagingOnly",
         "QueryParams": [
           {
             "Key": "postId",
-            "Line": 57,
+            "Line": 80,
             "Value": "1"
           }
         ],
@@ -250,13 +250,13 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 75,
+            "Line": 104,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": "array",
-            "Line": 76,
+            "Line": 105,
             "Operator": "type",
             "Subject": "body"
           }
@@ -267,7 +267,7 @@
         "Description": "Skipped unless debugMode variable is set",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 66,
+        "Line": 95,
         "Metadata": {
           "Auth": null,
           "Condition": {
@@ -303,7 +303,7 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 87,
+            "Line": 116,
             "Operator": "==",
             "Subject": "status"
           }
@@ -311,7 +311,7 @@
         "Body": null,
         "Captures": [
           {
-            "Line": 91,
+            "Line": 120,
             "Name": "userName",
             "Path": "name",
             "Source": "body"
@@ -321,7 +321,7 @@
         "Description": "First get a user",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 79,
+        "Line": 108,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -353,19 +353,19 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 105,
+            "Line": 134,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": "array",
-            "Line": 106,
+            "Line": 135,
             "Operator": "type",
             "Subject": "body"
           },
           {
             "Expected": 1,
-            "Line": 107,
+            "Line": 136,
             "Operator": "==",
             "Subject": "body[0].userId"
           }
@@ -376,7 +376,7 @@
         "Description": "Only fetch posts if user was found (depends on getUser)",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 94,
+        "Line": 123,
         "Metadata": {
           "Auth": null,
           "Condition": {
@@ -405,7 +405,7 @@
         "QueryParams": [
           {
             "Key": "userId",
-            "Line": 102,
+            "Line": 131,
             "Value": "1"
           }
         ],
@@ -419,22 +419,22 @@
     ],
     "Variables": [
       {
-        "Line": 4,
+        "Line": 11,
         "Name": "baseUrl",
-        "Value": "https://jsonplaceholder.typicode.com"
+        "Value": "http://localhost:3000"
       },
       {
-        "Line": 5,
+        "Line": 12,
         "Name": "runAuthTests",
         "Value": "true"
       },
       {
-        "Line": 6,
+        "Line": 13,
         "Name": "skipSlowTests",
         "Value": "false"
       },
       {
-        "Line": 7,
+        "Line": 14,
         "Name": "environment",
         "Value": "staging"
       }

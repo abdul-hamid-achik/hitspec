@@ -1,12 +1,20 @@
 # Database Assertion Examples
 # Demonstrates verifying database state after HTTP requests
-# Requires --allow-db flag and a SQLite database
+# Requires the --allow-db flag and a SQLite database. The HTTP side runs
+# offline against the built-in mock server (>>>mock blocks); the database path
+# below is relative to the directory you run hitspec from.
 #
-# Setup: Create the test database first:
-#   sqlite3 ./test.db "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT, active BOOLEAN DEFAULT 1);"
-#   sqlite3 ./test.db "INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com');"
+#   cd examples/database
+#   sqlite3 test.db < seed.sql                      (once; needs the sqlite3 CLI)
+#   hitspec mock database.http                      (terminal 1)
+#   hitspec run database.http --allow-db            (terminal 2)
+#
+# To use the real JSONPlaceholder API, set
+#   @baseUrl = https://jsonplaceholder.typicode.com
+# The mock server picks the first block matching a method + path, so GET /users
+# (used twice) is mocked once.
 
-@baseUrl = https://jsonplaceholder.typicode.com
+@baseUrl = http://localhost:3000
 @dbConn = sqlite://./test.db
 
 ### Create a User via API
@@ -28,6 +36,10 @@ expect status 201
 expect body.id exists
 <<<
 
+>>>mock
+{ "id": 11, "name": "Bob Smith", "email": "bob@example.com" }
+<<<
+
 >>>db
 SELECT COUNT(*) as count FROM users WHERE name = 'Alice';
 expect count == 1
@@ -43,6 +55,10 @@ GET {{baseUrl}}/users/1
 
 >>>
 expect status 200
+<<<
+
+>>>mock
+{ "id": 1, "name": "Alice", "email": "alice@example.com" }
 <<<
 
 >>>db
@@ -62,6 +78,12 @@ GET {{baseUrl}}/users
 
 >>>
 expect status 200
+<<<
+
+>>>mock
+[
+  { "id": 1, "name": "Alice", "email": "alice@example.com" }
+]
 <<<
 
 >>>db
@@ -86,6 +108,10 @@ Content-Type: application/json
 
 >>>
 expect status 200
+<<<
+
+>>>mock
+{ "id": 1, "name": "Alice Updated", "email": "alice.updated@example.com" }
 <<<
 
 >>>db

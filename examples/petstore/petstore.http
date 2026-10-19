@@ -1,4 +1,12 @@
-@baseUrl = https://petstore.swagger.io/v2
+# Petstore: a CRUD lifecycle with @depends and captures.
+#
+# Runs offline against the built-in mock server (>>>mock blocks):
+#   hitspec mock examples/petstore/petstore.http     (terminal 1)
+#   hitspec run examples/petstore/petstore.http      (terminal 2)
+# The mock replays canned responses, so it does not store the pet you create.
+# To use the real Swagger Petstore, set @baseUrl = https://petstore.swagger.io/v2
+
+@baseUrl = http://localhost:3000
 
 ### Find pets by status
 # @name findPetsByStatus
@@ -11,6 +19,17 @@ GET {{baseUrl}}/pet/findByStatus?status=available
 expect status 200
 expect body[0].id exists
 expect body[0].status == "available"
+<<<
+
+>>>mock
+[{
+  "id": 12345,
+  "name": "doggie",
+  "category": { "id": 1, "name": "Dogs" },
+  "photoUrls": ["http://example.com/photo.jpg"],
+  "tags": [{ "id": 1, "name": "cute" }],
+  "status": "available"
+}]
 <<<
 
 >>>capture
@@ -29,6 +48,17 @@ GET {{baseUrl}}/pet/{{createPet.petId}}
 expect status 200
 expect body.id exists
 expect body.name exists
+<<<
+
+>>>mock
+{
+  "id": 12345,
+  "name": "doggie",
+  "category": { "id": 1, "name": "Dogs" },
+  "photoUrls": ["http://example.com/photo.jpg"],
+  "tags": [{ "id": 1, "name": "cute" }],
+  "status": "available"
+}
 <<<
 
 ### Create a new pet
@@ -62,6 +92,17 @@ expect body.id == 12345
 expect body.name == "doggie"
 <<<
 
+>>>mock
+{
+  "id": 12345,
+  "name": "doggie",
+  "category": { "id": 1, "name": "Dogs" },
+  "photoUrls": ["http://example.com/photo.jpg"],
+  "tags": [{ "id": 1, "name": "cute" }],
+  "status": "available"
+}
+<<<
+
 >>>capture
 petId from body.id
 <<<
@@ -88,6 +129,15 @@ expect body.name == "doggie updated"
 expect body.status == "sold"
 <<<
 
+>>>mock
+{
+  "id": 12345,
+  "name": "doggie updated",
+  "photoUrls": ["http://example.com/photo.jpg"],
+  "status": "sold"
+}
+<<<
+
 ### Delete the pet
 # @name deletePet
 # @description Delete the pet
@@ -98,4 +148,8 @@ DELETE {{baseUrl}}/pet/{{createPet.petId}}
 
 >>>
 expect status 200
+<<<
+
+>>>mock
+{ "code": 200, "type": "unknown", "message": "12345" }
 <<<

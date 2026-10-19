@@ -12,11 +12,19 @@ Demonstrates how to write and test GraphQL queries with hitspec.
 
 ## API Used
 
-[Countries GraphQL API](https://countries.trevorblades.com/) -- a free, public GraphQL endpoint.
+Modelled on the [Countries GraphQL API](https://countries.trevorblades.com/), a
+free, public GraphQL endpoint. The file carries `>>>mock` blocks, so it runs
+offline against the built-in mock server. The mock routes on method + path only
+and cannot tell two GraphQL queries apart, so each operation posts to its own
+path (`/graphql/countries`, `/graphql/country`, ...). A real server has one
+`/graphql` endpoint: to use the Countries API, set
+`@baseUrl = https://countries.trevorblades.com` and change the URLs back to
+`/graphql`.
 
 ## Running
 
 ```bash
+hitspec mock examples/graphql/graphql.http &    # serves http://localhost:3000
 hitspec run examples/graphql/graphql.http
 
 # Run only read queries
@@ -24,6 +32,8 @@ hitspec run examples/graphql/graphql.http --tags read
 
 # Run filter tests
 hitspec run examples/graphql/graphql.http --tags filter
+
+kill %1
 ```
 
 ## Key Concepts

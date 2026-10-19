@@ -2,7 +2,16 @@
 # Demonstrates API contract validation against an OpenAPI spec
 # Verifies that API responses match their documented schemas
 
-@baseUrl = https://petstore.swagger.io/v2
+# Runs offline against the built-in mock server (>>>mock blocks):
+#   hitspec mock examples/contract/contract.http     (terminal 1)
+#   hitspec run examples/contract/contract.http      (terminal 2)
+# The mock replays canned responses shaped like the Petstore contract; point
+# @baseUrl at https://petstore.swagger.io/v2 to check the real service.
+# The mock server picks the first route matching a method + path, so the
+# 404 case is declared before GET /pet/{{createPet.petId}}, which would
+# otherwise also match /pet/0.
+
+@baseUrl = http://localhost:3000
 
 ### Find Available Pets (Schema Validation)
 # @name findPets
@@ -18,6 +27,17 @@ expect body[0].id exists
 expect body[0].name exists
 expect body[0].status == "available"
 expect body[0].photoUrls type array
+<<<
+
+>>>mock
+[{
+  "id": 99999,
+  "category": { "id": 1, "name": "Dogs" },
+  "name": "Rex",
+  "photoUrls": ["https://example.com/rex.jpg"],
+  "tags": [{ "id": 1, "name": "friendly" }],
+  "status": "available"
+}]
 <<<
 
 ### Create Pet (Validate Response Shape)
@@ -59,8 +79,37 @@ expect body.tags[0].name type string
 expect body.status in ["available", "pending", "sold"]
 <<<
 
+>>>mock
+{
+  "id": 99999,
+  "category": { "id": 1, "name": "Dogs" },
+  "name": "Rex",
+  "photoUrls": ["https://example.com/rex.jpg"],
+  "tags": [{ "id": 1, "name": "friendly" }],
+  "status": "available"
+}
+<<<
+
 >>>capture
 petId from body.id
+<<<
+
+### Invalid Request (Error Contract)
+# @name notFoundPet
+# @description Verify error responses follow the expected format
+# @tags contract, error
+
+GET {{baseUrl}}/pet/0
+
+>>>
+expect status 404
+expect body.code exists
+expect body.type exists
+expect body.message exists
+<<<
+
+>>>mock
+{ "code": 1, "type": "error", "message": "Pet not found" }
 <<<
 
 ### Get Pet by ID (Type Checks)
@@ -79,6 +128,17 @@ expect body.photoUrls type array
 expect body.status type string
 <<<
 
+>>>mock
+{
+  "id": 99999,
+  "category": { "id": 1, "name": "Dogs" },
+  "name": "Rex",
+  "photoUrls": ["https://example.com/rex.jpg"],
+  "tags": [{ "id": 1, "name": "friendly" }],
+  "status": "available"
+}
+<<<
+
 ### Get Store Inventory (Map Response)
 # @name getInventory
 # @description Verify the inventory endpoint returns a map of status counts
@@ -89,6 +149,10 @@ GET {{baseUrl}}/store/inventory
 >>>
 expect status 200
 expect body type object
+<<<
+
+>>>mock
+{ "available": 12, "pending": 3, "sold": 7 }
 <<<
 
 ### Create Order (Validate Order Schema)
@@ -117,16 +181,13 @@ expect body.status in ["placed", "approved", "delivered"]
 expect body.complete type boolean
 <<<
 
-### Invalid Request (Error Contract)
-# @name notFoundPet
-# @description Verify error responses follow the expected format
-# @tags contract, error
-
-GET {{baseUrl}}/pet/0
-
->>>
-expect status 404
-expect body.code exists
-expect body.type exists
-expect body.message exists
+>>>mock
+{
+  "id": 10,
+  "petId": 99999,
+  "quantity": 1,
+  "shipDate": "2026-01-01T00:00:00.000+0000",
+  "status": "placed",
+  "complete": false
+}
 <<<

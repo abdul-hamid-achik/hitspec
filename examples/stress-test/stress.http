@@ -1,8 +1,15 @@
 # Stress Testing Examples
 # Demonstrates load testing configuration with hitspec
-# Run with: hitspec run examples/stress-test/stress.http --stress --duration 30s --rate 50
+# Runs offline against the built-in mock server (>>>mock blocks):
+#   hitspec mock examples/stress-test/stress.http     (terminal 1)
+#   hitspec run examples/stress-test/stress.http --stress --duration 30s --rate 50   (terminal 2)
+# Drop --stress for a single functional pass. Load-testing the in-process mock
+# measures hitspec and your machine, not an API: for realistic numbers set
+# @baseUrl to a staging service you own. The mock server picks the first block
+# matching a method + path, so one GET /get and one POST /post mock serve every
+# request that shares them.
 
-@baseUrl = https://httpbin.org
+@baseUrl = http://localhost:3000
 
 ### Health Check (High Weight)
 # @name healthCheck
@@ -15,6 +22,10 @@ GET {{baseUrl}}/get
 >>>
 expect status 200
 expect duration < 5000
+<<<
+
+>>>mock
+{ "url": "http://localhost:3000/get", "args": { "page": "1", "limit": "20", "sort": "created_at" } }
 <<<
 
 ### Get with Query Params
@@ -54,6 +65,10 @@ expect status 200
 expect body.json.name exists
 <<<
 
+>>>mock
+{ "json": { "name": "Stress Test Item" } }
+<<<
+
 ### Delayed Response
 # @name delayedEndpoint
 # @description Test a slow endpoint under load
@@ -66,6 +81,10 @@ GET {{baseUrl}}/delay/1
 >>>
 expect status 200
 expect duration < 5000
+<<<
+
+>>>mock
+{ "url": "http://localhost:3000/delay/1" }
 <<<
 
 ### Setup Request (Runs Once Before Stress Test)
@@ -114,4 +133,8 @@ GET {{baseUrl}}/headers
 >>>
 expect status 200
 expect body.headers exists
+<<<
+
+>>>mock
+{ "headers": { "Host": "localhost:3000" } }
 <<<

@@ -11,33 +11,37 @@ Demonstrates how to verify database state alongside HTTP API responses.
 
 ## Prerequisites
 
-Create the test SQLite database:
+The `sqlite3` CLI, to create the test database from `seed.sql` (the HTTP side
+is mocked, so no internet is needed):
 
 ```bash
-sqlite3 ./examples/database/test.db <<'SQL'
-CREATE TABLE users (
-  id INTEGER PRIMARY KEY,
-  name TEXT,
-  email TEXT,
-  active BOOLEAN DEFAULT 1
-);
-INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com');
-SQL
+cd examples/database
+sqlite3 test.db < seed.sql
 ```
+
+`database.http` refers to the database as `sqlite://./test.db`, relative to the
+directory you run hitspec from, so run the commands below from
+`examples/database/`.
 
 ## Running
 
 Database assertions require the `--allow-db` flag for security:
 
 ```bash
-hitspec run examples/database/database.http --allow-db
+hitspec mock database.http &                 # serves http://localhost:3000
+hitspec run database.http --allow-db
 
 # Run only read tests
-hitspec run examples/database/database.http --allow-db --tags read
+hitspec run database.http --allow-db --tags read
 
 # Run write tests
-hitspec run examples/database/database.http --allow-db --tags write
+hitspec run database.http --allow-db --tags write
+
+kill %1
 ```
+
+Set `@baseUrl = https://jsonplaceholder.typicode.com` to use the real API
+instead of the mock.
 
 ## Supported Databases
 

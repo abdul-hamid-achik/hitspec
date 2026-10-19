@@ -6,19 +6,19 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 11,
+            "Line": 19,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": null,
-            "Line": 12,
+            "Line": 20,
             "Operator": "exists",
             "Subject": "body[0].id"
           },
           {
             "Expected": "available",
-            "Line": 13,
+            "Line": 21,
             "Operator": "==",
             "Subject": "body[0].status"
           }
@@ -26,7 +26,7 @@
         "Body": null,
         "Captures": [
           {
-            "Line": 17,
+            "Line": 36,
             "Name": "existingPetId",
             "Path": "[0].id",
             "Source": "body"
@@ -36,7 +36,7 @@
         "Description": "Find available pets",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 3,
+        "Line": 11,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -55,7 +55,7 @@
           "WaitFor": null
         },
         "Method": "GET",
-        "MockBody": "",
+        "MockBody": "[{\n  \"id\": 12345,\n  \"name\": \"doggie\",\n  \"category\": { \"id\": 1, \"name\": \"Dogs\" },\n  \"photoUrls\": [\"http://example.com/photo.jpg\"],\n  \"tags\": [{ \"id\": 1, \"name\": \"cute\" }],\n  \"status\": \"available\"\n}]",
         "Name": "findPetsByStatus",
         "QueryParams": null,
         "ShellCommands": null,
@@ -69,19 +69,19 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 29,
+            "Line": 48,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": null,
-            "Line": 30,
+            "Line": 49,
             "Operator": "exists",
             "Subject": "body.id"
           },
           {
             "Expected": null,
-            "Line": 31,
+            "Line": 50,
             "Operator": "exists",
             "Subject": "body.name"
           }
@@ -92,7 +92,7 @@
         "Description": "Get the created pet",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 20,
+        "Line": 39,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -113,7 +113,7 @@
           "WaitFor": null
         },
         "Method": "GET",
-        "MockBody": "",
+        "MockBody": "{\n  \"id\": 12345,\n  \"name\": \"doggie\",\n  \"category\": { \"id\": 1, \"name\": \"Dogs\" },\n  \"photoUrls\": [\"http://example.com/photo.jpg\"],\n  \"tags\": [{ \"id\": 1, \"name\": \"cute\" }],\n  \"status\": \"available\"\n}",
         "Name": "getPet",
         "QueryParams": null,
         "ShellCommands": null,
@@ -126,19 +126,19 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 60,
+            "Line": 90,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": 12345,
-            "Line": 61,
+            "Line": 91,
             "Operator": "==",
             "Subject": "body.id"
           },
           {
             "Expected": "doggie",
-            "Line": 62,
+            "Line": 92,
             "Operator": "==",
             "Subject": "body.name"
           }
@@ -147,13 +147,13 @@
           "ContentType": "json",
           "FilePath": "",
           "GraphQL": null,
-          "Line": 42,
+          "Line": 72,
           "Multipart": null,
           "Raw": "{\n  \"id\": 12345,\n  \"name\": \"doggie\",\n  \"category\": {\n    \"id\": 1,\n    \"name\": \"Dogs\"\n  },\n  \"photoUrls\": [\"http://example.com/photo.jpg\"],\n  \"tags\": [\n    {\n      \"id\": 1,\n      \"name\": \"cute\"\n    }\n  ],\n  \"status\": \"available\"\n}"
         },
         "Captures": [
           {
-            "Line": 66,
+            "Line": 107,
             "Name": "petId",
             "Path": "id",
             "Source": "body"
@@ -165,11 +165,11 @@
         "Headers": [
           {
             "Key": "Content-Type",
-            "Line": 40,
+            "Line": 70,
             "Value": "application/json"
           }
         ],
-        "Line": 34,
+        "Line": 64,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -188,7 +188,7 @@
           "WaitFor": null
         },
         "Method": "POST",
-        "MockBody": "",
+        "MockBody": "{\n  \"id\": 12345,\n  \"name\": \"doggie\",\n  \"category\": { \"id\": 1, \"name\": \"Dogs\" },\n  \"photoUrls\": [\"http://example.com/photo.jpg\"],\n  \"tags\": [{ \"id\": 1, \"name\": \"cute\" }],\n  \"status\": \"available\"\n}",
         "Name": "createPet",
         "QueryParams": null,
         "ShellCommands": null,
@@ -202,19 +202,19 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 86,
+            "Line": 127,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": "doggie updated",
-            "Line": 87,
+            "Line": 128,
             "Operator": "==",
             "Subject": "body.name"
           },
           {
             "Expected": "sold",
-            "Line": 88,
+            "Line": 129,
             "Operator": "==",
             "Subject": "body.status"
           }
@@ -223,7 +223,7 @@
           "ContentType": "json",
           "FilePath": "",
           "GraphQL": null,
-          "Line": 78,
+          "Line": 119,
           "Multipart": null,
           "Raw": "{\n  \"id\": {{createPet.petId}},\n  \"name\": \"doggie updated\",\n  \"photoUrls\": [\"http://example.com/photo.jpg\"],\n  \"status\": \"sold\"\n}"
         },
@@ -234,11 +234,11 @@
         "Headers": [
           {
             "Key": "Content-Type",
-            "Line": 76,
+            "Line": 117,
             "Value": "application/json"
           }
         ],
-        "Line": 69,
+        "Line": 110,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -259,7 +259,7 @@
           "WaitFor": null
         },
         "Method": "PUT",
-        "MockBody": "",
+        "MockBody": "{\n  \"id\": 12345,\n  \"name\": \"doggie updated\",\n  \"photoUrls\": [\"http://example.com/photo.jpg\"],\n  \"status\": \"sold\"\n}",
         "Name": "updatePet",
         "QueryParams": null,
         "ShellCommands": null,
@@ -273,7 +273,7 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 100,
+            "Line": 150,
             "Operator": "==",
             "Subject": "status"
           }
@@ -284,7 +284,7 @@
         "Description": "Delete the pet",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 91,
+        "Line": 141,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -305,7 +305,7 @@
           "WaitFor": null
         },
         "Method": "DELETE",
-        "MockBody": "",
+        "MockBody": "{ \"code\": 200, \"type\": \"unknown\", \"message\": \"12345\" }",
         "Name": "deletePet",
         "QueryParams": null,
         "ShellCommands": null,
@@ -318,9 +318,9 @@
     ],
     "Variables": [
       {
-        "Line": 1,
+        "Line": 9,
         "Name": "baseUrl",
-        "Value": "https://petstore.swagger.io/v2"
+        "Value": "http://localhost:3000"
       }
     ]
   }

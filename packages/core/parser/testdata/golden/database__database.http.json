@@ -6,13 +6,13 @@
         "Assertions": [
           {
             "Expected": 201,
-            "Line": 27,
+            "Line": 35,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": null,
-            "Line": 28,
+            "Line": 36,
             "Operator": "exists",
             "Subject": "body.id"
           }
@@ -21,7 +21,7 @@
           "ContentType": "json",
           "FilePath": "",
           "GraphQL": null,
-          "Line": 21,
+          "Line": 29,
           "Multipart": null,
           "Raw": "{\n  \"name\": \"Bob Smith\",\n  \"email\": \"bob@example.com\"\n}"
         },
@@ -32,11 +32,11 @@
         "Headers": [
           {
             "Key": "Content-Type",
-            "Line": 19,
+            "Line": 27,
             "Value": "application/json"
           }
         ],
-        "Line": 12,
+        "Line": 20,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -55,7 +55,7 @@
           "WaitFor": null
         },
         "Method": "POST",
-        "MockBody": "",
+        "MockBody": "{ \"id\": 11, \"name\": \"Bob Smith\", \"email\": \"bob@example.com\" }",
         "Name": "createUser",
         "QueryParams": null,
         "ShellCommands": null,
@@ -69,7 +69,7 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 45,
+            "Line": 57,
             "Operator": "==",
             "Subject": "status"
           }
@@ -80,7 +80,7 @@
         "Description": "Check that specific fields exist in the database",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 36,
+        "Line": 48,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -99,7 +99,7 @@
           "WaitFor": null
         },
         "Method": "GET",
-        "MockBody": "",
+        "MockBody": "{ \"id\": 1, \"name\": \"Alice\", \"email\": \"alice@example.com\" }",
         "Name": "verifyUserFields",
         "QueryParams": null,
         "ShellCommands": null,
@@ -113,7 +113,7 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 64,
+            "Line": 80,
             "Operator": "==",
             "Subject": "status"
           }
@@ -124,7 +124,7 @@
         "Description": "Verify the total number of records in a table",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 55,
+        "Line": 71,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -143,7 +143,7 @@
           "WaitFor": null
         },
         "Method": "GET",
-        "MockBody": "",
+        "MockBody": "[\n  { \"id\": 1, \"name\": \"Alice\", \"email\": \"alice@example.com\" }\n]",
         "Name": "checkRowCount",
         "QueryParams": null,
         "ShellCommands": null,
@@ -157,7 +157,7 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 88,
+            "Line": 110,
             "Operator": "==",
             "Subject": "status"
           }
@@ -166,7 +166,7 @@
           "ContentType": "json",
           "FilePath": "",
           "GraphQL": null,
-          "Line": 82,
+          "Line": 104,
           "Multipart": null,
           "Raw": "{\n  \"name\": \"Alice Updated\",\n  \"email\": \"alice.updated@example.com\"\n}"
         },
@@ -177,11 +177,11 @@
         "Headers": [
           {
             "Key": "Content-Type",
-            "Line": 80,
+            "Line": 102,
             "Value": "application/json"
           }
         ],
-        "Line": 72,
+        "Line": 94,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -202,7 +202,7 @@
           "WaitFor": null
         },
         "Method": "PUT",
-        "MockBody": "",
+        "MockBody": "{ \"id\": 1, \"name\": \"Alice Updated\", \"email\": \"alice.updated@example.com\" }",
         "Name": "verifyUpdate",
         "QueryParams": null,
         "ShellCommands": null,
@@ -216,7 +216,7 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 105,
+            "Line": 131,
             "Operator": "==",
             "Subject": "status"
           }
@@ -227,7 +227,7 @@
         "Description": "Run several database queries against the same request",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 96,
+        "Line": 122,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -259,12 +259,12 @@
     ],
     "Variables": [
       {
-        "Line": 9,
+        "Line": 17,
         "Name": "baseUrl",
-        "Value": "https://jsonplaceholder.typicode.com"
+        "Value": "http://localhost:3000"
       },
       {
-        "Line": 10,
+        "Line": 18,
         "Name": "dbConn",
         "Value": "sqlite://./test.db"
       }

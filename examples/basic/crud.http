@@ -1,7 +1,16 @@
 # Basic CRUD Operations Example
 # Demonstrates GET, POST, PUT, DELETE with a REST API
+#
+# Runs offline: the >>>mock blocks below make `hitspec mock` serve this very
+# file, and `hitspec run` then tests it. No internet needed. The mock server
+# answers with the first block that matches a method + path, so the last
+# request (a query-string filter on GET /posts) reuses the list mock above.
+#   hitspec mock examples/basic/crud.http     (terminal 1)
+#   hitspec run examples/basic/crud.http      (terminal 2)
+# To test the real JSONPlaceholder API instead, change @baseUrl to
+# https://jsonplaceholder.typicode.com (`hitspec run` ignores the mock blocks).
 
-@baseUrl = https://jsonplaceholder.typicode.com
+@baseUrl = http://localhost:3000
 
 ### List all posts
 # @name listPosts
@@ -19,6 +28,13 @@ expect body[0].body exists
 expect body[0].userId exists
 <<<
 
+>>>mock
+[
+  { "userId": 1, "id": 1, "title": "First post", "body": "Hello from the mock server" },
+  { "userId": 1, "id": 2, "title": "Second post", "body": "Another post by user 1" }
+]
+<<<
+
 ### Get single post
 # @name getPost
 # @description Get a specific post by ID
@@ -32,6 +48,10 @@ expect body.id == 1
 expect body.title exists
 expect body.body exists
 expect body.userId type number
+<<<
+
+>>>mock
+{ "userId": 1, "id": 1, "title": "First post", "body": "Hello from the mock server" }
 <<<
 
 ### Create a new post
@@ -54,6 +74,10 @@ expect body.id exists
 expect body.title == "My New Post"
 expect body.body contains "content"
 expect body.userId == 1
+<<<
+
+>>>mock
+{ "id": 101, "title": "My New Post", "body": "This is the content of my new post.", "userId": 1 }
 <<<
 
 >>>capture
@@ -80,6 +104,10 @@ expect status 200
 expect body.title == "Updated Post Title"
 <<<
 
+>>>mock
+{ "id": 1, "title": "Updated Post Title", "body": "This post has been updated.", "userId": 1 }
+<<<
+
 ### Partial update (PATCH)
 # @name patchPost
 # @description Partially update a post
@@ -98,6 +126,10 @@ expect body.title == "Patched Title Only"
 expect body.id == 1
 <<<
 
+>>>mock
+{ "id": 1, "title": "Patched Title Only", "body": "Hello from the mock server", "userId": 1 }
+<<<
+
 ### Delete a post
 # @name deletePost
 # @description Delete a post (using fixed ID since jsonplaceholder doesn't persist)
@@ -107,6 +139,10 @@ DELETE {{baseUrl}}/posts/1
 
 >>>
 expect status 200
+<<<
+
+>>>mock
+{}
 <<<
 
 ### Get post with comments (nested resource)
@@ -122,6 +158,12 @@ expect body type array
 expect body[0].postId == 1
 expect body[0].email exists
 expect body[0].body exists
+<<<
+
+>>>mock
+[
+  { "postId": 1, "id": 1, "name": "A comment", "email": "ada@example.com", "body": "Nice post" }
+]
 <<<
 
 ### Filter posts by user

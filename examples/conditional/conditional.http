@@ -1,7 +1,14 @@
 # Conditional Execution Examples
 # Demonstrates @if and @unless directives for controlling which requests run
 
-@baseUrl = https://jsonplaceholder.typicode.com
+# Runs offline against the built-in mock server (>>>mock blocks):
+#   hitspec mock examples/conditional/conditional.http     (terminal 1)
+#   hitspec run examples/conditional/conditional.http      (terminal 2)
+# The mock answers with the first block that matches a method + path, so
+# GET /users/1 and GET /posts (used twice) are mocked once. To test the real
+# JSONPlaceholder API, set @baseUrl = https://jsonplaceholder.typicode.com
+
+@baseUrl = http://localhost:3000
 @runAuthTests = true
 @skipSlowTests = false
 @environment = staging
@@ -16,6 +23,10 @@ GET {{baseUrl}}/posts/1
 >>>
 expect status 200
 expect body.id == 1
+<<<
+
+>>>mock
+{ "userId": 1, "id": 1, "title": "First post", "body": "Hello from the mock server" }
 <<<
 
 ### Runs Only When Auth Tests Are Enabled
@@ -33,6 +44,10 @@ expect body.name exists
 expect body.email exists
 <<<
 
+>>>mock
+{ "id": 1, "name": "Ada Lovelace", "email": "ada@example.com" }
+<<<
+
 ### Skipped When Slow Tests Are Disabled
 # @name slowQuery
 # @description Skipped when skipSlowTests is truthy (currently false, so this runs)
@@ -44,7 +59,15 @@ GET {{baseUrl}}/posts
 >>>
 expect status 200
 expect body type array
-expect body length > 50
+expect body length > 2
+<<<
+
+>>>mock
+[
+  { "userId": 1, "id": 1, "title": "First post" },
+  { "userId": 1, "id": 2, "title": "Second post" },
+  { "userId": 1, "id": 3, "title": "Third post" }
+]
 <<<
 
 ### Conditional Based on Environment
@@ -61,6 +84,12 @@ expect status 200
 expect body type array
 expect body[0].postId == 1
 expect body[0].email exists
+<<<
+
+>>>mock
+[
+  { "postId": 1, "id": 1, "email": "ada@example.com" }
+]
 <<<
 
 ### Skipped Unless Debug Mode

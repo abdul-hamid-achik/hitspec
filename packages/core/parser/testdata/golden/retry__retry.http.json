@@ -6,13 +6,13 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 18,
+            "Line": 27,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": null,
-            "Line": 19,
+            "Line": 28,
             "Operator": "exists",
             "Subject": "body.url"
           }
@@ -23,7 +23,7 @@
         "Description": "Retries up to 3 times on any non-2xx response",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 9,
+        "Line": 18,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -42,7 +42,7 @@
           "WaitFor": null
         },
         "Method": "GET",
-        "MockBody": "",
+        "MockBody": "{\n  \"url\": \"http://localhost:3000/get\",\n  \"headers\": { \"Host\": \"localhost:3000\" },\n  \"args\": { \"ready\": \"true\" }\n}",
         "Name": "basicRetry",
         "QueryParams": null,
         "ShellCommands": null,
@@ -56,7 +56,7 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 33,
+            "Line": 50,
             "Operator": "==",
             "Subject": "status"
           }
@@ -67,7 +67,7 @@
         "Description": "Retries with 2-second delay between attempts",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 22,
+        "Line": 39,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -91,7 +91,7 @@
         "QueryParams": [
           {
             "Key": "timestamp",
-            "Line": 30,
+            "Line": 47,
             "Value": "{{$timestamp()}}"
           }
         ],
@@ -106,13 +106,13 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 47,
+            "Line": 64,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": null,
-            "Line": 48,
+            "Line": 65,
             "Operator": "exists",
             "Subject": "body.headers"
           }
@@ -123,7 +123,7 @@
         "Description": "Only retries when the server returns 500, 502, or 503",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 36,
+        "Line": 53,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -160,13 +160,13 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 63,
+            "Line": 80,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": 10000,
-            "Line": 64,
+            "Line": 81,
             "Operator": "\u003c",
             "Subject": "duration"
           }
@@ -177,7 +177,7 @@
         "Description": "Retries specifically on 504 Gateway Timeout",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 51,
+        "Line": 68,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -198,7 +198,7 @@
           "WaitFor": null
         },
         "Method": "GET",
-        "MockBody": "",
+        "MockBody": "{ \"url\": \"http://localhost:3000/delay/1\" }",
         "Name": "retryGatewayTimeout",
         "QueryParams": null,
         "ShellCommands": null,
@@ -212,13 +212,13 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 78,
+            "Line": 99,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": 5000,
-            "Line": 79,
+            "Line": 100,
             "Operator": "\u003c",
             "Subject": "duration"
           }
@@ -229,7 +229,7 @@
         "Description": "Combines retry with a per-request timeout",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 67,
+        "Line": 88,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -262,13 +262,13 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 93,
+            "Line": 114,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": "true",
-            "Line": 94,
+            "Line": 115,
             "Operator": "==",
             "Subject": "body.args.ready"
           }
@@ -279,7 +279,7 @@
         "Description": "Wait for a health endpoint, then retry the actual request",
         "HTTPVersion": "",
         "Headers": null,
-        "Line": 82,
+        "Line": 103,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -308,7 +308,7 @@
         "QueryParams": [
           {
             "Key": "ready",
-            "Line": 90,
+            "Line": 111,
             "Value": "true"
           }
         ],
@@ -323,13 +323,13 @@
         "Assertions": [
           {
             "Expected": 200,
-            "Line": 115,
+            "Line": 136,
             "Operator": "==",
             "Subject": "status"
           },
           {
             "Expected": null,
-            "Line": 116,
+            "Line": 137,
             "Operator": "exists",
             "Subject": "body.json.idempotencyKey"
           }
@@ -338,7 +338,7 @@
           "ContentType": "json",
           "FilePath": "",
           "GraphQL": null,
-          "Line": 108,
+          "Line": 129,
           "Multipart": null,
           "Raw": "{\n  \"idempotencyKey\": \"{{$uuid()}}\",\n  \"action\": \"process\",\n  \"timestamp\": \"{{$now()}}\"\n}"
         },
@@ -349,11 +349,11 @@
         "Headers": [
           {
             "Key": "Content-Type",
-            "Line": 106,
+            "Line": 127,
             "Value": "application/json"
           }
         ],
-        "Line": 97,
+        "Line": 118,
         "Metadata": {
           "Auth": null,
           "Condition": null,
@@ -376,7 +376,7 @@
           "WaitFor": null
         },
         "Method": "POST",
-        "MockBody": "",
+        "MockBody": "{ \"json\": { \"idempotencyKey\": \"mock-key\", \"action\": \"process\" } }",
         "Name": "retryPost",
         "QueryParams": null,
         "ShellCommands": null,
@@ -389,9 +389,9 @@
     ],
     "Variables": [
       {
-        "Line": 7,
+        "Line": 16,
         "Name": "baseUrl",
-        "Value": "https://httpbin.org"
+        "Value": "http://localhost:3000"
       }
     ]
   }
