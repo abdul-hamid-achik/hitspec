@@ -2176,6 +2176,9 @@ func (m model) stressResultContent() string {
 	}
 	var sb strings.Builder
 	sb.WriteString(m.styles.title.Render("Last result") + "\n")
+	if r.Error != "" {
+		sb.WriteString(m.styles.danger.Render("Run failed: "+r.Error) + "\n")
+	}
 	fmt.Fprintf(&sb, "Duration %.1fs   Total %d   %s success   %s errors   %d timeouts\n",
 		r.DurationMs/1000.0, r.Total,
 		m.styles.success.Render(fmt.Sprint(r.Success)),

@@ -348,3 +348,12 @@ func TestStressResultShowsAssertionsIncompleteAndWarnings(t *testing.T) {
 		}
 	}
 }
+
+func TestStressResultShowsWhyTheRunFailed(t *testing.T) {
+	m := goldenModel(t, 100, 30)
+	m.stressResult = &clientmgr.StressResultDTO{Error: `setup request "login" failed: connection refused`}
+	out := plain(m.stressResultContent())
+	if !strings.Contains(out, `Run failed: setup request "login" failed`) {
+		t.Errorf("stress result does not say why the run failed:\n%s", out)
+	}
+}

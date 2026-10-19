@@ -384,8 +384,11 @@ type StressResultDTO struct {
 	AssertionFailRate float64 `json:"assertionFailRate,omitempty"`
 	// Warnings are problems with the run itself, e.g. a target rate that was
 	// not reached (the latency figures then understate the load).
-	Warnings  []string `json:"warnings,omitempty"`
-	Timestamp string   `json:"timestamp"`
+	Warnings []string `json:"warnings,omitempty"`
+	// Error says why the run stopped before producing numbers (invalid
+	// config, a failed setup request); the counters are then zero.
+	Error     string `json:"error,omitempty"`
+	Timestamp string `json:"timestamp"`
 }
 
 // StressRequestBreakdownDTO holds per-request stats.
@@ -612,6 +615,7 @@ type StressMetrics struct {
 	Completed bool           `json:"completed,omitempty"`
 	Stats     StressStatsDTO `json:"stats"`
 	Elapsed   float64        `json:"elapsed"`
+	Error     string         `json:"error,omitempty"` // on the completed event when the run failed
 	Timestamp string         `json:"timestamp"`
 }
 

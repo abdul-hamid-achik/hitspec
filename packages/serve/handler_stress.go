@@ -96,22 +96,24 @@ func (s *Server) handleStressStart(w http.ResponseWriter, r *http.Request) {
 		done := make(chan struct{})
 		// result is written before done is closed and read only after it.
 		var result *stress.Result
+		var runErr error
 		go func() {
 			defer close(done)
-			result, _ = stressRunner.Run(ctx)
+			result, runErr = stressRunner.Run(ctx)
 		}()
 
 		for {
 			select {
 			case <-done:
 				stats := stressRunner.GetCurrentStats()
-				resultDTO := convertStressResult(result, stressRunner)
+				resultDTO := stressResultWithError(convertStressResult(result, stressRunner), runErr)
 
 				s.hub.Broadcast("stress_update", WSStressMetrics{
 					Running:   false,
 					Completed: true,
 					Stats:     convertStressStats(stats),
 					Elapsed:   stats.Elapsed.Seconds(),
+					Error:     resultDTO.Error,
 					Timestamp: nowISO(),
 				})
 
@@ -365,6 +367,20 @@ func (s *Server) handleStressResult(w http.ResponseWriter, r *http.Request) {
 // it carries the rate-miss warnings and the threshold verdicts, which the
 // runner's metrics alone do not. It is nil when Run failed, in which case the
 // runner's own summary is used.
+// stressResultWithError records why a stress run stopped before it could
+// produce numbers (invalid config, a failed setup request). Without it the
+// result looked like a clean run with zero requests.
+func stressResultWithError(dto *StressResultDTO, err error) *StressResultDTO {
+	if err == nil {
+		return dto
+	}
+	if dto == nil {
+		dto = &StressResultDTO{Timestamp: nowISO()}
+	}
+	dto.Error = err.Error()
+	return dto
+}
+
 func convertStressResult(result *stress.Result, runner *stress.Runner) *StressResultDTO {
 	var summary *stress.Summary
 	var thresholds []stress.ThresholdResult
