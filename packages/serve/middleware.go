@@ -221,10 +221,10 @@ func loggingMiddleware(logger *slog.Logger) Middleware {
 // readOnlyAllowed lists the non-GET routes that stay available with
 // --read-only. Read-only protects the workspace and its settings (file
 // create/save/delete, PUT /config, PUT /environments/{name}, stress profiles,
-// history deletion); it does not stop the server from doing its job. These
-// routes run requests or only compute a response: none of them writes a
-// workspace file or hitspec.yaml. Anything not listed is refused, so a route
-// added later is read-only by default.
+// history deletion, import and record export); it does not stop the server from
+// doing its job. These routes run requests or only compute a response: none of
+// them writes a workspace file or hitspec.yaml. Anything not listed is refused,
+// so a route added later is read-only by default.
 var readOnlyAllowed = map[string]bool{
 	"POST /api/v1/execute":            true,
 	"POST /api/v1/run":                true,
@@ -237,11 +237,7 @@ var readOnlyAllowed = map[string]bool{
 	"POST /api/v1/record/start":       true,
 	"POST /api/v1/record/stop":        true,
 	"DELETE /api/v1/record/clear":     true, // in-memory recordings
-	"POST /api/v1/record/export":      true, // returns the content, writes nothing
-	"POST /api/v1/import/curl":        true, // convert-only: the client decides whether to save
-	"POST /api/v1/import/insomnia":    true,
-	"POST /api/v1/import/openapi":     true,
-	"POST /api/v1/export/curl":        true,
+	"POST /api/v1/export/curl":        true, // renders a command, writes nothing
 }
 
 // readOnlyMiddleware refuses the routes that change the workspace or its

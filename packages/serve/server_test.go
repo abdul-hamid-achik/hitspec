@@ -307,6 +307,10 @@ func TestReadOnlyMiddleware(t *testing.T) {
 		{http.MethodDelete, "/api/v1/history/runs", http.StatusForbidden},
 		{http.MethodDelete, "/api/v1/history/runs/3", http.StatusForbidden},
 		{http.MethodPost, "/api/v1/files/../files", http.StatusForbidden},
+		{http.MethodPost, "/api/v1/import/curl", http.StatusForbidden},
+		{http.MethodPost, "/api/v1/import/insomnia", http.StatusForbidden},
+		{http.MethodPost, "/api/v1/import/openapi", http.StatusForbidden},
+		{http.MethodPost, "/api/v1/record/export", http.StatusForbidden},
 		// Running things, and routes that only compute, stay available.
 		{http.MethodPost, "/api/v1/execute", http.StatusOK},
 		{http.MethodPost, "/api/v1/run", http.StatusOK},
@@ -316,8 +320,6 @@ func TestReadOnlyMiddleware(t *testing.T) {
 		{http.MethodPost, "/api/v1/mock/start", http.StatusOK},
 		{http.MethodPost, "/api/v1/contract/verify", http.StatusOK},
 		{http.MethodPost, "/api/v1/record/start", http.StatusOK},
-		{http.MethodPost, "/api/v1/record/export", http.StatusOK},
-		{http.MethodPost, "/api/v1/import/curl", http.StatusOK},
 		{http.MethodPost, "/api/v1/export/curl", http.StatusOK},
 		// Reads always pass.
 		{http.MethodGet, "/api/v1/config", http.StatusOK},
