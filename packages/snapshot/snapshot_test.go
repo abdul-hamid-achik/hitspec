@@ -215,3 +215,21 @@ func TestManager_IndependentInstances(t *testing.T) {
 		t.Fatalf("update-mode manager should create a baseline: %+v", r)
 	}
 }
+
+// The deprecated process-wide manager still works as a fallback.
+func TestGlobalManagerFallback(t *testing.T) {
+	dir := t.TempDir()
+	testFile := filepath.Join(dir, "test.http")
+	defer SetGlobalManager(nil) //nolint:staticcheck // exercising the deprecated fallback
+
+	if r := CompareSnapshot(testFile, "a", "", 1); r.Passed {
+		t.Fatal("no global manager: must report not initialized")
+	}
+	SetGlobalManager(NewManager(dir, true)) //nolint:staticcheck // exercising the deprecated fallback
+	if GetGlobalManager() == nil {          //nolint:staticcheck // exercising the deprecated fallback
+		t.Fatal("global manager not stored")
+	}
+	if r := CompareSnapshot(testFile, "a", "", 1); !r.Passed || !r.IsNew {
+		t.Fatalf("CompareSnapshot via the global manager = %+v", r)
+	}
+}
