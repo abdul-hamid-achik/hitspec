@@ -83,8 +83,11 @@ func New(opts ...Option) *Manager {
 		configPath = cfg.ConfigPath
 	}
 	if fileConfig == nil {
-		configPath = config.FindConfigPath(cfg.WorkDir)
-		fileConfig, _ = config.FindAndLoadConfig(cfg.WorkDir)
+		// Nearest hitspec.yaml from the workspace upward (bounded by the
+		// repository root and $HOME; see config.Discover).
+		if configPath = config.FindConfigPathUp(cfg.WorkDir); configPath != "" {
+			fileConfig, _ = config.LoadConfig(configPath)
+		}
 	}
 	// An explicit --env (cfg.Env != "") is honored as-is. Only when the caller
 	// didn't specify one (cfg.Env == "") do we fall back to the config's

@@ -1,0 +1,75 @@
+# HTTP client options: cookie jar (opt-in), response bound, bad TLS files.
+
+# A cookie from one response is not sent back unless --cookies is on.
+exitcode 1 hitspec run session.http --no-history
+stdout 'Tests: 1 passed, 1 failed, 2 total'
+
+exitcode 0 hitspec run session.http --no-history --cookies
+stdout 'Tests: 2 passed, 2 total'
+
+env HITSPEC_COOKIES=true
+exitcode 0 hitspec run session.http --no-history
+env HITSPEC_COOKIES=
+
+# hitspec.yaml turns it on; the flag turns it back off.
+exitcode 0 hitspec run session.http --no-history --config cookies.yaml
+exitcode 1 hitspec run session.http --no-history --config cookies.yaml --cookies=false
+
+# The response bound: bytes, -1 for unlimited.
+exitcode 1 hitspec run big.http --no-history --max-response-bytes 1000
+stdout 'exceeds 1000-byte limit'
+exitcode 0 hitspec run big.http --no-history --max-response-bytes 5000
+exitcode 0 hitspec run big.http --no-history --max-response-bytes -1
+
+# A CA / certificate / key file that cannot be used is a configuration error.
+exitcode 3 hitspec run big.http --no-history --cacert nope.pem
+stderr 'nope\.pem'
+exitcode 3 hitspec run big.http --no-history --cacert junk.pem
+stderr 'junk\.pem'
+exitcode 3 hitspec run big.http --no-history --cert nope-cert.pem --key nope-key.pem
+stderr 'nope-cert\.pem'
+env HITSPEC_CACERT=env-nope.pem
+exitcode 3 hitspec run big.http --no-history
+stderr 'env-nope\.pem'
+env HITSPEC_CACERT=
+exitcode 3 hitspec run big.http --no-history --config badca.yaml
+stderr 'yaml-nope\.pem'
+
+# The flags are documented.
+exec hitspec run --help
+stdout '--cacert'
+stdout '--cert'
+stdout '--key'
+stdout '--http1.1'
+stdout '--cookies'
+stdout '--max-response-bytes'
+stdout '--redirect-forward-headers'
+
+-- junk.pem --
+this is not a certificate
+-- cookies.yaml --
+cookies: true
+-- badca.yaml --
+cacert: yaml-nope.pem
+-- session.http --
+### login
+GET {{$env(SERVER)}}/b3/login
+
+>>>
+expect status 200
+<<<
+
+### me
+GET {{$env(SERVER)}}/b3/me
+
+>>>
+expect status 200
+expect body.session == "abc123"
+<<<
+-- big.http --
+### big
+GET {{$env(SERVER)}}/b3/big
+
+>>>
+expect status 200
+<<<

@@ -154,6 +154,7 @@ func registerRunFlags(f *pflag.FlagSet) {
 	// Network flags
 	f.StringVar(&proxyFlag, "proxy", "", "Proxy URL for HTTP requests (env: HITSPEC_PROXY; default: hitspec.yaml proxy)")
 	f.BoolVarP(&insecureFlag, "insecure", "k", false, "Disable SSL certificate validation (env: HITSPEC_INSECURE; default: hitspec.yaml validateSSL, else validate)")
+	registerHTTPFlags(f)
 
 	// Stress testing flags
 	f.BoolVar(&stressFlag, "stress", false, "Enable stress testing mode")
@@ -230,6 +231,7 @@ func runOverrides(flags *pflag.FlagSet, environment string) (runconfig.Overrides
 	if bailFlag || flags.Changed("bail") {
 		o.Bail = &bailFlag
 	}
+	applyHTTPFlags(flags, &o)
 	fromEnv, err := runconfig.FromEnv()
 	if err != nil {
 		return o, err
@@ -245,6 +247,9 @@ func buildRunnerConfig(flags *pflag.FlagSet, fileConfig *config.Config, environm
 		return nil, nil, err
 	}
 	cfg, clientOpts := runconfig.Build(fileConfig, overrides)
+	if err := checkClientOptions(clientOpts); err != nil {
+		return nil, nil, err
+	}
 	cfg.Verbose = verboseFlag > 0
 	cfg.NameFilter = nameFlag
 	cfg.TagsFilter = tagsFilter
@@ -369,10 +374,9 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load config from file (if present) and apply CLI overrides
-	fileConfig, err := config.LoadConfig(configFlag)
+	fileConfig, err := loadConfigForCommand(cmd, configFlag, verboseFlag > 0)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return newExitError(ExitConfigError, err.Error())
+		return err
 	}
 	// Resolve the environment: --env flag > HITSPEC_ENV (the flag's default)
 	// > hitspec.yaml defaultEnvironment > "dev". envFlag is left untouched so
@@ -393,6 +397,13 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 	cfg, clientOpts, err := buildRunnerConfig(cmd.Flags(), fileConfig, environment, tagsFilter)
 	if err != nil {
+		// Execute exits with an ExitCoder's code without printing it.
+		if _, ok := err.(ExitCoder); ok {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		}
+		return err
+	}
+	if err := checkEnvFile(cmd, cfg.EnvFile); err != nil {
 		return err
 	}
 
@@ -407,7 +418,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Open history store unless disabled
-	if !noHistoryFlag {
+	if !noHistoryFlag && !dryRunFlag {
 		dbPath := historyDBFlag
 		if dbPath == "" {
 			home, err := os.UserHomeDir()
@@ -446,12 +457,19 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		startTime := time.Now()
 
 		for _, file := range files {
+			var result *runner.RunResult
+			var err error
 			if dryRunFlag {
-				fmt.Fprintf(cmd.OutOrStdout(), "Would run: %s\n", file)
-				continue
+				// Parses and plans the file but sends nothing. A file that
+				// cannot load fails the dry run as it would fail a real one.
+				var matched int
+				if matched, err = writeDryRun(cmd.OutOrStdout(), r, file); err == nil {
+					t.Matched += matched
+					continue
+				}
+			} else {
+				result, err = r.RunFileContext(ctx, file)
 			}
-
-			result, err := r.RunFileContext(ctx, file)
 			if err != nil {
 				// A file that cannot be loaded (syntax error, duplicate
 				// @name, @depends cycle) fails the run; the error goes to
@@ -524,7 +542,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 		if t.BrokenFiles > 0 {
 			fmt.Fprintln(stderr, brokenFilesSummary(t.BrokenFiles))
-		} else if !dryRunFlag && filtersSet && t.Matched == 0 {
+		} else if filtersSet && t.Matched == 0 {
 			fmt.Fprintln(stderr, noMatchMessage(nameFlag, tagsFilter))
 		}
 		return t, flushErr
@@ -740,7 +758,7 @@ func newFormatter(format string, outWriter io.Writer, verbose int, noColor, quie
 		return output.NewHTMLFormatter(opts...)
 	default: // "console"
 		consoleOpts := []output.ConsoleOption{
-			output.WithVerbose(verbose > 0),
+			output.WithVerbosity(verbose),
 			output.WithNoColor(noColor || quiet),
 		}
 		if outWriter != nil {

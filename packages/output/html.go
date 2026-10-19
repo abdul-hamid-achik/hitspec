@@ -45,6 +45,7 @@ type HTMLTest struct {
 	Response    *HTMLResponse
 	Assertions  []HTMLAssertion
 	Captures    map[string]any
+	Warnings    []string
 }
 
 // HTMLRequest represents request details for HTML output
@@ -114,6 +115,7 @@ func (f *HTMLFormatter) FormatResult(result *runner.RunResult) {
 			Skipped:     r.Skipped,
 			Duration:    float64(r.Duration.Milliseconds()),
 			Captures:    r.Captures,
+			Warnings:    r.Warnings,
 		}
 
 		// Set status class for CSS
@@ -137,7 +139,7 @@ func (f *HTMLFormatter) FormatResult(result *runner.RunResult) {
 			test.Request = &HTMLRequest{
 				Method:  r.Request.Method,
 				URL:     r.Request.URL,
-				Headers: r.Request.Headers,
+				Headers: redactHeaders(r.Request.Headers),
 			}
 		}
 
@@ -145,7 +147,7 @@ func (f *HTMLFormatter) FormatResult(result *runner.RunResult) {
 			test.Response = &HTMLResponse{
 				StatusCode: r.Response.StatusCode,
 				Status:     r.Response.Status,
-				Headers:    r.Response.Headers,
+				Headers:    redactHeaders(r.Response.Headers),
 				Duration:   float64(r.Response.Duration.Milliseconds()),
 			}
 		}

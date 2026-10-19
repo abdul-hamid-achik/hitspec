@@ -59,12 +59,7 @@ func FetchSaved(ctx context.Context, input SavedRequest) (*Result, error) {
 	if selected.Metadata != nil && len(selected.Metadata.Depends) > 0 {
 		return nil, fmt.Errorf("request %q declares @depends; use hitspec run or fetch a dependency-free request", selected.Name)
 	}
-	var fileConfig *config.Config
-	if input.ConfigFile == "" {
-		fileConfig, err = config.FindAndLoadConfig(filepath.Dir(input.Path))
-	} else {
-		fileConfig, err = config.LoadConfig(input.ConfigFile)
-	}
+	fileConfig, err := loadSavedConfig(input)
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
@@ -272,4 +267,27 @@ func selectRequest(file *parser.File, name string, index int, display string) (*
 		return nil, fmt.Errorf("%s contains %d requests; select exactly one with name or index", display, len(file.Requests))
 	}
 	return file.Requests[0], nil
+}
+
+// loadSavedConfig loads the hitspec.yaml that applies to a saved request: the
+// explicit ConfigFile, else the nearest one above the request file. Inside a
+// WorkspaceRoot the search never leaves the workspace, so a hitspec.yaml in a
+// parent directory cannot change what an agent-facing fetch sends.
+func loadSavedConfig(input SavedRequest) (*config.Config, error) {
+	if input.ConfigFile != "" {
+		return config.LoadConfig(input.ConfigFile)
+	}
+	var (
+		loaded *config.Loaded
+		err    error
+	)
+	if input.WorkspaceRoot != "" {
+		loaded, err = config.DiscoverWithin(filepath.Dir(input.Path), input.WorkspaceRoot)
+	} else {
+		loaded, err = config.Discover(filepath.Dir(input.Path))
+	}
+	if err != nil {
+		return nil, err
+	}
+	return loaded.Config, nil
 }

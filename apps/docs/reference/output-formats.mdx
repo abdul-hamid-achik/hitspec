@@ -20,10 +20,33 @@ Human-readable colored terminal output with pass/fail indicators, response times
 hitspec run tests/
 ```
 
-Supports verbosity levels:
-- `-v` -- show request/response details
-- `-vv` -- show headers
-- `-vvv` -- show full bodies
+A failed request always shows what was sent and what came back: the request line (method and the URL as sent), the response status line with its duration, and an excerpt of the response body. JSON is pretty-printed and the excerpt is capped at about 2 KB or 30 lines, with a note saying how much was cut. A request that errored before getting a response shows the request line and the error. Credentials are masked in the console, JUnit and TAP reports. Header values for `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie` and any header whose name contains `api-key`, `token`, `secret` or `password` print as `[REDACTED]`. So do the password in a URL's `user:password@` and the value of query parameters named like `api_key` or `access_token`, in the request line and in error messages. The JSON and HTML reports redact header values but record the URL exactly as sent.
+
+```text
+  ✗ getUser (12ms)
+    → status == (line 5)
+      Expected: 200
+      Actual:   404
+      expected 200, got 404
+    Request:  GET https://api.example.com/users/42
+    Response: 404 Not Found (9ms)
+    Body:
+      {
+        "error": "user not found",
+        "id": 42
+      }
+```
+
+Verbosity levels add detail for every request, not only failures:
+
+| Flag | Adds |
+|------|------|
+| (none) | Failures only get the request, response and body excerpt |
+| `-v` | The request line and response status of every request, plus captures and SSE events |
+| `-vv` | Request and response headers (credentials redacted) |
+| `-vvv` | The full request and response bodies, uncapped |
+
+Warnings print in yellow under the request they belong to: a capture that matched nothing, or a `{{reference}}` that was still unresolved when the request was sent. A warning never changes pass/fail or the exit code.
 
 Options:
 - `--no-color` -- disable colored output
@@ -62,6 +85,8 @@ Output structure:
 }
 ```
 
+Every test also carries `request` (`method`, `url`, `headers`) and `response` (`statusCode`, `status`, `headers`, `duration`) when a request was sent; header credentials are redacted. For a failed or errored request, `response.bodyExcerpt` holds the pretty-printed body (capped at about 2 KB or 30 lines, with `response.bodyTruncated: true` when it was cut). A test with warnings has a `warnings` array of strings.
+
 <Tip>
 JSON output is the format used by `hitspec diff` for comparing test runs.
 </Tip>
@@ -77,6 +102,8 @@ hitspec run tests/ --output junit --output-file test-results.xml
 ```
 
 Most CI systems can parse JUnit XML natively for test result visualization.
+
+A `<failure>` or `<error>` body carries the failed assertions followed by the request line, the response status line and a capped body excerpt, so the CI report is enough to see why a request failed. Warnings (a capture that matched nothing, an unresolved `{{reference}}`) are written to the test case's `<system-out>`.
 
 ### GitHub Actions Example
 
@@ -111,11 +138,22 @@ TAP version 13
 1..10
 ok 1 - getUser (45ms)
 ok 2 - createUser (120ms)
-not ok 3 - deleteUser (89ms)
+not ok 3 - deleteUser
   ---
-  message: expected status 204, got 403
+  failures:
+    - "status ==: expected 204, got 403"
+  request: "DELETE https://api.example.com/users/7"
+  response:
+    status: "403 Forbidden"
+    durationMs: 89
+    body: |2-
+      {
+        "error": "forbidden"
+      }
   ...
 ```
+
+The diagnostics of a failed request carry the request line, the response status and duration, and the body excerpt (a literal block; `bodyTruncated` says how much was cut). Warnings are listed under `warnings:`.
 
 ---
 
@@ -131,6 +169,8 @@ The report includes:
 - Summary dashboard with pass/fail counts
 - Individual test results with durations
 - Assertion details for failed tests
+- Request and response details, with credentials in headers redacted
+- Warnings for each test
 - Dark theme styling
 
 ---

@@ -1,0 +1,78 @@
+# --dry-run lists every request that would run (file, name, method, resolved
+# URL, tags, dependencies, skip reasons) without any network access, exit 0.
+
+env HITSPEC_DRY_BASE=http://127.0.0.1:1
+exitcode 0 hitspec run --dry-run api.http
+stdout 'Would run: api\.http \(2 to run, 3 skipped\)'
+# Environment and file variables are resolved; captures stay as written.
+stdout '1\.  login  POST http://127\.0\.0\.1:1/auth/login\?v=2'
+stdout 'profile  GET http://127\.0\.0\.1:1/me\?token=\{\{login\.token\}\}'
+stdout 'tags: smoke, auth'
+stdout 'depends: login'
+# Skip reasons: @skip, @if false, filtered out/dependency.
+stdout '-   legacy  GET http://127\.0\.0\.1:1/legacy'
+stdout 'skipped: down for maintenance'
+stdout 'skipped: condition not met'
+stdout 'skipped: dependency will not run'
+# Credentials in the URL are masked.
+stdout 'api_key=\[REDACTED\]'
+! stdout 'topsecret'
+# The history database is not touched.
+! exists $HOME/.hitspec/history.db
+
+# Filters apply as in a real run.
+exitcode 0 hitspec run --dry-run --tags auth api.http
+stdout 'filtered out'
+stdout '1\.  login'
+
+# Filters that match nothing are a usage error, as in a real run.
+exitcode 64 hitspec run --dry-run --tags nosuch api.http
+stderr 'no requests matched'
+
+# A file that cannot load fails the dry run like a real run.
+exitcode 2 hitspec run --dry-run broken.http
+stderr 'broken\.http'
+
+-- api.http --
+@base = {{$env(HITSPEC_DRY_BASE)}}
+
+### login
+# @tags smoke, auth
+POST {{base}}/auth/login?v=2
+
+>>>
+expect status 200
+<<<
+
+>>>capture
+token from body.token
+<<<
+
+### profile
+# @depends login
+# @tags auth
+GET {{base}}/me?token={{login.token}}
+
+>>>
+expect status 200
+<<<
+
+### legacy
+# @skip down for maintenance
+GET {{base}}/legacy
+
+### beta
+# @if {{nothere}} == yes
+GET {{base}}/beta?api_key=topsecret
+
+### after-beta
+# @depends beta
+GET {{base}}/after
+
+-- broken.http --
+### nope
+GET http://127.0.0.1:1/x
+
+>>>
+expect status frobnicates 200
+<<<

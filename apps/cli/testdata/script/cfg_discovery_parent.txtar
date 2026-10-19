@@ -1,0 +1,49 @@
+# hitspec.yaml is found in a parent directory of the working directory
+# (nearest wins), so running from a subdirectory of a project still uses the
+# project's configuration. -v names the file that was used on stderr.
+
+cd sub/deeper
+exitcode 0 hitspec run --no-history ../../hit.http
+stdout 'Tests: 1 passed, 1 total'
+
+# -v reports which config file was used.
+exitcode 0 hitspec run --no-history -v ../../hit.http
+stderr 'config: .*hitspec\.yaml'
+
+# a nearer hitspec.yml / hitspec.yaml wins over the one further up.
+cd ../../nearer/x
+exitcode 0 hitspec run --no-history -v ../../hit-near.http
+stdout 'Tests: 1 passed, 1 total'
+stderr 'config: \.\.[/\\]hitspec\.yml'
+
+# --config still names the file explicitly, wherever it is.
+cd ../..
+exitcode 0 hitspec run --no-history --config nearer/hitspec.yml hit-near.http
+stdout 'Tests: 1 passed, 1 total'
+
+-- .git/HEAD --
+ref: refs/heads/main
+-- hitspec.yaml --
+headers:
+  X-Project: top
+-- nearer/hitspec.yml --
+headers:
+  X-Project: nearer
+-- nearer/x/.keep --
+-- sub/deeper/.keep --
+-- hit.http --
+### from-parent-config
+GET {{$env(SERVER)}}/echo/headers
+
+>>>
+expect status 200
+expect body.headers.X-Project == "top"
+<<<
+-- hit-near.http --
+### from-nearer-config
+GET {{$env(SERVER)}}/echo/headers
+
+>>>
+expect status 200
+expect body.headers.X-Project == "nearer"
+<<<

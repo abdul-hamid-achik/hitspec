@@ -107,6 +107,7 @@
         "pages": [
           "features/authentication",
           "features/multipart-graphql",
+          "features/tls-and-cookies",
           "features/snapshot-testing",
           "features/stress-testing",
           "features/database-assertions",
