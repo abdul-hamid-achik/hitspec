@@ -852,8 +852,8 @@ func tokenize(cmd string) []string {
 							n = 2
 						}
 						if i+n < len(rs) {
-							if v, err := strconv.ParseUint(string(rs[i+1:i+1+n]), 16, 32); err == nil {
-								current.WriteRune(rune(v))
+							if v, ok := hexRune(rs[i+1 : i+1+n]); ok {
+								current.WriteRune(v)
 								i += n
 								break
 							}
@@ -935,4 +935,24 @@ func sanitizeName(name string) string {
 	}
 
 	return result
+}
+
+// hexRune decodes the hex digits of a $'\xHH' or $'\uHHHH' escape.
+func hexRune(digits []rune) (rune, bool) {
+	var v rune
+	for _, c := range digits {
+		var d rune
+		switch {
+		case c >= '0' && c <= '9':
+			d = c - '0'
+		case c >= 'a' && c <= 'f':
+			d = c - 'a' + 10
+		case c >= 'A' && c <= 'F':
+			d = c - 'A' + 10
+		default:
+			return 0, false
+		}
+		v = v<<4 | d
+	}
+	return v, true
 }
