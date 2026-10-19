@@ -12,6 +12,11 @@ target:
   cmd: ["${vars.bin}", "studio", "${vars.workspace}"]
   cwd: "."
   timeoutMs: 15000
+  # Isolate ~/.hitspec (history, cookie jar) to a throwaway HOME so the run
+  # never reads or writes the real one. target.env applies to the studio
+  # process only; preconditions still build with the real HOME.
+  env:
+    HOME: /tmp/hitspec-studio-e2e/home-navigation
 
 terminal:
   cols: 100

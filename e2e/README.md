@@ -22,7 +22,8 @@ go build -o ./e2e/bin/hitspec ./apps/cli
 glyph run e2e/flows/*.yml --format md
 ```
 
-Requires `glyph` on PATH (`brew install abdul-hamid-achik/tap/glyph` or
+Requires `glyph` on PATH (`brew install abdul-hamid-achik/tap/glyph`, a binary from
+the [releases page](https://github.com/abdul-hamid-achik/glyphrun/releases), or
 `go install github.com/abdul-hamid-achik/glyphrun/cmd/glyph@latest`).
 
 Glyphrun discovers `glyphrun.config.yml` by walking up from each spec, and
@@ -83,10 +84,17 @@ and the build/artifact dirs:
 rather than a spec — its clipboard subprocess made the e2e assertion flaky under
 full-suite load.)
 
-Specs that run requests or touch cookies set `target.env.HOME` to a throwaway dir
-so they never read or pollute the user's real `~/.hitspec` history/cookie store
-(`target.env` applies to the studio process only — preconditions still build with
-the real `HOME`).
+**Every** spec sets `target.env.HOME` to a throwaway dir (`/tmp/hitspec-studio-e2e/home`
+or `home-<spec>`) so none of them reads or pollutes the user's real `~/.hitspec`
+history/cookie store (`target.env` applies to the studio process only —
+preconditions still build with the real `HOME`). Keep that block when adding a spec.
+
+## CI
+
+The `e2e` job in `.github/workflows/ci.yml` downloads a pinned, checksum-verified
+`glyph` release (glyphrun is public) and runs `glyph run e2e/flows/*.yml`. It is
+non-blocking (`continue-on-error`) until it has a track record on CI runners;
+failing runs upload `e2e/.glyphrun/runs` as an artifact.
 
 Reusable actions live in `actions/` (`quit_clean`, `open_workspace`) and
 are pulled in with `imports:` + `use:`.
