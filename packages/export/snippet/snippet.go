@@ -14,6 +14,7 @@ import (
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/export/curl"
+	hitspechttp "github.com/abdul-hamid-achik/hitspec/v2/packages/http"
 )
 
 // Formats lists the supported format names in display order.
@@ -235,6 +236,16 @@ func prepare(r *parser.Request, resolve func(string) string) (*prepared, error) 
 				if !p.hasHeader("Content-Type") {
 					p.headers = append(p.headers, header{"Content-Type", "application/json"})
 				}
+			}
+		case parser.BodyFormBlock:
+			// Encode the "& key = value" fields exactly as the client sends them.
+			if len(b.FormFields) > 0 {
+				p.body = hitspechttp.EncodeFormFields(b.FormFields, rs)
+			} else {
+				p.body = strings.TrimSpace(rs(b.Raw))
+			}
+			if p.body != "" && !p.hasHeader("Content-Type") {
+				p.headers = append(p.headers, header{"Content-Type", "application/x-www-form-urlencoded"})
 			}
 		default:
 			p.body = strings.TrimSpace(rs(b.Raw))

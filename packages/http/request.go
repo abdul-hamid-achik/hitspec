@@ -381,11 +381,7 @@ func BuildRequestFromASTWithBaseDir(req *parser.Request, resolver func(string) s
 		} else if req.Body.ContentType == parser.BodyFormBlock && len(req.Body.FormFields) > 0 {
 			// "& key = value" lines: encode each resolved name and value so
 			// spaces, "&" and "=" inside a value cannot change the form.
-			pairs := make([]string, len(req.Body.FormFields))
-			for i, f := range req.Body.FormFields {
-				pairs[i] = rfc3986Escape(resolver(f.Key)) + "=" + rfc3986Escape(resolver(f.Value))
-			}
-			r.SetBody(strings.Join(pairs, "&"))
+			r.SetBody(EncodeFormFields(req.Body.FormFields, resolver))
 			if r.Headers["Content-Type"] == "" {
 				r.SetHeader("Content-Type", "application/x-www-form-urlencoded")
 			}
@@ -421,6 +417,22 @@ func BuildRequestFromASTWithBaseDir(req *parser.Request, resolver func(string) s
 	r.QueryParams = nil // folded into URL; a second BuildURL must not repeat them
 
 	return r
+}
+
+// EncodeFormFields builds the application/x-www-form-urlencoded body of a
+// "& key = value" form block: each name and value is resolved and then
+// percent-encoded, so spaces, "&", "=" and non-ASCII text inside a value cannot
+// change the form. It is what the client sends and what the exporters print,
+// so the two always agree. A nil resolve leaves the text as written.
+func EncodeFormFields(fields []*parser.QueryParam, resolve func(string) string) string {
+	if resolve == nil {
+		resolve = func(s string) string { return s }
+	}
+	pairs := make([]string, len(fields))
+	for i, f := range fields {
+		pairs[i] = rfc3986Escape(resolve(f.Key)) + "=" + rfc3986Escape(resolve(f.Value))
+	}
+	return strings.Join(pairs, "&")
 }
 
 func ParseFormBody(body string) map[string]string {
