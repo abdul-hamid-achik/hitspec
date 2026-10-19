@@ -67,9 +67,20 @@ func TestHandleSecondaryKeyFormArms(t *testing.T) {
 		t.Fatalf("FormPrev should return to field 0, got %d", m.formFocus)
 	}
 
-	// enter (Confirm) submits the form and returns a command.
-	if cmd := m.handleSecondaryKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter})); cmd == nil {
-		t.Fatal("Confirm on an active form should return a submit command")
+	// enter only moves to the next field; it never submits (a form can start a
+	// 30s load test, so submitting takes ctrl+s).
+	if cmd := m.handleSecondaryKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter})); cmd != nil {
+		t.Fatal("enter on an active form must not submit")
+	}
+	if m.formFocus != 1 {
+		t.Fatalf("enter should advance to field 1, got %d", m.formFocus)
+	}
+	m.focusForm(true)
+	if cmd := m.handleSecondaryKey(tea.KeyPressMsg(tea.Key{Code: 's', Mod: tea.ModCtrl})); cmd == nil {
+		t.Fatal("ctrl+s on an active form should return a submit command")
+	}
+	if m.formActive {
+		t.Fatal("submitting should leave form-edit mode")
 	}
 
 	// esc (Cancel) leaves form-edit mode.

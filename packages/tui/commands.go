@@ -3,7 +3,6 @@ package tui
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -234,14 +233,6 @@ func clamp(v, lo, hi int) int {
 		return hi
 	}
 	return v
-}
-
-func atoi(s string, fallback int) int {
-	n, err := strconv.Atoi(s)
-	if err != nil {
-		return fallback
-	}
-	return n
 }
 
 // containsFile reports whether rel is among the files by relative path.

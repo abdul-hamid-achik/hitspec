@@ -3,14 +3,14 @@
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ contract                                                                                         │
 │ provider URL: http://localhost:3000                                                              │
-│ state handler:                                                                                   │
+│ state handler: optional                                                                          │
 │                                                                                                  │
 │ api.http  pass:1 fail:1 skip:0 120ms                                                             │
 │   PASS health 40ms                                                                               │
 │   FAIL createUser 80ms  state=seeded  status 500                                                 │
 │                                                                                                  │
 │                                                                                                  │
-│ e edit fields   enter/s verify selected file   esc cancel                                        │
+│ e edit fields   s verify the selected file   esc back                                            │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
@@ -27,4 +27,4 @@
 │                                                                                                  │
 │                                                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
- ready                                    e fields · enter run · esc back · ? help · ctrl+p palette 
+ ready                                     e fields · s submit · esc back · ? help · ctrl+p palette 

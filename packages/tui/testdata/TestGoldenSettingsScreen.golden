@@ -24,7 +24,7 @@
 │     baseUrl = http://localhost:3000                                                              │
 │                                                                                                  │
 │                                                                                                  │
-│ e edit fields   enter/s save config & set var   esc cancel                                       │
+│ e edit fields   s save config & set var   esc back                                               │
 │                                                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
- ready                                    e fields · enter run · esc back · ? help · ctrl+p palette 
+ ready                                     e fields · s submit · esc back · ? help · ctrl+p palette 

@@ -199,7 +199,7 @@ func (r *Runner) RunFileContext(ctx context.Context, path string) (*RunResult, e
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	file, err := parser.ParseFile(path)
+	file, err := parseForRun(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse %s: %w", path, err)
 	}

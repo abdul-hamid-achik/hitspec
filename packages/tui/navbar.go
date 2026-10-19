@@ -42,6 +42,8 @@ func (m model) hints() string {
 	s := m.styles
 	var h string
 	switch {
+	case m.running:
+		h = "x cancel run · ctrl+c cancel run"
 	case m.editing && m.focus == focusSource:
 		h = "ctrl+s save · esc cancel"
 	case m.screen == screenWorkspace:
@@ -54,13 +56,18 @@ func (m model) hints() string {
 			h = "e edit · ctrl+s save · r run · R run file"
 		case focusResponse:
 			h = "←→/[] tabs · r run · R run file"
+			if m.respView.multiResult() {
+				h = "←→/[] tabs · </> request · r run · R run file"
+			}
 		default:
 			h = "tab next pane · r run"
 		}
 	case m.screen == screenHistory:
 		h = "enter details · D delete · ctrl+r refresh"
+	case m.formActive:
+		h = "tab/enter next field · ctrl+s submit · esc leave fields"
 	default:
-		h = "e fields · enter run · esc back"
+		h = "e fields · s submit · esc back"
 	}
 	return s.help.Render(h+" · ") + s.accent.Render("?") + s.help.Render(" help · ") + s.accent.Render("ctrl+p") + s.help.Render(" palette")
 }

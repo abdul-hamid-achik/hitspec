@@ -7,13 +7,13 @@
 │ name: session                                                                                    │
 │ value:                                                                                           │
 │                                                                                                  │
+│ Global store ~/.hitspec/tui-cookies.json, shared by every workspace.                             │
+│ For inspection only: these cookies are not sent with requests.                                   │
+│                                                                                                  │
 │ example.com    /    session=abc123                                                               │
 │                                                                                                  │
 │                                                                                                  │
-│ e edit fields   enter/s add cookie   D delete matching cookie   esc cancel                       │
-│                                                                                                  │
-│                                                                                                  │
-│                                                                                                  │
+│ e edit fields   s add cookie   D delete matching cookie   esc back                               │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
@@ -27,4 +27,4 @@
 │                                                                                                  │
 │                                                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
- ready                                    e fields · enter run · esc back · ? help · ctrl+p palette 
+ ready                                     e fields · s submit · esc back · ? help · ctrl+p palette 

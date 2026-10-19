@@ -21,10 +21,10 @@
 │ Active VUs: 5                                                                                    │
 │                                                                                                  │
 │                                                                                                  │
-│ e edit fields   enter/s start stress   x stop   esc cancel                                       │
+│ e edit fields   s start stress   x stop   esc back                                               │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
- ready                                    e fields · enter run · esc back · ? help · ctrl+p palette 
+ ready                                     e fields · s submit · esc back · ? help · ctrl+p palette 

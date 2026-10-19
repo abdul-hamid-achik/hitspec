@@ -1,0 +1,95 @@
+version: 1
+name: studio_save_conflict
+
+intent: |
+  ctrl+s notices that the file changed on disk since it was opened and asks
+  before overwriting it: n keeps the other change, y writes the buffer. The
+  outside change is simulated by a transform step that appends to the file.
+
+target:
+  cmd: ["${vars.bin}", "studio", "/tmp/hitspec-studio-e2e/conflict"]
+  cwd: "."
+  timeoutMs: 25000
+  env:
+    HOME: /tmp/hitspec-studio-e2e/home-save_conflict
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+    - run: "rm -rf /tmp/hitspec-studio-e2e/conflict && mkdir -p /tmp/hitspec-studio-e2e/conflict"
+      timeoutMs: 10000
+    - run: "printf '### C\\n# @name c\\nGET https://example.com/c\\n' > /tmp/hitspec-studio-e2e/conflict/c.http"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "c.http"
+      timeoutMs: 8000
+  - press: "e"
+  - type: "MINE"
+  - wait:
+      screen:
+        contains: "modified"
+      timeoutMs: 5000
+  # another program edits the file under us
+  - transform:
+      runtime: shell
+      file: ../transforms/append_external_change.sh
+      input: ../transforms/append_external_change.sh
+      saveAs: external.txt
+      assign: external
+      timeoutMs: 10000
+  - press: "ctrl+s"
+  - wait:
+      screen:
+        contains: "File changed on disk"
+      timeoutMs: 8000
+  - snapshot: conflict
+  # n: their change stays, ours is still pending
+  - press: "n"
+  - wait:
+      screen:
+        notContains: "File changed on disk"
+      timeoutMs: 5000
+  - wait:
+      screen:
+        contains: "modified"
+      timeoutMs: 2000
+  # ctrl+s again, then y: the buffer overwrites
+  - press: "ctrl+s"
+  - wait:
+      screen:
+        contains: "File changed on disk"
+      timeoutMs: 8000
+  - press: "y"
+  - wait:
+      screen:
+        notContains: "modified"
+      timeoutMs: 8000
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  - id: overwrite_only_after_confirming
+    description: the buffer reached the disk (after y)
+    verify:
+      file:
+        glob: /tmp/hitspec-studio-e2e/conflict/c.http
+        contains: "MINE"
+        timeoutMs: 10000
+  - id: clean_exit
+    description: q exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0

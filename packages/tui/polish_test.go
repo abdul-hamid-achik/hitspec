@@ -93,18 +93,25 @@ func TestQuitConfirmsWhenDirty(t *testing.T) {
 	}
 }
 
-func TestCtrlCAlwaysQuits(t *testing.T) {
+// TestCtrlCWithUnsavedEditsAsksFirst: ctrl+c must not throw away edits silently.
+// The first press opens the discard dialog; a second press quits anyway.
+func TestCtrlCWithUnsavedEditsAsksFirst(t *testing.T) {
+	ctrlC := tea.KeyPressMsg(tea.Key{Code: 'c', Mod: tea.ModCtrl})
 	m := goldenModel(t, 100, 30)
-	m.dirty = true // even with unsaved changes, ctrl+c is a hard interrupt
-	cmd := m.handleKey(tea.KeyPressMsg(tea.Key{Code: 'c', Mod: tea.ModCtrl}))
+	m.selected = "api.http"
+	m.dirty = true
+	if cmd := m.handleKey(ctrlC); cmd != nil {
+		t.Fatalf("first ctrl+c with unsaved edits should only ask, got a command")
+	}
+	if m.confirm == nil || !m.confirm.forQuit {
+		t.Fatal("first ctrl+c with unsaved edits should open the discard dialog")
+	}
+	cmd := m.handleKey(ctrlC)
 	if cmd == nil {
-		t.Fatal("ctrl+c returned no command")
+		t.Fatal("second ctrl+c should quit")
 	}
 	if _, ok := cmd().(tea.QuitMsg); !ok {
-		t.Fatal("ctrl+c did not produce a QuitMsg")
-	}
-	if m.confirm != nil {
-		t.Fatal("ctrl+c should not open a confirm modal")
+		t.Fatal("second ctrl+c did not produce a QuitMsg")
 	}
 }
 
@@ -165,10 +172,10 @@ func TestResizeGuardsSmallTerminals(t *testing.T) {
 
 func TestSecondaryEmptyStatesAreActionable(t *testing.T) {
 	m := goldenModel(t, 100, 30)
-	if got := m.mockContent(); !strings.Contains(got, "No mock server running") || !strings.Contains(got, "enter") {
+	if got := m.mockContent(); !strings.Contains(got, "No mock server running") || !strings.Contains(got, "then s to start") {
 		t.Fatalf("mock empty state not actionable: %q", got)
 	}
-	if got := m.recordContent(); !strings.Contains(got, "No recording proxy running") || !strings.Contains(got, "enter") {
+	if got := m.recordContent(); !strings.Contains(got, "No recording proxy running") || !strings.Contains(got, "then s to start") {
 		t.Fatalf("record empty state not actionable: %q", got)
 	}
 }

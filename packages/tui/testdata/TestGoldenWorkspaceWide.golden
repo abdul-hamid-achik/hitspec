@@ -29,7 +29,7 @@
 │                              ││                                               ││                                               │
 │                              │└───────────────────────────────────────────────┘└───────────────────────────────────────────────┘
 │                              │┌───────────────────────────────────────────────┐┌───────────────────────────────────────────────┐
-│                              ││ headers                                       ││ assertions                                    │
+│                              ││ response headers                              ││ assertion results                             │
 │                              ││  Header              Value                    ││  Subject             Op            Expected   │
 │                              ││  Content-Type        application/json         ││  status              ==            pass 200   │
 │                              ││                                               ││                                               │

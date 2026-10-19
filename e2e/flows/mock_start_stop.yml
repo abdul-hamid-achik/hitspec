@@ -40,11 +40,10 @@ steps:
       screen:
         contains: "mock server running"
       timeoutMs: 8000
-  # edit the port to an uncommon one, then submit to start
+  # set an uncommon port (the field starts empty), then submit to start
   - press: "e"
-  - press: "ctrl+u"
   - type: "39711"
-  - press: "enter"
+  - press: "ctrl+s"
   - wait:
       screen:
         contains: "Running: true"

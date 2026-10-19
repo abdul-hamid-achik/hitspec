@@ -38,12 +38,13 @@ steps:
       screen:
         contains: "No recording proxy running"
       timeoutMs: 8000
-  # fields: 0 target URL, 1 port, 2 deduplicate — set an uncommon port then start
+  # fields: 0 target URL (required), 1 port, 2 deduplicate — fill the target and
+  # an uncommon port, then submit with ctrl+s
   - press: "e"
+  - type: "http://localhost:1"
   - press: "down"
-  - press: "ctrl+u"
   - type: "39811"
-  - press: "enter"
+  - press: "ctrl+s"
   - wait:
       screen:
         contains: "Running: true"

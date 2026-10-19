@@ -5,11 +5,11 @@
 │                       ││  Name                    Method    URL                                  │
 │   1 item    ┌─────────────────────────────────────────────────────────────────────┐              │
 │             │                                                                     │              │
-│ │ api.http  │   Keyboard shortcuts                                                │──────────────┘
-│ │ api.http  │                                                                     │──────────────┐
+│ │ api.http  │   Keyboard shortcuts                                                │              │
+│ │ api.http  │                                                                     │              │
 │             │   Screens        Workspace                 Global                   │              │
-│             │                                                                     │              │
-│             │   1  workspace   enter   open/select       ctrl+p     palette       │              │
+│             │                                                                     │──────────────┘
+│             │   1  workspace   enter   open/select       ctrl+p     palette       │──────────────┐
 │             │   2  stress      e       edit source       ctrl+e     environment   │              │
 │             │   3  mock        ctrl+s  save              ctrl+t     theme         │              │
 │             │   4  contract    r       run request       ctrl+f     search        │              │

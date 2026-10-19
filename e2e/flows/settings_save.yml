@@ -50,7 +50,7 @@ steps:
   - press: "down"
   - press: "down"
   - type: "7"
-  - press: "enter"
+  - press: "ctrl+s"
   - wait:
       screen:
         contains: "Retries: 7"

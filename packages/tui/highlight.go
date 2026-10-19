@@ -3,7 +3,9 @@ package tui
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/formatters"
@@ -114,6 +116,83 @@ func formatBody(body, contentType string, color bool) string {
 		out = prettyJSON(body)
 	}
 	return highlight(out, name, color)
+}
+
+const (
+	// maxPrettyBytes bounds the JSON bodies that are re-indented; larger ones are
+	// cut as-is.
+	maxPrettyBytes = 4 << 20
+	// maxBodyLines and maxBodyBytes bound what the response pane renders, so a huge
+	// payload never stalls the highlighter or the viewport.
+	maxBodyLines = 2000
+	maxBodyBytes = 256 << 10
+)
+
+// bodyCut describes how much of a response body was left out of the pane.
+type bodyCut struct {
+	shownLines, totalLines int
+	shownBytes, totalBytes int
+	notPretty              bool // the JSON was too large to re-indent before cutting
+}
+
+func (c bodyCut) String() string {
+	s := fmt.Sprintf("…[truncated: showing the first %d of %d lines (%s of %s)",
+		c.shownLines, c.totalLines, humanBytes(int64(c.shownBytes)), humanBytes(int64(c.totalBytes)))
+	if c.notPretty {
+		s += "; too large to pretty-print"
+	}
+	return s + " · palette: copy response body for all of it]"
+}
+
+// prepareBody turns a response body into the text the pane shows and the lexer
+// to highlight it with. JSON is pretty-printed first and only then cut by lines
+// (never by bytes of the minified text, which would leave one invalid line), and
+// the returned bodyCut says how much was left out.
+func prepareBody(body, contentType string) (text, lexer string, cut *bodyCut) {
+	lexer = lexerName(contentType, body)
+	text = body
+	notPretty := false
+	if lexer == "json" {
+		if len(body) <= maxPrettyBytes {
+			text = prettyJSON(body)
+		} else {
+			notPretty = true
+		}
+	}
+	end, lines := len(text), 1
+	for i := 0; i < len(text); i++ {
+		if text[i] == '\n' {
+			if lines >= maxBodyLines {
+				end = i
+				break
+			}
+			lines++
+		}
+		if i >= maxBodyBytes {
+			end = i
+			// Prefer a line boundary; otherwise back up to a rune boundary so the
+			// highlighter and the viewport never see invalid UTF-8.
+			if nl := strings.LastIndexByte(text[:end], '\n'); nl > 0 {
+				end = nl
+			} else {
+				for end > 0 && !utf8.RuneStart(text[end]) {
+					end--
+				}
+			}
+			break
+		}
+	}
+	if end >= len(text) {
+		return text, lexer, nil
+	}
+	shown := text[:end]
+	return shown, lexer, &bodyCut{
+		shownLines: strings.Count(shown, "\n") + 1,
+		totalLines: strings.Count(text, "\n") + 1,
+		shownBytes: len(shown),
+		totalBytes: len(text),
+		notPretty:  notPretty,
+	}
 }
 
 // headerValue does a case-insensitive lookup of an HTTP header.

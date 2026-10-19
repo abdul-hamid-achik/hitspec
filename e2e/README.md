@@ -41,6 +41,7 @@ and the build/artifact dirs:
 | `glyphrun.config.yml` | terminal defaults, vars (`bin`, `workspace`, …), env |
 | `flows/*.yml` | the behavior specs |
 | `actions/*.yml` | reusable action snippets (imported, invoked via `use:`) |
+| `transforms/` | shell scripts run by a spec's `transform` step (e.g. an outside edit to the open file) |
 | `fixtures/workspace/` | a sample `.http` workspace |
 | `fixtures/empty/` | an empty workspace (triggers the welcome card) |
 | `bin/` | the built `hitspec` binary (gitignored) |
@@ -79,6 +80,11 @@ and the build/artifact dirs:
 | `mock_start_stop.yml` | mock screen: `s` starts the server (custom port), `x` stops it (scratch ws) |
 | `stress_run.yml` | stress screen: edit duration to 2s, start, watch live metrics, see the result |
 | `record_start_stop.yml` | record screen: `s` starts the proxy (custom port), `x` stops it |
+| `run_edited_buffer.yml` | `r` runs the unsaved editor buffer (edit the URL port, the connection error names the edited port); `ctrl+c` with the edit asks first (scratch ws) |
+| `lost_edits.yml` | opening another file with unsaved edits asks: `n` keeps the edit, `y` discards it; `ctrl+c` asks, a second one quits (scratch ws) |
+| `save_conflict.yml` | `ctrl+s` asks before overwriting a file changed on disk since it was opened (a `transform` step edits it mid-run) |
+| `form_explicit_submit.yml` | `enter` on a form screen never starts a run; `esc` leaves the fields then goes back; `s` starts it |
+| `small_terminal.yml` | 80x24: every request is listed and the response is on screen after `r` |
 
 (The palette "copy as curl" export is covered by a `packages/tui` unit test
 rather than a spec — its clipboard subprocess made the e2e assertion flaky under
@@ -99,6 +105,14 @@ failing runs upload `e2e/.glyphrun/runs` as an artifact.
 Reusable actions live in `actions/` (`quit_clean`, `open_workspace`) and
 are pulled in with `imports:` + `use:`.
 
+## Forms start empty
+
+The stress/mock/contract/record/import/cookies forms start with empty fields whose
+placeholders show the default used when a field is left blank, and `enter` never
+submits: it opens the fields and moves between them. Submit with `ctrl+s` while
+editing or `s` otherwise. Specs therefore type every value they need (there is
+nothing to clear first) and finish with `ctrl+s`.
+
 ## Note on key encoding
 
 These specs drive studio with printable keys (`q`, `g`, digits), `ctrl+<key>`
@@ -107,6 +121,11 @@ correctly over glyphrun's PTY (earlier toolchain versions didn't, so older specs
 leaned on `ctrl+c` to quit and the `--theme` flag instead of driving the picker;
 those still work and are kept). `enter`/`esc` are exercised directly now by the
 palette/prompt specs (`adhoc_request`, `duplicate_file`, `copy_as_curl`).
+
+`esc` followed immediately by another key is read by the terminal as `alt+<key>`,
+and `wait: idle` can return before the app has repainted, so it is not a delay. After
+a `press: "esc"` that is followed by another key, `wait` for the screen change the
+`esc` causes (the hint line is a good marker) before pressing the next key.
 
 Palette tip: the command list filters via `/` then a query (not type-to-filter).
 Use a **short, unique** token and `wait` for `1 item` before `enter`, both to

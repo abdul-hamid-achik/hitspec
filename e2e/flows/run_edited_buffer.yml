@@ -1,0 +1,84 @@
+version: 1
+name: studio_run_edited_buffer
+
+intent: |
+  r runs the editor buffer, not the file on disk: edit the request's URL port
+  without saving, press r, and the connection error names the edited port. The
+  file on disk is untouched. Runs in a scratch workspace; the target port is
+  closed so the outcome is deterministic and offline.
+
+target:
+  cmd: ["${vars.bin}", "studio", "/tmp/hitspec-studio-e2e/runbuf"]
+  cwd: "."
+  timeoutMs: 20000
+  # Isolate ~/.hitspec (history, cookie jar) to a throwaway HOME.
+  env:
+    HOME: /tmp/hitspec-studio-e2e/home-run_edited_buffer
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+    - run: "rm -rf /tmp/hitspec-studio-e2e/runbuf && mkdir -p /tmp/hitspec-studio-e2e/runbuf"
+      timeoutMs: 10000
+    # no trailing newline: the editor cursor starts at the end of the URL
+    - run: "printf '### Buf\\n# @name buf\\nGET http://127.0.0.1:1' > /tmp/hitspec-studio-e2e/runbuf/buf.http"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "buf.http"
+      timeoutMs: 8000
+  - press: "e"
+  # port 1 -> 19, in the buffer only
+  - type: "9"
+  - wait:
+      screen:
+        contains: "modified"
+      timeoutMs: 5000
+  - press: "esc"
+  - wait:
+      screen:
+        notContains: "esc cancel"
+      timeoutMs: 5000
+  - press: "r"
+  - wait:
+      screen:
+        contains: "127.0.0.1:19"
+      timeoutMs: 10000
+  - snapshot: ran_buffer
+  # ctrl+c asks first because of the unsaved edit; the second one quits anyway
+  - press: "ctrl+c"
+  - wait:
+      screen:
+        contains: "Discard unsaved changes?"
+      timeoutMs: 5000
+  - press: "ctrl+c"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  - id: ran_the_edited_buffer
+    description: the connection error names the edited port 19, so the buffer ran
+    verify:
+      screen:
+        contains: "127.0.0.1:19"
+  - id: file_on_disk_untouched
+    description: running did not save the buffer
+    verify:
+      command:
+        run: "grep -q '127.0.0.1:1$' /tmp/hitspec-studio-e2e/runbuf/buf.http"
+  - id: clean_exit
+    description: the second ctrl+c exits with status code 0
+    verify:
+      process:
+        exitCode: 0

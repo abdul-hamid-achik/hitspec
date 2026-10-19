@@ -11,6 +11,9 @@ type confirmState struct {
 	title  string
 	body   string
 	action tea.Cmd
+	// forQuit marks the "discard unsaved changes and quit" dialog, which a second
+	// ctrl+c confirms.
+	forQuit bool
 }
 
 // view renders the confirm dialog box.
