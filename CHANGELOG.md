@@ -146,6 +146,10 @@ suite once locally with the new version, and pin the version in CI.
   no longer read and written without a lock.
 - Cancelling an OpenAPI import from studio, or a client disconnecting from
   `POST /api/v1/import/openapi`, stops the fetch.
+- A build from a checkout with no tags (a shallow CI clone, a fork) reports
+  `dev+<revision>` in `hitspec version` and `/api/v1/system/info`. It used to
+  report `2.0.0-<time>-<revision>`, and hitspec Studio then warned that the CLI
+  was older than 2.20.0.
 - On Windows:
   - hooks, `>>>shell` blocks, state handlers and globs work;
   - paths in studio and `serve` use `/`;
