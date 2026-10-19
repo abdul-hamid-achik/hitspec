@@ -1,0 +1,20 @@
+# snapshot: a snapshot is NOT saved on the first plain run (that run fails with
+# a hint); `--update-snapshots` creates it, and later runs compare against it.
+
+exitcode 1 hitspec run snap.http
+stdout 'snapshot does not exist'
+stdout '--update-snapshots'
+
+exitcode 0 hitspec run --update-snapshots snap.http
+exists __snapshots__
+
+exitcode 0 hitspec run snap.http
+stdout 'Tests: 1 passed, 1 total'
+
+-- snap.http --
+### snap
+GET {{$env(SERVER)}}/a3/values
+
+>>>
+expect body.obj snapshot "obj"
+<<<

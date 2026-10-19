@@ -1,6 +1,7 @@
 package assertions
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,13 +10,14 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/abdul-hamid-achik/hitspec/v2/internal/conv"
 	"github.com/abdul-hamid-achik/hitspec/v2/internal/pathutil"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/http"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/jsonbody"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/snapshot"
-	"github.com/tidwall/gjson"
 	"github.com/xeipuuv/gojsonschema"
 )
 
@@ -31,7 +33,8 @@ type Result struct {
 
 type Evaluator struct {
 	response    *http.Response
-	bodyJSON    gjson.Result
+	body        *jsonbody.Body
+	wholeBody   bool                // the subject being evaluated is the whole body
 	baseDir     string              // Base directory for resolving schema file paths
 	testFile    string              // Path to the test file (for snapshots)
 	requestName string              // Name of the current request (for snapshots)
@@ -71,9 +74,7 @@ func NewEvaluatorWithBaseDir(resp *http.Response, baseDir string, opts ...Evalua
 		response: resp,
 		baseDir:  baseDir,
 	}
-	if resp.IsJSON() {
-		e.bodyJSON = gjson.ParseBytes(resp.Body)
-	}
+	e.body = jsonbody.New(resp.ContentType(), resp.Body)
 	for _, opt := range opts {
 		opt(e)
 	}
@@ -102,9 +103,23 @@ func (e *Evaluator) resolveExpected(expected any) any {
 			result[key] = e.resolveExpected(val)
 		}
 		return result
+	case *parser.EachSpec:
+		return &parser.EachSpec{Path: v.Path, Operator: v.Operator, Expected: e.resolveExpected(v.Expected)}
 	default:
 		return expected
 	}
+}
+
+// absentValue marks a path that matches nothing, as opposed to a JSON null.
+type absentValue struct{}
+
+// absent is the value of a missing path. It is distinct from nil (JSON null):
+// exists is false for both, but == null only matches a real null.
+var absent any = absentValue{}
+
+func isAbsent(v any) bool {
+	_, ok := v.(absentValue)
+	return ok
 }
 
 func (e *Evaluator) Evaluate(assertion *parser.Assertion) *Result {
@@ -118,6 +133,7 @@ func (e *Evaluator) Evaluate(assertion *parser.Assertion) *Result {
 		Line:     assertion.Line,
 	}
 
+	e.wholeBody = assertion.Subject == "body"
 	actual, err := e.getActualValue(assertion.Subject)
 	if err == nil && isExistenceOp(assertion.Operator) {
 		// A missing header reads as "" which is non-nil, so the generic exists
@@ -131,19 +147,41 @@ func (e *Evaluator) Evaluate(assertion *parser.Assertion) *Result {
 		result.Message = err.Error()
 		return result
 	}
-	result.Actual = actual
+	if !isAbsent(actual) {
+		result.Actual = actual
+	}
 
 	passed, msg := e.compare(actual, assertion.Operator, resolvedExpected)
+	if !passed && isAbsent(actual) && msg == "" {
+		msg = fmt.Sprintf("%s does not exist", assertion.Subject)
+	}
 	result.Passed = passed
 	result.Message = msg
 
 	// For length operators, show the computed length as the actual value
 	switch assertion.Operator {
 	case parser.OpLength, parser.OpLengthGt, parser.OpLengthGte, parser.OpLengthLt, parser.OpLengthLte:
-		result.Actual = computeLength(actual)
+		if !isAbsent(actual) {
+			result.Actual = computeLength(actual)
+		}
 	}
 
 	return result
+}
+
+// subjectWord reports whether subject is the keyword alone or the keyword
+// followed by the given separator (so a body field named "headers" or
+// "bodyText" is not mistaken for the header or body subject).
+func subjectIs(subject, keyword string, seps ...string) bool {
+	if subject == keyword {
+		return true
+	}
+	for _, sep := range seps {
+		if strings.HasPrefix(subject, keyword+sep) {
+			return true
+		}
+	}
+	return false
 }
 
 func (e *Evaluator) getActualValue(subject string) (any, error) {
@@ -156,17 +194,16 @@ func (e *Evaluator) getActualValue(subject string) (any, error) {
 	// In stress testing mode, these would be calculated from aggregated metrics
 	case subject == "p50", subject == "p95", subject == "p99":
 		return e.response.DurationMs(), nil
-	case strings.HasPrefix(subject, "header"):
+	case subjectIs(subject, "header", " "):
 		name, _ := headerName(subject)
 		if name == "" {
 			return e.response.Headers, nil
 		}
 		return e.response.Header(name), nil
-	case strings.HasPrefix(subject, "body"):
+	case subjectIs(subject, "body", ".", "["):
 		return e.getBodyValue(subject)
-	case strings.HasPrefix(subject, "jsonpath"):
-		path := strings.TrimPrefix(subject, "jsonpath")
-		path = strings.TrimSpace(path)
+	case subjectIs(subject, "jsonpath", " "):
+		path := strings.TrimSpace(strings.TrimPrefix(subject, "jsonpath"))
 		return e.getJSONPathValue(path)
 	default:
 		return e.getBodyValue("body." + subject)
@@ -180,7 +217,7 @@ func isExistenceOp(op parser.AssertionOperator) bool {
 // headerName extracts the header name from a "header <name>" subject. ok is
 // false when the subject is not a named header subject.
 func headerName(subject string) (string, bool) {
-	if !strings.HasPrefix(subject, "header") {
+	if !subjectIs(subject, "header", " ") {
 		return "", false
 	}
 	name := strings.TrimSpace(strings.TrimPrefix(subject, "header"))
@@ -199,58 +236,78 @@ func (e *Evaluator) headerValueOrNil(name string) any {
 	return nil
 }
 
-// convertBracketNotation converts array bracket notation to gjson dot notation
-// e.g., "[0].id" -> "0.id", "items[0].tags[1]" -> "items.0.tags.1"
-func convertBracketNotation(path string) string {
-	// Replace [N] with .N
-	result := regexp.MustCompile(`\[(\d+)\]`).ReplaceAllString(path, ".$1")
-	// Remove leading dot if present (from converting [0] at start)
-	result = strings.TrimPrefix(result, ".")
-	return result
-}
-
+// getBodyValue reads "body" (the whole body) or "body.<path>". On a JSON
+// response the path is a gjson path (bracket notation is converted); on any
+// other response only the whole body can be read, a path is an error instead of
+// quietly matching.
 func (e *Evaluator) getBodyValue(subject string) (any, error) {
-	if !e.bodyJSON.Exists() {
-		return e.response.BodyString(), nil
-	}
-
 	path := strings.TrimPrefix(subject, "body")
 	if path == "" {
-		return e.bodyJSON.Value(), nil
+		if e.body.Err() != nil {
+			return e.response.BodyString(), nil
+		}
+		return e.body.Root(), nil
 	}
-	path = strings.TrimPrefix(path, ".")
+	if err := e.body.Err(); err != nil {
+		return nil, fmt.Errorf("%s: %w", subject, err)
+	}
+	gpath := parser.BodyPathToGJSON(strings.TrimPrefix(path, "."))
+	return e.lookup(gpath), nil
+}
 
-	// Convert bracket notation to gjson dot notation
-	path = convertBracketNotation(path)
-
-	result := e.bodyJSON.Get(path)
+func (e *Evaluator) lookup(gpath string) any {
+	result := e.body.Get(gpath)
 	if !result.Exists() {
-		return nil, nil
+		return absent
 	}
-	return result.Value(), nil
+	return result.Value()
 }
 
 func (e *Evaluator) getJSONPathValue(path string) (any, error) {
-	if !e.bodyJSON.Exists() {
-		return nil, fmt.Errorf("response body is not JSON")
+	if err := e.body.Err(); err != nil {
+		return nil, fmt.Errorf("jsonpath %s: %w", path, err)
 	}
-	// Convert bracket notation to gjson dot notation
-	path = convertBracketNotation(path)
-	result := e.bodyJSON.Get(path)
-	if !result.Exists() {
-		return nil, nil
+	gpath, err := parser.JSONPathToGJSON(path)
+	if err != nil {
+		return nil, err
 	}
-	return result.Value(), nil
+	return e.lookup(gpath), nil
 }
 
+// compare applies one operator. A missing path (absent) fails every operator
+// except exists / !exists and the negated ones (!=, !contains, !includes, !in),
+// which hold trivially; the null comparisons are strict: == null needs a JSON
+// null and != null needs a present non-null value, so a misspelt path cannot
+// pass them. Use !exists to accept "absent or null".
 func (e *Evaluator) compare(actual any, op parser.AssertionOperator, expected any) (bool, string) {
+	if isAbsent(actual) {
+		switch op {
+		case parser.OpExists:
+			return false, "expected to exist"
+		case parser.OpNotExists:
+			return true, ""
+		case parser.OpNotEquals:
+			if expected == nil {
+				return false, "expected a value that is not null, but the path does not exist (use !exists to allow absent)"
+			}
+			return true, ""
+		case parser.OpNotContains, parser.OpNotIncludes, parser.OpNotIn:
+			return true, ""
+		case parser.OpEquals:
+			if expected == nil {
+				return false, "expected null, but the path does not exist (null and absent are different; use !exists to allow both)"
+			}
+		}
+		return false, "does not exist"
+	}
+
 	switch op {
 	case parser.OpEquals:
 		return e.equals(actual, expected)
 	case parser.OpNotEquals:
 		passed, _ := e.equals(actual, expected)
 		if passed {
-			return false, fmt.Sprintf("expected not to equal %v", expected)
+			return false, fmt.Sprintf("expected not to equal %v", display(expected))
 		}
 		return true, ""
 	case parser.OpGreaterThan:
@@ -266,7 +323,7 @@ func (e *Evaluator) compare(actual any, op parser.AssertionOperator, expected an
 	case parser.OpNotContains:
 		passed, _ := e.contains(actual, expected)
 		if passed {
-			return false, fmt.Sprintf("expected not to contain %v", expected)
+			return false, fmt.Sprintf("expected not to contain %v", display(expected))
 		}
 		return true, ""
 	case parser.OpStartsWith:
@@ -298,7 +355,7 @@ func (e *Evaluator) compare(actual any, op parser.AssertionOperator, expected an
 	case parser.OpNotIncludes:
 		passed, _ := e.includes(actual, expected)
 		if passed {
-			return false, fmt.Sprintf("expected not to include %v", expected)
+			return false, fmt.Sprintf("expected not to include %v", display(expected))
 		}
 		return true, ""
 	case parser.OpIn:
@@ -306,7 +363,7 @@ func (e *Evaluator) compare(actual any, op parser.AssertionOperator, expected an
 	case parser.OpNotIn:
 		passed, _ := e.in(actual, expected)
 		if passed {
-			return false, fmt.Sprintf("expected not to be in %v", expected)
+			return false, fmt.Sprintf("expected not to be in %v", display(expected))
 		}
 		return true, ""
 	case parser.OpType:
@@ -322,7 +379,123 @@ func (e *Evaluator) compare(actual any, op parser.AssertionOperator, expected an
 	}
 }
 
+// display renders a value for a message: strings as they are, composites as JSON.
+func display(v any) string {
+	switch t := v.(type) {
+	case nil:
+		return "null"
+	case string:
+		return t
+	case []any, map[string]any:
+		return jsonText(t)
+	}
+	return fmt.Sprintf("%v", v)
+}
+
+// jsonText encodes a value as compact JSON without HTML escaping.
+func jsonText(v any) string {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return fmt.Sprintf("%v", v)
+	}
+	return strings.TrimSuffix(buf.String(), "\n")
+}
+
+// text is the string form string operators work on: strings as they are,
+// numbers without exponent, objects and arrays as JSON text (never Go's
+// map[...] formatting), null as "null". The whole JSON body is the raw text of
+// the response.
+func (e *Evaluator) text(v any) string {
+	if e.wholeBody && e.body.Err() == nil {
+		return string(e.body.Raw())
+	}
+	return valueText(v)
+}
+
+func valueText(v any) string {
+	switch t := v.(type) {
+	case nil:
+		return "null"
+	case string:
+		return t
+	case float64:
+		return strconv.FormatFloat(t, 'f', -1, 64)
+	case float32:
+		return strconv.FormatFloat(float64(t), 'f', -1, 32)
+	case json.Number:
+		return t.String()
+	case []any, map[string]any:
+		return jsonText(t)
+	}
+	return fmt.Sprintf("%v", v)
+}
+
+func isComposite(v any) bool {
+	switch v.(type) {
+	case []any, map[string]any:
+		return true
+	}
+	return false
+}
+
+// jsonEqual compares decoded JSON values deeply. Numbers are compared as
+// numbers (1 equals 1.0), objects by key, arrays by position.
+func jsonEqual(a, b any) bool {
+	switch x := a.(type) {
+	case []any:
+		y, ok := b.([]any)
+		if !ok || len(x) != len(y) {
+			return false
+		}
+		for i := range x {
+			if !jsonEqual(x[i], y[i]) {
+				return false
+			}
+		}
+		return true
+	case map[string]any:
+		y, ok := b.(map[string]any)
+		if !ok || len(x) != len(y) {
+			return false
+		}
+		for k, xv := range x {
+			yv, ok := y[k]
+			if !ok || !jsonEqual(xv, yv) {
+				return false
+			}
+		}
+		return true
+	case nil:
+		return b == nil
+	case bool:
+		y, ok := b.(bool)
+		return ok && x == y
+	case string:
+		y, ok := b.(string)
+		return ok && x == y
+	}
+	xn, xok := conv.ToFloat64(a)
+	yn, yok := conv.ToFloat64(b)
+	if xok && yok {
+		if _, isStr := b.(string); !isStr {
+			return xn == yn
+		}
+	}
+	return false
+}
+
 func (e *Evaluator) equals(actual, expected any) (bool, string) {
+	// Objects and arrays compare deeply as JSON; the loose string and number
+	// coercion below is for scalars only (it would make ["a b"] equal ["a","b"]).
+	if isComposite(actual) || isComposite(expected) {
+		if jsonEqual(actual, expected) {
+			return true, ""
+		}
+		return false, fmt.Sprintf("expected %s, got %s", display(expected), display(actual))
+	}
+
 	if reflect.DeepEqual(actual, expected) {
 		return true, ""
 	}
@@ -333,13 +506,18 @@ func (e *Evaluator) equals(actual, expected any) (bool, string) {
 		return true, ""
 	}
 
-	actualStr := fmt.Sprintf("%v", actual)
-	expectedStr := fmt.Sprintf("%v", expected)
+	// null only equals null: "<nil>" must not match anything by accident.
+	if actual == nil || expected == nil {
+		return false, fmt.Sprintf("expected %v, got %v", display(expected), display(actual))
+	}
+
+	actualStr := valueText(actual)
+	expectedStr := valueText(expected)
 	if actualStr == expectedStr {
 		return true, ""
 	}
 
-	return false, fmt.Sprintf("expected %v, got %v", expected, actual)
+	return false, fmt.Sprintf("expected %v, got %v", display(expected), display(actual))
 }
 
 func (e *Evaluator) compareNumeric(actual, expected any, op string) (bool, string) {
@@ -347,7 +525,7 @@ func (e *Evaluator) compareNumeric(actual, expected any, op string) (bool, strin
 	expectedNum, eOk := conv.ToFloat64(expected)
 
 	if !aOk || !eOk {
-		return false, fmt.Sprintf("cannot compare non-numeric values: %v %s %v", actual, op, expected)
+		return false, fmt.Sprintf("cannot compare non-numeric values: %v %s %v", display(actual), op, display(expected))
 	}
 
 	var passed bool
@@ -365,42 +543,48 @@ func (e *Evaluator) compareNumeric(actual, expected any, op string) (bool, strin
 	if passed {
 		return true, ""
 	}
-	return false, fmt.Sprintf("expected %v %s %v", actual, op, expected)
+	return false, fmt.Sprintf("expected %v %s %v", display(actual), op, display(expected))
 }
 
 func (e *Evaluator) contains(actual, expected any) (bool, string) {
-	actualStr := fmt.Sprintf("%v", actual)
-	expectedStr := fmt.Sprintf("%v", expected)
+	actualStr := e.text(actual)
+	expectedStr := valueText(expected)
 	if strings.Contains(actualStr, expectedStr) {
 		return true, ""
 	}
-	return false, fmt.Sprintf("expected '%v' to contain '%v'", actual, expected)
+	return false, fmt.Sprintf("expected %s to contain '%s'", quoteShort(actualStr), expectedStr)
 }
 
 func (e *Evaluator) startsWith(actual, expected any) (bool, string) {
-	actualStr := fmt.Sprintf("%v", actual)
-	expectedStr := fmt.Sprintf("%v", expected)
+	actualStr := e.text(actual)
+	expectedStr := valueText(expected)
 	if strings.HasPrefix(actualStr, expectedStr) {
 		return true, ""
 	}
-	return false, fmt.Sprintf("expected '%v' to start with '%v'", actual, expected)
+	return false, fmt.Sprintf("expected %s to start with '%s'", quoteShort(actualStr), expectedStr)
 }
 
 func (e *Evaluator) endsWith(actual, expected any) (bool, string) {
-	actualStr := fmt.Sprintf("%v", actual)
-	expectedStr := fmt.Sprintf("%v", expected)
+	actualStr := e.text(actual)
+	expectedStr := valueText(expected)
 	if strings.HasSuffix(actualStr, expectedStr) {
 		return true, ""
 	}
-	return false, fmt.Sprintf("expected '%v' to end with '%v'", actual, expected)
+	return false, fmt.Sprintf("expected %s to end with '%s'", quoteShort(actualStr), expectedStr)
+}
+
+// quoteShort quotes a value for a failure message, cutting very long ones.
+func quoteShort(s string) string {
+	const max = 200
+	if utf8.RuneCountInString(s) > max {
+		s = string([]rune(s)[:max]) + "..."
+	}
+	return "'" + s + "'"
 }
 
 func (e *Evaluator) matches(actual, expected any) (bool, string) {
-	actualStr := fmt.Sprintf("%v", actual)
-	pattern := fmt.Sprintf("%v", expected)
-
-	pattern = strings.TrimPrefix(pattern, "/")
-	pattern = strings.TrimSuffix(pattern, "/")
+	actualStr := e.text(actual)
+	pattern := valueText(expected)
 
 	re, err := regexp.Compile(pattern)
 	if err != nil {
@@ -410,30 +594,36 @@ func (e *Evaluator) matches(actual, expected any) (bool, string) {
 	if re.MatchString(actualStr) {
 		return true, ""
 	}
-	return false, fmt.Sprintf("expected '%v' to match /%v/", actual, pattern)
+	return false, fmt.Sprintf("expected %s to match /%v/", quoteShort(actualStr), pattern)
 }
 
+// exists is true for a present, non-null value (absent never reaches here).
 func (e *Evaluator) exists(actual any) (bool, string) {
-	if actual == nil {
+	if actual == nil || isAbsent(actual) {
 		return false, "expected to exist"
 	}
 	return true, ""
 }
 
-// computeLength returns the length of a value, or -1 if length cannot be computed
+// computeLength returns the length of a value, or -1 if length cannot be
+// computed. Strings count characters (runes), not bytes.
 func computeLength(actual any) int {
 	switch v := actual.(type) {
 	case string:
-		return len(v)
+		return utf8.RuneCountInString(v)
 	case []any:
 		return len(v)
 	case map[string]any:
 		return len(v)
+	case nil:
+		return -1
 	default:
 		rv := reflect.ValueOf(actual)
 		switch rv.Kind() {
-		case reflect.Slice, reflect.Array, reflect.Map, reflect.String:
+		case reflect.Slice, reflect.Array, reflect.Map:
 			return rv.Len()
+		case reflect.String:
+			return utf8.RuneCountInString(rv.String())
 		default:
 			return -1
 		}
@@ -443,12 +633,12 @@ func computeLength(actual any) int {
 func (e *Evaluator) length(actual, expected any) (bool, string) {
 	expectedLen, ok := toInt(expected)
 	if !ok {
-		return false, fmt.Sprintf("expected length must be a number, got %v", expected)
+		return false, fmt.Sprintf("expected length must be a number, got %v", display(expected))
 	}
 
 	actualLen := computeLength(actual)
 	if actualLen == -1 {
-		return false, fmt.Sprintf("cannot get length of %T", actual)
+		return false, fmt.Sprintf("cannot get length of %s", typeName(actual))
 	}
 
 	if actualLen == expectedLen {
@@ -460,12 +650,12 @@ func (e *Evaluator) length(actual, expected any) (bool, string) {
 func (e *Evaluator) lengthCompare(actual, expected any, op string) (bool, string) {
 	expectedLen, ok := toInt(expected)
 	if !ok {
-		return false, fmt.Sprintf("expected length must be a number, got %v", expected)
+		return false, fmt.Sprintf("expected length must be a number, got %v", display(expected))
 	}
 
 	actualLen := computeLength(actual)
 	if actualLen == -1 {
-		return false, fmt.Sprintf("cannot get length of %T", actual)
+		return false, fmt.Sprintf("cannot get length of %s", typeName(actual))
 	}
 
 	var passed bool
@@ -489,7 +679,7 @@ func (e *Evaluator) lengthCompare(actual, expected any, op string) (bool, string
 func (e *Evaluator) includes(actual, expected any) (bool, string) {
 	arr, ok := actual.([]any)
 	if !ok {
-		return false, fmt.Sprintf("expected array, got %T", actual)
+		return false, fmt.Sprintf("expected array, got %s", typeName(actual))
 	}
 
 	for _, item := range arr {
@@ -497,13 +687,13 @@ func (e *Evaluator) includes(actual, expected any) (bool, string) {
 			return true, ""
 		}
 	}
-	return false, fmt.Sprintf("expected array to include %v", expected)
+	return false, fmt.Sprintf("expected array to include %v", display(expected))
 }
 
 func (e *Evaluator) in(actual, expected any) (bool, string) {
 	arr, ok := expected.([]any)
 	if !ok {
-		return false, fmt.Sprintf("expected array for 'in' operator, got %T", expected)
+		return false, fmt.Sprintf("expected a list for 'in' operator, got %s", typeName(expected))
 	}
 
 	for _, item := range arr {
@@ -511,29 +701,32 @@ func (e *Evaluator) in(actual, expected any) (bool, string) {
 			return true, ""
 		}
 	}
-	return false, fmt.Sprintf("expected %v to be in %v", actual, expected)
+	return false, fmt.Sprintf("expected %v to be in %v", display(actual), display(expected))
+}
+
+// typeName is the JSON type name of a decoded value.
+func typeName(v any) string {
+	switch v.(type) {
+	case nil:
+		return "null"
+	case bool:
+		return "boolean"
+	case float64, float32, int, int64, int32, json.Number:
+		return "number"
+	case string:
+		return "string"
+	case []any:
+		return "array"
+	case map[string]any:
+		return "object"
+	default:
+		return reflect.TypeOf(v).String()
+	}
 }
 
 func (e *Evaluator) typeCheck(actual, expected any) (bool, string) {
-	expectedType := fmt.Sprintf("%v", expected)
-	var actualType string
-
-	switch actual.(type) {
-	case nil:
-		actualType = "null"
-	case bool:
-		actualType = "boolean"
-	case float64, float32, int, int64, int32:
-		actualType = "number"
-	case string:
-		actualType = "string"
-	case []any:
-		actualType = "array"
-	case map[string]any:
-		actualType = "object"
-	default:
-		actualType = reflect.TypeOf(actual).String()
-	}
+	expectedType := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", expected)))
+	actualType := typeName(actual)
 
 	if actualType == expectedType {
 		return true, ""
@@ -621,43 +814,68 @@ func (e *Evaluator) schema(actual, expected any) (bool, string) {
 	return false, fmt.Sprintf("schema validation failed: %s", strings.Join(errors, "; "))
 }
 
+// eachSpecFromValue builds the spec for an Expected that is not an EachSpec
+// (assertions built in code): {"operator": ..., "value": ...} or a bare value
+// every element must equal. It returns nil for an unknown operator name.
+func eachSpecFromValue(expected any) *parser.EachSpec {
+	if m, ok := expected.(map[string]any); ok {
+		opName, hasOp := m["operator"]
+		val, hasVal := m["value"]
+		if hasOp && hasVal {
+			name := fmt.Sprintf("%v", opName)
+			switch name {
+			case "equals":
+				name = "=="
+			case "notEquals":
+				name = "!="
+			}
+			op, found := parser.LookupOperator(name)
+			if !found || op == parser.OpEach {
+				return nil
+			}
+			return &parser.EachSpec{Operator: op, Expected: val}
+		}
+	}
+	return &parser.EachSpec{Operator: parser.OpEquals, Expected: expected}
+}
+
+// each applies the spec's operator to every element of the array (or to a path
+// inside every element). An empty array passes: combine with length > 0 to
+// require elements.
 func (e *Evaluator) each(actual, expected any) (bool, string) {
 	arr, ok := actual.([]any)
 	if !ok {
-		return false, fmt.Sprintf("expected array for 'each' operator, got %T", actual)
+		return false, fmt.Sprintf("expected array for 'each' operator, got %s", typeName(actual))
 	}
 
-	if len(arr) == 0 {
-		return true, "" // Empty array passes all conditions
+	spec, ok := expected.(*parser.EachSpec)
+	if !ok {
+		spec = eachSpecFromValue(expected)
+	}
+	if spec == nil {
+		return false, fmt.Sprintf("each: unknown operator in %v", display(expected))
 	}
 
-	// Expected should be an assertion-like structure or a simple value check
-	// For simplicity, we check if each element equals the expected value
-	// or if expected is a map with operator/value, we apply it to each element
+	// "body" inside the element refers to the element, never the response.
+	saved := e.wholeBody
+	e.wholeBody = false
+	defer func() { e.wholeBody = saved }()
 
-	expectedMap, isMap := expected.(map[string]any)
-	if isMap {
-		// Check if it has operator and value fields
-		op, hasOp := expectedMap["operator"]
-		val, hasVal := expectedMap["value"]
-
-		if hasOp && hasVal {
-			opStr := fmt.Sprintf("%v", op)
-			for i, item := range arr {
-				passed, msg := e.applyOperator(item, opStr, val)
-				if !passed {
-					return false, fmt.Sprintf("item[%d]: %s", i, msg)
-				}
-			}
-			return true, ""
-		}
-	}
-
-	// Default: check each element equals expected
 	for i, item := range arr {
-		passed, msg := e.equals(item, expected)
+		value, found := jsonbody.Lookup(item, spec.Path)
+		if !found {
+			value = absent
+		}
+		passed, msg := e.compare(value, spec.Operator, spec.Expected)
 		if !passed {
-			return false, fmt.Sprintf("item[%d]: %s", i, msg)
+			if msg == "" || msg == "does not exist" {
+				msg = fmt.Sprintf("%s does not exist", spec.Path)
+			}
+			where := fmt.Sprintf("item[%d]", i)
+			if spec.Path != "" && !strings.HasPrefix(msg, spec.Path) {
+				where += "." + spec.Path
+			}
+			return false, fmt.Sprintf("%s: %s", where, msg)
 		}
 	}
 	return true, ""
@@ -687,39 +905,4 @@ func (e *Evaluator) snapshot(actual, expected any) (bool, string) {
 		return true, ""
 	}
 	return false, result.Message
-}
-
-func (e *Evaluator) applyOperator(actual any, op string, expected any) (bool, string) {
-	switch op {
-	case "==", "equals":
-		return e.equals(actual, expected)
-	case "!=", "notEquals":
-		passed, _ := e.equals(actual, expected)
-		if passed {
-			return false, fmt.Sprintf("expected not to equal %v", expected)
-		}
-		return true, ""
-	case ">":
-		return e.compareNumeric(actual, expected, ">")
-	case ">=":
-		return e.compareNumeric(actual, expected, ">=")
-	case "<":
-		return e.compareNumeric(actual, expected, "<")
-	case "<=":
-		return e.compareNumeric(actual, expected, "<=")
-	case "contains":
-		return e.contains(actual, expected)
-	case "startsWith":
-		return e.startsWith(actual, expected)
-	case "endsWith":
-		return e.endsWith(actual, expected)
-	case "matches":
-		return e.matches(actual, expected)
-	case "exists":
-		return e.exists(actual)
-	case "type":
-		return e.typeCheck(actual, expected)
-	default:
-		return false, fmt.Sprintf("unknown operator in each: %s", op)
-	}
 }

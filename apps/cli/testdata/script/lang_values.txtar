@@ -1,0 +1,70 @@
+# Expected values: one grammar. A JSON literal, or the rest of the line
+# verbatim. Unquoted text with spaces, ./x, ^x, $x, @x and #fff used to be cut
+# at the first space or lose their first character.
+
+exitcode 0 hitspec run values.http
+stdout 'Tests: 3 passed, 3 total'
+
+# a wrong unquoted value fails (it used to compare against "Jane" only)
+exitcode 1 hitspec run wrong.http
+stdout 'Jane Smith'
+
+-- values.http --
+### verbatim
+GET {{$env(SERVER)}}/a3/values
+
+>>>
+expect status 200
+expect body.name == Jane Doe
+expect body.name != Jane Smith
+expect body.name startsWith Jane
+expect body.name contains "ne D"
+expect body.path == ./x
+expect body.caret == ^x
+expect body.dollar == $x
+expect body.at == @x
+expect body.hash == #fff
+expect body.msg == "line\nbreak"
+expect body.cjk == 日本語
+expect body.cjk length 3
+expect body.nothing == null
+expect body.nothing !exists
+expect body.nothing type null
+expect body.absent !exists
+expect body.name type string  # trailing comment
+<<<
+
+### objects and arrays
+GET {{$env(SERVER)}}/a3/values
+
+>>>
+expect body.obj == {"a": 1, "b": [1, 2.5, "x"]}
+expect body.obj != {"a": 2}
+expect body.list == [1, 2, 3]
+expect body.list == [1.0, 2, 3]
+expect body.list length 3
+expect body contains "Jane Doe"
+expect body !contains "map["
+expect body startsWith {
+<<<
+
+### each and counts
+GET {{$env(SERVER)}}/a3/values
+
+>>>
+expect body.items.# == 2
+expect body.items.#(name=="Jane Doe").id == 1
+expect body.items each type object
+expect body.items each body.id exists
+expect body.items each id > 0
+expect body.items each email matches /^.+@.+\..+$/
+expect jsonpath $.items[1].name == Bob
+expect jsonpath $.items[*].id == [1, 2]
+<<<
+
+-- wrong.http --
+GET {{$env(SERVER)}}/a3/values
+
+>>>
+expect body.name == Jane Smith
+<<<

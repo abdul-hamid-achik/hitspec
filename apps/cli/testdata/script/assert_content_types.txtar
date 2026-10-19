@@ -1,0 +1,58 @@
+# JSON detection: any +json media type (and charset parameters) is JSON; a body
+# path on a non-JSON response never matches (it used to read the whole body, so
+# "body.x exists" always passed).
+
+exitcode 0 hitspec run problem.http
+stdout 'Tests: 1 passed, 1 total'
+
+exitcode 1 hitspec run html.http
+stdout 'not JSON'
+stdout 'Tests: 1 passed, 3 failed, 4 total'
+
+-- problem.http --
+### problem+json
+GET {{$env(SERVER)}}/a3/problem
+
+>>>
+expect status 404
+expect header Content-Type contains problem+json
+expect body.title == Not Found
+expect body.status == 404
+expect body.errors.# == 1
+expect body.errors[0].field == id
+expect body.errors each code exists
+expect jsonpath $.errors[0].code == missing
+<<<
+
+-- html.http --
+### html is not JSON
+# @name page1
+GET {{$env(SERVER)}}/a3/html
+
+>>>
+expect body.x exists
+<<<
+
+### whole body still works
+# @name page2
+GET {{$env(SERVER)}}/a3/html
+
+>>>
+expect body contains "<html>"
+<<<
+
+### text
+# @name page3
+GET {{$env(SERVER)}}/text
+
+>>>
+expect body.x !exists
+<<<
+
+### jsonpath
+# @name page4
+GET {{$env(SERVER)}}/text
+
+>>>
+expect jsonpath $.x exists
+<<<
