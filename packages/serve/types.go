@@ -335,9 +335,12 @@ type StressStartReq struct {
 
 // StressStatusDTO is the current stress test status.
 type StressStatusDTO struct {
-	Running bool            `json:"running"`
-	Elapsed float64         `json:"elapsed"`
-	Stats   *StressStatsDTO `json:"stats,omitempty"`
+	Running bool    `json:"running"`
+	Elapsed float64 `json:"elapsed"`
+	// Duration is how long the run is configured to last, in seconds (0 when
+	// unknown).
+	Duration float64         `json:"duration,omitempty"`
+	Stats    *StressStatsDTO `json:"stats,omitempty"`
 }
 
 // StressStatsDTO holds real-time stress metrics.
@@ -492,7 +495,8 @@ type WSStressMetrics struct {
 	Completed bool           `json:"completed,omitempty"`
 	Stats     StressStatsDTO `json:"stats"`
 	Elapsed   float64        `json:"elapsed"`
-	Error     string         `json:"error,omitempty"` // on the completed event when the run failed
+	Duration  float64        `json:"duration,omitempty"` // the run's configured length, in seconds
+	Error     string         `json:"error,omitempty"`    // on the completed event when the run failed
 	Timestamp string         `json:"timestamp"`
 }
 

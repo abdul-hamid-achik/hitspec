@@ -979,6 +979,7 @@ curl http://localhost:8080/api/v1/stress/status
 {
   "running": true,
   "elapsed": 15.3,
+  "duration": 60,
   "stats": {
     "total": 750,
     "success": 745,
@@ -997,7 +998,7 @@ curl http://localhost:8080/api/v1/stress/status
 }
 ```
 
-`incomplete` counts requests still in flight, and `assertionChecks` / `assertionFailures` count responses that were checked against `expect` lines and those that failed one. Assertion failures are not part of `errors`. The three fields are omitted when zero, and the same fields appear in `stress_update` messages.
+`incomplete` counts requests still in flight, and `assertionChecks` / `assertionFailures` count responses that were checked against `expect` lines and those that failed one. Assertion failures are not part of `errors`. The three fields are omitted when zero, and the same fields appear in `stress_update` messages. `duration` is the run's configured length in seconds (from the request or its `profile`), so a client can draw progress as `elapsed / duration`; it is omitted when unknown.
 
 When no stress test is running:
 
@@ -1993,6 +1994,7 @@ Sent every 500ms during an active stress test with current metrics. The `running
       "activeVUs": 10
     },
     "elapsed": 15.3,
+    "duration": 60,
     "timestamp": "2026-02-10T12:00:00Z"
   },
   "timestamp": "2026-02-10T12:00:00Z"

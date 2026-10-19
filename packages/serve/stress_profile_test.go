@@ -2,6 +2,7 @@ package serve
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -90,5 +91,32 @@ func TestStressStartUnknownProfileIsBadRequest(t *testing.T) {
 	s.handleStressStart(w, req)
 	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), `nope`) {
 		t.Fatalf("got %d %s; want 400 naming the profile", w.Code, w.Body.String())
+	}
+}
+
+// The status reports the run's own duration (here the profile's), so a client
+// can draw progress without guessing from its form.
+func TestStressStatusReportsTheRunDuration(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer target.Close()
+	s := stressProfileServer(t, target.URL)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/stress/start", strings.NewReader(`{"files":["a.http"],"profile":"slow"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.handleStressStart(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("start: %d %s", w.Code, w.Body.String())
+	}
+	defer s.handleStressStop(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/v1/stress/stop", nil))
+
+	w = httptest.NewRecorder()
+	s.handleStressStatus(w, httptest.NewRequest(http.MethodGet, "/api/v1/stress/status", nil))
+	var st StressStatusDTO
+	if err := json.Unmarshal(w.Body.Bytes(), &st); err != nil {
+		t.Fatal(err)
+	}
+	if !st.Running || st.Duration != 60 {
+		t.Fatalf("status = %+v; want a running test with duration 60", st)
 	}
 }

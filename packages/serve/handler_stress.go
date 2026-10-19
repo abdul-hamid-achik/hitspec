@@ -124,6 +124,7 @@ func (s *Server) handleStressStart(w http.ResponseWriter, r *http.Request) {
 					Completed: true,
 					Stats:     convertStressStats(stats),
 					Elapsed:   stats.Elapsed.Seconds(),
+					Duration:  stressRunner.Duration().Seconds(),
 					Error:     resultDTO.Error,
 					Timestamp: nowISO(),
 				})
@@ -141,6 +142,7 @@ func (s *Server) handleStressStart(w http.ResponseWriter, r *http.Request) {
 					Running:   true,
 					Stats:     convertStressStats(stats),
 					Elapsed:   stats.Elapsed.Seconds(),
+					Duration:  stressRunner.Duration().Seconds(),
 					Timestamp: nowISO(),
 				})
 			}
@@ -176,9 +178,10 @@ func (s *Server) handleStressStatus(w http.ResponseWriter, r *http.Request) {
 
 	stats := runner.GetCurrentStats()
 	dto := StressStatusDTO{
-		Running: true,
-		Elapsed: stats.Elapsed.Seconds(),
-		Stats:   ptrStressStats(convertStressStats(stats)),
+		Running:  true,
+		Elapsed:  stats.Elapsed.Seconds(),
+		Duration: runner.Duration().Seconds(),
+		Stats:    ptrStressStats(convertStressStats(stats)),
 	}
 
 	writeJSON(w, http.StatusOK, dto)

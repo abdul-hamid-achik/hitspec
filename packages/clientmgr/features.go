@@ -121,7 +121,7 @@ func (m *Manager) StartStress(ctx context.Context, req StressStartReq) error {
 					Completed: true,
 					Stats:     convertStressStats(stats),
 					Elapsed:   stats.Elapsed.Seconds(),
-					Duration:  duration.Seconds(),
+					Duration:  stressRunner.Duration().Seconds(),
 					Error:     resultDTO.Error,
 					Timestamp: nowISO(),
 				})
@@ -137,7 +137,7 @@ func (m *Manager) StartStress(ctx context.Context, req StressStartReq) error {
 					Running:   true,
 					Stats:     convertStressStats(stats),
 					Elapsed:   stats.Elapsed.Seconds(),
-					Duration:  duration.Seconds(),
+					Duration:  stressRunner.Duration().Seconds(),
 					Timestamp: nowISO(),
 				})
 			}
