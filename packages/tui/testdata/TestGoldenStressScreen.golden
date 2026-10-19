@@ -2,19 +2,19 @@
  1 workspace   2 stress   3 mock  4 contract  5 record  6 history  7 import  8 cookies  9 settings  
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ stress                                                                                           │
-│ duration: 30s                                                                                    │
-│ rate: 5                                                                                          │
-│ vus: 0                                                                                           │
-│ max vus: 0                                                                                       │
+│ duration: 30s or profile's                                                                       │
+│ rate: 5 or profile's                                                                             │
+│ vus: 0 or profile's                                                                              │
+│ max vus: 0 or profile's                                                                          │
+│ profile: none                                                                                    │
 │                                                                                                  │
 │ No stress test running.                                                                          │
 │                                                                                                  │
 │ Press s to start a load test on the selected file with the form's values                         │
-│ (blank fields use the defaults shown: 30s at 5 RPS), e to edit them first,                       │
-│ or use the command palette.                                                                      │
+│ (blank fields use the defaults shown: 30s at 5 RPS, or the profile's when                        │
+│ one is named), e to edit them first, or use the command palette.                                 │
 │                                                                                                  │
 │ e edit fields   s start stress   x stop   esc back                                               │
-│                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │

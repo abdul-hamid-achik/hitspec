@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -53,19 +54,22 @@ type model struct {
 	showHelp  bool
 	color     bool // syntax highlighting / ANSI color enabled (disabled in golden tests)
 
-	lastResult   *clientmgr.RunResultDTO
-	lastRunIdx   int  // source index of the request a single-request run executed; -1 for a file run
-	metaFromRun  bool // the headers/assertions panels show the selected request's last result
-	progress     clientmgr.RequestProgress
-	stress       clientmgr.StressStatusDTO
-	stressResult *clientmgr.StressResultDTO
-	mock         clientmgr.MockStatusDTO
-	record       clientmgr.RecordStatusDTO
-	history      clientmgr.HistoryListDTO
-	cookies      []clientmgr.CookieDTO
-	config       clientmgr.ConfigDTO
-	envs         []clientmgr.EnvironmentDTO
-	contracts    []clientmgr.ContractResultDTO
+	lastResult  *clientmgr.RunResultDTO
+	lastRunIdx  int  // source index of the request a single-request run executed; -1 for a file run
+	metaFromRun bool // the headers/assertions panels show the selected request's last result
+	progress    clientmgr.RequestProgress
+	stress      clientmgr.StressStatusDTO
+	// stressProfiles are the saved hitspec.yaml stress profile names, cached by
+	// loadScreenState for the idle stress screen.
+	stressProfiles []string
+	stressResult   *clientmgr.StressResultDTO
+	mock           clientmgr.MockStatusDTO
+	record         clientmgr.RecordStatusDTO
+	history        clientmgr.HistoryListDTO
+	cookies        []clientmgr.CookieDTO
+	config         clientmgr.ConfigDTO
+	envs           []clientmgr.EnvironmentDTO
+	contracts      []clientmgr.ContractResultDTO
 
 	filesList   list.Model
 	palette     list.Model
@@ -566,10 +570,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.preview.SetContent(m.historyDetailContent())
 		}
 	case searchResultMsg:
+		if msg.query != m.searchInput.Value() {
+			break // a stale response, error or not: the user has typed on
+		}
 		if msg.err != nil {
 			m.err = msg.err.Error()
 			cmds = append(cmds, m.notify(toastError, msg.err.Error()))
-		} else if msg.query == m.searchInput.Value() { // ignore stale responses
+		} else {
 			m.err = ""
 			m.searchResults = msg.results
 			m.refreshSearchList()
@@ -1785,6 +1792,38 @@ func requireFields(values map[string]string, labels ...string) error {
 	return nil
 }
 
+// stressStartReq builds the stress request the form describes. Without a
+// profile, blank fields take the defaults the placeholders show. With one, only
+// what the user typed is sent so the profile's own duration, rate and VUs apply
+// (the manager lets non-empty request values win).
+func stressStartReq(values map[string]string, files []string) (clientmgr.StressStartReq, error) {
+	profile := strings.TrimSpace(values["profile"])
+	defDuration, defRate := "30s", 5.0
+	if profile != "" {
+		defDuration, defRate = "", 0
+	}
+	rate, err := numField(values, "rate", defRate)
+	if err != nil {
+		return clientmgr.StressStartReq{}, err
+	}
+	vus, err := intField(values, "vus", 0)
+	if err != nil {
+		return clientmgr.StressStartReq{}, err
+	}
+	maxVUs, err := intField(values, "max vus", 0)
+	if err != nil {
+		return clientmgr.StressStartReq{}, err
+	}
+	return clientmgr.StressStartReq{
+		Files:    files,
+		Profile:  profile,
+		Duration: strings.TrimSpace(defaultString(values["duration"], defDuration)),
+		Rate:     rate,
+		VUs:      vus,
+		MaxVUs:   maxVUs,
+	}, nil
+}
+
 // submitFormCmd starts what the active secondary screen's form describes. Empty
 // optional fields use the defaults the placeholders show.
 func (m *model) submitFormCmd() tea.Cmd {
@@ -1792,24 +1831,9 @@ func (m *model) submitFormCmd() tea.Cmd {
 	ctx, mgr := m.ctx, m.mgr
 	switch m.screen {
 	case screenStress:
-		rate, err := numField(values, "rate", 5)
+		req, err := stressStartReq(values, selectedFiles(m.selected))
 		if err != nil {
 			return m.formError(err)
-		}
-		vus, err := intField(values, "vus", 0)
-		if err != nil {
-			return m.formError(err)
-		}
-		maxVUs, err := intField(values, "max vus", 0)
-		if err != nil {
-			return m.formError(err)
-		}
-		req := clientmgr.StressStartReq{
-			Files:    selectedFiles(m.selected),
-			Duration: defaultString(values["duration"], "30s"),
-			Rate:     rate,
-			VUs:      vus,
-			MaxVUs:   maxVUs,
 		}
 		return func() tea.Msg {
 			return simpleMsg{kind: "stress started", err: mgr.StartStress(ctx, req)}
@@ -2009,6 +2033,13 @@ func (m *model) loadScreenState() {
 	case screenStress:
 		m.stress = m.mgr.StressStatus(m.ctx)
 		m.stressResult, _ = m.mgr.StressResult(m.ctx)
+		m.stressProfiles = m.stressProfiles[:0:0]
+		if profiles, err := m.mgr.ListStressProfiles(m.ctx); err == nil {
+			for _, p := range profiles {
+				m.stressProfiles = append(m.stressProfiles, p.Name)
+			}
+			sort.Strings(m.stressProfiles)
+		}
 	case screenMock:
 		m.mock = m.mgr.MockStatus(m.ctx)
 	case screenRecord:
@@ -2026,10 +2057,11 @@ func (m *model) initFormForScreen(s screen) {
 	switch s {
 	case screenStress:
 		m.formInputs = []textinput.Model{
-			m.newField("duration", "30s", 12),
-			m.newField("rate", "5", 10),
-			m.newField("vus", "0", 8),
-			m.newField("max vus", "0", 8),
+			m.newField("duration", "30s or profile's", 18),
+			m.newField("rate", "5 or profile's", 18),
+			m.newField("vus", "0 or profile's", 18),
+			m.newField("max vus", "0 or profile's", 18),
+			m.newField("profile", "none", 16),
 		}
 	case screenMock:
 		m.formInputs = []textinput.Model{
@@ -2757,7 +2789,11 @@ func (m model) stressContent() string {
 		if m.stressResult != nil {
 			return m.stressResultContent()
 		}
-		return "No stress test running.\n\nPress s to start a load test on the selected file with the form's values\n(blank fields use the defaults shown: 30s at 5 RPS), e to edit them first,\nor use the command palette."
+		idle := "No stress test running.\n\nPress s to start a load test on the selected file with the form's values\n(blank fields use the defaults shown: 30s at 5 RPS, or the profile's when\none is named), e to edit them first, or use the command palette."
+		if len(m.stressProfiles) > 0 {
+			idle += "\n\nProfiles: " + strings.Join(m.stressProfiles, ", ")
+		}
+		return idle
 	}
 	stats := status.Stats
 	// The bar tracks elapsed against the duration the run really has (reported by

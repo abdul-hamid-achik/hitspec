@@ -137,6 +137,9 @@ func (m *Manager) startWatcher() {
 				if !isHitspecFile(event.Name) {
 					continue
 				}
+				// Drop the cached parse now: the debounced event (and Manager's own
+				// writes, which the watcher suppresses) may come later or never.
+				m.search.invalidate(event.Name)
 				schedule(event.Name, event.Op)
 			case err, ok := <-watcher.Errors:
 				if !ok {

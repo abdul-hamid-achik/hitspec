@@ -2,10 +2,11 @@
  1 workspace   2 stress   3 mock  4 contract  5 record  6 history  7 import  8 cookies  9 settings  
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ stress                                                                                           │
-│ duration: 30s                                                                                    │
-│ rate: 5                                                                                          │
-│ vus: 0                                                                                           │
-│ max vus: 0                                                                                       │
+│ duration: 30s or profile's                                                                       │
+│ rate: 5 or profile's                                                                             │
+│ vus: 0 or profile's                                                                              │
+│ max vus: 0 or profile's                                                                          │
+│ profile: none                                                                                    │
 │                                                                                                  │
 │ Running: true                                                                                    │
 │ Elapsed: 15.0s                                                                                   │
@@ -22,7 +23,6 @@
 │                                                                                                  │
 │                                                                                                  │
 │ e edit fields   s start stress   x stop   esc back                                               │
-│                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │

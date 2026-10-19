@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -140,6 +141,7 @@ func (m *Manager) SaveFile(ctx context.Context, relPath, content string) (*Parse
 	if err := os.WriteFile(absPath, []byte(content), 0o644); err != nil {
 		return nil, err
 	}
+	m.search.invalidate(absPath)
 	m.publish("file_changed", FileEvent{Path: m.relPath(absPath), Operation: "changed", Timestamp: nowISO()})
 
 	parsed, err := parser.ParseFile(absPath)
@@ -181,6 +183,7 @@ func (m *Manager) CreateFile(ctx context.Context, relPath, content string) (*Par
 	if err := os.WriteFile(absPath, []byte(content), 0o644); err != nil {
 		return nil, err
 	}
+	m.search.invalidate(absPath)
 	m.publish("file_changed", FileEvent{Path: m.relPath(absPath), Operation: "created", Timestamp: nowISO()})
 
 	parsed, err := parser.ParseFile(absPath)
@@ -210,6 +213,7 @@ func (m *Manager) DeleteFile(ctx context.Context, relPath string) error {
 	if err := os.Remove(absPath); err != nil {
 		return err
 	}
+	m.search.invalidate(absPath)
 	m.publish("file_changed", FileEvent{Path: m.relPath(absPath), Operation: "deleted", Timestamp: nowISO()})
 	return nil
 }
@@ -217,32 +221,37 @@ func (m *Manager) DeleteFile(ctx context.Context, relPath string) error {
 // SearchRequests finds requests across the workspace whose name, method, URL, or
 // tags contain the (case-insensitive) query. An empty query returns nil.
 func (m *Manager) SearchRequests(ctx context.Context, query string) ([]SearchResultDTO, error) {
-	_ = ctx
 	q := strings.ToLower(strings.TrimSpace(query))
 	if q == "" {
 		return nil, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	files, err := collectHitspecFiles(m.config.WorkDir)
 	if err != nil {
 		return nil, err
 	}
+	m.search.retain(files)
 	var results []SearchResultDTO
 	for _, f := range files {
-		parsed, perr := parser.ParseFile(f)
-		if perr != nil {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		entries, ok := m.search.searchEntries(f)
+		if !ok {
 			continue
 		}
 		rel := m.relPath(f)
-		for _, r := range parsed.Requests {
-			hay := strings.ToLower(strings.Join([]string{r.Name, r.Method, r.URL, strings.Join(r.Tags, " ")}, " "))
-			if strings.Contains(hay, q) {
+		for _, e := range entries {
+			if strings.Contains(e.hay, q) {
 				results = append(results, SearchResultDTO{
 					File:        rel,
-					RequestName: r.Name,
-					Method:      r.Method,
-					URL:         r.URL,
-					Tags:        r.Tags,
-					Line:        r.Line,
+					RequestName: e.name,
+					Method:      e.method,
+					URL:         e.url,
+					Tags:        slices.Clone(e.tags),
+					Line:        e.line,
 				})
 			}
 		}
@@ -287,6 +296,7 @@ func (m *Manager) RenameFile(ctx context.Context, oldPath, newPath string) (*Par
 	if err := os.Rename(srcAbs, dstAbs); err != nil {
 		return nil, err
 	}
+	m.search.invalidate(srcAbs, dstAbs)
 	m.publish("file_changed", FileEvent{Path: m.relPath(srcAbs), Operation: "deleted", Timestamp: nowISO()})
 	m.publish("file_changed", FileEvent{Path: m.relPath(dstAbs), Operation: "created", Timestamp: nowISO()})
 
@@ -334,6 +344,7 @@ func (m *Manager) CopyFile(ctx context.Context, srcPath, dstPath string) (*Parse
 	if err := os.WriteFile(dstAbs, content, 0o644); err != nil {
 		return nil, err
 	}
+	m.search.invalidate(dstAbs)
 	m.publish("file_changed", FileEvent{Path: m.relPath(dstAbs), Operation: "created", Timestamp: nowISO()})
 
 	parsed, err := parser.ParseFile(dstAbs)

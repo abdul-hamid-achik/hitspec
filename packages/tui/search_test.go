@@ -39,6 +39,23 @@ func TestSearchResultMsgPopulatesAndIgnoresStale(t *testing.T) {
 	}
 }
 
+// A failed search for a query the user has typed past is dropped silently.
+func TestSearchStaleErrorIsIgnored(t *testing.T) {
+	m := newModel(context.Background(), newTestManager(t), Options{})
+	m.searchOpen = true
+	m.searchInput.SetValue("users")
+
+	next, _ := m.Update(searchResultMsg{query: "use", err: context.Canceled})
+	nm := next.(model)
+	if nm.err != "" || len(nm.toasts.items) != 0 {
+		t.Fatalf("a stale error must not surface: err=%q toasts=%d", nm.err, len(nm.toasts.items))
+	}
+	next, _ = nm.Update(searchResultMsg{query: "users", err: context.Canceled})
+	if next.(model).err == "" {
+		t.Fatal("an error for the current query should surface")
+	}
+}
+
 func TestSearchTypingReachesInput(t *testing.T) {
 	m := newModel(context.Background(), newTestManager(t), Options{})
 	m.searchOpen = true

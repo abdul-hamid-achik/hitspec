@@ -227,9 +227,9 @@ hitspec run api.http --stress --profile load --env staging
 
 A flag you pass on the command line overrides the profile, even when it equals the flag's default (`--rate 10` wins over a profile's `rate: 100`). Settings you do not pass come from the profile.
 
-### Managing Profiles from studio
+### Using Profiles from studio
 
-The [hitspec studio](/guides/api-client-manager) stress screen lets you create, edit, and delete profiles without touching `hitspec.yaml` directly. Changes are persisted to `hitspec.yaml` automatically.
+The [hitspec studio](/guides/api-client-manager) stress screen runs a saved profile by name. Type it in the `profile` field and start the test: the profile's duration, rate, VUs and thresholds apply, and any other field you fill in overrides it. The idle screen lists the profiles saved in `hitspec.yaml`. The desktop app can also create, edit, and delete profiles; changes are persisted to `hitspec.yaml` automatically.
 
 ## Results Panel
 

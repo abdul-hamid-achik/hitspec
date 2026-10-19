@@ -135,6 +135,16 @@ is the value used when a field is left blank. Nothing starts until you ask:
 
 `enter` never submits a form, so a stray key cannot start a load test.
 
+### Stress profiles
+
+The last field of the stress form is `profile`. Type the name of a stress
+profile saved in `hitspec.yaml` and start the test: the profile's duration, rate,
+VUs and thresholds apply. With a profile named, a blank `duration`, `rate`,
+`vus` or `max vus` keeps the profile's value, and a value you type wins over it.
+Without a profile, blank fields use the defaults shown (30s at 5 RPS). The idle
+stress screen lists the saved profile names; an unknown name shows an error and
+starts nothing.
+
 ### Global
 
 | Key | Action |
