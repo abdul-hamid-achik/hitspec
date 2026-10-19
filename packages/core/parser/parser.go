@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 )
 
 // Parser is a recursive descent parser for hitspec test files.
@@ -16,6 +17,8 @@ type Parser struct {
 	file     string
 	warnings []Warning
 }
+
+var printedWarnings sync.Map
 
 // WarningOutput is where ParseFile prints the warnings of the files it parses
 // ("warning: file:line:col: message"). Set it to nil to silence them; use Parse
@@ -50,6 +53,11 @@ func ParseFile(path string) (*File, error) {
 	f, err := ParseFileQuiet(path)
 	if err == nil && WarningOutput != nil {
 		for _, w := range f.Warnings {
+			// A long-running process (serve, studio, watch) parses the same
+			// file again and again; print each warning once.
+			if _, seen := printedWarnings.LoadOrStore(w.String(), true); seen {
+				continue
+			}
 			fmt.Fprintf(WarningOutput, "warning: %s\n", w)
 		}
 	}
@@ -93,10 +101,6 @@ func (p *Parser) nextToken() {
 	for p.curToken.Type == TokenWhitespace || p.curToken.Type == TokenComment {
 		p.curToken = p.lexer.NextToken()
 	}
-}
-
-func (p *Parser) nextTokenRaw() {
-	p.curToken = p.lexer.NextToken()
 }
 
 func (p *Parser) skipNewlines() {

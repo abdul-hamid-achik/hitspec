@@ -83,7 +83,6 @@ func (p *Parser) parseDBExpectLine(lineNo int, raw string, query string, queryLi
 	}, nil
 }
 
-// parseShellBlock parses a >>>shell ... <<< block into a slice of ShellCommand.
 // parseMockBlock parses a >>>mock ... <<< block, capturing the raw response body
 // the mock server should return for this request. Mirrors the GraphQL block's
 // raw-read so multi-line JSON is preserved verbatim.
@@ -108,47 +107,17 @@ func (p *Parser) parseMockBlock() (string, error) {
 	return strings.TrimSpace(body), nil
 }
 
+// parseShellBlock parses a >>>shell ... <<< block: one command per line, read
+// raw so quotes, repeated spaces and '#' reach the shell exactly as written.
+// Blank lines and lines starting with '#' or '//' are skipped.
 func (p *Parser) parseShellBlock() ([]*ShellCommand, error) {
-	p.nextToken()
-	p.skipNewlines()
-
 	var commands []*ShellCommand
-
-	for p.curToken.Type != TokenAssertionEnd && p.curToken.Type != TokenEOF {
-		line := p.curToken.Line
-
-		// Build the command by reading from current token to end of line
-		var cmdBuilder strings.Builder
-		for p.curToken.Type != TokenNewline && p.curToken.Type != TokenEOF && p.curToken.Type != TokenAssertionEnd {
-			if cmdBuilder.Len() > 0 && p.curToken.Type == TokenWhitespace {
-				cmdBuilder.WriteString(" ")
-			} else if p.curToken.Type == TokenVariableRef {
-				cmdBuilder.WriteString("{{")
-				cmdBuilder.WriteString(p.curToken.Value)
-				cmdBuilder.WriteString("}}")
-			} else if p.curToken.Type != TokenWhitespace {
-				cmdBuilder.WriteString(p.curToken.Value)
-			}
-			p.nextTokenRaw()
-		}
-
-		cmd := strings.TrimSpace(cmdBuilder.String())
-		if cmd != "" {
-			commands = append(commands, &ShellCommand{
-				Command: cmd,
-				Line:    line,
-			})
-		}
-
-		if p.curToken.Type == TokenNewline {
-			p.nextToken()
-		}
-		p.skipNewlines()
+	err := p.readBlock("shell", func(lineNo int, raw string) error {
+		commands = append(commands, &ShellCommand{Command: strings.TrimSpace(raw), Line: lineNo})
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-
-	if p.curToken.Type == TokenAssertionEnd {
-		p.nextToken()
-	}
-
 	return commands, nil
 }

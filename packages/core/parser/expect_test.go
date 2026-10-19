@@ -451,3 +451,19 @@ func FuzzBlockLines(f *testing.F) {
 		}
 	})
 }
+
+func TestShellBlockIsRaw(t *testing.T) {
+	src := "GET http://x/\n\n>>>shell\n# a comment\necho \"a  b\" 'c d' # keep\ncurl -H \"X: {{tok}}\" http://h\n\n<<<\n"
+	f, err := Parse(src, "t.http")
+	require.NoError(t, err)
+	var got []string
+	for _, c := range f.Requests[0].ShellCommands {
+		got = append(got, c.Command)
+	}
+	assert.Equal(t, []string{`echo "a  b" 'c d' # keep`, `curl -H "X: {{tok}}" http://h`}, got)
+	assert.Equal(t, 5, f.Requests[0].ShellCommands[0].Line)
+
+	_, err = Parse("GET http://x/\n\n>>>shell\necho hi\n", "t.http")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unclosed >>>shell")
+}
