@@ -554,3 +554,46 @@ func TestValidatePathWithinBase(t *testing.T) {
 		})
 	}
 }
+
+func TestEvaluator_HeaderExists(t *testing.T) {
+	resp := createResponse(200, `{}`, map[string]string{
+		"X-Request-Id": "abc",
+		"X-Empty":      "",
+	})
+	e := NewEvaluator(resp)
+
+	tests := []struct {
+		name    string
+		subject string
+		op      parser.AssertionOperator
+		want    bool
+	}{
+		{"present exists", "header X-Request-Id", parser.OpExists, true},
+		{"present exists case-insensitive", "header x-request-id", parser.OpExists, true},
+		{"present !exists", "header X-Request-Id", parser.OpNotExists, false},
+		{"present !exists case-insensitive", "header X-REQUEST-ID", parser.OpNotExists, false},
+		{"missing exists", "header X-Nope", parser.OpExists, false},
+		{"missing !exists", "header X-Nope", parser.OpNotExists, true},
+		{"empty value exists", "header X-Empty", parser.OpExists, true},
+		{"empty value !exists", "header X-Empty", parser.OpNotExists, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := e.Evaluate(&parser.Assertion{Subject: tt.subject, Operator: tt.op})
+			assert.Equal(t, tt.want, result.Passed, "Message: %s", result.Message)
+		})
+	}
+
+	t.Run("missing header still equals empty string", func(t *testing.T) {
+		result := e.Evaluate(&parser.Assertion{Subject: "header X-Nope", Operator: parser.OpEquals, Expected: ""})
+		assert.True(t, result.Passed)
+	})
+}
+
+// TestEvaluator_BodyExistsSemantics pins the current behavior of body exists:
+// JSON null and absent fields both read as nil, so neither "exists".
+func TestEvaluator_BodyExistsSemantics(t *testing.T) {
+	json := NewEvaluator(createResponse(200, `{"a":null}`, nil))
+	assert.False(t, json.Evaluate(&parser.Assertion{Subject: "body.a", Operator: parser.OpExists}).Passed)
+	assert.False(t, json.Evaluate(&parser.Assertion{Subject: "body.b", Operator: parser.OpExists}).Passed)
+}
