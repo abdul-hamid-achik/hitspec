@@ -87,7 +87,8 @@ func IsNetworkError(err error) bool {
 			errors.Is(urlErr, syscall.ECONNRESET) ||
 			errors.Is(urlErr, syscall.ECONNREFUSED) ||
 			errors.Is(urlErr, syscall.ECONNABORTED) ||
-			errors.Is(urlErr, syscall.EPIPE)
+			errors.Is(urlErr, syscall.EPIPE) ||
+			isWinsockReset(urlErr)
 	}
 	return false
 }
