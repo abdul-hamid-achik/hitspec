@@ -127,16 +127,7 @@ func (r *Recorder) Start() error {
 		return fmt.Errorf("invalid target URL: %w", err)
 	}
 
-	proxy := &httputil.ReverseProxy{
-		Director: func(req *http.Request) {
-			req.URL.Scheme = target.Scheme
-			req.URL.Host = target.Host
-			req.Host = target.Host
-		},
-		ModifyResponse: func(resp *http.Response) error {
-			return r.recordResponse(resp)
-		},
-	}
+	proxy := r.newReverseProxy(target)
 
 	addr := fmt.Sprintf(":%d", r.port)
 	server := &http.Server{
@@ -150,6 +141,20 @@ func (r *Recorder) Start() error {
 	return server.ListenAndServe()
 }
 
+// newReverseProxy forwards to target, joining the target's path prefix with
+// the incoming path so upstream sees the same URL that fullURL records.
+func (r *Recorder) newReverseProxy(target *url.URL) *httputil.ReverseProxy {
+	return &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.SetURL(target)
+			pr.SetXForwarded()
+		},
+		ModifyResponse: func(resp *http.Response) error {
+			return r.recordResponse(resp)
+		},
+	}
+}
+
 // StartWithContext starts the proxy with context for graceful shutdown
 func (r *Recorder) StartWithContext(ctx context.Context) error {
 	if r.targetURL == "" {
@@ -161,16 +166,7 @@ func (r *Recorder) StartWithContext(ctx context.Context) error {
 		return fmt.Errorf("invalid target URL: %w", err)
 	}
 
-	proxy := &httputil.ReverseProxy{
-		Director: func(req *http.Request) {
-			req.URL.Scheme = target.Scheme
-			req.URL.Host = target.Host
-			req.Host = target.Host
-		},
-		ModifyResponse: func(resp *http.Response) error {
-			return r.recordResponse(resp)
-		},
-	}
+	proxy := r.newReverseProxy(target)
 
 	addr := fmt.Sprintf(":%d", r.port)
 	server := &http.Server{
