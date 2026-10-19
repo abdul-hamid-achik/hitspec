@@ -1,0 +1,17 @@
+# hitspec.yaml `retries` / `retryDelay` are the default for requests without
+# their own @retry. /a2/flaky/yaml-retries fails twice, then succeeds.
+
+exitcode 0 hitspec run flaky.http --no-history
+stdout 'Tests: 1 passed, 1 total'
+
+-- hitspec.yaml --
+retries: 2
+retryDelay: 10
+
+-- flaky.http --
+### flaky
+GET {{$env(SERVER)}}/a2/flaky/yaml-retries
+
+>>>
+expect status 200
+<<<

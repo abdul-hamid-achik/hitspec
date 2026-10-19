@@ -16,6 +16,7 @@ import (
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/config"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/env"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runconfig"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/coverage"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/export/metrics"
@@ -26,6 +27,7 @@ import (
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/stress"
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 var runCmd = &cobra.Command{
@@ -119,88 +121,144 @@ var (
 	noHistoryFlag bool
 )
 
-func init() {
+// registerRunFlags binds the run flags to their package variables.
+//
+// Flags that mirror a hitspec.yaml key (timeout, concurrency, proxy, insecure,
+// parallel, bail) default to "not set" instead of the effective default, so
+// the config file can supply the value; runOverrides layers the HITSPEC_*
+// variable under an explicit flag and runconfig.Build resolves the rest. The
+// help text states the effective default.
+func registerRunFlags(f *pflag.FlagSet) {
 	// Core flags
-	runCmd.Flags().StringVarP(&envFlag, "env", "e", getEnvString("HITSPEC_ENV", ""), "Environment to use (env: HITSPEC_ENV; default: hitspec.yaml defaultEnvironment, else dev)")
-	runCmd.Flags().StringVar(&envFileFlag, "env-file", getEnvString("HITSPEC_ENV_FILE", ""), "Path to .env file for variable interpolation (env: HITSPEC_ENV_FILE)")
-	runCmd.Flags().StringVar(&configFlag, "config", getEnvString("HITSPEC_CONFIG", ""), "Path to config file (env: HITSPEC_CONFIG)")
-	runCmd.Flags().StringVarP(&nameFlag, "name", "n", "", "Run only tests matching name pattern")
-	runCmd.Flags().StringVarP(&tagsFlag, "tags", "t", getEnvString("HITSPEC_TAGS", ""), "Run only tests with specified tags (comma-separated) (env: HITSPEC_TAGS)")
+	f.StringVarP(&envFlag, "env", "e", getEnvString("HITSPEC_ENV", ""), "Environment to use (env: HITSPEC_ENV; default: hitspec.yaml defaultEnvironment, else dev)")
+	f.StringVar(&envFileFlag, "env-file", getEnvString("HITSPEC_ENV_FILE", ""), "Path to .env file for variable interpolation (env: HITSPEC_ENV_FILE)")
+	f.StringVar(&configFlag, "config", getEnvString("HITSPEC_CONFIG", ""), "Path to config file (env: HITSPEC_CONFIG)")
+	f.StringVarP(&nameFlag, "name", "n", "", "Run only tests matching name pattern")
+	f.StringVarP(&tagsFlag, "tags", "t", getEnvString("HITSPEC_TAGS", ""), "Run only tests with specified tags (comma-separated) (env: HITSPEC_TAGS)")
 
 	// Output flags
-	runCmd.Flags().CountVarP(&verboseFlag, "verbose", "v", "Verbose output (-v, -vv, -vvv for more detail)")
-	runCmd.Flags().BoolVarP(&quietFlag, "quiet", "q", getEnvBool("HITSPEC_QUIET", false), "Suppress the report on stdout; failures are still listed on stderr and --output-file is still written (env: HITSPEC_QUIET)")
-	runCmd.Flags().BoolVar(&noColorFlag, "no-color", getEnvBool("HITSPEC_NO_COLOR", false), "Disable colored output (env: HITSPEC_NO_COLOR)")
-	runCmd.Flags().StringVarP(&outputFlag, "output", "o", getEnvString("HITSPEC_OUTPUT", "console"), "Output format: console, json, junit, tap, html (env: HITSPEC_OUTPUT)")
-	runCmd.Flags().StringVar(&outputFileFlag, "output-file", getEnvString("HITSPEC_OUTPUT_FILE", ""), "Write output to file (default: stdout) (env: HITSPEC_OUTPUT_FILE)")
+	f.CountVarP(&verboseFlag, "verbose", "v", "Verbose output (-v, -vv, -vvv for more detail)")
+	f.BoolVarP(&quietFlag, "quiet", "q", getEnvBool("HITSPEC_QUIET", false), "Suppress the report on stdout; failures are still listed on stderr and --output-file is still written (env: HITSPEC_QUIET)")
+	f.BoolVar(&noColorFlag, "no-color", getEnvBool("HITSPEC_NO_COLOR", false), "Disable colored output (env: HITSPEC_NO_COLOR)")
+	f.StringVarP(&outputFlag, "output", "o", getEnvString("HITSPEC_OUTPUT", "console"), "Output format: console, json, junit, tap, html (env: HITSPEC_OUTPUT)")
+	f.StringVar(&outputFileFlag, "output-file", getEnvString("HITSPEC_OUTPUT_FILE", ""), "Write output to file (default: stdout) (env: HITSPEC_OUTPUT_FILE)")
 
 	// Execution flags
-	runCmd.Flags().BoolVar(&bailFlag, "bail", getEnvBool("HITSPEC_BAIL", false), "Stop on first failure (env: HITSPEC_BAIL)")
-	runCmd.Flags().StringVar(&timeoutFlag, "timeout", getEnvString("HITSPEC_TIMEOUT", "30s"), "Request timeout (e.g., 30s, 1m) (env: HITSPEC_TIMEOUT)")
-	runCmd.Flags().BoolVar(&dryRunFlag, "dry-run", false, "Parse and show what would run without executing")
-	runCmd.Flags().BoolVarP(&parallelFlag, "parallel", "p", getEnvBool("HITSPEC_PARALLEL", false), "Run requests in parallel (when no dependencies) (env: HITSPEC_PARALLEL)")
-	runCmd.Flags().IntVar(&concurrencyFlag, "concurrency", getEnvInt("HITSPEC_CONCURRENCY", 5), "Number of concurrent requests when running in parallel (env: HITSPEC_CONCURRENCY)")
-	runCmd.Flags().BoolVarP(&watchFlag, "watch", "w", false, "Watch files for changes and re-run tests")
+	f.BoolVar(&bailFlag, "bail", false, "Stop on first failure (env: HITSPEC_BAIL; default: hitspec.yaml bail, else false)")
+	f.StringVar(&timeoutFlag, "timeout", "", "Request timeout, e.g. 30s, 1m (env: HITSPEC_TIMEOUT; default: hitspec.yaml timeout, else 30s)")
+	f.BoolVar(&dryRunFlag, "dry-run", false, "Parse and show what would run without executing")
+	f.BoolVarP(&parallelFlag, "parallel", "p", false, "Run requests in parallel (when no dependencies) (env: HITSPEC_PARALLEL; default: hitspec.yaml parallel, else false)")
+	f.IntVar(&concurrencyFlag, "concurrency", 0, "Number of concurrent requests when running in parallel (env: HITSPEC_CONCURRENCY; default: hitspec.yaml concurrency, else 5)")
+	f.BoolVarP(&watchFlag, "watch", "w", false, "Watch files for changes and re-run tests")
 
 	// Network flags
-	runCmd.Flags().StringVar(&proxyFlag, "proxy", getEnvString("HITSPEC_PROXY", ""), "Proxy URL for HTTP requests (env: HITSPEC_PROXY)")
-	runCmd.Flags().BoolVarP(&insecureFlag, "insecure", "k", getEnvBool("HITSPEC_INSECURE", false), "Disable SSL certificate validation (env: HITSPEC_INSECURE)")
+	f.StringVar(&proxyFlag, "proxy", "", "Proxy URL for HTTP requests (env: HITSPEC_PROXY; default: hitspec.yaml proxy)")
+	f.BoolVarP(&insecureFlag, "insecure", "k", false, "Disable SSL certificate validation (env: HITSPEC_INSECURE; default: hitspec.yaml validateSSL, else validate)")
 
 	// Stress testing flags
-	runCmd.Flags().BoolVar(&stressFlag, "stress", false, "Enable stress testing mode")
-	runCmd.Flags().StringVarP(&stressDurationFlag, "duration", "d", "30s", "Stress test duration (e.g., 30s, 5m, 1h)")
-	runCmd.Flags().Float64VarP(&stressRateFlag, "rate", "r", 10, "Target requests per second")
-	runCmd.Flags().IntVar(&stressVUsFlag, "vus", 0, "Number of virtual users (alternative to rate)")
-	runCmd.Flags().IntVar(&stressMaxVUsFlag, "max-vus", 100, "Maximum concurrent requests")
-	runCmd.Flags().StringVar(&stressThinkTimeFlag, "think-time", "0s", "Think time between requests per VU")
-	runCmd.Flags().StringVar(&stressRampUpFlag, "ramp-up", "0s", "Ramp-up time to reach target rate/VUs")
-	runCmd.Flags().StringVar(&stressThresholdFlag, "threshold", "", "Pass/fail thresholds (e.g., \"p95<200ms,errors<0.1%\")")
-	runCmd.Flags().StringVar(&stressProfileFlag, "profile", "", "Load stress profile from config")
-	runCmd.Flags().BoolVar(&stressNoProgressFlag, "no-progress", false, "Disable real-time progress display")
-	runCmd.Flags().BoolVar(&stressJSONFlag, "stress-json", false, "Output stress results as JSON")
+	f.BoolVar(&stressFlag, "stress", false, "Enable stress testing mode")
+	f.StringVarP(&stressDurationFlag, "duration", "d", "30s", "Stress test duration (e.g., 30s, 5m, 1h)")
+	f.Float64VarP(&stressRateFlag, "rate", "r", 10, "Target requests per second")
+	f.IntVar(&stressVUsFlag, "vus", 0, "Number of virtual users (alternative to rate)")
+	f.IntVar(&stressMaxVUsFlag, "max-vus", 100, "Maximum concurrent requests")
+	f.StringVar(&stressThinkTimeFlag, "think-time", "0s", "Think time between requests per VU")
+	f.StringVar(&stressRampUpFlag, "ramp-up", "0s", "Ramp-up time to reach target rate/VUs")
+	f.StringVar(&stressThresholdFlag, "threshold", "", "Pass/fail thresholds (e.g., \"p95<200ms,errors<0.1%\")")
+	f.StringVar(&stressProfileFlag, "profile", "", "Load stress profile from config")
+	f.BoolVar(&stressNoProgressFlag, "no-progress", false, "Disable real-time progress display")
+	f.BoolVar(&stressJSONFlag, "stress-json", false, "Output stress results as JSON")
 
 	// Metrics flags
-	runCmd.Flags().StringVar(&metricsFlag, "metrics", getEnvString("HITSPEC_METRICS", ""), "Metrics export format: prometheus, datadog, json (env: HITSPEC_METRICS)")
-	runCmd.Flags().IntVar(&metricsPortFlag, "metrics-port", getEnvInt("HITSPEC_METRICS_PORT", 9090), "Port for Prometheus metrics HTTP endpoint (env: HITSPEC_METRICS_PORT)")
-	runCmd.Flags().StringVar(&metricsFileFlag, "metrics-file", getEnvString("HITSPEC_METRICS_FILE", ""), "Output file for metrics (JSON format) (env: HITSPEC_METRICS_FILE)")
-	runCmd.Flags().StringVar(&datadogAPIKeyFlag, "datadog-api-key", getEnvString("DD_API_KEY", ""), "DataDog API key (env: DD_API_KEY)")
-	runCmd.Flags().StringVar(&datadogSiteFlag, "datadog-site", getEnvString("DD_SITE", "datadoghq.com"), "DataDog site (env: DD_SITE)")
-	runCmd.Flags().StringVar(&datadogTagsFlag, "datadog-tags", getEnvString("DD_TAGS", ""), "Comma-separated DataDog tags (env: DD_TAGS)")
+	f.StringVar(&metricsFlag, "metrics", getEnvString("HITSPEC_METRICS", ""), "Metrics export format: prometheus, datadog, json (env: HITSPEC_METRICS)")
+	f.IntVar(&metricsPortFlag, "metrics-port", getEnvInt("HITSPEC_METRICS_PORT", 9090), "Port for Prometheus metrics HTTP endpoint (env: HITSPEC_METRICS_PORT)")
+	f.StringVar(&metricsFileFlag, "metrics-file", getEnvString("HITSPEC_METRICS_FILE", ""), "Output file for metrics (JSON format) (env: HITSPEC_METRICS_FILE)")
+	f.StringVar(&datadogAPIKeyFlag, "datadog-api-key", getEnvString("DD_API_KEY", ""), "DataDog API key (env: DD_API_KEY)")
+	f.StringVar(&datadogSiteFlag, "datadog-site", getEnvString("DD_SITE", "datadoghq.com"), "DataDog site (env: DD_SITE)")
+	f.StringVar(&datadogTagsFlag, "datadog-tags", getEnvString("DD_TAGS", ""), "Comma-separated DataDog tags (env: DD_TAGS)")
 
 	// Notification flags
-	runCmd.Flags().StringVar(&notifyFlag, "notify", getEnvString("HITSPEC_NOTIFY", ""), "Notification service: slack, teams (env: HITSPEC_NOTIFY)")
-	runCmd.Flags().StringVar(&notifyOnFlag, "notify-on", getEnvString("HITSPEC_NOTIFY_ON", "failure"), "When to notify: always, failure, success, recovery (env: HITSPEC_NOTIFY_ON)")
-	runCmd.Flags().StringVar(&slackWebhookFlag, "slack-webhook", getEnvString("SLACK_WEBHOOK", ""), "Slack webhook URL (env: SLACK_WEBHOOK)")
-	runCmd.Flags().StringVar(&slackChannelFlag, "slack-channel", getEnvString("SLACK_CHANNEL", ""), "Slack channel override (env: SLACK_CHANNEL)")
-	runCmd.Flags().StringVar(&teamsWebhookFlag, "teams-webhook", getEnvString("TEAMS_WEBHOOK", ""), "Microsoft Teams webhook URL (env: TEAMS_WEBHOOK)")
+	f.StringVar(&notifyFlag, "notify", getEnvString("HITSPEC_NOTIFY", ""), "Notification service: slack, teams (env: HITSPEC_NOTIFY)")
+	f.StringVar(&notifyOnFlag, "notify-on", getEnvString("HITSPEC_NOTIFY_ON", "failure"), "When to notify: always, failure, success, recovery (env: HITSPEC_NOTIFY_ON)")
+	f.StringVar(&slackWebhookFlag, "slack-webhook", getEnvString("SLACK_WEBHOOK", ""), "Slack webhook URL (env: SLACK_WEBHOOK)")
+	f.StringVar(&slackChannelFlag, "slack-channel", getEnvString("SLACK_CHANNEL", ""), "Slack channel override (env: SLACK_CHANNEL)")
+	f.StringVar(&teamsWebhookFlag, "teams-webhook", getEnvString("TEAMS_WEBHOOK", ""), "Microsoft Teams webhook URL (env: TEAMS_WEBHOOK)")
 
 	// Snapshot testing flags
-	runCmd.Flags().BoolVar(&updateSnapshotsFlag, "update-snapshots", false, "Update snapshot files instead of comparing")
+	f.BoolVar(&updateSnapshotsFlag, "update-snapshots", false, "Update snapshot files instead of comparing")
 
 	// Security flags
-	runCmd.Flags().BoolVar(&allowShellFlag, "allow-shell", false, "Allow shell command execution (>>>shell blocks and hooks)")
-	runCmd.Flags().BoolVar(&allowDBFlag, "allow-db", false, "Allow database assertions (>>>db blocks)")
+	f.BoolVar(&allowShellFlag, "allow-shell", false, "Allow shell command execution (>>>shell blocks and hooks)")
+	f.BoolVar(&allowDBFlag, "allow-db", false, "Allow database assertions (>>>db blocks)")
 
 	// Coverage flags
-	runCmd.Flags().BoolVar(&coverageFlag, "coverage", false, "Generate API coverage report against OpenAPI spec")
-	runCmd.Flags().StringVar(&openapiFlag, "openapi", "", "Path to OpenAPI spec file for coverage analysis")
+	f.BoolVar(&coverageFlag, "coverage", false, "Generate API coverage report against OpenAPI spec")
+	f.StringVar(&openapiFlag, "openapi", "", "Path to OpenAPI spec file for coverage analysis")
 
 	// History flags
-	runCmd.Flags().StringVar(&historyDBFlag, "history-db", getEnvString("HITSPEC_HISTORY_DB", ""), "Path to history database (default: ~/.hitspec/history.db) (env: HITSPEC_HISTORY_DB)")
-	runCmd.Flags().BoolVar(&noHistoryFlag, "no-history", getEnvBool("HITSPEC_NO_HISTORY", false), "Disable run history recording (env: HITSPEC_NO_HISTORY)")
+	f.StringVar(&historyDBFlag, "history-db", getEnvString("HITSPEC_HISTORY_DB", ""), "Path to history database (default: ~/.hitspec/history.db) (env: HITSPEC_HISTORY_DB)")
+	f.BoolVar(&noHistoryFlag, "no-history", getEnvBool("HITSPEC_NO_HISTORY", false), "Disable run history recording (env: HITSPEC_NO_HISTORY)")
+}
+
+func init() { registerRunFlags(runCmd.Flags()) }
+
+// runOverrides collects what the user pinned on the command line, under the
+// HITSPEC_* variables, as runconfig overrides: flag > env var; hitspec.yaml and
+// the built-in default fill in whatever is left (runconfig.Build).
+func runOverrides(flags *pflag.FlagSet, environment string) (runconfig.Overrides, error) {
+	o := runconfig.Overrides{
+		Environment: environment,
+		EnvFile:     envFileFlag,
+		Proxy:       proxyFlag,
+		Concurrency: concurrencyFlag,
+	}
+	if timeoutFlag != "" {
+		timeout, err := time.ParseDuration(timeoutFlag)
+		if err != nil {
+			return o, fmt.Errorf("invalid timeout value %q: %w (use format like 30s, 1m, 500ms)", timeoutFlag, err)
+		}
+		o.Timeout = timeout
+	}
+	// A bool flag overrides hitspec.yaml when it is true or was passed
+	// explicitly (so --parallel=false can beat parallel: true).
+	if insecureFlag || flags.Changed("insecure") {
+		validate := !insecureFlag
+		o.ValidateSSL = &validate
+	}
+	if parallelFlag || flags.Changed("parallel") {
+		o.Parallel = &parallelFlag
+	}
+	if bailFlag || flags.Changed("bail") {
+		o.Bail = &bailFlag
+	}
+	fromEnv, err := runconfig.FromEnv()
+	if err != nil {
+		return o, err
+	}
+	return o.Over(fromEnv), nil
+}
+
+// buildRunnerConfig turns hitspec.yaml plus the run flags into the runner
+// configuration for `hitspec run`.
+func buildRunnerConfig(flags *pflag.FlagSet, fileConfig *config.Config, environment string, tagsFilter []string) (*runner.Config, []http.ClientOption, error) {
+	overrides, err := runOverrides(flags, environment)
+	if err != nil {
+		return nil, nil, err
+	}
+	cfg, clientOpts := runconfig.Build(fileConfig, overrides)
+	cfg.Verbose = verboseFlag > 0
+	cfg.NameFilter = nameFlag
+	cfg.TagsFilter = tagsFilter
+	cfg.UpdateSnapshots = updateSnapshotsFlag
+	cfg.AllowShell = allowShellFlag
+	cfg.AllowDB = allowDBFlag
+	return cfg, clientOpts, nil
 }
 
 // resolveEnvironment picks the environment: the --env flag (whose default is
 // HITSPEC_ENV), then hitspec.yaml defaultEnvironment, then "dev". explicit is
 // true when the user chose it (flag or HITSPEC_ENV) rather than a default.
 func resolveEnvironment(flagValue string, cfg *config.Config) (name string, explicit bool) {
-	if flagValue != "" {
-		return flagValue, true
-	}
-	if cfg != nil && cfg.DefaultEnvironment != "" {
-		return cfg.DefaultEnvironment, false
-	}
-	return "dev", false
+	return runconfig.ResolveEnvironment(flagValue, cfg)
 }
 
 // Environment variable helpers
@@ -333,46 +391,19 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	cfg, clientOpts, err := buildRunnerConfig(cmd.Flags(), fileConfig, environment, tagsFilter)
+	if err != nil {
+		return err
+	}
+
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	// If stress mode is enabled, delegate to stress runner
 	if stressFlag {
-		return runStressMode(cmd, files, fileConfig, environment)
-	}
-
-	// Determine proxy and validateSSL from config file, allowing CLI flags to override
-	proxy := fileConfig.Proxy
-	if proxyFlag != "" {
-		proxy = proxyFlag
-	}
-
-	validateSSL := fileConfig.GetValidateSSL()
-	if insecureFlag {
-		validateSSL = false
-	}
-
-	// Parse timeout duration string
-	timeout, err := time.ParseDuration(timeoutFlag)
-	if err != nil {
-		return fmt.Errorf("invalid timeout value %q: %w (use format like 30s, 1m, 500ms)", timeoutFlag, err)
-	}
-
-	cfg := &runner.Config{
-		Environment:        environment,
-		EnvFile:            envFileFlag,
-		Verbose:            verboseFlag > 0,
-		Timeout:            timeout,
-		FollowRedirect:     fileConfig.GetFollowRedirects(),
-		Bail:               bailFlag,
-		NameFilter:         nameFlag,
-		TagsFilter:         tagsFilter,
-		Parallel:           parallelFlag,
-		Concurrency:        concurrencyFlag,
-		ValidateSSL:        validateSSL,
-		Proxy:              proxy,
-		DefaultHeaders:     fileConfig.Headers,
-		ConfigEnvironments: fileConfig.Environments,
-		UpdateSnapshots:    updateSnapshotsFlag,
-		AllowShell:         allowShellFlag,
-		AllowDB:            allowDBFlag,
+		return runStressMode(cmd, files, fileConfig, environment, clientOpts)
 	}
 
 	// Open history store unless disabled
@@ -420,7 +451,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 				continue
 			}
 
-			result, err := r.RunFile(file)
+			result, err := r.RunFileContext(ctx, file)
 			if err != nil {
 				// A file that cannot be loaded (syntax error, duplicate
 				// @name, @depends cycle) fails the run; the error goes to
@@ -438,7 +469,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 						formatter.FormatResult(brokenFileResult(file, err))
 					}
 				}
-				if bailFlag {
+				if cfg.Bail {
 					break
 				}
 				continue
@@ -456,7 +487,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 			t.Skipped += result.Skipped
 			t.Matched += result.Matched
 
-			if bailFlag && result.Failed > 0 {
+			if cfg.Bail && result.Failed > 0 {
 				break
 			}
 		}
@@ -720,7 +751,7 @@ func newFormatter(format string, outWriter io.Writer, verbose int, noColor, quie
 }
 
 // runStressMode executes stress tests using the stress runner
-func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config, environment string) error {
+func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config, environment string, clientOpts []http.ClientOption) error {
 	// Build stress config
 	cfg, err := buildStressConfig(fileConfig)
 	if err != nil {
@@ -783,24 +814,6 @@ func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config
 	}()
 
 	// Create HTTP client
-	clientOpts := []http.ClientOption{}
-	if fileConfig != nil {
-		clientOpts = append(clientOpts, http.WithFollowRedirects(fileConfig.GetFollowRedirects()))
-		if fileConfig.Proxy != "" && proxyFlag == "" {
-			proxyFlag = fileConfig.Proxy
-		}
-	}
-	if proxyFlag != "" {
-		clientOpts = append(clientOpts, http.WithProxy(proxyFlag))
-	}
-	validateSSL := true
-	if fileConfig != nil {
-		validateSSL = fileConfig.GetValidateSSL()
-	}
-	if insecureFlag {
-		validateSSL = false
-	}
-	clientOpts = append(clientOpts, http.WithValidateSSL(validateSSL))
 	client := http.NewClient(clientOpts...)
 
 	// Create resolver

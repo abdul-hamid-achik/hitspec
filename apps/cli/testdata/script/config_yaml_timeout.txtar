@@ -1,0 +1,32 @@
+# hitspec.yaml `timeout` (milliseconds) bounds a request when no flag or
+# HITSPEC_TIMEOUT is set. Regression: --timeout defaulted to "30s", so the
+# yaml value could never apply.
+
+# yaml timeout 200ms against a 1s response: the request times out.
+exitcode 1 hitspec run slow.http
+stdout 'Tests: 1 failed, 1 total'
+stdout 'timeout|deadline'
+
+# --timeout beats the yaml value.
+exitcode 0 hitspec run slow.http --timeout 5s
+stdout 'Tests: 1 passed, 1 total'
+
+# HITSPEC_TIMEOUT beats the yaml value too ...
+env HITSPEC_TIMEOUT=5s
+exitcode 0 hitspec run slow.http
+stdout 'Tests: 1 passed, 1 total'
+
+# ... but a flag beats the variable.
+exitcode 1 hitspec run slow.http --timeout 200ms
+stdout 'Tests: 1 failed, 1 total'
+
+-- hitspec.yaml --
+timeout: 200
+
+-- slow.http --
+### slow-request
+GET {{$env(SERVER)}}/slow?ms=1000
+
+>>>
+expect status 200
+<<<

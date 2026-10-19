@@ -8,8 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runconfig"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/history"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/http"
 )
 
 // Execute runs one request from a file. RequestName selects by @name;
@@ -40,7 +42,6 @@ func (m *Manager) RunFile(ctx context.Context, req RunReq) (*RunResultDTO, error
 // resolves variables from the active (or given) environment just like a normal
 // run, by materializing the request into a temporary .http file.
 func (m *Manager) ExecuteAdHoc(ctx context.Context, req AdHocReq) (*RunResultDTO, error) {
-	_ = ctx
 	if err := m.requireWritable(); err != nil {
 		return nil, err
 	}
@@ -72,18 +73,8 @@ func (m *Manager) ExecuteAdHoc(ctx context.Context, req AdHocReq) (*RunResultDTO
 	}
 	_ = tmp.Close()
 
-	env, configEnvs := m.envSnapshot(req.Environment)
-
-	cfg := &runner.Config{
-		Environment:        env,
-		Timeout:            30 * time.Second,
-		FollowRedirect:     true,
-		ValidateSSL:        true,
-		ConfigEnvironments: configEnvs,
-		AllowShell:         m.config.AllowShell,
-		AllowDB:            m.config.AllowDB,
-	}
-	result, err := runner.NewRunner(cfg).RunFile(tmpPath)
+	cfg, _ := m.runSettings(req.Environment)
+	result, err := runner.NewRunner(cfg).RunFileContext(ctx, tmpPath)
 	if err != nil {
 		return nil, err
 	}
@@ -115,13 +106,36 @@ func buildAdHocContent(method, url string, headers map[string]string, body strin
 	return sb.String()
 }
 
+// runSettings resolves hitspec.yaml (as currently held, including edits made
+// from the Settings screen), the HITSPEC_* variables and the active environment
+// into the runner configuration and the matching HTTP client options. Callers
+// add their filters and progress callback. The result does not alias the live
+// config, so it stays valid after the lock is released.
+func (m *Manager) runSettings(environment string) (*runner.Config, []http.ClientOption) {
+	overrides, err := runconfig.FromEnv()
+	if err != nil {
+		m.logger.Warn("ignoring invalid environment setting", "error", err)
+	}
+	m.configMu.RLock()
+	defer m.configMu.RUnlock()
+	overrides.Environment = m.config.Env
+	if environment != "" {
+		overrides.Environment = environment
+	}
+	cfg, clientOpts := runconfig.Build(m.fileConfig, overrides)
+	cfg.AllowShell = m.config.AllowShell
+	cfg.AllowDB = m.config.AllowDB
+	return cfg, clientOpts
+}
+
 func (m *Manager) run(ctx context.Context, file, requestName string, requestIndex *int, environment string) (*RunResultDTO, error) {
 	absPath, err := m.absPath(file)
 	if err != nil {
 		return nil, err
 	}
 
-	env, configEnvs := m.envSnapshot(environment)
+	cfg, _ := m.runSettings(environment)
+	env := cfg.Environment
 
 	execID := generateID()
 	m.publish("execution_start", ExecEvent{ID: execID, File: file, Status: "started", Timestamp: nowISO()})
@@ -132,17 +146,8 @@ func (m *Manager) run(ctx context.Context, file, requestName string, requestInde
 	if requestName != "" {
 		indexFilter = nil
 	}
-	cfg := &runner.Config{
-		Environment:        env,
-		Timeout:            30 * time.Second,
-		FollowRedirect:     true,
-		ValidateSSL:        true,
-		NameFilter:         requestName,
-		IndexFilter:        indexFilter,
-		ConfigEnvironments: configEnvs,
-		AllowShell:         m.config.AllowShell,
-		AllowDB:            m.config.AllowDB,
-	}
+	cfg.NameFilter = requestName
+	cfg.IndexFilter = indexFilter
 	cfg.OnProgress = func(event runner.ProgressEvent) {
 		progress := RequestProgress{
 			ExecID:      execID,
@@ -161,7 +166,7 @@ func (m *Manager) run(ctx context.Context, file, requestName string, requestInde
 	}
 
 	rn := runner.NewRunner(cfg)
-	result, err := rn.RunFile(absPath)
+	result, err := rn.RunFileContext(ctx, absPath)
 	if err != nil {
 		m.publish("error", ExecEvent{ID: execID, File: file, Status: "error", Error: err.Error(), Timestamp: nowISO()})
 		return nil, err

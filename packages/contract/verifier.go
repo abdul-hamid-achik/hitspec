@@ -2,6 +2,7 @@
 package contract
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -48,6 +49,17 @@ func WithVerbose(verbose bool) Option {
 	}
 }
 
+// WithHTTPClient sets the client used to call the provider. By default the
+// verifier uses a client with the http package defaults; pass one built from
+// the run configuration (runconfig.Build) to honor hitspec.yaml.
+func WithHTTPClient(client *http.Client) Option {
+	return func(v *Verifier) {
+		if client != nil {
+			v.client = client
+		}
+	}
+}
+
 // NewVerifier creates a new contract verifier
 func NewVerifier(opts ...Option) *Verifier {
 	v := &Verifier{
@@ -84,16 +96,29 @@ type InteractionResult struct {
 
 // VerifyFile verifies a contract file against the provider
 func (v *Verifier) VerifyFile(path string) (*VerificationResult, error) {
+	return v.VerifyFileContext(context.Background(), path)
+}
+
+// VerifyFileContext is VerifyFile bound to ctx: cancellation aborts the
+// in-flight provider call and stops before the next interaction.
+func (v *Verifier) VerifyFileContext(ctx context.Context, path string) (*VerificationResult, error) {
 	file, err := parser.ParseFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse contract file: %w", err)
 	}
 
-	return v.Verify(file)
+	return v.VerifyContext(ctx, file)
 }
 
 // Verify verifies a parsed contract file
 func (v *Verifier) Verify(file *parser.File) (*VerificationResult, error) {
+	return v.VerifyContext(context.Background(), file)
+}
+
+// VerifyContext is Verify bound to ctx. When ctx ends, the interactions that
+// did not run are left out of the result and the context error is returned
+// alongside the partial result.
+func (v *Verifier) VerifyContext(ctx context.Context, file *parser.File) (*VerificationResult, error) {
 	start := time.Now()
 
 	result := &VerificationResult{
@@ -113,7 +138,11 @@ func (v *Verifier) Verify(file *parser.File) (*VerificationResult, error) {
 
 	// Process each request as a contract interaction
 	for _, req := range file.Requests {
-		interactionResult := v.verifyInteraction(req, filepath.Dir(file.Path))
+		if err := ctx.Err(); err != nil {
+			result.Duration = time.Since(start)
+			return result, err
+		}
+		interactionResult := v.verifyInteraction(ctx, req, filepath.Dir(file.Path))
 		result.Results = append(result.Results, interactionResult)
 
 		if interactionResult.Passed {
@@ -129,7 +158,7 @@ func (v *Verifier) Verify(file *parser.File) (*VerificationResult, error) {
 	return result, nil
 }
 
-func (v *Verifier) verifyInteraction(req *parser.Request, baseDir string) InteractionResult {
+func (v *Verifier) verifyInteraction(ctx context.Context, req *parser.Request, baseDir string) InteractionResult {
 	start := time.Now()
 	result := InteractionResult{
 		Name:        req.Name,
@@ -147,7 +176,7 @@ func (v *Verifier) verifyInteraction(req *parser.Request, baseDir string) Intera
 	state := v.extractState(req)
 	if state != "" {
 		result.State = state
-		if err := v.setupState(state); err != nil {
+		if err := v.setupStateContext(ctx, state); err != nil {
 			result.Error = fmt.Errorf("failed to set up state %q: %w", state, err)
 			result.Duration = time.Since(start)
 			return result
@@ -157,7 +186,7 @@ func (v *Verifier) verifyInteraction(req *parser.Request, baseDir string) Intera
 	// Build and execute request
 	httpReq := http.BuildRequestFromASTWithBaseDir(req, v.resolver.Resolve, baseDir)
 
-	resp, err := v.client.Do(httpReq)
+	resp, err := v.client.DoWithContext(ctx, httpReq)
 	if err != nil {
 		result.Error = err
 		result.Duration = time.Since(start)
@@ -201,6 +230,12 @@ func (v *Verifier) extractState(req *parser.Request) string {
 
 // setupState sets up the provider state using the state handler script
 func (v *Verifier) setupState(state string) error {
+	return v.setupStateContext(context.Background(), state)
+}
+
+// setupStateContext is setupState bound to ctx so a cancelled run also stops
+// the state handler.
+func (v *Verifier) setupStateContext(ctx context.Context, state string) error {
 	if v.stateHandler == "" {
 		if v.verbose {
 			fmt.Printf("No state handler configured, skipping state setup for: %s\n", state)
@@ -212,7 +247,7 @@ func (v *Verifier) setupState(state string) error {
 		fmt.Printf("Setting up state: %s\n", state)
 	}
 
-	cmd := exec.Command(v.stateHandler, state)
+	cmd := exec.CommandContext(ctx, v.stateHandler, state)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -221,6 +256,11 @@ func (v *Verifier) setupState(state string) error {
 
 // VerifyDirectory verifies all contract files in a directory
 func (v *Verifier) VerifyDirectory(dir string) ([]*VerificationResult, error) {
+	return v.VerifyDirectoryContext(context.Background(), dir)
+}
+
+// VerifyDirectoryContext is VerifyDirectory bound to ctx.
+func (v *Verifier) VerifyDirectoryContext(ctx context.Context, dir string) ([]*VerificationResult, error) {
 	var results []*VerificationResult
 
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -237,7 +277,7 @@ func (v *Verifier) VerifyDirectory(dir string) ([]*VerificationResult, error) {
 			return nil
 		}
 
-		result, err := v.VerifyFile(path)
+		result, err := v.VerifyFileContext(ctx, path)
 		if err != nil {
 			return err
 		}

@@ -554,6 +554,7 @@ func convertRunResult(r *runner.RunResult) *RunResultDTO {
 		Skipped:  r.Skipped,
 		Results:  make([]RequestResultDTO, 0, len(r.Results)),
 	}
+	dto.Cancelled = r.Cancelled
 	for _, rr := range r.Results {
 		dto.Results = append(dto.Results, convertRequestResult(rr))
 	}

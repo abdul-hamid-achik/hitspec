@@ -168,6 +168,16 @@ The top bar always shows which environment is active, and the Settings screen
 (`9`) lets you view and edit environment variables. See
 [Environments](/concepts/environments) for how environments are defined.
 
+The Settings screen also edits `hitspec.yaml` values such as `timeout`, `proxy`,
+`headers`, `validateSSL` and `followRedirects`. Studio uses them for every request
+it sends -- single requests, file runs, ad-hoc requests, stress runs and contract
+checks -- exactly as `hitspec run` does, and a change you save applies to the next
+run. The `HITSPEC_TIMEOUT`, `HITSPEC_PROXY`, `HITSPEC_INSECURE`,
+`HITSPEC_PARALLEL`, `HITSPEC_CONCURRENCY` and `HITSPEC_BAIL` environment variables
+take precedence over `hitspec.yaml` (the environment itself is chosen with
+`--env`). See the
+[configuration reference](/reference/configuration) for the full list.
+
 ## Themes
 
 Press `ctrl+t` to open the theme picker, or set a theme at launch with `--theme`:

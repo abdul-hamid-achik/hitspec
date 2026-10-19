@@ -1,11 +1,16 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/contract"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/config"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runconfig"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/http"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
@@ -59,8 +64,33 @@ func init() {
 	contractCmd.AddCommand(contractVerifyCmd)
 }
 
+// contractRunConfig resolves the HTTP settings for `contract verify`: the
+// hitspec.yaml found in dir (or HITSPEC_CONFIG) under the HITSPEC_* variables.
+func contractRunConfig(dir string) (*runner.Config, error) {
+	var fileConfig *config.Config
+	var err error
+	if path := os.Getenv("HITSPEC_CONFIG"); path != "" {
+		fileConfig, err = config.LoadConfig(path)
+	} else {
+		fileConfig, err = config.FindAndLoadConfig(dir)
+	}
+	if err != nil {
+		return nil, newExitError(ExitConfigError, err.Error())
+	}
+	overrides, err := runconfig.FromEnv()
+	if err != nil {
+		return nil, err
+	}
+	cfg, _ := runconfig.Build(fileConfig, overrides)
+	return cfg, nil
+}
+
 func contractVerifyCommand(cmd *cobra.Command, args []string) error {
 	contractsDir := args[0]
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
 	// Verify directory exists
 	info, err := os.Stat(contractsDir)
@@ -68,8 +98,16 @@ func contractVerifyCommand(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cannot access contracts directory: %w", err)
 	}
 
+	// Provider calls honor hitspec.yaml (timeout, proxy, SSL, redirects,
+	// default headers) and the HITSPEC_* variables like `hitspec run` does.
+	runCfg, err := contractRunConfig(".")
+	if err != nil {
+		return err
+	}
+
 	// Create verifier
 	verifier := contract.NewVerifier(
+		contract.WithHTTPClient(http.NewClient(runCfg.ClientOptions()...)),
 		contract.WithProviderURL(contractProviderFlag),
 		contract.WithStateHandler(contractStateHandlerFlag),
 		contract.WithVerbose(contractVerboseFlag),
@@ -78,9 +116,9 @@ func contractVerifyCommand(cmd *cobra.Command, args []string) error {
 	// Verify contracts
 	var results []*contract.VerificationResult
 	if info.IsDir() {
-		results, err = verifier.VerifyDirectory(contractsDir)
+		results, err = verifier.VerifyDirectoryContext(ctx, contractsDir)
 	} else {
-		result, err := verifier.VerifyFile(contractsDir)
+		result, err := verifier.VerifyFileContext(ctx, contractsDir)
 		if err != nil {
 			return err
 		}

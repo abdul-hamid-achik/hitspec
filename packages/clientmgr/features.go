@@ -16,6 +16,7 @@ import (
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/config"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
 	curlexport "github.com/abdul-hamid-achik/hitspec/v2/packages/export/curl"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/http"
 	curlimport "github.com/abdul-hamid-achik/hitspec/v2/packages/import/curl"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/import/insomnia"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/import/openapi"
@@ -29,7 +30,8 @@ func (m *Manager) StartStress(ctx context.Context, req StressStartReq) error {
 	if err := m.requireWritable(); err != nil {
 		return err
 	}
-	envName, configEnvs := m.envSnapshot(req.Environment)
+	runCfg, clientOpts := m.runSettings(req.Environment)
+	envName, configEnvs := runCfg.Environment, runCfg.ConfigEnvironments
 	m.mu.Lock()
 	if m.stressRunner != nil {
 		m.mu.Unlock()
@@ -67,6 +69,7 @@ func (m *Manager) StartStress(ctx context.Context, req StressStartReq) error {
 	// subscribers through the stress_update events published below, so the
 	// reporter writes nowhere.
 	runnerOpts := []stress.RunnerOption{
+		stress.WithHTTPClient(http.NewClient(clientOpts...)),
 		stress.WithReporter(stress.NewReporter(stress.WithWriter(io.Discard), stress.WithNoProgress(true))),
 	}
 	if envName != "" {
@@ -496,15 +499,16 @@ func (m *Manager) ClearRecordings(ctx context.Context) error {
 
 // VerifyContracts verifies contract files against a provider URL.
 func (m *Manager) VerifyContracts(ctx context.Context, req ContractVerifyReq) ([]ContractResultDTO, error) {
-	_ = ctx
 	if err := m.requireWritable(); err != nil {
 		return nil, err
 	}
 	if req.ProviderURL == "" {
 		return nil, fmt.Errorf("providerUrl is required")
 	}
-	envName, configEnvs := m.envSnapshot(req.Environment)
+	runCfg, clientOpts := m.runSettings(req.Environment)
+	envName, configEnvs := runCfg.Environment, runCfg.ConfigEnvironments
 	opts := []contract.Option{
+		contract.WithHTTPClient(http.NewClient(clientOpts...)),
 		contract.WithProviderURL(req.ProviderURL),
 		contract.WithVerbose(false), // verbose state-handler lines go to os.Stdout, which the TUI owns
 	}
@@ -540,7 +544,7 @@ func (m *Manager) VerifyContracts(ctx context.Context, req ContractVerifyReq) ([
 		if err != nil {
 			err = fmt.Errorf("failed to parse contract file: %w", err)
 		} else {
-			result, err = verifier.Verify(parsed)
+			result, err = verifier.VerifyContext(ctx, parsed)
 		}
 		if err != nil {
 			results = append(results, ContractResultDTO{

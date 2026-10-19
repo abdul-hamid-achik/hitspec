@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/contract"
+	hitspechttp "github.com/abdul-hamid-achik/hitspec/v2/packages/http"
 )
 
 // ContractVerifyReq is the request body for POST /contract/verify.
@@ -72,7 +73,9 @@ func (s *Server) handleContractVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	_, clientOpts := s.runSettings("")
 	opts := []contract.Option{
+		contract.WithHTTPClient(hitspechttp.NewClient(clientOpts...)),
 		contract.WithProviderURL(req.ProviderURL),
 		contract.WithVerbose(s.config.Verbose),
 	}
@@ -105,7 +108,7 @@ func (s *Server) handleContractVerify(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		result, err := verifier.VerifyFile(absPath)
+		result, err := verifier.VerifyFileContext(r.Context(), absPath)
 		if err != nil {
 			results = append(results, ContractResultDTO{
 				File: file,

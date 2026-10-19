@@ -143,6 +143,10 @@ type RunResultDTO struct {
 	Failed   int                `json:"failed"`
 	Skipped  int                `json:"skipped"`
 	Results  []RequestResultDTO `json:"results"`
+	// Cancelled is set when the request context ended before every request
+	// ran; Results holds what finished and the rest are skipped with reason
+	// "cancelled".
+	Cancelled bool `json:"cancelled,omitempty"`
 }
 
 // RequestResultDTO holds results from a single request execution.

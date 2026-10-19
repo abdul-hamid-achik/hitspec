@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -8,8 +9,9 @@ import (
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
 )
 
-// waitForService polls a URL until it returns the expected status code or times out
-func (r *Runner) waitForService(cfg *parser.WaitForConfig, resolver func(string) string) error {
+// waitForService polls a URL until it returns the expected status code, times
+// out, or ctx ends.
+func (r *Runner) waitForService(ctx context.Context, cfg *parser.WaitForConfig, resolver func(string) string) error {
 	if cfg == nil {
 		return nil
 	}
@@ -33,10 +35,19 @@ func (r *Runner) waitForService(cfg *parser.WaitForConfig, resolver func(string)
 	var lastStatus int
 
 	for time.Now().Before(deadline) {
-		resp, err := client.Get(url)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
+			return fmt.Errorf("service %s: %w", url, err)
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			lastErr = err
-			time.Sleep(interval)
+			if !sleepContext(ctx, interval) {
+				return ctx.Err()
+			}
 			continue
 		}
 		lastStatus = resp.StatusCode
@@ -49,7 +60,9 @@ func (r *Runner) waitForService(cfg *parser.WaitForConfig, resolver func(string)
 			return nil
 		}
 
-		time.Sleep(interval)
+		if !sleepContext(ctx, interval) {
+			return ctx.Err()
+		}
 	}
 
 	if lastErr != nil {
@@ -57,4 +70,17 @@ func (r *Runner) waitForService(cfg *parser.WaitForConfig, resolver func(string)
 	}
 	return fmt.Errorf("service %s not ready after %v: got status %d, expected %d",
 		url, timeout, lastStatus, expectedStatus)
+}
+
+// sleepContext waits for d or until ctx ends; it reports whether the full wait
+// elapsed.
+func sleepContext(ctx context.Context, d time.Duration) bool {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
 }

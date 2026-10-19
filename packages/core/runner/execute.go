@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -115,6 +116,16 @@ func (r *Runner) runRequests(ctx context.Context, file *parser.File) (*RunResult
 		executed := make(map[string]*RequestResult)
 
 		for i, req := range filteredRequests {
+			// A cancelled run starts nothing further; the rest are reported as
+			// skipped so the caller can tell they never ran.
+			if ctx.Err() != nil {
+				for _, rest := range filteredRequests[i:] {
+					result.Results = append(result.Results, cancelledResult(rest))
+					result.Skipped++
+				}
+				break
+			}
+
 			// Check dependencies - if any dependency failed OR didn't run (filtered
 			// out, skipped, or nonexistent), skip this request. Previously a missing
 			// dependency was ignored and the dependent ran anyway.
@@ -181,8 +192,35 @@ func (r *Runner) runRequests(ctx context.Context, file *parser.File) (*RunResult
 		}
 	}
 
+	result.Cancelled = runCancelled(ctx, result)
 	result.Duration = time.Since(start)
 	return result, nil
+}
+
+// cancelledResult is the placeholder for a request that never started because
+// the run's context ended.
+func cancelledResult(req *parser.Request) *RequestResult {
+	return &RequestResult{
+		Name:        req.Name,
+		Description: req.Description,
+		Skipped:     true,
+		SkipReason:  SkipReasonCancelled,
+	}
+}
+
+// runCancelled reports whether ctx ended before the run finished: a request was
+// skipped as cancelled, or one in flight failed with the context's error.
+func runCancelled(ctx context.Context, result *RunResult) bool {
+	err := ctx.Err()
+	if err == nil {
+		return false
+	}
+	for _, rr := range result.Results {
+		if rr.SkipReason == SkipReasonCancelled || (rr.Error != nil && errors.Is(rr.Error, err)) {
+			return true
+		}
+	}
+	return false
 }
 
 // runParallel executes requests concurrently with a semaphore-based concurrency limit.
@@ -198,12 +236,22 @@ func (r *Runner) runParallel(ctx context.Context, requests []*parser.Request, ba
 	sem := make(chan struct{}, concurrency)
 
 	for i, req := range requests {
+		select {
+		case sem <- struct{}{}: // acquire semaphore
+		case <-ctx.Done():
+			results[i] = cancelledResult(req)
+			continue
+		}
 		wg.Add(1)
-		sem <- struct{}{} // acquire semaphore
 
 		go func(idx int, request *parser.Request) {
 			defer wg.Done()
 			defer func() { <-sem }() // release semaphore
+
+			if ctx.Err() != nil {
+				results[idx] = cancelledResult(request)
+				return
+			}
 
 			if r.config.OnProgress != nil {
 				r.config.OnProgress(ProgressEvent{
@@ -239,8 +287,13 @@ func (r *Runner) runRequest(ctx context.Context, req *parser.Request, baseDir st
 // runRequestWithRetry executes a request with retry logic based on @retry,
 // @retryDelay, and @retryOn annotations.
 func (r *Runner) runRequestWithRetry(ctx context.Context, req *parser.Request, baseDir string, filePath string, parallel bool) *RequestResult {
-	maxRetries := 0
+	// The config supplies the defaults (hitspec.yaml retries/retryDelay); a
+	// request's own @retry/@retryDelay override them.
+	maxRetries := max(r.config.Retries, 0)
 	retryDelay := DefaultRetryDelayMs
+	if d := r.config.RetryDelay.Milliseconds(); d > 0 {
+		retryDelay = int(d)
+	}
 	var retryOnStatuses []int
 
 	if req.Metadata != nil {
@@ -259,7 +312,7 @@ func (r *Runner) runRequestWithRetry(ctx context.Context, req *parser.Request, b
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		result = r.executeRequest(ctx, req, baseDir, filePath, parallel)
 
-		if result.Passed || result.Skipped {
+		if result.Passed || result.Skipped || ctx.Err() != nil {
 			return result
 		}
 
@@ -296,6 +349,9 @@ func (r *Runner) runRequestWithRetry(ctx context.Context, req *parser.Request, b
 // executeRequest performs a single HTTP request execution including condition checks,
 // waitFor, hooks, assertions, DB assertions, shell commands, and captures.
 func (r *Runner) executeRequest(ctx context.Context, req *parser.Request, baseDir string, filePath string, parallel bool) *RequestResult {
+	if ctx.Err() != nil {
+		return cancelledResult(req)
+	}
 	result := &RequestResult{
 		Name:        req.Name,
 		Description: req.Description,
@@ -313,7 +369,7 @@ func (r *Runner) executeRequest(ctx context.Context, req *parser.Request, baseDi
 
 	// Wait for service readiness if configured
 	if req.Metadata != nil && req.Metadata.WaitFor != nil {
-		if err := r.waitForService(req.Metadata.WaitFor, r.resolver.Resolve); err != nil {
+		if err := r.waitForService(ctx, req.Metadata.WaitFor, r.resolver.Resolve); err != nil {
 			result.Error = err
 			result.Passed = false
 			return result

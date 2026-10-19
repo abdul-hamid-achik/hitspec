@@ -235,6 +235,51 @@ If no config file is found, all default values are used.
 
 ---
 
+## Precedence
+
+Every command that sends requests -- `hitspec run` (including `--stress`),
+`hitspec contract verify`, `hitspec studio` and `hitspec serve --api-only` --
+resolves a setting the same way. From highest to lowest priority:
+
+1. a command-line flag (for example `--timeout`),
+2. a `HITSPEC_*` environment variable,
+3. `hitspec.yaml`,
+4. the built-in default.
+
+The flags, and the `--env` / `HITSPEC_ENV` pair, belong to `hitspec run`. The
+other commands read the same variables for everything except the environment
+name.
+
+| Setting | Flag | Environment variable | `hitspec.yaml` key | Built-in default |
+|---------|------|----------------------|--------------------|------------------|
+| Environment | `--env` | `HITSPEC_ENV` | `defaultEnvironment` | `dev` |
+| Request timeout | `--timeout` | `HITSPEC_TIMEOUT` | `timeout` | `30s` |
+| Proxy | `--proxy` | `HITSPEC_PROXY` | `proxy` | none |
+| Skip certificate validation | `--insecure` | `HITSPEC_INSECURE` | `validateSSL: false` | validate |
+| Parallel requests | `--parallel` | `HITSPEC_PARALLEL` | `parallel` | `false` |
+| Parallel limit | `--concurrency` | `HITSPEC_CONCURRENCY` | `concurrency` | `5` |
+| Stop on first failure | `--bail` | `HITSPEC_BAIL` | `bail` | `false` |
+| Retries | | | `retries` | `0` |
+| Retry delay | | | `retryDelay` | `1000` ms |
+| Follow redirects | | | `followRedirects` | `true` |
+| Redirect limit | | | `maxRedirects` | `10` |
+| Default headers | | | `headers` | none |
+
+A `@retry` or `@retryDelay` annotation on a request overrides `retries` and
+`retryDelay` for that request, and a request's own headers override `headers`.
+A number at or below zero in `hitspec.yaml` counts as "not set" (use
+`followRedirects: false` rather than `maxRedirects: 0`).
+
+`hitspec studio`, `hitspec serve --api-only` and `hitspec contract verify` have
+no run flags. They read `HITSPEC_TIMEOUT`, `HITSPEC_PROXY`, `HITSPEC_INSECURE`,
+`HITSPEC_PARALLEL`, `HITSPEC_CONCURRENCY` and `HITSPEC_BAIL`, then `hitspec.yaml`,
+then the defaults. Studio and serve choose the environment with their own
+`--env` (else `defaultEnvironment`, else `dev`) and ignore `HITSPEC_ENV`.
+`contract verify` reads `hitspec.yaml` from the current directory (or the path in
+`HITSPEC_CONFIG`) and has no environment of its own.
+
+---
+
 ## CLI Overrides
 
 CLI flags always override config file values:
@@ -242,6 +287,9 @@ CLI flags always override config file values:
 ```bash
 # Config says timeout: 30000, but this overrides to 60s
 hitspec run tests/ --timeout 60s
+
+# Config says parallel: true, but this turns it off
+hitspec run tests/ --parallel=false
 
 # Config says parallel: false, but this enables it
 hitspec run tests/ --parallel --concurrency 10

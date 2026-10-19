@@ -14,8 +14,8 @@ import (
 // TestExecuteConcurrentPutEnvironment guards the regression where handleRunFile
 // handed the live s.fileConfig.Environments map to the runner AFTER releasing
 // configMu, while PUT /environments mutated the same map under the write lock — a
-// concurrent map read/write that crashed the process. getConfigEnvsLocked now
-// returns a snapshot copy, so concurrent execute-vs-PUT must stay race-free.
+// concurrent map read/write that crashed the process. runconfig.Build now
+// deep-copies the environments, so concurrent execute-vs-PUT must stay race-free.
 //
 // A single execute goroutine races against many PUT /environments goroutines so
 // the test isolates the environments race (concurrent execute-execute runs would

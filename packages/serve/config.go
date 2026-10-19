@@ -118,7 +118,7 @@ func DefaultConfig() *ServeConfig {
 		Host:      "localhost",
 		Open:      true,
 		Watch:     true,
-		Env:       "dev",
+		Env:       "", // empty = unset; NewServer falls back to defaultEnvironment, else "dev"
 		WorkDir:   ".",
 		LogFormat: "text",
 		LogLevel:  "info",

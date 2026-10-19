@@ -23,6 +23,9 @@ const (
 	DefaultConcurrency = 5
 	// DefaultRetryDelayMs is the default delay between retries in milliseconds
 	DefaultRetryDelayMs = 1000
+	// SkipReasonCancelled marks requests that never started because the run's
+	// context ended first.
+	SkipReasonCancelled = "cancelled"
 )
 
 type Runner struct {
@@ -38,6 +41,9 @@ type Config struct {
 	Verbose            bool
 	Timeout            time.Duration
 	FollowRedirect     bool
+	MaxRedirects       int           // redirect limit; <= 0 keeps the HTTP client default
+	Retries            int           // default retries for a failed request; a request's @retry overrides it
+	RetryDelay         time.Duration // default delay between retries; <= 0 means DefaultRetryDelayMs. @retryDelay overrides it
 	Bail               bool
 	NameFilter         string
 	IndexFilter        *int // run only the request at this source index; nil = unset (studio TUI runs untitled requests)
@@ -56,6 +62,31 @@ type Config struct {
 	MaxResponseBytes   int64                     // Optional response-body bound
 }
 
+// ClientOptions returns the HTTP client options this configuration implies. The
+// runner builds its own client from them, and callers that drive the HTTP layer
+// directly (stress, contract) use the same list so they honor the same settings.
+func (c *Config) ClientOptions() []http.ClientOption {
+	opts := []http.ClientOption{}
+	if c.Timeout > 0 {
+		opts = append(opts, http.WithTimeout(c.Timeout))
+	}
+	opts = append(opts, http.WithFollowRedirects(c.FollowRedirect))
+	if c.MaxRedirects > 0 {
+		opts = append(opts, http.WithMaxRedirects(c.MaxRedirects))
+	}
+	opts = append(opts, http.WithValidateSSL(c.ValidateSSL))
+	if c.Proxy != "" {
+		opts = append(opts, http.WithProxy(c.Proxy))
+	}
+	if len(c.DefaultHeaders) > 0 {
+		opts = append(opts, http.WithDefaultHeaders(c.DefaultHeaders))
+	}
+	if c.MaxResponseBytes > 0 {
+		opts = append(opts, http.WithMaxBodyBytes(c.MaxResponseBytes))
+	}
+	return opts
+}
+
 func NewRunner(cfg *Config) *Runner {
 	if cfg == nil {
 		cfg = &Config{
@@ -63,23 +94,7 @@ func NewRunner(cfg *Config) *Runner {
 		}
 	}
 
-	clientOpts := []http.ClientOption{}
-	if cfg.Timeout > 0 {
-		clientOpts = append(clientOpts, http.WithTimeout(cfg.Timeout))
-	}
-	clientOpts = append(clientOpts, http.WithFollowRedirects(cfg.FollowRedirect))
-	clientOpts = append(clientOpts, http.WithValidateSSL(cfg.ValidateSSL))
-
-	if cfg.Proxy != "" {
-		clientOpts = append(clientOpts, http.WithProxy(cfg.Proxy))
-	}
-
-	if len(cfg.DefaultHeaders) > 0 {
-		clientOpts = append(clientOpts, http.WithDefaultHeaders(cfg.DefaultHeaders))
-	}
-	if cfg.MaxResponseBytes > 0 {
-		clientOpts = append(clientOpts, http.WithMaxBodyBytes(cfg.MaxResponseBytes))
-	}
+	clientOpts := cfg.ClientOptions()
 
 	resolver := env.NewResolver()
 	// Set up warning function to print to stderr
@@ -108,6 +123,11 @@ type RunResult struct {
 	Passed   int
 	Failed   int
 	Skipped  int
+	// Cancelled is set when the run's context ended before every request ran.
+	// Results holds what finished; the requests that never started are listed
+	// as skipped with SkipReason "cancelled", and a request that was in flight
+	// carries the context error in Error.
+	Cancelled bool
 	// Matched counts the requests in the file that satisfied the NameFilter and
 	// TagsFilter (all requests when neither is set), including ones later
 	// skipped by @skip or @only. Zero across a whole run means the filters
