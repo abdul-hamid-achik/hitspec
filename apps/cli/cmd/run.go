@@ -454,10 +454,6 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	var dotenv dotenvTracker // watch mode: undo the env file's exports on reload
-	if watchFlag {
-		dotenv.capture(cfg.EnvFile)
-	}
 	r := runner.NewRunner(cfg)
 	// Flush any in-flight history writes before the deferred store.Close() runs.
 	// (defers are LIFO, so this runs before the store.Close registered above.)
@@ -698,7 +694,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 			if reload {
 				reload = false
-				newRunner, newCfg, err := reloadRunSettings(cmd.Flags(), cfg, tagsFilter, &dotenv)
+				newRunner, newCfg, err := reloadRunSettings(cmd.Flags(), cfg, tagsFilter)
 				if err != nil {
 					fmt.Fprintf(stderr, "Error: %v\nKeeping the previous settings until the file is fixed.\n", err)
 				} else {
