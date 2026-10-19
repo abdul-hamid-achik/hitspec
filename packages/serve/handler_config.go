@@ -34,7 +34,7 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handlePutConfig(w http.ResponseWriter, r *http.Request) {
 	var dto ConfigDTO
 	if err := readJSON(r, &dto); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeReadError(w, err)
 		return
 	}
 

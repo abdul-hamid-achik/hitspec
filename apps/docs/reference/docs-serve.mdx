@@ -106,7 +106,7 @@ No web SPA is served; non-API browser routes are not part of `serve`.
 | `--allow-shell` | | Allow shell command execution | `false` |
 | `--allow-db` | | Allow database assertions | `false` |
 | `--log-level` | | Log level: `debug`, `info`, `warn`, `error` | `info` |
-| `--api-token` | | Require a bearer token for all REST/WebSocket requests (env: `HITSPEC_API_TOKEN`) | |
+| `--api-token` | | Require a bearer token for all REST/WebSocket requests (env: `HITSPEC_API_TOKEN`, preferred because arguments are visible in `ps`) | |
 
 ## Security
 
@@ -118,6 +118,20 @@ the `HITSPEC_API_TOKEN` env var) to require a shared secret. Clients must then s
 `Authorization: Bearer <token>` (REST) or `?token=<token>` (WebSocket, which cannot
 set headers on the upgrade request). Requests with a missing or mismatched token
 get `401 Unauthorized`.
+
+If the server is bound to a non-loopback address, or `--allow-shell` /
+`--allow-db` is set, and you did not configure a token, hitspec generates a random
+one and prints it once to stderr.
+
+Even on localhost the server defends against web pages that try to reach it
+through your browser: JSON bodies must be sent as `application/json` (`415`
+otherwise), the `Host` header must be `localhost`, `127.0.0.1` or `[::1]` (`403`),
+and a request with an `Origin` header must come from a localhost origin on the
+server's port, or on any port with `--cors` (`403`). See
+[REST API](/reference/rest-api#security-and-request-requirements).
+
+`stateHandler` in `POST /contract/verify` runs a program, so it needs
+`--allow-shell` and must point inside the workspace.
 
 ## Examples
 

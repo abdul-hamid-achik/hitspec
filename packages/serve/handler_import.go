@@ -14,7 +14,7 @@ import (
 func (s *Server) handleImportCurl(w http.ResponseWriter, r *http.Request) {
 	var req ImportCurlReq
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeReadError(w, err)
 		return
 	}
 
@@ -52,7 +52,7 @@ func (s *Server) handleImportCurl(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleImportInsomnia(w http.ResponseWriter, r *http.Request) {
 	var req ImportInsomniaReq
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeReadError(w, err)
 		return
 	}
 
@@ -90,7 +90,7 @@ func (s *Server) handleImportInsomnia(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleImportOpenAPI(w http.ResponseWriter, r *http.Request) {
 	var req ImportOpenAPIReq
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeReadError(w, err)
 		return
 	}
 

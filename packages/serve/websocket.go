@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -71,10 +72,22 @@ func (h *Hub) ClientCount() int {
 	return len(h.clients)
 }
 
+// wsOriginPatterns lists the Origin hosts the upgrade accepts. The middleware
+// has already vetted the Origin; this repeats the policy (own port, or any
+// loopback port with --cors) as defense in depth. `[` must be escaped because
+// the library matches with path.Match.
+func (s *Server) wsOriginPatterns() []string {
+	port := "*"
+	if !s.config.CORS {
+		port = strconv.Itoa(s.boundPort)
+	}
+	return []string{"localhost:" + port, "127.0.0.1:" + port, `\[::1\]:` + port}
+}
+
 // handleWebSocket upgrades HTTP to WebSocket and manages the connection.
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		OriginPatterns: []string{"localhost:*", "127.0.0.1:*", "[::1]:*"},
+		OriginPatterns: s.wsOriginPatterns(),
 	})
 	if err != nil {
 		s.logger.Error("websocket accept failed", "error", err)

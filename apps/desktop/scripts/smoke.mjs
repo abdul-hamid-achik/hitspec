@@ -10,7 +10,9 @@
  *   HITSPEC_BIN=/path/to/hitspec node scripts/smoke.mjs
  */
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import http from 'node:http';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -422,6 +424,53 @@ async function main() {
       await request({ method: 'DELETE', path: '/record/clear' });
       assert.equal((await request({ path: '/record/status' })).count, 0);
       await request({ method: 'POST', path: '/record/stop' });
+    });
+
+    group('server hardening');
+
+    // node:http (unlike fetch) lets a test choose the Host header.
+    const rawCall = (method, urlPath, { headers = {}, body } = {}) =>
+      new Promise((resolve, reject) => {
+        const req = http.request(
+          { host: '127.0.0.1', port: backend.port, method, path: `/api/v1${urlPath}`, headers: { Authorization: `Bearer ${backend.token}`, ...headers } },
+          (res) => {
+            let text = '';
+            res.on('data', (c) => (text += c));
+            res.on('end', () => resolve({ status: res.statusCode, text }));
+          },
+        );
+        req.on('error', reject);
+        req.end(body);
+      });
+
+    await check('the token is not on the child command line', async () => {
+      const ps = execFileSync('ps', ['-o', 'args=', '-p', String(backend.child.pid)], { encoding: 'utf8' });
+      assert.ok(ps.includes('--api-only'), `unexpected ps output: ${ps}`);
+      assert.ok(!ps.includes(backend.token), 'API token leaked into argv');
+    });
+
+    await check('a text/plain POST (CORS simple request) is rejected with 415', async () => {
+      const res = await rawCall('POST', '/execute', { headers: { 'Content-Type': 'text/plain' }, body: '{"file":"x"}' });
+      assert.equal(res.status, 415);
+    });
+
+    await check('a foreign Origin is rejected even with a valid token', async () => {
+      const res = await rawCall('GET', '/system/info', { headers: { Origin: 'http://evil.example' } });
+      assert.equal(res.status, 403);
+    });
+
+    await check('a rebound Host header is rejected', async () => {
+      const res = await rawCall('GET', '/system/info', { headers: { Host: 'rebind.evil.example' } });
+      assert.equal(res.status, 403);
+    });
+
+    await check('state handlers are refused without --allow-shell', async () => {
+      const res = await backend.request({
+        method: 'POST',
+        path: '/contract/verify',
+        body: { providerUrl: api.url, stateHandler: path.join(workspace.dir, 'nope.sh') },
+      });
+      assert.equal(res.status, 403);
     });
 
     group('shutdown');

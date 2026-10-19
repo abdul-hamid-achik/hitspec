@@ -3,8 +3,10 @@ package serve
 import (
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -20,15 +22,44 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 // maxRequestBody is the maximum size for JSON request bodies (10MB).
 const maxRequestBody = 10 * 1024 * 1024
 
+// errUnsupportedMediaType is returned by readJSON for a request that has a body
+// but is not declared as application/json.
+var errUnsupportedMediaType = errors.New("Content-Type must be application/json")
+
+// isJSONContentType reports whether a Content-Type header value is
+// application/json (parameters such as charset are allowed).
+func isJSONContentType(ct string) bool {
+	mt, _, err := mime.ParseMediaType(ct)
+	return err == nil && mt == "application/json"
+}
+
+// readJSON decodes the request body as JSON. A request that has a body must
+// declare Content-Type: application/json. Browsers send text/plain,
+// form-encoded and multipart bodies cross-origin without a CORS preflight, so
+// insisting on application/json (which does need a preflight) closes the
+// "simple request" CSRF path to every JSON endpoint.
 func readJSON(r *http.Request, v any) error {
 	if r.Body == nil {
 		return fmt.Errorf("empty request body")
+	}
+	if r.Body != http.NoBody && r.ContentLength != 0 && !isJSONContentType(r.Header.Get("Content-Type")) {
+		return errUnsupportedMediaType
 	}
 	// nil ResponseWriter is acceptable — MaxBytesReader returns an error
 	// to the reader when the limit is exceeded, which Decode propagates.
 	r.Body = http.MaxBytesReader(nil, r.Body, maxRequestBody)
 	defer r.Body.Close()
 	return json.NewDecoder(r.Body).Decode(v)
+}
+
+// writeReadError maps a readJSON error to its HTTP response: 415 for a wrong
+// Content-Type, 400 for everything else.
+func writeReadError(w http.ResponseWriter, err error) {
+	if errors.Is(err, errUnsupportedMediaType) {
+		writeError(w, http.StatusUnsupportedMediaType, err.Error())
+		return
+	}
+	writeError(w, http.StatusBadRequest, err.Error())
 }
 
 const idChars = "abcdefghijklmnopqrstuvwxyz0123456789"

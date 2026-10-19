@@ -130,7 +130,7 @@ func (s *Server) handleCreateFile(w http.ResponseWriter, r *http.Request) {
 		Content string `json:"content"`
 	}
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeReadError(w, err)
 		return
 	}
 

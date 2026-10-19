@@ -1,6 +1,7 @@
 package serve
 
 import (
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"time"
@@ -44,8 +45,26 @@ type ContractStatusDTO struct {
 func (s *Server) handleContractVerify(w http.ResponseWriter, r *http.Request) {
 	var req ContractVerifyReq
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeReadError(w, err)
 		return
+	}
+
+	// A state handler is an executable the server would run. A REST caller must
+	// never be able to pick one by default, so it needs the same explicit
+	// --allow-shell opt-in as shell execution elsewhere, and even then it has to
+	// live inside the workspace.
+	stateHandler := ""
+	if req.StateHandler != "" {
+		if !s.config.AllowShell {
+			writeError(w, http.StatusForbidden, "stateHandler runs an executable and requires the server to be started with --allow-shell")
+			return
+		}
+		resolved, err := s.resolveStateHandler(req.StateHandler)
+		if err != nil {
+			writeError(w, http.StatusForbidden, err.Error())
+			return
+		}
+		stateHandler = resolved
 	}
 
 	if req.ProviderURL == "" {
@@ -57,8 +76,8 @@ func (s *Server) handleContractVerify(w http.ResponseWriter, r *http.Request) {
 		contract.WithProviderURL(req.ProviderURL),
 		contract.WithVerbose(s.config.Verbose),
 	}
-	if req.StateHandler != "" {
-		opts = append(opts, contract.WithStateHandler(req.StateHandler))
+	if stateHandler != "" {
+		opts = append(opts, contract.WithStateHandler(stateHandler))
 	}
 
 	verifier := contract.NewVerifier(opts...)
@@ -125,6 +144,25 @@ func (s *Server) handleContractVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, results)
+}
+
+// resolveStateHandler resolves a requested state handler to an absolute path
+// (relative paths are taken from the workspace, symlinks are followed) and
+// verifies that it lies inside the workspace. The resolved path is returned so
+// that exec never performs a PATH lookup on a bare name.
+func (s *Server) resolveStateHandler(handler string) (string, error) {
+	abs := handler
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(s.config.WorkDir, abs)
+	}
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return "", fmt.Errorf("stateHandler %q cannot be resolved inside the workspace", handler)
+	}
+	if !isPathWithin(s.config.WorkDir, resolved) {
+		return "", fmt.Errorf("stateHandler %q is outside the workspace", handler)
+	}
+	return resolved, nil
 }
 
 func (s *Server) handleContractFiles(w http.ResponseWriter, r *http.Request) {

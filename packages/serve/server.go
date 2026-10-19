@@ -2,13 +2,17 @@ package serve
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -48,6 +52,10 @@ type Server struct {
 
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	// boundPort is the port the server listens on; set by buildHandler before
+	// any request is served.
+	boundPort int
 
 	// Watcher suppression for server-initiated writes
 	watchSuppress *watchSuppressor
@@ -126,6 +134,51 @@ func NewServer(opts ...Option) *Server {
 	return s
 }
 
+// ensureAPIToken generates a random API token when the server is not bound to a
+// loopback address, or when any --allow-* flag is set, and none was configured.
+// The token is printed once to w. Without it such a server would be open to
+// anything that can reach it.
+func (s *Server) ensureAPIToken(w io.Writer) error {
+	if s.config.APIToken != "" {
+		return nil
+	}
+	if isLoopbackBind(s.config.Host) && !s.config.AllowShell && !s.config.AllowDB {
+		return nil
+	}
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		// No entropy: refuse to run unauthenticated rather than fall back.
+		return fmt.Errorf("generating API token: %w", err)
+	}
+	s.config.APIToken = hex.EncodeToString(buf)
+	fmt.Fprintf(w, "hitspec: no --api-token / HITSPEC_API_TOKEN set, but this server is not loopback-only or has --allow-* enabled.\n"+
+		"hitspec: generated API token (shown once): %s\n"+
+		"hitspec: send it as 'Authorization: Bearer <token>' (or '?token=<token>' for WebSockets); set --api-token to choose your own.\n", s.config.APIToken)
+	return nil
+}
+
+// buildHandler assembles the middleware chain around the routes. port is the
+// port the server actually listens on. Order, outermost first: panic recovery,
+// logging, Host check (loopback binds only), Origin/CORS (answers preflights
+// before auth, since browsers never send credentials on them), API token,
+// read-only gate.
+func (s *Server) buildHandler(port int) http.Handler {
+	s.boundPort = port
+	mux := http.NewServeMux()
+	s.registerRoutes(mux)
+
+	mws := []Middleware{recoveryMiddleware(s.logger), loggingMiddleware(s.logger)}
+	if isLoopbackBind(s.config.Host) {
+		mws = append(mws, hostCheckMiddleware(port))
+	}
+	mws = append(mws,
+		corsMiddleware(s.config.CORS, port),
+		authTokenMiddleware(s.config.APIToken),
+		readOnlyMiddleware(s.config.ReadOnly),
+	)
+	return chain(mux, mws...)
+}
+
 // Start runs the server and blocks until shutdown.
 func (s *Server) Start(ctx context.Context) error {
 	s.ctx, s.cancel = context.WithCancel(ctx)
@@ -148,22 +201,28 @@ func (s *Server) Start(ctx context.Context) error {
 		s.startWatcher()
 	}
 
-	// Build HTTP handler
-	mux := http.NewServeMux()
-	s.registerRoutes(mux)
+	// A server that is reachable beyond the local machine, or that can run
+	// shell commands / reach databases, must not be open.
+	if err := s.ensureAPIToken(os.Stderr); err != nil {
+		return err
+	}
 
-	handler := chain(mux,
-		authTokenMiddleware(s.config.APIToken),
-		recoveryMiddleware(s.logger),
-		corsMiddleware(s.config.CORS),
-		loggingMiddleware(s.logger),
-		readOnlyMiddleware(s.config.ReadOnly),
-	)
+	// Bind first so the middleware knows the real listening port (Host/Origin
+	// checks), even for --port 0.
+	ln, err := net.Listen("tcp", net.JoinHostPort(s.config.Host, strconv.Itoa(s.config.Port)))
+	if err != nil {
+		return fmt.Errorf("server error: %w", err)
+	}
+	defer ln.Close()
+	port := s.config.Port
+	if ta, ok := ln.Addr().(*net.TCPAddr); ok {
+		port = ta.Port
+	}
+	addr := net.JoinHostPort(s.config.Host, strconv.Itoa(port))
 
-	addr := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 	server := &http.Server{
 		Addr:         addr,
-		Handler:      handler,
+		Handler:      s.buildHandler(port),
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 60 * time.Second,
 		IdleTimeout:  120 * time.Second,
@@ -191,7 +250,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 	s.logger.Info("API available", "url", fmt.Sprintf("http://%s/api/v1/", addr))
 
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if err := server.Serve(ln); err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf("server error: %w", err)
 	}
 
