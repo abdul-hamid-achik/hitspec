@@ -2,10 +2,10 @@ package clientmgr
 
 import (
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/abdul-hamid-achik/hitspec/internal/watchutil"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -13,6 +13,10 @@ const (
 	watchDebounce    = 300 * time.Millisecond
 	suppressDuration = 2 * time.Second
 )
+
+type debounceTimer struct {
+	timer *time.Timer
+}
 
 type watchSuppressor struct {
 	mu    sync.Mutex
@@ -57,58 +61,77 @@ func (m *Manager) startWatcher() {
 		m.logger.Error("failed to create file watcher", "error", err)
 		return
 	}
-	_ = filepath.Walk(m.config.WorkDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if info.IsDir() {
-			_ = watcher.Add(path)
-		}
-		return nil
-	})
+	if err := watchutil.AddTree(watcher, m.config.WorkDir, nil); err != nil {
+		m.logger.Warn("failed to watch some directories", "error", err)
+	}
 
 	go func() {
 		defer watcher.Close()
-		timers := make(map[string]*time.Timer)
+		timers := make(map[string]*debounceTimer)
+		var timersMu sync.Mutex
+
+		// schedule debounces one file event and publishes it once the file
+		// has been quiet for watchDebounce.
+		schedule := func(name string, op fsnotify.Op) {
+			timersMu.Lock()
+			defer timersMu.Unlock()
+			if entry, exists := timers[name]; exists {
+				entry.timer.Stop()
+			}
+			entry := &debounceTimer{}
+			entry.timer = time.AfterFunc(watchDebounce, func() {
+				defer func() {
+					timersMu.Lock()
+					if timers[name] == entry {
+						delete(timers, name)
+					}
+					timersMu.Unlock()
+				}()
+				if m.watchSuppress.isSuppressed(name) {
+					return
+				}
+				m.publish("file_changed", FileEvent{
+					Path:      m.relPath(name),
+					Operation: fileOperation(op),
+					Timestamp: nowISO(),
+				})
+			})
+			timers[name] = entry
+		}
+
 		for {
 			select {
 			case <-m.ctx.Done():
-				for _, t := range timers {
-					t.Stop()
+				timersMu.Lock()
+				for _, entry := range timers {
+					entry.timer.Stop()
 				}
+				timers = make(map[string]*debounceTimer)
+				timersMu.Unlock()
 				return
 			case event, ok := <-watcher.Events:
 				if !ok {
 					return
 				}
+				if event.Has(fsnotify.Create) {
+					if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
+						if watchutil.SkipDir(info.Name()) {
+							continue
+						}
+						// Watch the whole new subtree and report files that
+						// already exist in it (mkdir -p, cp -R, git checkout).
+						if addErr := watchutil.AddTree(watcher, event.Name, func(p string) {
+							schedule(p, fsnotify.Create)
+						}); addErr != nil {
+							m.logger.Warn("failed to watch created directory", "path", event.Name, "error", addErr)
+						}
+						continue
+					}
+				}
 				if !isHitspecFile(event.Name) {
 					continue
 				}
-				if event.Has(fsnotify.Create) {
-					if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
-						_ = watcher.Add(event.Name)
-					}
-				}
-				if t, exists := timers[event.Name]; exists {
-					t.Stop()
-				}
-				ev := event
-				timers[ev.Name] = time.AfterFunc(watchDebounce, func() {
-					if m.watchSuppress.isSuppressed(ev.Name) {
-						return
-					}
-					op := "changed"
-					if ev.Has(fsnotify.Create) {
-						op = "created"
-					} else if ev.Has(fsnotify.Remove) || ev.Has(fsnotify.Rename) {
-						op = "deleted"
-					}
-					m.publish("file_changed", FileEvent{
-						Path:      m.relPath(ev.Name),
-						Operation: op,
-						Timestamp: nowISO(),
-					})
-				})
+				schedule(event.Name, event.Op)
 			case err, ok := <-watcher.Errors:
 				if !ok {
 					return
@@ -117,4 +140,17 @@ func (m *Manager) startWatcher() {
 			}
 		}
 	}()
+}
+
+// fileOperation maps an fsnotify op to the created/changed/deleted label
+// carried by file_changed events.
+func fileOperation(op fsnotify.Op) string {
+	switch {
+	case op.Has(fsnotify.Create):
+		return "created"
+	case op.Has(fsnotify.Remove), op.Has(fsnotify.Rename):
+		return "deleted"
+	default:
+		return "changed"
+	}
 }

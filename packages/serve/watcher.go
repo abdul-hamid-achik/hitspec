@@ -6,11 +6,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/abdul-hamid-achik/hitspec/internal/watchutil"
 	"github.com/fsnotify/fsnotify"
 )
 
 const watchDebounce = 300 * time.Millisecond
 const suppressDuration = 2 * time.Second
+
+type debounceTimer struct {
+	timer *time.Timer
+}
 
 // suppressedPaths tracks paths that should not trigger watcher broadcasts
 // because they were written by the server itself.
@@ -62,67 +67,90 @@ func (s *Server) startWatcher() {
 		return
 	}
 
-	// Walk and add directories
-	_ = filepath.Walk(s.config.WorkDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if info.IsDir() {
-			_ = watcher.Add(path)
-		}
-		return nil
-	})
+	if err := watchutil.AddTree(watcher, s.config.WorkDir, nil); err != nil {
+		s.logger.Warn("failed to watch some directories", "error", err)
+	}
 
 	go func() {
 		defer watcher.Close()
 		// Per-file timers so concurrent changes to different files
 		// don't drop events (previously a single timer was reused).
-		timers := make(map[string]*time.Timer)
+		timers := make(map[string]*debounceTimer)
+		var timersMu sync.Mutex
+
+		// schedule debounces one file event and broadcasts it once the file
+		// has been quiet for watchDebounce.
+		schedule := func(name string, op fsnotify.Op) {
+			timersMu.Lock()
+			defer timersMu.Unlock()
+			if entry, exists := timers[name]; exists {
+				entry.timer.Stop()
+			}
+			entry := &debounceTimer{}
+			entry.timer = time.AfterFunc(watchDebounce, func() {
+				defer func() {
+					timersMu.Lock()
+					if timers[name] == entry {
+						delete(timers, name)
+					}
+					timersMu.Unlock()
+				}()
+				// Skip broadcast for server-initiated writes
+				if s.watchSuppress.isSuppressed(name) {
+					s.logger.Debug("suppressed self-write notification", "path", name)
+					return
+				}
+
+				operation := fileOperation(op)
+				relPath, _ := filepath.Rel(s.config.WorkDir, name)
+				if relPath == "" {
+					relPath = name
+				}
+
+				s.hub.Broadcast("file_changed", WSFileEvent{
+					Path:      relPath,
+					Operation: operation,
+					Timestamp: nowISO(),
+				})
+
+				s.logger.Info("file changed", "operation", operation, "path", relPath)
+			})
+			timers[name] = entry
+		}
+
 		for {
 			select {
 			case <-s.ctx.Done():
-				for _, t := range timers {
-					t.Stop()
+				timersMu.Lock()
+				for _, entry := range timers {
+					entry.timer.Stop()
 				}
+				timers = make(map[string]*debounceTimer)
+				timersMu.Unlock()
 				return
 			case event, ok := <-watcher.Events:
 				if !ok {
 					return
 				}
+				if event.Has(fsnotify.Create) {
+					if info, statErr := os.Stat(event.Name); statErr == nil && info.IsDir() {
+						if watchutil.SkipDir(info.Name()) {
+							continue
+						}
+						// Watch the whole new subtree and report files that
+						// already exist in it (mkdir -p, cp -R, git checkout).
+						if addErr := watchutil.AddTree(watcher, event.Name, func(p string) {
+							schedule(p, fsnotify.Create)
+						}); addErr != nil {
+							s.logger.Warn("failed to watch created directory", "path", event.Name, "error", addErr)
+						}
+						continue
+					}
+				}
 				if !isHitspecFile(event.Name) {
 					continue
 				}
-				if t, exists := timers[event.Name]; exists {
-					t.Stop()
-				}
-				ev := event // capture
-				timers[ev.Name] = time.AfterFunc(watchDebounce, func() {
-					// Skip broadcast for server-initiated writes
-					if s.watchSuppress.isSuppressed(ev.Name) {
-						s.logger.Debug("suppressed self-write notification", "path", ev.Name)
-						return
-					}
-
-					op := "changed"
-					if ev.Has(fsnotify.Create) {
-						op = "created"
-					} else if ev.Has(fsnotify.Remove) || ev.Has(fsnotify.Rename) {
-						op = "deleted"
-					}
-
-					relPath, _ := filepath.Rel(s.config.WorkDir, ev.Name)
-					if relPath == "" {
-						relPath = ev.Name
-					}
-
-					s.hub.Broadcast("file_changed", WSFileEvent{
-						Path:      relPath,
-						Operation: op,
-						Timestamp: nowISO(),
-					})
-
-					s.logger.Info("file changed", "operation", op, "path", relPath)
-				})
+				schedule(event.Name, event.Op)
 			case err, ok := <-watcher.Errors:
 				if !ok {
 					return
@@ -131,4 +159,17 @@ func (s *Server) startWatcher() {
 			}
 		}
 	}()
+}
+
+// fileOperation maps an fsnotify op to the created/changed/deleted label
+// carried by file_changed events.
+func fileOperation(op fsnotify.Op) string {
+	switch {
+	case op.Has(fsnotify.Create):
+		return "created"
+	case op.Has(fsnotify.Remove), op.Has(fsnotify.Rename):
+		return "deleted"
+	default:
+		return "changed"
+	}
 }

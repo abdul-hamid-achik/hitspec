@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`--target http://host/api` sends `/users` upstream as `/api/users`), matching
   the URL it records, so replaying a recording hits the same endpoint. The
   proxy uses `ReverseProxy.Rewrite` (the `Director` hook is deprecated).
+- The studio and `serve` file watchers now watch every directory created after
+  startup, including nested ones (`mkdir -p`), and report `.http` files that
+  already exist inside a directory moved or copied into the workspace
+  (`cp -R`, `git checkout`, unzip). Debounce timers are guarded by a mutex and
+  removed once they fire. `.git`, `node_modules`, and `vendor` are no longer
+  watched.
 
 ## [2.19.1] - 2026-07-19
 
