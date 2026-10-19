@@ -23,6 +23,7 @@ type Verifier struct {
 	verbose      bool
 	client       *http.Client
 	resolver     *env.Resolver
+	fileRoot     string // when set, `< file` bodies must live under it
 }
 
 // Option is a functional option for Verifier
@@ -57,6 +58,16 @@ func WithHTTPClient(client *http.Client) Option {
 		if client != nil {
 			v.client = client
 		}
+	}
+}
+
+// WithFileRoot confines `< file` bodies and multipart files of the contract's
+// requests to root (the workspace of serve/studio); a request that points
+// outside fails its interaction without being sent. Empty disables the check,
+// which is the CLI's behavior.
+func WithFileRoot(root string) Option {
+	return func(v *Verifier) {
+		v.fileRoot = root
 	}
 }
 
@@ -178,6 +189,14 @@ func (v *Verifier) verifyInteraction(ctx context.Context, req *parser.Request, b
 		result.State = state
 		if err := v.setupStateContext(ctx, state); err != nil {
 			result.Error = fmt.Errorf("failed to set up state %q: %w", state, err)
+			result.Duration = time.Since(start)
+			return result
+		}
+	}
+
+	if v.fileRoot != "" {
+		if err := http.CheckFileRefs(req, v.resolver.Resolve, baseDir, v.fileRoot); err != nil {
+			result.Error = err
 			result.Duration = time.Since(start)
 			return result
 		}

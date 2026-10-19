@@ -66,6 +66,7 @@ func (m *Manager) StartStress(ctx context.Context, req StressStartReq) error {
 	// reporter writes nowhere.
 	runnerOpts := []stress.RunnerOption{
 		stress.WithHTTPClient(http.NewClient(clientOpts...)),
+		stress.WithFileRoot(runCfg.FileRoot),
 		stress.WithReporter(stress.NewReporter(stress.WithWriter(io.Discard), stress.WithNoProgress(true))),
 	}
 	if envName != "" {
@@ -502,6 +503,7 @@ func (m *Manager) VerifyContracts(ctx context.Context, req ContractVerifyReq) ([
 	envName, configEnvs := runCfg.Environment, runCfg.ConfigEnvironments
 	opts := []contract.Option{
 		contract.WithHTTPClient(http.NewClient(clientOpts...)),
+		contract.WithFileRoot(runCfg.FileRoot),
 		contract.WithProviderURL(req.ProviderURL),
 		contract.WithVerbose(false), // verbose state-handler lines go to os.Stdout, which the TUI owns
 	}

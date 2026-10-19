@@ -65,7 +65,7 @@ func (s *Server) handleStressStart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	runnerOpts := make([]stress.RunnerOption, 0, 3)
-	runnerOpts = append(runnerOpts, stress.WithHTTPClient(hitspechttp.NewClient(clientOpts...)))
+	runnerOpts = append(runnerOpts, stress.WithHTTPClient(hitspechttp.NewClient(clientOpts...)), stress.WithFileRoot(runCfg.FileRoot))
 	if envName != "" {
 		runnerOpts = append(runnerOpts, stress.WithEnvironment(envName))
 	}
