@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"charm.land/lipgloss/v2"
@@ -329,4 +330,21 @@ func TestGoldenHistoryDetail(t *testing.T) {
 		}},
 	}
 	golden.RequireEqual(t, plain(m.historyDetailContent()))
+}
+
+func TestStressResultShowsAssertionsIncompleteAndWarnings(t *testing.T) {
+	m := goldenModel(t, 100, 30)
+	m.stressResult = &clientmgr.StressResultDTO{
+		DurationMs: 1000, Total: 20, Success: 20, RPS: 20,
+		AssertionChecks: 20, AssertionFailures: 5, AssertionFailRate: 0.25,
+		Incomplete: 3,
+		Warnings:   []string{"achieved 20.0 req/s, 50% below the 40 req/s target"},
+		Thresholds: []clientmgr.StressThresholdDTO{{Name: "error rate", Passed: false, Expected: "0%", Actual: "5%"}},
+	}
+	out := plain(m.stressResultContent())
+	for _, want := range []string{"20 checked", "5 failed (25.0%)", "Incomplete  3", "Warning: achieved 20.0 req/s", "FAIL error rate"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("stress result lacks %q:\n%s", want, out)
+		}
+	}
 }

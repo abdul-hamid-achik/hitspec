@@ -2184,6 +2184,23 @@ func (m model) stressResultContent() string {
 	fmt.Fprintf(&sb, "RPS %.1f   success rate %.1f%%   error rate %.1f%%\n", r.RPS, r.SuccessRate*100, r.ErrorRate*100)
 	fmt.Fprintf(&sb, "Latency  min %.1f · mean %.1f · p50 %.1f · p95 %.1f · p99 %.1f · max %.1f ms\n",
 		r.MinMs, r.MeanMs, r.P50Ms, r.P95Ms, r.P99Ms, r.MaxMs)
+	if r.AssertionChecks > 0 {
+		fmt.Fprintf(&sb, "Assertions  %d checked   %s failed (%.1f%%)\n",
+			r.AssertionChecks, m.styles.danger.Render(fmt.Sprint(r.AssertionFailures)), r.AssertionFailRate*100)
+	}
+	if r.Incomplete > 0 {
+		fmt.Fprintf(&sb, "Incomplete  %d requests still in flight at the end\n", r.Incomplete)
+	}
+	for _, t := range r.Thresholds {
+		state := m.styles.success.Render("PASS")
+		if !t.Passed {
+			state = m.styles.danger.Render("FAIL")
+		}
+		fmt.Fprintf(&sb, "Threshold   %s %s (expected %s, got %s)\n", state, t.Name, t.Expected, t.Actual)
+	}
+	for _, w := range r.Warnings {
+		sb.WriteString(m.styles.danger.Render("Warning: "+w) + "\n")
+	}
 	if len(r.Breakdown) > 0 {
 		sb.WriteString("\n" + m.styles.title.Render("Per request") + "\n")
 		for _, b := range r.Breakdown {

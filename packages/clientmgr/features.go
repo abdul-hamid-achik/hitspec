@@ -92,15 +92,17 @@ func (m *Manager) StartStress(ctx context.Context, req StressStartReq) error {
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
 		done := make(chan struct{})
+		// result is written before done is closed and read only after it.
+		var result *stress.Result
 		go func() {
 			defer close(done)
-			_, _ = stressRunner.Run(runCtx)
+			result, _ = stressRunner.Run(runCtx)
 		}()
 		for {
 			select {
 			case <-done:
 				stats := stressRunner.GetCurrentStats()
-				resultDTO := convertStressResult(stressRunner)
+				resultDTO := convertStressResult(result, stressRunner)
 				m.publish("stress_update", StressMetrics{
 					Running:   false,
 					Completed: true,
@@ -754,8 +756,18 @@ func (m *Manager) Export(ctx context.Context, req ExportReq) (ExportResultDTO, e
 	return ExportResultDTO{Commands: commands}, nil
 }
 
-func convertStressResult(runner *stress.Runner) *StressResultDTO {
-	summary := runner.GetSummary()
+// convertStressResult builds the result DTO. result is what Runner.Run returned;
+// it carries the rate-miss warnings and the threshold verdicts, which the
+// runner's metrics alone do not. It is nil when Run failed, in which case the
+// runner's own summary is used.
+func convertStressResult(result *stress.Result, runner *stress.Runner) *StressResultDTO {
+	var summary *stress.Summary
+	var thresholds []stress.ThresholdResult
+	if result != nil && result.Summary != nil {
+		summary, thresholds = result.Summary, result.Thresholds
+	} else {
+		summary = runner.GetSummary()
+	}
 	if summary == nil {
 		return nil
 	}
@@ -775,7 +787,16 @@ func convertStressResult(runner *stress.Runner) *StressResultDTO {
 		MaxMs:       float64(summary.Max.Microseconds()) / 1000.0,
 		MeanMs:      float64(summary.Mean.Microseconds()) / 1000.0,
 		StdDevMs:    float64(summary.StdDev.Microseconds()) / 1000.0,
-		Timestamp:   nowISO(),
+
+		Incomplete:        summary.IncompleteCount,
+		AssertionChecks:   summary.AssertionChecks,
+		AssertionFailures: summary.AssertionFailures,
+		AssertionFailRate: summary.AssertionFailRate,
+		Warnings:          summary.Warnings,
+		Timestamp:         nowISO(),
+	}
+	for _, tr := range thresholds {
+		dto.Thresholds = append(dto.Thresholds, StressThresholdDTO{Name: tr.Name, Passed: tr.Passed, Expected: tr.Expected, Actual: tr.Actual})
 	}
 	for _, rs := range summary.RequestBreakdown {
 		dto.Breakdown = append(dto.Breakdown, StressRequestBreakdownDTO{
@@ -787,6 +808,8 @@ func convertStressResult(runner *stress.Runner) *StressResultDTO {
 			P95Ms:   float64(rs.P95.Microseconds()) / 1000.0,
 			P99Ms:   float64(rs.P99.Microseconds()) / 1000.0,
 			MeanMs:  float64(rs.Mean.Microseconds()) / 1000.0,
+
+			AssertionFailures: rs.AssertionFailures,
 		})
 	}
 	if dto.Breakdown == nil {
@@ -822,5 +845,9 @@ func convertStressStats(s stress.CurrentStats) StressStatsDTO {
 		MaxMs:     float64(s.Max.Microseconds()) / 1000.0,
 		ErrorRate: s.ErrorRate,
 		ActiveVUs: s.ActiveVUs,
+
+		Incomplete:        s.Incomplete,
+		AssertionChecks:   s.AssertionChecks,
+		AssertionFailures: s.AssertionFailures,
 	}
 }

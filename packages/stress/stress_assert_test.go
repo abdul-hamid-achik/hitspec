@@ -164,3 +164,21 @@ func TestZeroErrorThresholdIsExpressible(t *testing.T) {
 		assert.Equal(t, wantPass, res.Passed, expr)
 	}
 }
+
+// The live counters (CurrentStats) expose assertion checks and failures too.
+func TestCurrentStatsCarriesAssertionCounts(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":false}`))
+	}))
+	defer srv.Close()
+	file := writeHTTP(t, "### A\nGET "+srv.URL+"/a\n\n>>>\nexpect body.ok == true\n<<<\n")
+	runner := NewRunner(&Config{Mode: RateMode, Duration: 300 * time.Millisecond, Rate: 20, MaxVUs: 5},
+		WithReporter(NewReporter(WithWriter(&bytes.Buffer{}), WithNoProgress(true))))
+	require.NoError(t, runner.LoadFile(file))
+	_, err := runner.Run(context.Background())
+	require.NoError(t, err)
+	stats := runner.GetCurrentStats()
+	assert.Greater(t, stats.AssertionChecks, int64(0))
+	assert.Equal(t, stats.AssertionChecks, stats.AssertionFailures)
+}
