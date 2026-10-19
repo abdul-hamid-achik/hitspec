@@ -570,6 +570,7 @@ func convertRequestResult(rr *runner.RequestResult) RequestResultDTO {
 		SkipReason:  rr.SkipReason,
 		Duration:    float64(rr.Duration.Milliseconds()),
 		Captures:    rr.Captures,
+		Warnings:    rr.Warnings,
 	}
 	if rr.Error != nil {
 		dto.Error = rr.Error.Error()

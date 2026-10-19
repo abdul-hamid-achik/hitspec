@@ -163,6 +163,9 @@ type RequestResultDTO struct {
 	Assertions  []AssertionResultDTO `json:"assertions,omitempty"`
 	SSEEvents   []SSEEventDTO        `json:"sseEvents,omitempty"`
 	Captures    map[string]any       `json:"captures,omitempty"`
+	// Warnings are non-fatal findings about the request (a capture that
+	// matched nothing, a {{reference}} sent unresolved).
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // SSEEventDTO represents a parsed Server-Sent Event.
@@ -466,7 +469,9 @@ type WSRequestProgress struct {
 	Total       int     `json:"total"`
 	Passed      bool    `json:"passed,omitempty"`
 	Duration    float64 `json:"duration,omitempty"`
-	Timestamp   string  `json:"timestamp"`
+	// Warnings are the request's non-fatal findings; set on "completed".
+	Warnings  []string `json:"warnings,omitempty"`
+	Timestamp string   `json:"timestamp"`
 }
 
 // WSStressMetrics is a stress metrics broadcast.
