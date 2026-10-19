@@ -298,6 +298,12 @@ func (m *Manager) StartMock(ctx context.Context, req MockStartReq) (MockStatusDT
 			return MockStatusDTO{}, err
 		}
 	}
+	// Bind before announcing anything: a busy port or bad address must fail
+	// the call, not leave a "running" mock that nothing listens on.
+	if _, err := mockSrv.Listen(); err != nil {
+		m.mu.Unlock()
+		return MockStatusDTO{}, err
+	}
 	baseCtx := m.ctx
 	if baseCtx == nil {
 		baseCtx = ctx
@@ -383,7 +389,17 @@ func (m *Manager) StartRecord(ctx context.Context, req RecordStartReq) error {
 	if len(req.Sanitize) > 0 {
 		opts = append(opts, proxy.WithSanitize(req.Sanitize))
 	}
+	if _, err := url.Parse(req.TargetURL); err != nil {
+		m.mu.Unlock()
+		return fmt.Errorf("invalid target URL: %w", err)
+	}
 	recorder := proxy.NewRecorder(opts...)
+	// Bind before announcing anything: a busy port or bad address must fail
+	// the call, not leave a "running" proxy that nothing listens on.
+	if _, err := recorder.Listen(); err != nil {
+		m.mu.Unlock()
+		return err
+	}
 	baseCtx := m.ctx
 	if baseCtx == nil {
 		baseCtx = ctx
