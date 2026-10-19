@@ -665,7 +665,9 @@ func parseFormPart(v string, literal bool) (*FormPart, []string) {
 		if mods != "" {
 			ws = append(ws, fmt.Sprintf("form field %q has modifiers (;%s) that hitspec cannot express; they were dropped", name, mods))
 		}
-		ws = append(ws, fmt.Sprintf("multipart file field name %q cannot be expressed by hitspec's `file @path` line; set the name by hand", name))
+		if !result.CanNameMultipartFile(name) {
+			ws = append(ws, fmt.Sprintf("multipart file field name %q cannot be written as `file <name> @path` (it has spaces); the part is sent as field \"file\", set the name by hand", name))
+		}
 		return &FormPart{Name: name, File: path}, ws
 	case strings.HasPrefix(val, "<"):
 		return nil, []string{fmt.Sprintf("form field %q reads its value from file %s; add the value by hand", name, strings.TrimPrefix(val, "<"))}
@@ -764,8 +766,7 @@ func (c *Converter) ToHitspec(parsed *ParsedCurl) string {
 		sb.WriteString("\n>>>multipart\n")
 		for _, f := range parsed.Form {
 			if f.File != "" {
-				sb.WriteString("file @")
-				sb.WriteString(relativePath(f.File))
+				sb.WriteString(result.MultipartFileLine(f.Name, relativePath(f.File)))
 				sb.WriteString("\n")
 			} else {
 				fmt.Fprintf(&sb, "field %s = %s\n", f.Name, f.Value)

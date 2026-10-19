@@ -37,13 +37,12 @@ user=a+b&tok={{token}}
 
 ### Users - Upload
 # @name Upload
-# TODO: multipart file field name "doc" cannot be expressed by hitspec's `file @path` line; set the name by hand
 # @auth apiKey X-API-Key, {{apiKey}}
 POST {{baseUrl}}/upload
 
 >>>multipart
 field title = Report
-file @./report.pdf
+file doc @./report.pdf
 <<<
 
 ### GraphQL
@@ -74,6 +73,5 @@ GET {{baseUrl}}/users/7
 # warnings:
 # - List users: untranslated test: pm.environment.set("firstId", jsonData.users[0].id)
 # - List users: untranslated test: if (jsonData.flag)
-# - Upload: multipart file field name "doc" cannot be expressed by hitspec's `file @path` line; set the name by hand
 # - GraphQL: auth type "oauth2" is not supported and was dropped
 # - GraphQL: untranslated pre-request script: pm.variables.set('t', Date.now())

@@ -445,8 +445,10 @@ func (w *writer) body(b *Body, headers *[][2]string, hasHeader func(string) bool
 					note("form file field %q has no file path; add `file @./path` by hand", p.Name)
 					continue
 				}
-				fmt.Fprintf(&sb, "file @%s\n", relativePath(src))
-				note("multipart file field name %q cannot be expressed by hitspec's `file @path` line; set the name by hand", p.Name)
+				fmt.Fprintf(&sb, "%s\n", result.MultipartFileLine(p.Name, relativePath(src)))
+				if !result.CanNameMultipartFile(p.Name) {
+					note("multipart file field name %q cannot be written as `file <name> @path` (it has spaces); the part is sent as field \"file\", set the name by hand", p.Name)
+				}
 				continue
 			}
 			fmt.Fprintf(&sb, "field %s = %s\n", p.Name, oneLine(c.convertVariable(p.Value)))

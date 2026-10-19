@@ -195,7 +195,7 @@ func init() {
 }
 
 // fileRefLine matches the body and multipart lines that name a file.
-var fileRefLine = regexp.MustCompile(`(?m)^(< |file @)\S`)
+var fileRefLine = regexp.MustCompile(`(?m)^(< |file (\S+ )?@)\S`)
 
 // isDirOutput reports whether -o names a directory: a trailing separator or
 // an existing directory.

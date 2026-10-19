@@ -1,12 +1,11 @@
 ### post_upload
 # @name post_upload
 # TODO: form field "avatar" has modifiers (;type=image/png) that hitspec cannot express; they were dropped
-# TODO: multipart file field name "avatar" cannot be expressed by hitspec's `file @path` line; set the name by hand
 POST https://api.example.com/upload
 
 >>>multipart
 field name = Jo
-file @./me.png
+file avatar @./me.png
 <<<
 
 >>>
@@ -16,4 +15,3 @@ expect status < 400
 
 # warnings:
 # - form field "avatar" has modifiers (;type=image/png) that hitspec cannot express; they were dropped
-# - multipart file field name "avatar" cannot be expressed by hitspec's `file @path` line; set the name by hand
