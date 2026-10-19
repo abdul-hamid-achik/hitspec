@@ -208,6 +208,12 @@ test.describe.serial('hitspec Studio desktop app', () => {
 
   test('starts a stress test from a saved profile', async () => {
     await page.locator('.rail-item', { hasText: 'Stress' }).click();
+    // Toasts sit over the bottom-right corner, where the profile buttons are,
+    // and hovering one keeps it open: dismiss them first.
+    for (const dismiss of await page.locator('#toasts button[title="Dismiss"]').all()) {
+      await dismiss.click().catch(() => {});
+    }
+    await expect(page.locator('#toasts .toast')).toHaveCount(0);
     const profiles = page.locator('.card', { hasText: 'Saved profiles' });
     await profiles.getByRole('button', { name: 'Apply' }).first().click();
     const applied = page.locator('[data-testid="stress-profile"]');
