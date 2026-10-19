@@ -103,15 +103,30 @@ runs:
       # script), so an input value cannot inject shell code.
       env:
         INPUT_VERSION: ${{ inputs.version }}
+        GH_TOKEN: ${{ github.token }}
       run: |
         set -eu
 
         VERSION="$INPUT_VERSION"
 
-        # Resolve 'latest' to actual version
+        # Resolve 'latest' without the REST API (no rate limit): the
+        # /releases/latest page redirects to /releases/tag/<tag>. The API,
+        # authenticated when a token is available, is the fallback.
         if [ "$VERSION" = "latest" ]; then
           echo "Fetching latest version..."
-          VERSION=$(curl -fsSL https://api.github.com/repos/abdul-hamid-achik/hitspec/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+          LOCATION=$(curl -fsSL --retry 3 -o /dev/null -w '%{url_effective}' https://github.com/abdul-hamid-achik/hitspec/releases/latest || true)
+          VERSION="${LOCATION##*/}"
+          case "$VERSION" in
+            v[0-9]*) ;;
+            *)
+              if [ -n "${GH_TOKEN:-}" ]; then
+                BODY=$(curl -fsSL --retry 3 -H "Authorization: Bearer ${GH_TOKEN}" https://api.github.com/repos/abdul-hamid-achik/hitspec/releases/latest || true)
+              else
+                BODY=$(curl -fsSL --retry 3 https://api.github.com/repos/abdul-hamid-achik/hitspec/releases/latest || true)
+              fi
+              VERSION=$(printf '%s' "$BODY" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | head -n 1)
+              ;;
+          esac
           if [ -z "$VERSION" ]; then
             echo "::error::Failed to fetch latest version"
             exit 1
