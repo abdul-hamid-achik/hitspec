@@ -37,7 +37,7 @@ hitspec studio [file|directory] [flags]
 | Flag | Short | Description | Default |
 |------|-------|-------------|---------|
 | `--watch` | `-w` | Watch for file changes | `true` |
-| `--read-only` | | Disallow file mutations | `false` |
+| `--read-only` | | Refuse workspace and `hitspec.yaml` writes (running requests still works) | `false` |
 | `--env` | `-e` | Default environment | `dev` |
 | `--config` | | Path to `hitspec.yaml` | |
 | `--verbose` | `-v` | Verbose logging | `false` |
@@ -46,6 +46,7 @@ hitspec studio [file|directory] [flags]
 | `--log-format` | | Log format: `text` or `json` | `text` |
 | `--log-level` | | Log level: `debug`, `info`, `warn`, `error` | `info` |
 | `--theme` | | Color theme (see below) | `Nord` |
+| `--mouse` | | Capture the mouse for wheel scrolling | `false` |
 
 ## Themes
 
@@ -67,7 +68,7 @@ hitspec studio ./tests/
 # Open a single file
 hitspec studio ./tests/users.http
 
-# Inspect without file mutations
+# Run requests without changing any file
 hitspec studio --read-only --env staging
 ```
 
@@ -99,13 +100,15 @@ No web SPA is served; non-API browser routes are not part of `serve`.
 | `--host` | | API bind address | `localhost` |
 | `--cors` | | Enable CORS headers | `false` |
 | `--watch` | `-w` | Watch for file changes | `true` |
-| `--read-only` | | Disallow mutating actions | `false` |
+| `--read-only` | | Refuse workspace and `hitspec.yaml` writes (running requests still works). See [Read-only mode](/reference/rest-api#read-only-mode) | `false` |
 | `--env` | `-e` | Default environment | `dev` |
 | `--config` | | Path to `hitspec.yaml` | |
 | `--verbose` | `-v` | Verbose logging | `false` |
 | `--allow-shell` | | Allow shell command execution | `false` |
 | `--allow-db` | | Allow database assertions | `false` |
+| `--log-format` | | Log format: `text` or `json` | `text` |
 | `--log-level` | | Log level: `debug`, `info`, `warn`, `error` | `info` |
+| `--parent-pid` | | Shut down when this process exits (for supervisors such as the desktop app) | `0` |
 | `--api-token` | | Require a bearer token for all REST/WebSocket requests (env: `HITSPEC_API_TOKEN`, preferred because arguments are visible in `ps`) | |
 
 ## Security

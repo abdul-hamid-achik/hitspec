@@ -303,6 +303,8 @@ echo "Processing complete"
 # @auth apiKeyQuery api_key, {{apiKey}}
 # @auth digest {{username}}, {{password}}
 # @auth aws {{accessKey}}, {{secretKey}}, {{region}}, {{service}}
+# AWS with temporary credentials: session token as 5th argument
+# @auth aws {{accessKey}}, {{secretKey}}, {{region}}, {{service}}, {{sessionToken}}
 # @auth oauth2 client_credentials {{tokenUrl}}, {{clientId}}, {{clientSecret}}, scope1,scope2
 # @auth oauth2 password {{tokenUrl}}, {{clientId}}, {{clientSecret}}, {{username}}, {{password}}, scope1,scope2
 ```
@@ -357,7 +359,7 @@ is `null`.
 ## CLI Commands
 
 ```bash
-# Run tests
+# Run tests (also: quoted globs 'tests/**/*.http', or `-` to read one file from stdin)
 hitspec run <file|dir> [flags]
 
 # Stress testing mode (supports files, directories, or multiple files)
@@ -391,10 +393,10 @@ hitspec import postman <collection.json> -o <output-dir>
 # Export requests as curl, fetch, wget, python, httpie, go or ruby
 hitspec export [curl|fetch|wget|python|httpie|go|ruby] <file>   # or --format <fmt>
 
-# Start mock server from .http files
+# Start mock server from .http files (binds 127.0.0.1; --host 0.0.0.0 to expose, --cors opt-in)
 hitspec mock <file|dir> --port 3000
 
-# Record HTTP traffic as .http files
+# Record HTTP traffic as .http files (binds 127.0.0.1; secrets redacted unless --no-redact)
 hitspec record --port 8080 -o recorded.http
 
 # Verify API contracts
@@ -424,17 +426,19 @@ hitspec studio --theme "Tokyo Night"  # Launch with a color theme
 
 Key bindings: number keys `1`-`9` switch screens; `ctrl+p` command palette;
 `ctrl+e` environment switcher; `ctrl+t` theme picker; `ctrl+f` search; `?` help;
-`q` quit.
+`q` quit. Forms submit with `s` or `ctrl+s` (not `enter`); `r`/`R` run the editor buffer,
+including unsaved edits; `x` cancels a run.
 
 ### Studio Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--watch, -w` | true | Watch for file changes |
-| `--read-only` | false | Disallow file mutations |
+| `--read-only` | false | Refuse workspace and hitspec.yaml writes (running requests still works) |
 | `--env, -e` | hitspec.yaml `defaultEnvironment`, else dev | Default environment |
 | `--config` | | Path to hitspec.yaml |
 | `--theme` | | Color theme (Nord, Catppuccin Mocha, Dracula, Tokyo Night, Gruvbox Dark) |
+| `--mouse` | false | Capture the mouse for wheel scrolling (off so the terminal can select text) |
 | `--allow-shell` | false | Allow shell command execution |
 | `--allow-db` | false | Allow database assertions |
 | `--verbose, -v` | false | Verbose logging |
@@ -461,13 +465,14 @@ hitspec serve --api-only --read-only --cors  # Safe mode for sharing
 | `--host` | localhost | API server bind address |
 | `--cors` | false | Enable CORS headers |
 | `--watch, -w` | true | Watch for file changes |
-| `--read-only` | false | Disallow file mutations |
+| `--read-only` | false | Refuse workspace and hitspec.yaml writes (running requests still works) |
 | `--env, -e` | hitspec.yaml `defaultEnvironment`, else dev | Default environment |
 | `--config` | | Path to hitspec.yaml |
 | `--allow-shell` | false | Allow shell command execution |
 | `--allow-db` | false | Allow database assertions |
 | `--api-token` | env `HITSPEC_API_TOKEN` | Require `Authorization: Bearer <token>` (or `?token=`) on all REST/WS requests. A random token is generated and printed once if the bind is not loopback or `--allow-shell`/`--allow-db` is set |
 | `--log-format` | text | Log format: text or json |
+| `--parent-pid` | 0 | Shut down when this process exits |
 | `--log-level` | info | Log level: debug, info, warn, error |
 
 ### REST API Endpoints
@@ -553,11 +558,11 @@ Connect to `/api/v1/ws` for real-time updates. Message envelope: `{"type": "stri
 | `--env-file` | Path to .env file for variable interpolation |
 | `--name, -n` | Filter by request name pattern (dependencies of selected requests run too) |
 | `--tags, -t` | Filter by tags (comma-separated; dependencies of selected requests run too) |
-| `--verbose, -v` | Show detailed output |
+| `--verbose, -v` | Repeatable: `-v` request and status for every request, `-vv` adds headers (redacted), `-vvv` adds full bodies |
 | `--bail` | Stop on first failure (default: hitspec.yaml `bail`) |
 | `--timeout` | Request timeout as a duration, e.g. `30s`, `1m` (env: HITSPEC_TIMEOUT; default: hitspec.yaml `timeout`, else 30s) |
 | `--no-color` | Disable colored output |
-| `--dry-run` | Show what would run |
+| `--dry-run` | Parse each file and list the requests that would run (method, resolved URL, tags, depends, skip reasons); sends nothing. Not with `--stress` (exit 64); `-o`/`--output-file` are ignored (plan is text) |
 | `--output, -o` | Format: console, json, junit, tap, html |
 | `--output-file` | Write output to file (recreated on every watch rerun) |
 | `--quiet, -q` | Suppress the stdout report; failures are still listed on stderr and `--output-file` is still written |
@@ -566,7 +571,13 @@ Connect to `/api/v1/ws` for real-time updates. Message envelope: `{"type": "stri
 | `--watch, -w` | Watch files for changes |
 | `--proxy` | Proxy URL for requests (default: hitspec.yaml `proxy`, else `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY`) |
 | `--insecure, -k` | Disable SSL validation (default: hitspec.yaml `validateSSL: false`) |
-| `--config` | Path to the config file (default: `hitspec.yaml` in the current directory) |
+| `--cacert` | PEM CA bundle to trust in addition to the system roots (default: hitspec.yaml `cacert`) |
+| `--cert`, `--key` | PEM client certificate and private key for mutual TLS (must be given together; hitspec.yaml `cert`, `key`) |
+| `--http1.1` | Do not negotiate HTTP/2 (hitspec.yaml `http1`) |
+| `--cookies` | Keep a cookie jar: `Set-Cookie` from one response is sent on later requests of the run (default off; hitspec.yaml `cookies`) |
+| `--max-response-bytes` | Largest response body to read, in bytes; `-1` for no limit (default 104857600; hitspec.yaml `maxResponseBytes`) |
+| `--redirect-forward-headers` | Keep your request headers on redirects to another origin (default off; hitspec.yaml `redirectForwardHeaders`) |
+| `--config` | Path to the config file (default: the nearest `hitspec.yaml`/`hitspec.yml` from the current directory upward, stopping at the first directory with `.git`) |
 | `--allow-shell` | Allow `>>>shell` blocks and `@before`/`@after` hooks (refused otherwise) |
 | `--allow-db` | Allow `>>>db` blocks (refused otherwise) |
 | `--update-snapshots` | Write snapshot files instead of comparing |
@@ -574,15 +585,37 @@ Connect to `/api/v1/ws` for real-time updates. Message envelope: `{"type": "stri
 | `--history-db` | History database path (default: `~/.hitspec/history.db`) |
 | `--no-history` | Do not record this run in the history database |
 | `--openapi`, `--coverage` | Report API coverage against an OpenAPI spec |
-| `--metrics`, `--metrics-port`, `--metrics-file` | Export metrics: `prometheus`, `datadog` or `json` |
+| `--metrics`, `--metrics-port`, `--metrics-host`, `--metrics-file` | Export metrics: `prometheus`, `datadog` or `json` |
 | `--notify`, `--notify-on` | Send results to `slack` or `teams` (`always`, `failure`, `success`, `recovery`) |
 | `--slack-webhook`, `--slack-channel`, `--teams-webhook` | Notification targets |
 | `--datadog-api-key`, `--datadog-site`, `--datadog-tags` | DataDog metrics export settings |
 
 Most flags have a `HITSPEC_*` environment variable (see `hitspec run --help`), for
 example `HITSPEC_ENV`, `HITSPEC_TAGS`, `HITSPEC_OUTPUT`, `HITSPEC_QUIET`,
-`HITSPEC_TIMEOUT`, `HITSPEC_CONFIG` and `HITSPEC_NO_HISTORY`. Stress flags
-(`--stress`, `--duration`, `--rate`, `--vus`, ...) are listed in the next section.
+`HITSPEC_TIMEOUT`, `HITSPEC_CONFIG`, `HITSPEC_NO_HISTORY`, `HITSPEC_CACERT` and
+`HITSPEC_COOKIES`. A missing or invalid CA, certificate, key or proxy exits 3 before
+any request is sent. Stress flags (`--stress`, `--duration`, `--rate`, `--vus`, ...)
+are listed in the next section.
+
+### Run Inputs and Behavior
+
+- `hitspec run -` reads one document from stdin (relative paths resolve against the
+  working directory). It cannot be combined with other files, `--watch` or `--stress`;
+  `--dry-run` works with it.
+- Quote glob patterns so the shell does not expand them: `hitspec run 'tests/**/*.http'`
+  (`**` matches any depth).
+- Directories are searched recursively, skipping `.git`, `node_modules` and `vendor`
+  unless named explicitly. A file given more than once runs once. A pattern that
+  matches no `.http`/`.hitspec` file is an error (exit 1).
+- Ctrl+C or SIGTERM stops the run: finished requests are reported, the rest are
+  marked cancelled, `--output-file` is written, and the exit code is 130. A second
+  Ctrl+C exits immediately.
+- `--watch` re-runs when a test file changes (including editor atomic saves) and when
+  `hitspec.yaml`, `--config` or the env file changes; settings are reloaded before
+  the next pass. `node_modules`, `vendor` and `.git` are not watched.
+- Failures print the request line, response status and a capped body excerpt.
+  Warnings (a capture that matched nothing, a `{{var}}` sent unresolved) print under
+  the request at every verbosity and never change the exit code.
 
 ## Exit Codes
 
@@ -591,11 +624,12 @@ example `HITSPEC_ENV`, `HITSPEC_TAGS`, `HITSPEC_OUTPUT`, `HITSPEC_QUIET`,
 | 0 | All requests passed |
 | 1 | A request or assertion failed |
 | 2 | A file could not be loaded (syntax error, duplicate `@name`, `@depends` cycle); other files still run |
-| 3 | Configuration error (hitspec.yaml) |
-| 4 | Network error (reserved: `run` currently reports connection failures as 1) |
-| 64 | Usage error, including `--name`/`--tags` that matched no request |
+| 3 | Configuration error: unparseable or missing hitspec.yaml/`--config`, missing `--env-file`, bad `--cacert`/`--cert`/`--key`/`--proxy` |
+| 4 | Network error: a request got no response because the connection failed (refused, unreachable, DNS, TLS, reset before a response, timeout before connecting, OAuth2 token endpoint or `@waitFor` target unreachable). A timeout after connecting is a failure (1) |
+| 64 | Usage error (unknown flag or command, bad flag value, missing required flag, wrong number of arguments, `--dry-run` with `--stress`), including `--name`/`--tags` that matched no request. Errors found while working (missing file, unknown export format) keep exit 1 |
+| 130 | Interrupted (Ctrl+C / SIGTERM): partial results printed, `--output-file` written |
 
-Precedence when several apply: 2, then 1, then 64.
+Precedence when several apply: 130, then 2, then 4, then 1, then 64.
 
 ## Stress Testing Mode
 
@@ -638,10 +672,14 @@ hitspec run api.http --stress --env prod --env-file .env -d 1m -r 50
 | `--max-vus` | Maximum concurrent requests (default: 100) |
 | `--think-time` | Think time between requests per VU |
 | `--ramp-up` | Ramp-up time to reach target rate/VUs |
-| `--threshold` | Pass/fail thresholds (e.g., "p95<200ms,errors<0.1%") |
+| `--threshold` | Pass/fail thresholds (e.g., "p95<200ms,errors<0.1%"). Metrics: `p50`, `p95`, `p99`, `max`, `errors` (transport errors and non-2xx), `assertions` (assertion failure share, e.g. `assertions<1%`), `rps` (e.g. `rps>50`) |
 | `--profile` | Load stress profile from config |
 | `--no-progress` | Disable real-time progress display |
 | `--stress-json` | Output stress results as JSON |
+
+Requests still in flight when the duration ends are reported as incomplete: they are not
+counted as requests, successes or errors. A non-2xx status accepted by the request's own
+`expect status` is not an error.
 
 ### Metrics Export Flags
 
@@ -649,6 +687,7 @@ hitspec run api.http --stress --env prod --env-file .env -d 1m -r 50
 |------|-------------|
 | `--metrics` | Export format: prometheus, datadog, json |
 | `--metrics-port` | Prometheus HTTP endpoint port (default: 9090) |
+| `--metrics-host` | Prometheus bind address (default: 127.0.0.1; `0.0.0.0` exposes it; env: HITSPEC_METRICS_HOST) |
 | `--metrics-file` | Output file for JSON metrics |
 | `--datadog-api-key` | DataDog API key (env: DD_API_KEY) |
 | `--datadog-site` | DataDog site (default: datadoghq.com) |
@@ -763,6 +802,10 @@ stress:
 
 Use: `hitspec run api.http --stress --profile conservative`
 
+Profile threshold values may start with an operator (`p95: "<=250ms"`, `rps: ">=100"`,
+`errors: "<=0"`; quote them). Without one, latency/error/assertion thresholds mean "less
+than" and `rps` means "greater than". `errors<0` / `errors: "0%"` means no request may fail.
+
 ## Configuration File (hitspec.yaml)
 
 Unified configuration file combining settings and environments:
@@ -778,6 +821,14 @@ validateSSL: true
 headers:
   User-Agent: hitspec/1.0
 verbose: false
+# TLS / HTTP client (paths relative to this file; a missing file exits 3)
+# cacert: certs/ca.pem
+# cert: certs/client.pem
+# key: certs/client-key.pem
+http1: false
+cookies: false
+maxResponseBytes: 104857600
+redirectForwardHeaders: false
 
 # Environments
 environments:
@@ -792,6 +843,14 @@ environments:
 Supported config files (searched in order):
 1. `hitspec.yaml`
 2. `hitspec.yml`
+
+Discovery: `--config` (or `HITSPEC_CONFIG`) is used as is; otherwise the nearest
+`hitspec.yaml`/`hitspec.yml` from the working directory upward, stopping after the
+first directory that contains `.git` (never the home directory or above). A config
+that cannot be parsed exits 3 with `file:line`. An unknown key is a warning with a
+"did you mean" hint; `hitspec validate --strict` turns it into an error (exit 2).
+`hitspec run -v` prints the config file in use. Precedence: flag, then `HITSPEC_*`
+environment variable, then hitspec.yaml, then the default.
 
 Use: `hitspec run tests/ --env prod`
 
@@ -848,7 +907,7 @@ POST {{baseUrl}}/upload
 >>>multipart
 field name = John Doe
 field email = john@example.com
-file @./photo.jpg
+file avatar @./photo.jpg
 file @./report.pdf
 <<<
 
@@ -857,6 +916,10 @@ expect status 200
 expect body.uploaded == true
 <<<
 ```
+
+`file <name> @<path>` sends the file as form field `<name>`; `file @<path>` uses the
+field name `file`. A `< ./file` body or multipart file that cannot be read fails the
+request with an error naming the path.
 
 ### Form Data
 ```http
@@ -883,6 +946,12 @@ GET {{baseUrl}}/search
 ? query = test
 ? limit = 10
 ```
+
+`? name = value` lines are appended in the order written, repeated names are all sent,
+and names and values are percent-encoded (a space is `%20`). Illegal characters in the
+URL itself are percent-encoded too; `%XX` escapes you wrote are kept. In `& name = value`
+form blocks values keep their spaces and are percent-encoded when sent. An inline
+`a=b&c=d` body is sent as written.
 
 ## Common Patterns
 
@@ -1123,7 +1192,7 @@ hitspec validate --strict tests/
 
 ### Debug Mode
 ```bash
-# See full request/response
+# See every request and response status (-vv adds headers, -vvv full bodies)
 hitspec run test.http --verbose
 
 # See what would run without executing
@@ -1292,6 +1361,10 @@ hitspec import openapi spec.yaml --tags users,auth --base-url http://localhost:3
 # Basic import
 hitspec import postman collection.json -o tests/
 ```
+
+Importers (curl `-F`, Postman, Insomnia, OpenAPI) keep multipart file field names:
+`-F avatar=@me.png` becomes `file avatar @me.png`. A name with a space falls back to
+`file @path` with a warning.
 
 ## Fetch One Response
 
@@ -1554,7 +1627,16 @@ hitspec mock tests/ --port 8080
 
 # With artificial delay
 hitspec mock api.http --port 3000 --delay 100ms
+
+# Reachable from other machines or a container (default bind is 127.0.0.1)
+hitspec mock api.http --host 0.0.0.0
+
+# Answer CORS preflights (off by default)
+hitspec mock api.http --cors
 ```
+
+A known path with the wrong method answers 405 with an `Allow` header; HEAD is served
+from GET routes. A port that is already in use is an error (exit 1).
 
 Mock responses come from a `>>>mock` block if present (returned verbatim),
 otherwise they are inferred from assertion expectations. Status comes from
@@ -1590,7 +1672,16 @@ hitspec record --port 8080 --target https://api.example.com -o recorded.http
 
 # Exclude endpoints
 hitspec record --port 8080 --exclude "/health,/metrics" -o recorded.http
+
+# Expose the proxy beyond this machine (default bind is 127.0.0.1)
+hitspec record --target https://api.example.com --host 0.0.0.0
+
+# Keep secrets verbatim instead of replacing them with {{PLACEHOLDER}}
+hitspec record --target https://api.example.com --no-redact
 ```
+
+By default `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie` and `X-Api-Key`
+headers and JSON fields named `password`, `secret`, `token` or `apiKey` are redacted.
 
 ## Contract Testing
 
@@ -1637,7 +1728,7 @@ hitspec run api.http --stress --metrics json --metrics-file metrics.json
 hitspec run api.http --stress --metrics datadog --datadog-api-key $DD_API_KEY
 ```
 
-Prometheus metrics exposed:
+Prometheus metrics are updated every second while the stress test runs. Exposed:
 - `hitspec_requests_total` - Total requests (counter)
 - `hitspec_requests_success_total` - Successful requests (counter)
 - `hitspec_requests_failed_total` - Failed requests (counter)

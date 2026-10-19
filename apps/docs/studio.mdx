@@ -18,7 +18,7 @@ all from one screen.
 hitspec studio                 # open the current directory
 hitspec studio ./tests/        # open a directory
 hitspec studio ./tests/users.http   # open a single file
-hitspec studio --read-only     # browse without allowing file changes
+hitspec studio --read-only     # browse and run, but refuse file and settings writes
 ```
 
 <Note>
@@ -248,7 +248,7 @@ the file list and live execution progress as files change on disk. Disable it wi
 | Flag | Short | Description | Default |
 |------|-------|-------------|---------|
 | `--watch` | `-w` | Watch for file changes | `true` |
-| `--read-only` | | Disallow file mutations | `false` |
+| `--read-only` | | Refuse workspace and `hitspec.yaml` writes (running requests still works) | `false` |
 | `--env` | `-e` | Default environment | `defaultEnvironment` from config, else `dev` |
 | `--config` | | Path to `hitspec.yaml` | |
 | `--verbose` | `-v` | Verbose logging | `false` |
@@ -271,8 +271,7 @@ the terminal's own selection then needs a modifier key (usually `shift`).
 
 ## Read-only mode
 
-`--read-only` disables every file mutation (save, new, rename, duplicate, delete,
-generate). Use it to browse or demo a workspace without risking changes:
+`--read-only` protects the workspace and `hitspec.yaml`: saving, creating, renaming and deleting files and editing settings or cookies are refused. Running requests, stress, mock, record and contract verification still work, and read-only runs do not save cookies. Use it to browse or demo a workspace without risking changes:
 
 ```bash
 hitspec studio ./tests/ --read-only

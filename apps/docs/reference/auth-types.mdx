@@ -111,12 +111,21 @@ Signs requests using AWS Signature Version 4 for AWS services or compatible APIs
 # @auth aws {{accessKey}}, {{secretKey}}, {{region}}, {{service}}
 ```
 
-| Parameter | Description |
-|-----------|-------------|
-| `accessKey` | AWS Access Key ID |
-| `secretKey` | AWS Secret Access Key |
-| `region` | AWS region (e.g., `us-east-1`) |
-| `service` | AWS service name (e.g., `s3`, `execute-api`) |
+With temporary credentials, add the session token as a fifth argument:
+
+```http
+# @auth aws {{accessKey}}, {{secretKey}}, {{region}}, {{service}}, {{sessionToken}}
+```
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `accessKey` | Yes | AWS Access Key ID |
+| `secretKey` | Yes | AWS Secret Access Key |
+| `region` | Yes | AWS region (e.g., `us-east-1`) |
+| `service` | Yes | AWS service name (e.g., `s3`, `execute-api`) |
+| `sessionToken` | No | Session token of temporary credentials. Sent as `X-Amz-Security-Token` and signed |
+
+If the fifth argument is left out and the access key equals `$AWS_ACCESS_KEY_ID`, hitspec uses `$AWS_SESSION_TOKEN` when it is set. A `>>>multipart` body is signed over the exact bytes sent.
 
 ---
 
@@ -165,7 +174,7 @@ Fetches an access token using the OAuth2 Resource Owner Password Credentials gra
 | API Key (Header) | `# @auth apiKey <header>, <value>` | 2 |
 | API Key (Query) | `# @auth apiKeyQuery <param>, <value>` | 2 |
 | Digest | `# @auth digest <user>, <pass>` | 2 |
-| AWS Sig v4 | `# @auth aws <key>, <secret>, <region>, <service>` | 4 |
+| AWS Sig v4 | `# @auth aws <key>, <secret>, <region>, <service>[, <sessionToken>]` | 4-5 |
 | OAuth2 Client Creds | `# @auth oauth2 client_credentials <url>, <id>, <secret>, <scopes>` | 3-4 |
 | OAuth2 Password | `# @auth oauth2 password <url>, <id>, <secret>, <user>, <pass>, <scopes>` | 5-6 |
 

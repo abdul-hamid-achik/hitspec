@@ -48,6 +48,15 @@ validateSSL: true
 # HTTP proxy URL for all requests
 proxy: ""
 
+# TLS and HTTP client options (paths are relative to this file)
+cacert: ""                     # PEM CA bundle trusted in addition to the system roots
+cert: ""                       # PEM client certificate for mutual TLS (needs key)
+key: ""                        # PEM private key for cert
+http1: false                   # true disables HTTP/2
+cookies: false                 # keep a cookie jar for the run
+maxResponseBytes: 104857600    # largest response body in bytes (-1 = unlimited)
+redirectForwardHeaders: false  # keep request headers on cross-origin redirects
+
 # Default headers added to every request
 headers:
   User-Agent: "hitspec/1.0"
@@ -127,6 +136,15 @@ stress:
 | `maxRedirects` | integer | `10` | Maximum number of redirects to follow |
 | `validateSSL` | boolean | `true` | Validate SSL/TLS certificates |
 | `proxy` | string | `""` | HTTP proxy URL (e.g., `http://proxy:8080`) |
+| `cacert` | string | `""` | PEM CA bundle trusted in addition to the system roots. Relative to the directory of this file |
+| `cert` | string | `""` | PEM client certificate for mutual TLS (needs `key`). Relative to this file |
+| `key` | string | `""` | PEM private key for `cert`. Relative to this file |
+| `http1` | boolean | `false` | `true` disables HTTP/2 (uses HTTP/1.1 only) |
+| `cookies` | boolean | `false` | Keep a cookie jar for the run: `Set-Cookie` from one response is sent on later requests |
+| `maxResponseBytes` | integer | `104857600` | Largest response body in bytes (0 = default, `-1` = unlimited) |
+| `redirectForwardHeaders` | boolean | `false` | Keep your request headers on redirects to another origin |
+
+Relative `cacert`, `cert` and `key` paths in `hitspec.yaml` resolve against the directory of the file; a bad or missing file exits with code 3. See [TLS, cookies and HTTP options](/features/tls-and-cookies).
 
 ### Headers
 
@@ -159,6 +177,10 @@ Headers defined in individual requests override config-level headers with the sa
 | `bail` | boolean | `false` | Stop on first failure |
 | `verbose` | boolean | `false` | Enable verbose output |
 | `noColor` | boolean | `false` | Disable colored terminal output |
+
+<Note>
+`verbose: true` is applied by `hitspec run` and means `-v`. A `-v`, `-vv` or `-vvv` flag wins over it, and `--verbose=0` turns it off. The key must be a boolean. `reporters`, `outputDir` and `noColor` are read and validated, but `hitspec run` does not apply them yet. Use `--output`, `--output-file` and `--no-color` (or their `HITSPEC_*` variables).
+</Note>
 
 ### Environments
 
@@ -213,7 +235,7 @@ stress:
 | `maxVUs` | integer | Maximum concurrent requests |
 | `thinkTime` | string | Pause between requests per VU |
 | `rampUp` | string | Ramp-up time to reach target |
-| `thresholds` | map | Pass/fail thresholds (e.g., `p95: "200ms"`, `errors: "1%"`) |
+| `thresholds` | map | Pass/fail thresholds (e.g., `p95: "200ms"`, `errors: "1%"`). A value may start with an operator (`p95: "<=250ms"`, `rps: ">=100"`); without one, `rps` means greater than and everything else less than. `errors: "0%"` means no request may fail |
 
 Use a profile with the `--profile` flag:
 
@@ -276,6 +298,13 @@ name.
 | Request timeout | `--timeout` | `HITSPEC_TIMEOUT` | `timeout` | `30s` |
 | Proxy | `--proxy` | `HITSPEC_PROXY` | `proxy` | none |
 | Skip certificate validation | `--insecure` | `HITSPEC_INSECURE` | `validateSSL: false` | validate |
+| CA bundle | `--cacert` | `HITSPEC_CACERT` | `cacert` | system roots |
+| Client certificate | `--cert` | `HITSPEC_CERT` | `cert` | none |
+| Client key | `--key` | `HITSPEC_KEY` | `key` | none |
+| HTTP/1.1 only | `--http1.1` | `HITSPEC_HTTP1` | `http1: true` | HTTP/2 |
+| Cookie jar | `--cookies` | `HITSPEC_COOKIES` | `cookies: true` | off |
+| Response size limit | `--max-response-bytes` | `HITSPEC_MAX_RESPONSE_BYTES` | `maxResponseBytes` | `104857600` |
+| Forward headers on redirects | `--redirect-forward-headers` | `HITSPEC_REDIRECT_FORWARD_HEADERS` | `redirectForwardHeaders: true` | off |
 | Parallel requests | `--parallel` | `HITSPEC_PARALLEL` | `parallel` | `false` |
 | Parallel limit | `--concurrency` | `HITSPEC_CONCURRENCY` | `concurrency` | `5` |
 | Stop on first failure | `--bail` | `HITSPEC_BAIL` | `bail` | `false` |
@@ -288,12 +317,15 @@ name.
 A `@retry` or `@retryDelay` annotation on a request overrides `retries` and
 `retryDelay` for that request, and a request's own headers override `headers`.
 A number at or below zero in `hitspec.yaml` counts as "not set" (use
-`followRedirects: false` rather than `maxRedirects: 0`).
+`followRedirects: false` rather than `maxRedirects: 0`). The exception is
+`maxResponseBytes`, where `0` means the default and `-1` means no limit.
 
 `hitspec studio`, `hitspec serve --api-only` and `hitspec contract verify` have
 no run flags. They read `HITSPEC_TIMEOUT`, `HITSPEC_PROXY`, `HITSPEC_INSECURE`,
-`HITSPEC_PARALLEL`, `HITSPEC_CONCURRENCY` and `HITSPEC_BAIL`, then `hitspec.yaml`,
-then the defaults. Studio and serve choose the environment with their own
+`HITSPEC_PARALLEL`, `HITSPEC_CONCURRENCY` and `HITSPEC_BAIL`, plus the TLS and HTTP
+variables from the table above (`HITSPEC_CACERT`, `HITSPEC_CERT`, `HITSPEC_KEY`,
+`HITSPEC_HTTP1`, `HITSPEC_COOKIES`, `HITSPEC_MAX_RESPONSE_BYTES`,
+`HITSPEC_REDIRECT_FORWARD_HEADERS`), then `hitspec.yaml`, then the defaults. Studio and serve choose the environment with their own
 `--env` (else `defaultEnvironment`, else `dev`) and ignore `HITSPEC_ENV`.
 `contract verify` finds `hitspec.yaml` from the current directory upward (or uses
 the path in `HITSPEC_CONFIG`) and has no environment of its own.

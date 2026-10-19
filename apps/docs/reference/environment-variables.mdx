@@ -20,7 +20,7 @@ All hitspec CLI flags that support environment variables are listed here. Enviro
 |----------|------|---------|-------------|
 | `HITSPEC_OUTPUT` | `--output` | `console` | Output format |
 | `HITSPEC_OUTPUT_FILE` | `--output-file` | | Output file path |
-| `HITSPEC_QUIET` | `--quiet` | `false` | Suppress all output |
+| `HITSPEC_QUIET` | `--quiet` | `false` | Suppress the report on stdout (failures are still listed on stderr) |
 | `HITSPEC_NO_COLOR` | `--no-color` | `false` | Disable colored output |
 
 ## Execution Variables
@@ -38,6 +38,13 @@ All hitspec CLI flags that support environment variables are listed here. Enviro
 |----------|------|---------|-------------|
 | `HITSPEC_PROXY` | `--proxy` | | HTTP proxy URL |
 | `HITSPEC_INSECURE` | `--insecure` | `false` | Disable SSL validation |
+| `HITSPEC_CACERT` | `--cacert` | | PEM CA bundle to trust in addition to the system roots |
+| `HITSPEC_CERT` | `--cert` | | PEM client certificate for mutual TLS (needs `HITSPEC_KEY`) |
+| `HITSPEC_KEY` | `--key` | | PEM private key for the client certificate |
+| `HITSPEC_HTTP1` | `--http1.1` | `false` | Do not negotiate HTTP/2 |
+| `HITSPEC_COOKIES` | `--cookies` | `false` | Keep a cookie jar for the run |
+| `HITSPEC_MAX_RESPONSE_BYTES` | `--max-response-bytes` | `104857600` | Largest response body to read in bytes; `-1` for no limit |
+| `HITSPEC_REDIRECT_FORWARD_HEADERS` | `--redirect-forward-headers` | `false` | Keep request headers on redirects to another origin |
 
 ## Metrics Variables
 
@@ -45,6 +52,7 @@ All hitspec CLI flags that support environment variables are listed here. Enviro
 |----------|------|---------|-------------|
 | `HITSPEC_METRICS` | `--metrics` | | Metrics export format |
 | `HITSPEC_METRICS_PORT` | `--metrics-port` | `9090` | Prometheus endpoint port |
+| `HITSPEC_METRICS_HOST` | `--metrics-host` | `127.0.0.1` | Interface the Prometheus endpoint binds (`0.0.0.0` exposes it) |
 | `HITSPEC_METRICS_FILE` | `--metrics-file` | | JSON metrics output file |
 | `DD_API_KEY` | `--datadog-api-key` | | DataDog API key |
 | `DD_SITE` | `--datadog-site` | `datadoghq.com` | DataDog site |

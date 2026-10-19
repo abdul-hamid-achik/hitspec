@@ -120,15 +120,17 @@ hitspec serve [file|dir]
      │                                drives packages/clientmgr.Manager (in-process)
      │
      └── --api-only   packages/serve → net/http server (REST + WebSocket), no UI
-                                       wraps the same clientmgr operations
+                                       separate implementation (own handlers), not a clientmgr wrapper
                     ▲
                     └── apps/desktop (hitspec Studio) spawns this as a child process:
                         the Electron main process owns the port + token and proxies
                         every call over IPC; the renderer never sees the network.
 ```
 
-Both surfaces (TUI and `--api-only` REST) sit on top of the same
-`clientmgr.Manager`, so behavior stays consistent. The `Manager` is
+The TUI sits on `clientmgr.Manager`. `packages/serve` is a separate
+implementation with its own handlers and DTOs (it shares the lower-level packages
+with the Manager, not the Manager itself), so a change to a `Manager` operation
+usually needs a twin in `packages/serve`. The `Manager` is
 transport-independent: ~50 methods covering files, execute/run, environments,
 config, stress, mock, contract, record, import/export, cookies, and history.
 It publishes realtime `Event`s (file_changed, request_progress, stress_update,
@@ -200,10 +202,10 @@ via `loadScreenState`).
 ### TUI keybindings (default)
 
 - **Screens**: `1`-`9` (workspace, stress, mock, contract, record, history, import, cookies, settings)
-- **Global**: `ctrl+p` command palette · `ctrl+e` environment switcher · `?` help · `q`/`ctrl+c` quit
-- **Workspace**: `tab`/`shift+tab` cycle panes · `enter` open file · `e` edit source · `ctrl+s` save · `r` run request · `R` run file · `n` new file · `D` delete file (confirmed) · `ctrl+r` refresh
+- **Global**: `ctrl+p` command palette · `ctrl+e` environment switcher · `?` help · `q` quit · `ctrl+c` cancels a run, then asks before discarding unsaved edits, then quits
+- **Workspace**: `tab`/`shift+tab` cycle panes · `enter` open file · `e` edit source · `ctrl+s` save · `r` run request · `R` run file · `x` cancel run · `<`/`>` switch request in the response pane · `n` new file · `D` delete file (confirmed) · `ctrl+r` refresh
 - **Response pane**: `←`/`→` or `[`/`]` switch tabs
-- **Secondary forms**: `e` edit fields · `tab`/`shift+tab` move field · `enter`/`s` submit · `esc` cancel · `x` stop · `E` export (record screen)
+- **Secondary forms**: `e`/`enter` edit fields · `tab`/`enter` next field · `ctrl+s` submit while editing · `s` submit otherwise · `esc` leave fields, then back · `x` stop · `E` export (record screen)
 - **History**: `enter` details · `D` delete (confirmed) · `esc` back · `ctrl+r` refresh
 - **Confirm dialog**: `y`/`enter` confirm · `n`/`esc` cancel
 

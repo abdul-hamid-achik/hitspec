@@ -17,8 +17,10 @@ hitspec run <file|directory> [flags]
 |----------|-------------|
 | `<file>` | Single `.http` or `.hitspec` file to run |
 | `<directory>` | Directory containing test files (searched recursively) |
+| `<glob>` | A quoted pattern such as `'tests/**/*.http'` |
+| `-` | Read one document from stdin |
 
-You can pass multiple files and directories as arguments.
+You can pass multiple files, directories and patterns as arguments. See [Inputs](#inputs).
 
 ## Flags
 
@@ -36,7 +38,7 @@ You can pass multiple files and directories as arguments.
 
 | Flag | Short | Description | Default | Env Var |
 |------|-------|-------------|---------|---------|
-| `--verbose` | `-v` | Verbose output (use `-vv` or `-vvv` for more detail) | `false` | |
+| `--verbose` | `-v` | Verbose output, repeatable: `-v`, `-vv`, `-vvv` for more detail (see [Verbose Output](#verbose-output)) | `false` | |
 | `--quiet` | `-q` | Suppress the report on stdout. Failures are still listed on stderr and `--output-file` is still written | `false` | `HITSPEC_QUIET` |
 | `--no-color` | | Disable colored output | `false` | `HITSPEC_NO_COLOR` |
 | `--output` | `-o` | Output format: `console`, `json`, `junit`, `tap`, `html` | `console` | `HITSPEC_OUTPUT` |
@@ -48,7 +50,7 @@ You can pass multiple files and directories as arguments.
 |------|-------|-------------|---------|---------|
 | `--bail` | | Stop on first failure | `false` | `HITSPEC_BAIL` |
 | `--timeout` | | Request timeout (e.g., `30s`, `1m`, `500ms`) | `30s` | `HITSPEC_TIMEOUT` |
-| `--dry-run` | | Parse and show what would run without executing | `false` | |
+| `--dry-run` | | Parse each file and list the requests that would run (method, resolved URL, tags, dependencies, skip reasons) without sending anything (see [Dry Run](#dry-run)) | `false` | |
 | `--parallel` | `-p` | Run independent requests in parallel | `false` | `HITSPEC_PARALLEL` |
 | `--concurrency` | | Max concurrent requests when running in parallel | `5` | `HITSPEC_CONCURRENCY` |
 | `--watch` | `-w` | Watch files for changes and re-run tests | `false` | |
@@ -59,6 +61,15 @@ You can pass multiple files and directories as arguments.
 |------|-------|-------------|---------|---------|
 | `--proxy` | | Proxy URL for HTTP requests | | `HITSPEC_PROXY` |
 | `--insecure` | `-k` | Disable SSL certificate validation | `false` | `HITSPEC_INSECURE` |
+| `--cacert` | | PEM CA bundle to trust in addition to the system roots | | `HITSPEC_CACERT` |
+| `--cert` | | PEM client certificate for mutual TLS; needs `--key` | | `HITSPEC_CERT` |
+| `--key` | | PEM private key for `--cert` | | `HITSPEC_KEY` |
+| `--http1.1` | | Do not negotiate HTTP/2 | `false` | `HITSPEC_HTTP1` |
+| `--cookies` | | Keep a cookie jar for the run: `Set-Cookie` from one response is sent on later requests | `false` | `HITSPEC_COOKIES` |
+| `--max-response-bytes` | | Largest response body to read, in bytes; `-1` for no limit | `104857600` | `HITSPEC_MAX_RESPONSE_BYTES` |
+| `--redirect-forward-headers` | | Keep your request headers on redirects to another origin | `false` | `HITSPEC_REDIRECT_FORWARD_HEADERS` |
+
+A CA, certificate or key file that is missing or not valid PEM, and a malformed `--proxy` URL, exit with code 3 before any request is sent. Each of these also has a `hitspec.yaml` key; see [Configuration](/reference/configuration) and [TLS, cookies and HTTP options](/features/tls-and-cookies).
 
 ### History Flags
 
@@ -105,7 +116,7 @@ Shell and database blocks are disabled by default for security. You must explici
 | `--max-vus` | | Maximum concurrent requests | `100` |
 | `--think-time` | | Think time between requests per virtual user | `0s` |
 | `--ramp-up` | | Ramp-up time to reach target rate/VUs | `0s` |
-| `--threshold` | | Pass/fail thresholds (e.g., `"p95<200ms,errors<0.1%"`) | |
+| `--threshold` | | Pass/fail thresholds (e.g., `"p95<200ms,errors<0.1%"`). Metrics: `p50`, `p95`, `p99`, `max`, `errors` (transport errors and non-2xx), `assertions` (assertion failure share), `rps` | |
 | `--profile` | | Load a stress profile from config file | |
 | `--no-progress` | | Disable real-time progress display | `false` |
 | `--stress-json` | | Output stress results as JSON | `false` |
@@ -116,6 +127,7 @@ Shell and database blocks are disabled by default for security. You must explici
 |------|-------------|---------|---------|
 | `--metrics` | Export format: `prometheus`, `datadog`, `json` | | `HITSPEC_METRICS` |
 | `--metrics-port` | Port for Prometheus metrics HTTP endpoint | `9090` | `HITSPEC_METRICS_PORT` |
+| `--metrics-host` | Interface the Prometheus endpoint binds; `0.0.0.0` exposes it to the network | `127.0.0.1` | `HITSPEC_METRICS_HOST` |
 | `--metrics-file` | Output file for JSON metrics | | `HITSPEC_METRICS_FILE` |
 | `--datadog-api-key` | DataDog API key | | `DD_API_KEY` |
 | `--datadog-site` | DataDog site | `datadoghq.com` | `DD_SITE` |
@@ -218,6 +230,56 @@ hitspec run tests/ --watch
 hitspec run tests/ --watch --tags dev
 ```
 
+`--watch` re-runs when a test file changes, including editors that save by renaming a temp file over it, and when `hitspec.yaml`, `--config` or the env file changes. The settings are reloaded before the next pass, and `--output-file` is rewritten each time. `node_modules`, `vendor` and `.git` are not watched. With `--cookies`, the cookie jar is kept across re-runs.
+
+### Inputs
+
+`hitspec run -` reads one document from stdin. Relative paths in it resolve against the working directory. It cannot be combined with other files, `--watch` or `--stress`; `--dry-run` works with it.
+
+```bash
+hitspec run - < api.http
+```
+
+Quote glob patterns so the shell does not expand them: `hitspec run 'tests/**/*.http'`. `**` matches any depth.
+
+Directories are searched recursively, skipping `.git`, `node_modules` and `vendor` unless you name one of them explicitly. A file given more than once runs once. A pattern or path that matches no `.http` or `.hitspec` file is an error (exit code `1`); so is empty stdin. Combining `-` with other files, `--watch` or `--stress` exits with code `64`.
+
+Ctrl+C (or SIGTERM) stops the run: hitspec reports the requests that finished, marks the rest as cancelled, writes `--output-file`, and exits with code `130`. A second Ctrl+C exits immediately.
+
+### Verbose Output
+
+`-v` can be repeated; each level adds detail for every request, not only failures.
+
+| Flag | Output |
+|------|--------|
+| (none) | One line per request. A failed request also shows the request line, the response status line with its duration, and a capped body excerpt. |
+| `-v` | The request line and response status of every request, plus captures, SSE events and structured diffs. Also prints the `hitspec.yaml` in use (`config: <path>`) on stderr. |
+| `-vv` | Adds request and response headers. Credentials (`Authorization`, `Cookie`, `Set-Cookie`, anything with `api-key`, `token`, `secret` or `password` in its name) print as `[REDACTED]`. |
+| `-vvv` | Adds the full request and response bodies, uncapped. |
+
+Warnings (a capture that matched nothing, a `{{reference}}` sent unresolved) print in yellow under the request at every level, and are also written to stderr. They never change the exit code.
+
+### Dry Run
+
+`--dry-run` parses each file and prints what would run, in execution order, without sending anything or touching the history database.
+
+```text
+Would run: api.http (2 to run, 1 skipped)
+  1.  login  POST https://api.example.com/auth/login?v=2
+        tags: smoke, auth
+  -   legacy  GET https://api.example.com/legacy
+        skipped: down for maintenance
+  2.  profile  GET https://api.example.com/me?token={{login.token}}
+        tags: auth
+        depends: login
+```
+
+Environment and file variables are resolved in the URL. References to captured values (`{{login.token}}`) are left as written. Requests that would not run are marked `-` with the reason: the `@skip` text, `filtered out`, `condition not met`, or `dependency will not run`. An `@if` that depends on a captured value is listed with a note, because only a real run can decide it. `--name` and `--tags` apply as in a real run.
+
+`--dry-run` cannot be combined with `--stress` (usage error, exit `64`; nothing is sent). With `--dry-run`, `-o` and `--output-file` are ignored: the plan is always text (a note on stderr says so) and the output file is not created.
+
+Exit codes: `0` on success, `2` if a file cannot be loaded (syntax error, duplicate `@name`, `@depends` cycle), `64` if the filters match nothing.
+
 ### Output Formats
 
 <CodeGroup>
@@ -309,11 +371,12 @@ hitspec run tests/ --allow-shell
 | `0` | `ExitSuccess` | All tests passed |
 | `1` | `ExitTestFailure` | One or more tests failed |
 | `2` | `ExitParseError` | A file could not be loaded (invalid syntax, duplicate `@name`, `@depends` cycle) |
-| `3` | `ExitConfigError` | Configuration error (a `hitspec.yaml` that cannot be parsed, an `--env-file` that does not exist) |
-| `4` | `ExitNetworkError` | Network or connection error |
-| `64` | `ExitUsageError` | Invalid CLI usage, or `--name`/`--tags` matched no request |
+| `3` | `ExitConfigError` | Configuration error (a `hitspec.yaml` that cannot be parsed, an `--env-file` that does not exist, a missing or invalid `--cacert`, `--cert`, `--key` or `--proxy`) |
+| `4` | `ExitNetworkError` | A request got no response because the connection failed (refused, unreachable, DNS, TLS, reset before a response, timeout before connecting, unreachable OAuth2 token endpoint). A timeout after connecting is a failure (`1`) |
+| `64` | `ExitUsageError` | Usage error (unknown flag, bad flag value, missing argument, `-` combined with other files, `--dry-run` with `--stress`), or `--name`/`--tags` matched no request |
+| `130` | `ExitInterrupted` | Interrupted (Ctrl+C or SIGTERM): partial results printed, `--output-file` written |
 
-When several apply, `2` wins over `1`, and `1` wins over `0`.
+When several apply: `130`, then `2`, then `4`, then `1`, then `64`. See [Exit Codes](/reference/exit-codes).
 
 ## Environment Variables
 

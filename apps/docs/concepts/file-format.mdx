@@ -185,10 +185,12 @@ POST {{baseUrl}}/upload
 >>>multipart
 field name = John Doe
 field email = john@example.com
-file @./photo.jpg
+file avatar @./photo.jpg
 file @./report.pdf
 <<<
 ```
+
+`file <name> @<path>` sends the file as form field `<name>`; `file @<path>` uses the field name `file`. A file that cannot be read fails the request with an error naming the path.
 
 ### GraphQL
 
@@ -239,7 +241,7 @@ Content-Type: application/json
 < ./fixtures/user.json
 ```
 
-The file path is resolved relative to the `.http` file's directory. Content-Type is auto-detected from the file extension (`.json`, `.xml`, `.yaml`, `.html`, `.csv`, `.txt`) when no explicit `Content-Type` header is set.
+The file path is resolved relative to the `.http` file's directory. A file that cannot be read fails the request with an error naming the path; hitspec does not send the path text instead. Content-Type is auto-detected from the file extension (`.json`, `.xml`, `.yaml`, `.html`, `.csv`, `.txt`) when no explicit `Content-Type` header is set.
 
 Variable interpolation works in the file path:
 
@@ -267,6 +269,8 @@ GET {{baseUrl}}/search
 ? sort = created_at
 ? order = desc
 ```
+
+Query parameters written as `? name = value` lines are appended to the URL in the order you wrote them, repeated names are all sent, and names and values are percent-encoded (a space is `%20`). Characters that cannot appear in a URL (spaces, quotes, non-ASCII) in the URL itself are percent-encoded too; `%XX` escapes you wrote are kept. In a form block (`& name = value` lines) values keep their spaces and each name and value is percent-encoded when sent. A body written inline as `a=b&c=d` is sent exactly as written.
 
 ## Assertion Blocks
 
@@ -382,7 +386,7 @@ Content-Type: application/json
 | `timeout_ms` | `30000` | Maximum time to wait (milliseconds) |
 | `interval_ms` | `1000` | Time between poll attempts (milliseconds) |
 
-If the URL does not return the expected status within the timeout, the request fails without executing.
+If the URL does not return the expected status within the timeout, the request fails without executing. When the target cannot be reached at all (connection refused, DNS failure), the run exits with code `4`. The poll uses the same HTTP client settings as the run (default headers, proxy, CA bundle, `--insecure`).
 
 ### @if / @unless -- Conditional Execution
 
@@ -514,6 +518,12 @@ GET {{baseUrl}}/secure
 
 ```http AWS Signature v4
 # @auth aws {{accessKey}}, {{secretKey}}, {{region}}, {{service}}
+
+GET {{baseUrl}}/s3/object
+```
+
+```http AWS Signature v4 (temporary credentials)
+# @auth aws {{accessKey}}, {{secretKey}}, {{region}}, {{service}}, {{sessionToken}}
 
 GET {{baseUrl}}/s3/object
 ```

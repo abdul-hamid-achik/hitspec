@@ -13,7 +13,7 @@ hitspec run api.http --stress -d 5m -r 100 \
   --metrics-port 9090
 ```
 
-Metrics are available at `http://localhost:9090/metrics` while the stress test runs.
+Metrics are available at `http://localhost:9090/metrics` while the stress test runs. The endpoint listens on `127.0.0.1` only. To let a Prometheus server on another machine scrape it, bind another interface with `--metrics-host 0.0.0.0` (env: `HITSPEC_METRICS_HOST`); the metrics are not authenticated, so expose them only on a trusted network. The numbers are updated every second during the run, so a scrape in the middle of a test sees the current totals, not zeros.
 
 ## Prometheus Configuration
 
@@ -32,12 +32,12 @@ scrape_configs:
 | Metric | Type | Description |
 |--------|------|-------------|
 | `hitspec_requests_total` | Counter | Total number of requests |
-| `hitspec_requests_success` | Counter | Successful requests |
-| `hitspec_requests_failed` | Counter | Failed requests |
-| `hitspec_request_duration_ms` | Histogram | Request duration in milliseconds |
-| `hitspec_request_duration_p50` | Gauge | 50th percentile latency |
-| `hitspec_request_duration_p95` | Gauge | 95th percentile latency |
-| `hitspec_request_duration_p99` | Gauge | 99th percentile latency |
+| `hitspec_requests_success_total` | Counter | Successful requests |
+| `hitspec_requests_failed_total` | Counter | Failed requests |
+| `hitspec_request_duration_ms{quantile="..."}` | Gauge | Request duration in milliseconds: `min`, `max`, `avg`, and the `0.50`, `0.95` and `0.99` quantiles |
+| `hitspec_requests_by_status_total{status="..."}` | Counter | Requests by HTTP status code |
+| `hitspec_test_requests_total{test="..."}` | Counter | Requests per named test |
+| `hitspec_test_duration_avg_ms{test="..."}` | Gauge | Average request duration per named test |
 
 ## Custom Port
 
@@ -47,4 +47,4 @@ hitspec run api.http --stress -d 5m -r 100 \
   --metrics-port 9100
 ```
 
-Environment variable: `HITSPEC_METRICS_PORT`
+Environment variables: `HITSPEC_METRICS_PORT`, `HITSPEC_METRICS_HOST`

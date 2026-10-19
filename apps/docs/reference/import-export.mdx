@@ -182,9 +182,10 @@ a `# TODO:` above the request. Browser "Copy as cURL" commands (with `$'...'`
 quoting) are supported.
 
 <Note>
-hitspec's `file @path` line in a multipart block has no field name, so the name
-of an uploaded file field (`-F avatar=@me.png`) is reported and must be set by
-hand.
+An uploaded file field keeps its form field name: `-F avatar=@me.png` becomes
+`file avatar @me.png`. The Postman, Insomnia and OpenAPI importers do the same.
+A field name that contains a space cannot be written that way; it falls back to
+`file @path` (field name `file`) with a warning.
 </Note>
 
 ### Examples
@@ -233,8 +234,8 @@ hitspec import insomnia <export-file> [flags]
   base), written next to the output, or printed to stderr when writing to stdout.
   An existing `hitspec.yaml` is never overwritten (`hitspec.imported.yaml` is
   written instead).
-  hitspec only auto-loads `hitspec.yaml` from the current directory, so for a
-  file written next to the output pass it explicitly:
+  hitspec finds `hitspec.yaml` from the working directory upward, so for a
+  file written elsewhere pass it explicitly:
   `hitspec run tests/api.http --config tests/hitspec.yaml --env dev`.
 - Authentication (Bearer, Basic, API Key, Digest) as `@auth`
 - Request bodies (JSON, raw, form-urlencoded, multipart, GraphQL, file)
@@ -279,7 +280,9 @@ The same names the Studio export action uses.
 | `ruby` | Ruby `Net::HTTP` |
 
 Query parameters (`? key = value` lines) and `@auth` (bearer, basic, API key) are
-included in every format. A request a format cannot express (multipart or file
+included in every format. A form block (`& key = value` lines) is exported as the
+percent-encoded body the client sends (`name=John%20Smith&e=a%26b`), in `curl` and in
+the snippet formats. A request a format cannot express (multipart or file
 bodies outside `curl`) is skipped with a `warning:` on stderr and a
 `SKIPPED` comment in the output; if no request can be exported the command fails.
 

@@ -46,8 +46,9 @@ The `validate` command parses each file without running it. Findings are either 
 - `# @directive` lines at the top of a file that lead into no request
 - A `@depends` on a request that does not exist in the file
 - A capture path containing spaces (it can never match)
+- An unknown key in `hitspec.yaml` (for example `tiemout`), with a "did you mean" hint. `validate` checks the nearest `hitspec.yaml` from the working directory upward and lists it before the test files
 
-With `--strict`, every warning is an error (exit code 2), and `validate` additionally checks variables:
+With `--strict`, every warning is an error (exit code 2), including an unknown `hitspec.yaml` key, and `validate` additionally checks variables:
 
 - `{{name}}` must be defined in the file (`@name = ...`), by a `>>>capture` block, in an `environments:` entry of the nearest `hitspec.yaml`, in a `.env` file next to the file or in the working directory, or in the process environment. `{{$uuid()}}`, `{{$env(NAME)}}` and other built-ins are never flagged.
 - `{{request.capture}}` must name a capture that request has, and the using request should `# @depends` on it.
@@ -56,7 +57,7 @@ With `--strict`, every warning is an error (exit code 2), and `validate` additio
 Variable checking is a static check. It cannot know which environment a later `hitspec run --env` selects or what a CI job injects, so it accepts a name defined in *any* environment and in the current process environment. That is why it is only enabled by `--strict`.
 </Note>
 
-If all files are valid, each is printed as `OK    <file>`. If any file has errors, the command prints each error and exits with code 2.
+If all files are valid, each is printed as `OK    <file>`. If any file has errors, the command prints each error and exits with code 2. A `hitspec.yaml` that cannot be parsed stops `validate` with exit code 3 (a configuration error) and a `file:line` message.
 
 ## Examples
 
