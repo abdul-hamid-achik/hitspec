@@ -81,6 +81,7 @@ and the build/artifact dirs:
 | `clear_history.yml` | palette → "Clear history" → confirm `y` → history list empties (isolated HOME) |
 | `mock_start_stop.yml` | mock screen: `s` starts the server (custom port), `x` stops it (scratch ws) |
 | `stress_run.yml` | stress screen: edit duration to 2s, start, watch live metrics, see the result |
+| `stress_profile.yml` | stress screen: lists saved profiles; typing a profile name starts a run with the profile's duration and rate |
 | `record_start_stop.yml` | record screen: `s` starts the proxy (custom port), `x` stops it |
 | `run_edited_buffer.yml` | `r` runs the unsaved editor buffer (edit the URL port, the connection error names the edited port); `ctrl+c` with the edit asks first (scratch ws) |
 | `lost_edits.yml` | opening another file with unsaved edits asks: `n` keeps the edit, `y` discards it; `ctrl+c` asks, a second one quits (scratch ws) |

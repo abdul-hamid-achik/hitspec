@@ -1,0 +1,78 @@
+version: 1
+name: studio_stress_profile
+
+intent: |
+  the stress screen lists the saved hitspec.yaml profiles, and typing a profile's
+  name in the profile field starts a run with the profile's own duration and rate
+  (2s at 2 RPS) while the other fields stay blank. The target is a closed local
+  port so requests resolve deterministically with no external network.
+
+imports:
+  - ../actions/quit_clean.yml
+
+target:
+  cmd: ["${vars.bin}", "studio", "/tmp/hitspec-studio-e2e/stressprofile"]
+  cwd: "."
+  timeoutMs: 30000
+  env:
+    HOME: /tmp/hitspec-studio-e2e/home-stress_profile
+
+terminal:
+  cols: 100
+  rows: 30
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/hitspec ../apps/cli"
+      timeoutMs: 120000
+    - run: "rm -rf /tmp/hitspec-studio-e2e/stressprofile && mkdir -p /tmp/hitspec-studio-e2e/stressprofile"
+      timeoutMs: 10000
+    - run: "printf '### Strprof\\n# @name strprof\\nGET http://localhost:1/health\\n\\n>>>\\nexpect status 200\\n<<<\\n' > /tmp/hitspec-studio-e2e/stressprofile/strprof.http"
+      timeoutMs: 10000
+    - run: "printf 'stress:\\n  profiles:\\n    quick:\\n      duration: 2s\\n      rate: 2\\n' > /tmp/hitspec-studio-e2e/stressprofile/hitspec.yaml"
+      timeoutMs: 10000
+
+steps:
+  - press: "2"
+  - wait:
+      screen:
+        contains: "No stress test running"
+      timeoutMs: 8000
+  # the idle screen lists the saved profiles
+  - wait:
+      screen:
+        contains: "Profiles: quick"
+      timeoutMs: 5000
+  # the profile is the last field (5th); leave every other field blank and start
+  - press: "e"
+  - press: "down"
+  - press: "down"
+  - press: "down"
+  - press: "down"
+  - type: "quick"
+  - press: "ctrl+s"
+  - wait:
+      screen:
+        contains: "Running: true"
+      timeoutMs: 8000
+  # the profile's 2s duration applies, so the final report appears quickly
+  - wait:
+      screen:
+        contains: "Last result"
+      timeoutMs: 15000
+  - snapshot: stress_profile_result
+  - use: quit_clean
+
+outcomes:
+  - id: profile_run_completed
+    description: the run started from the profile finishes and shows a result
+    verify:
+      screen:
+        contains: "Last result"
+  - id: clean_exit
+    description: q exits the app with status code 0
+    verify:
+      process:
+        exitCode: 0

@@ -144,6 +144,7 @@ func (m *Manager) ScaffoldSample(ctx context.Context) ([]string, error) {
 		if err := os.WriteFile(absPath, []byte(f.content), 0o644); err != nil {
 			return created, err
 		}
+		m.search.invalidate(absPath)
 		rel := m.relPath(absPath)
 		m.publish("file_changed", FileEvent{Path: rel, Operation: "created", Timestamp: nowISO()})
 		created = append(created, rel)

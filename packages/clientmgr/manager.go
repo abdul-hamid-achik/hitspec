@@ -57,6 +57,9 @@ type Manager struct {
 
 	watchSuppress *watchSuppressor
 
+	// search caches parsed request summaries for SearchRequests.
+	search searchCache
+
 	subMu       sync.RWMutex
 	subscribers map[chan Event]struct{}
 
