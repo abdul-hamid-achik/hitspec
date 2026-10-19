@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	neturl "net/url"
@@ -176,6 +177,7 @@ func (c *Client) DoWithContext(ctx context.Context, req *Request) (*Response, er
 	}
 	if timeout > 0 {
 		var cancel context.CancelFunc
+		ctx = context.WithValue(ctx, timeoutKey{}, timeout)
 		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
@@ -196,6 +198,36 @@ func (c *Client) DoWithContext(ctx context.Context, req *Request) (*Response, er
 	}
 
 	return c.doRequest(ctx, req, "")
+}
+
+// timeoutKey carries the effective per-request timeout through the context so
+// body-read errors can report it.
+type timeoutKey struct{}
+
+// isEventStream reports whether a Content-Type header names a Server-Sent
+// Events stream (parameters and case are ignored).
+func isEventStream(contentType string) bool {
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		mediaType = strings.TrimSpace(strings.SplitN(contentType, ";", 2)[0])
+	}
+	return strings.EqualFold(mediaType, "text/event-stream")
+}
+
+// bodyReadError describes a failure while reading a response body, including
+// how much of the body arrived before it failed.
+func bodyReadError(ctx context.Context, err error, read int, contentLength int64) error {
+	progress := fmt.Sprintf("read %d bytes", read)
+	if contentLength >= 0 {
+		progress = fmt.Sprintf("read %d of %d bytes", read, contentLength)
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		if timeout, ok := ctx.Value(timeoutKey{}).(time.Duration); ok {
+			return fmt.Errorf("timeout reading response body after %s (%s): %w", timeout, progress, err)
+		}
+		return fmt.Errorf("timeout reading response body (%s): %w", progress, err)
+	}
+	return fmt.Errorf("error reading response body (%s): %w", progress, err)
 }
 
 func (c *Client) doRequest(ctx context.Context, req *Request, authHeader string) (*Response, error) {
@@ -258,11 +290,11 @@ func (c *Client) doRequest(ctx context.Context, req *Request, authHeader string)
 		// A context deadline while reading the body is the expected termination
 		// for a time-bounded SSE/event stream: the caller set @timeout to bound
 		// how long to listen, so the partial body collected so far is the result,
-		// not an error. Discarding it returned zero events and failed the request.
-		if errors.Is(err, context.DeadlineExceeded) {
-			// keep the partial body already read; fall through to build the response
-		} else {
-			return nil, err
+		// not an error. For any other response a deadline (or any read error)
+		// means the body is truncated and must fail the request rather than let
+		// assertions run against partial data.
+		if !(errors.Is(err, context.DeadlineExceeded) && isEventStream(httpResp.Header.Get("Content-Type"))) {
+			return nil, bodyReadError(ctx, err, len(respBody), httpResp.ContentLength)
 		}
 	}
 	if c.maxBodyBytes > 0 && int64(len(respBody)) > c.maxBodyBytes {

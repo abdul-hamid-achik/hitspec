@@ -1,0 +1,16 @@
+# A body truncated by @timeout must fail the request, not pass as a success.
+# /stall sends Content-Length 1000, writes 10 bytes, then stalls.
+
+exitcode 1 hitspec run stall.http
+stdout 'stall-request'
+stdout 'timeout reading response body after 500ms \(read 10 of 1000 bytes\)'
+stdout 'Tests: 1 failed, 1 total'
+
+-- stall.http --
+### stall-request
+# @timeout 500
+GET {{$env(SERVER)}}/stall
+
+>>>
+expect status 200
+<<<

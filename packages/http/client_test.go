@@ -180,6 +180,48 @@ func TestClient_SSEPartialBodyOnTimeout(t *testing.T) {
 	assert.Contains(t, resp.BodyString(), "event-two")
 }
 
+// TestClient_NonSSETruncatedBodyOnTimeoutFails guards the false pass where a
+// deadline hit mid-body on an ordinary response returned the truncated body as
+// a success. Only SSE streams may end on the deadline.
+func TestClient_NonSSETruncatedBodyOnTimeoutFails(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "1000")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("0123456789"))
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+
+	client := NewClient()
+	resp, err := client.Do(&Request{Method: "GET", URL: server.URL, Timeout: 300 * time.Millisecond})
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Contains(t, err.Error(), "timeout reading response body after 300ms (read 10 of 1000 bytes)")
+}
+
+// TestClient_SSEContentTypeParamsStillTolerateTimeout checks that SSE detection
+// ignores Content-Type parameters and case.
+func TestClient_SSEContentTypeParamsStillTolerateTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "Text/Event-Stream; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "data: one\n\n")
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+
+	client := NewClient()
+	resp, err := client.Do(&Request{Method: "GET", URL: server.URL, Timeout: 200 * time.Millisecond})
+	require.NoError(t, err)
+	assert.Contains(t, resp.BodyString(), "one")
+}
+
 func TestClient_WithDefaultHeader(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "test-token", r.Header.Get("Authorization"))
