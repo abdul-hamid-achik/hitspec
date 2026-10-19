@@ -843,10 +843,11 @@ func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config
 		}
 	}
 
-	// Cleanup metrics exporters on exit
+	// Cleanup metrics exporters on exit. The summary is exported explicitly
+	// below; Flush would re-export the collector's own (empty) aggregate over
+	// it, so only Close here.
 	defer func() {
 		if metricsCollector != nil {
-			_ = metricsCollector.Flush()
 			_ = metricsCollector.Close()
 		}
 	}()
@@ -896,11 +897,15 @@ func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
 
 	go func() {
-		<-sigCh
-		fmt.Fprintln(os.Stderr, "\nReceived interrupt, stopping gracefully...")
-		cancel()
+		select {
+		case <-sigCh:
+			fmt.Fprintln(os.Stderr, "\nReceived interrupt, stopping gracefully...")
+			cancel()
+		case <-ctx.Done():
+		}
 	}()
 
 	// Keep Prometheus scrapes current while the test runs, not just after it.
@@ -926,9 +931,11 @@ func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config
 		return reporter.JSONSummary(result.Summary, result.Thresholds)
 	}
 
-	// Exit with error code if thresholds failed
+	// Failed thresholds exit 1. Returned, not os.Exit, so the deferred cleanup
+	// (metrics exporters, signal handler) still runs. The summary already said
+	// which thresholds failed, so the error carries no message.
 	if result.HasThresholdFailures() {
-		os.Exit(ExitTestFailure)
+		return newExitError(ExitTestFailure, "")
 	}
 
 	return nil
