@@ -3,6 +3,7 @@
   "values": [
     {"key": "baseUrl", "value": "https://staging.example.com", "enabled": true},
     {"key": "token", "value": "abc", "enabled": true},
+    {"key": "orgId", "value": 1234567, "enabled": true},
     {"key": "off", "value": "no", "enabled": false}
   ],
   "_postman_variable_scope": "environment"

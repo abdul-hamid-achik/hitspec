@@ -25,6 +25,9 @@ func TestGolden(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !strings.Contains(y, "port: 1234567\n") || strings.Contains(y, "e+") {
+		t.Errorf("a 7-digit number must stay plain in the YAML:\n%s", y)
+	}
 	out := res.Content + "\n# environments:\n" + y + "\n# warnings:\n# - " + strings.Join(res.Warnings, "\n# - ") + "\n"
 	importtest.Golden(t, "export.http", out)
 }

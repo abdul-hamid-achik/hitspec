@@ -51,7 +51,7 @@ func (c *Converter) Convert(data []byte) (*result.Result, error) {
 			if v.Enabled != nil && !*v.Enabled {
 				continue
 			}
-			vars[v.Key] = convertVariable(res, fmt.Sprint(v.Value))
+			vars[v.Key] = convertVariable(res, result.Scalar(v.Value))
 		}
 		res.Environments = map[string]map[string]any{name: vars}
 		res.DefaultEnvironment = name
@@ -73,7 +73,7 @@ func (c *Converter) Convert(data []byte) (*result.Result, error) {
 		if v.Key == "" || v.Disabled {
 			continue
 		}
-		fmt.Fprintf(&sb, "@%s = %s\n", v.Key, oneLine(convertVariable(res, fmt.Sprint(valueOrEmpty(v.Value)))))
+		fmt.Fprintf(&sb, "@%s = %s\n", v.Key, oneLine(convertVariable(res, result.Scalar(v.Value))))
 		wroteVar = true
 	}
 	if wroteVar {
@@ -98,13 +98,6 @@ func dedupe(in []string) []string {
 		}
 	}
 	return out
-}
-
-func valueOrEmpty(v any) any {
-	if v == nil {
-		return ""
-	}
-	return v
 }
 
 var envNameBad = regexp.MustCompile(`[^A-Za-z0-9_-]+`)
@@ -298,7 +291,7 @@ func (w *writer) res2url(u postmanURL, note func(string, ...any)) string {
 			if v.Key == "" {
 				continue
 			}
-			val := fmt.Sprint(valueOrEmpty(v.Value))
+			val := result.Scalar(v.Value)
 			if val == "" {
 				val = "{{" + v.Key + "}}"
 			}

@@ -3,7 +3,7 @@
 
 @baseUrl = https://pets.example.com/v1
 @id = 123e4567-e89b-12d3-a456-426614174000
-@petId = 42
+@petId = 1234567
 @photoId = example
 @getUser_id = 1
 

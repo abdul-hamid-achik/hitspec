@@ -2,7 +2,8 @@
   "info": {"name": "Demo API", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
   "variable": [
     {"key": "baseUrl", "value": "https://api.example.com"},
-    {"key": "version", "value": 2}
+    {"key": "version", "value": 2},
+    {"key": "orgId", "value": 1234567}
   ],
   "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{token}}", "type": "string"}]},
   "item": [

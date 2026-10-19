@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/import/curl"
@@ -193,6 +194,9 @@ func init() {
 	importCmd.AddCommand(importInsomniaCmd)
 }
 
+// fileRefLine matches the body and multipart lines that name a file.
+var fileRefLine = regexp.MustCompile(`(?m)^(< |file @)\S`)
+
 // isDirOutput reports whether -o names a directory: a trailing separator or
 // an existing directory.
 func isDirOutput(out string) bool {
@@ -259,6 +263,9 @@ func emitImport(cmd *cobra.Command, res *result.Result, source, fallback string)
 		}
 	}
 	if !envOnly {
+		if fileRefLine.MatchString(res.Content) && filepath.Dir(outPath) != "." {
+			printWarnings(stderr, []string{fmt.Sprintf("the output refers to files (< ./x or file @./x); hitspec resolves them relative to %s, so keep those files in %s", outPath, filepath.Dir(outPath))})
+		}
 		if err := os.WriteFile(outPath, []byte(res.Content), 0o644); err != nil {
 			return fmt.Errorf("failed to write output file: %w", err)
 		}
@@ -281,6 +288,15 @@ func emitImport(cmd *cobra.Command, res *result.Result, source, fallback string)
 			return fmt.Errorf("failed to write environments: %w", err)
 		}
 		fmt.Fprintf(stdout, "Wrote %d environment(s) to %s%s\n", len(res.Environments), cfg, note)
+		// hitspec only finds hitspec.yaml in the current directory, so say how
+		// to use one that sits next to the output.
+		hint := "--config " + cfg
+		if importOutputFlag != "" && !envOnly {
+			hint = "hitspec run " + outPath + " " + hint
+		} else {
+			hint = "hitspec run <file> " + hint
+		}
+		fmt.Fprintf(stdout, "Use it with: %s --env <%s>\n", hint, strings.Join(res.EnvironmentNames(), "|"))
 	}
 	return nil
 }

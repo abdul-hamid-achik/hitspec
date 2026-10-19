@@ -623,24 +623,24 @@ func (c *Converter) convertPathParams(st *state, path, opName string, allParams 
 // the type. forPath asks for a value that is stable across runs.
 func (c *Converter) getParamExample(param *openapi3.Parameter, forPath bool) string {
 	if param.Example != nil {
-		return fmt.Sprintf("%v", param.Example)
+		return result.Scalar(param.Example)
 	}
 	for _, ex := range sortedExamples(param.Examples) {
 		if ex != nil {
-			return fmt.Sprintf("%v", ex)
+			return result.Scalar(ex)
 		}
 	}
 
 	if param.Schema != nil && param.Schema.Value != nil {
 		schema := param.Schema.Value
 		if schema.Example != nil {
-			return fmt.Sprintf("%v", schema.Example)
+			return result.Scalar(schema.Example)
 		}
 		if schema.Default != nil {
-			return fmt.Sprintf("%v", schema.Default)
+			return result.Scalar(schema.Default)
 		}
 		if len(schema.Enum) > 0 {
-			return fmt.Sprintf("%v", schema.Enum[0])
+			return result.Scalar(schema.Enum[0])
 		}
 
 		// Generate based on type
@@ -765,7 +765,7 @@ func (c *Converter) generateMultipartFromSchema(schema *openapi3.Schema, note fu
 		}
 		value := "example"
 		if prop != nil && prop.Example != nil {
-			value = fmt.Sprintf("%v", prop.Example)
+			value = result.Scalar(prop.Example)
 		}
 		fmt.Fprintf(&sb, "field %s = %s\n", n, value)
 	}
@@ -896,7 +896,7 @@ func (c *Converter) generateFormFromSchema(schema *openapi3.Schema) string {
 		value := "example"
 		if propSchema != nil && propSchema.Value != nil {
 			if propSchema.Value.Example != nil {
-				value = fmt.Sprintf("%v", propSchema.Value.Example)
+				value = result.Scalar(propSchema.Value.Example)
 			}
 		}
 		parts = append(parts, name+"="+value)

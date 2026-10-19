@@ -2,6 +2,8 @@
 
 exec hitspec import insomnia ex.json -o out/api.http
 stdout 'Wrote 3 environment\(s\) to out/hitspec.yaml'
+# hitspec only auto-loads ./hitspec.yaml, so the message says how to use this one.
+stdout 'Use it with: hitspec run out/api.http --config out/hitspec.yaml --env <base\|dev\|production>'
 exists out/hitspec.yaml
 grep 'defaultEnvironment: base' out/hitspec.yaml
 grep 'baseUrl: http://localhost:3000' out/hitspec.yaml
@@ -10,17 +12,38 @@ exec hitspec validate out/api.http
 grep 'GET \{\{baseUrl\}\}/users' out/api.http
 grep '^# @auth bearer \{\{token\}\}$' out/api.http
 
+grep 'environments section \(base, dev, production\)' out/api.http
+
 # An existing hitspec.yaml is never overwritten.
 exec hitspec import insomnia ex.json -o out/second.http
 stdout 'hitspec.imported.yaml'
 stdout 'already exists'
 exists out/hitspec.imported.yaml
 
+# The imported environments are really used: with --config pointing at the
+# written file, --env selects the per-environment values (Dev overrides path).
+exec hitspec import insomnia run.json -o runout/api.http --no-tests
+grep 'big: 1234567' runout/hitspec.yaml
+! grep 'e\+' runout/hitspec.yaml
+exec hitspec run runout/api.http --config runout/hitspec.yaml --env dev --output json
+stdout '"passed": true'
+stdout '/status/204'
+exec hitspec run runout/api.http --config runout/hitspec.yaml --env prod --output json
+stdout '/status/200'
+! stdout '/status/204'
+
 # To stdout the environments go to stderr.
 exec hitspec import insomnia ex.json
 stderr 'defaultEnvironment: base'
 stderr 'production:'
 
+-- run.json --
+{"_type":"export","__export_format":4,"resources":[
+ {"_id":"w","_type":"workspace","name":"W"},
+ {"_id":"e0","_type":"environment","parentId":"w","name":"Base","data":{"path":"/status/200","big":1234567}},
+ {"_id":"e1","_type":"environment","parentId":"e0","name":"Dev","data":{"baseUrl":"{{$env(SERVER)}}","path":"/status/204"}},
+ {"_id":"e2","_type":"environment","parentId":"e0","name":"Prod","data":{"baseUrl":"{{$env(SERVER)}}"}},
+ {"_id":"r","_type":"request","parentId":"w","name":"Ping","method":"GET","url":"{{ _.baseUrl }}{{ _.path }}"}]}
 -- ex.json --
 {"_type":"export","__export_format":4,"resources":[
  {"_id":"w","_type":"workspace","name":"W"},

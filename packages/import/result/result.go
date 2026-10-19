@@ -3,8 +3,11 @@
 package result
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -35,6 +38,16 @@ func (r *Result) Warn(format string, args ...any) {
 		}
 	}
 	r.Warnings = append(r.Warnings, msg)
+}
+
+// EnvironmentNames returns the environment names in sorted order.
+func (r *Result) EnvironmentNames() []string {
+	names := make([]string, 0, len(r.Environments))
+	for n := range r.Environments {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // HasEnvironments reports whether the result carries a hitspec.yaml fragment.
@@ -104,4 +117,34 @@ func (r *Result) ContentWithEnvironments() string {
 		sb.WriteString("# " + line + "\n")
 	}
 	return sb.String()
+}
+
+// Scalar renders a decoded JSON/YAML value as text. Numbers decode as float64,
+// which fmt would print as 1.234567e+06 for a 7-digit ID; they are written in
+// plain decimal instead. Maps and slices become JSON.
+func Scalar(v any) string {
+	switch t := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return t
+	case float64:
+		return strconv.FormatFloat(t, 'f', -1, 64)
+	case float32:
+		return strconv.FormatFloat(float64(t), 'f', -1, 32)
+	case map[string]any, []any, map[any]any:
+		if b, err := json.Marshal(t); err == nil {
+			return string(b)
+		}
+	}
+	return fmt.Sprint(v)
+}
+
+// Normalize turns whole-number float64 values (how JSON decodes every number)
+// into int64 so YAML writes 1234567 instead of 1.234567e+06.
+func Normalize(v any) any {
+	if f, ok := v.(float64); ok && f == math.Trunc(f) && math.Abs(f) < 1e15 {
+		return int64(f)
+	}
+	return v
 }

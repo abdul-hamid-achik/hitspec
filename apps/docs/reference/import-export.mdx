@@ -233,6 +233,9 @@ hitspec import insomnia <export-file> [flags]
   base), written next to the output, or printed to stderr when writing to stdout.
   An existing `hitspec.yaml` is never overwritten (`hitspec.imported.yaml` is
   written instead).
+  hitspec only auto-loads `hitspec.yaml` from the current directory, so for a
+  file written next to the output pass it explicitly:
+  `hitspec run tests/api.http --config tests/hitspec.yaml --env dev`.
 - Authentication (Bearer, Basic, API Key, Digest) as `@auth`
 - Request bodies (JSON, raw, form-urlencoded, multipart, GraphQL, file)
 - Headers and query parameters

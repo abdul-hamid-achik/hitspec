@@ -17,6 +17,9 @@ func TestGoldenCollection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !strings.Contains(res.Content, "@orgId = 1234567\n") {
+		t.Errorf("a 7-digit variable must not become scientific notation:\n%s", res.Content)
+	}
 	f := importtest.Validate(t, res.Content)
 	if len(f.Requests) != 7 {
 		t.Errorf("want 7 requests, got %d", len(f.Requests))
@@ -51,6 +54,9 @@ func TestEnvironmentExport(t *testing.T) {
 	y, err := res.EnvironmentsYAML()
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !strings.Contains(y, "orgId: \"1234567\"") && !strings.Contains(y, "orgId: 1234567") {
+		t.Errorf("orgId lost its plain form:\n%s", y)
 	}
 	importtest.Golden(t, "environment.yaml", y)
 }

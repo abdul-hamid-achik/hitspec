@@ -198,10 +198,7 @@ func runExport(cmd *cobra.Command, format, filePath string) error {
 	}
 
 	// Generate output
-	comment := "#"
-	if format == "fetch" || format == "go" {
-		comment = "//"
-	}
+	comment := snippet.Comment(format)
 	var sb strings.Builder
 	rendered := 0
 	var lastErr error

@@ -47,7 +47,7 @@ paths:
       tags: [pets]
       operationId: uploadPhoto
       parameters:
-        - {name: petId, in: path, required: true, example: 42, schema: {type: integer}}
+        - {name: petId, in: path, required: true, example: 1234567, schema: {type: integer}}
         - {name: photoId, in: path, required: true, schema: {type: string}}
       requestBody:
         content:

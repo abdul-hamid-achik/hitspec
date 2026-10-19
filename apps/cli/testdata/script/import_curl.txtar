@@ -14,6 +14,7 @@ exec hitspec validate out/post.http
 
 # -o dir/ writes <dir>/<source>.http
 exec hitspec import curl @cmds.txt -o outdir/
+stderr 'warning: the output refers to files .* keep those files in outdir'
 exists outdir/cmds.http
 exec hitspec validate outdir/cmds.http
 grep '< \./body.json' outdir/cmds.http

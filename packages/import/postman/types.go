@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/import/result"
 )
 
 // collection is a Postman Collection v2.x document. The same struct also
@@ -268,14 +270,14 @@ func (a *auth) params() map[string]string {
 	}
 	if json.Unmarshal(raw, &list) == nil {
 		for _, e := range list {
-			out[e.Key] = fmt.Sprint(valueOrEmpty(e.Value))
+			out[e.Key] = result.Scalar(e.Value)
 		}
 		return out
 	}
 	var obj map[string]any
 	if json.Unmarshal(raw, &obj) == nil {
 		for k, v := range obj {
-			out[k] = fmt.Sprint(valueOrEmpty(v))
+			out[k] = result.Scalar(v)
 		}
 	}
 	return out

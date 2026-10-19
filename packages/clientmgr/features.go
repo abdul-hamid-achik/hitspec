@@ -734,12 +734,25 @@ func (m *Manager) Export(ctx context.Context, req ExportReq) (ExportResultDTO, e
 		reqs = parsed.Requests
 	}
 	commands := make([]string, 0, len(reqs))
+	rendered := 0
+	var lastErr error
 	for _, r := range reqs {
 		cmd, err := snippet.Render(req.Format, r)
 		if err != nil {
-			return ExportResultDTO{}, err
+			// One request a format cannot express (multipart, file body) must not
+			// fail a whole-file export; say so in its place, as `hitspec export` does.
+			if req.RequestName != "" {
+				return ExportResultDTO{}, err
+			}
+			lastErr = err
+			cmd = snippet.Comment(req.Format) + " SKIPPED: " + err.Error()
+		} else {
+			rendered++
 		}
 		commands = append(commands, cmd)
+	}
+	if rendered == 0 && lastErr != nil {
+		return ExportResultDTO{}, lastErr
 	}
 	return ExportResultDTO{Commands: commands}, nil
 }

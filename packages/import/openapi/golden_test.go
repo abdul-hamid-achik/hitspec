@@ -17,7 +17,7 @@ func TestGoldenPetstore(t *testing.T) {
 		t.Errorf("want 4 requests, got %d", len(f.Requests))
 	}
 	// Path params must be backed by variables, not left unresolved.
-	for _, want := range []string{"@id = 123e4567-e89b-12d3-a456-426614174000", "@getUser_id = 1", "@petId = 42", "GET {{baseUrl}}/users/{{getUser_id}}"} {
+	for _, want := range []string{"@id = 123e4567-e89b-12d3-a456-426614174000", "@getUser_id = 1", "@petId = 1234567", "GET {{baseUrl}}/users/{{getUser_id}}"} {
 		if !strings.Contains(res.Content, want) {
 			t.Errorf("missing %q", want)
 		}

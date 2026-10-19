@@ -208,12 +208,12 @@ func (c *Converter) writeEnvironments(sb *strings.Builder, res *result.Result, e
 			switch t := v.(type) {
 			case string:
 				out[k] = c.convertVariable(t)
-			case float64, bool, nil:
-				if t == nil {
-					out[k] = ""
-				} else {
-					out[k] = t
-				}
+			case float64:
+				out[k] = result.Normalize(t)
+			case bool:
+				out[k] = t
+			case nil:
+				out[k] = ""
 			default:
 				b, _ := json.Marshal(t)
 				out[k] = string(b)
@@ -234,7 +234,7 @@ func (c *Converter) writeEnvironments(sb *strings.Builder, res *result.Result, e
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			fmt.Fprintf(sb, "@%s = %v\n", k, oneLine(fmt.Sprint(vars[k])))
+			fmt.Fprintf(sb, "@%s = %s\n", k, oneLine(result.Scalar(vars[k])))
 		}
 		if len(keys) > 0 {
 			sb.WriteString("\n")
@@ -263,7 +263,7 @@ func (c *Converter) writeEnvironments(sb *strings.Builder, res *result.Result, e
 		}
 		res.Environments[name] = merged
 	}
-	fmt.Fprintf(sb, "# Environment variables are in the environments section of hitspec.yaml (use --env %s).\n\n", "<name>")
+	fmt.Fprintf(sb, "# Environment variables are in the hitspec.yaml environments section (%s); select one with --env.\n\n", strings.Join(res.EnvironmentNames(), ", "))
 }
 
 var envNameBad = regexp.MustCompile(`[^A-Za-z0-9_-]+`)

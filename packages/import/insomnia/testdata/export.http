@@ -1,6 +1,6 @@
 # Generated from Insomnia export
 
-# Environment variables are in the environments section of hitspec.yaml (use --env <name>).
+# Environment variables are in the hitspec.yaml environments section (base, development, production); select one with --env.
 
 ### Users - List
 # @name list
@@ -77,18 +77,21 @@ environments:
         baseUrl: https://api.example.com
         debug: false
         nested: '{"a":1}'
+        port: 1234567
         retries: 3
         token: base-token
     development:
         baseUrl: http://localhost:3000
         debug: false
         nested: '{"a":1}'
+        port: 1234567
         retries: 3
         token: base-token
     production:
         baseUrl: https://api.example.com
         debug: false
         nested: '{"a":1}'
+        port: 1234567
         retries: 3
         token: '{{prodToken}}'
 

@@ -103,16 +103,20 @@ func Render(format string, req *parser.Request, opts ...Option) (string, error) 
 	case "ruby":
 		body = rubySnippet(p)
 	}
-	comment := "#"
-	if f == "fetch" || f == "go" {
-		comment = "//"
-	}
 	var sb strings.Builder
 	for _, n := range p.notes {
-		sb.WriteString(comment + " NOTE: " + n + "\n")
+		sb.WriteString(Comment(f) + " NOTE: " + n + "\n")
 	}
 	sb.WriteString(body)
 	return sb.String(), nil
+}
+
+// Comment returns the line-comment prefix of the given format's language.
+func Comment(format string) string {
+	if f, _ := Normalize(format); f == "fetch" || f == "go" {
+		return "//"
+	}
+	return "#"
 }
 
 func describe(r *parser.Request) string {
