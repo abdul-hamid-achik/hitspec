@@ -36,6 +36,9 @@ type Metrics struct {
 	// Per-request metrics
 	requestMetrics map[string]*RequestMetrics
 
+	// statusCodes counts responses by HTTP status code (guarded by mu).
+	statusCodes map[int]int64
+
 	// Time series for real-time display
 	timeSeries    []TimePoint
 	lastTimePoint time.Time
@@ -77,6 +80,7 @@ func NewMetrics() *Metrics {
 		// Histogram: 1us to 60s range, 3 significant digits
 		histogram:      hdrhistogram.New(1, 60_000_000, 3),
 		requestMetrics: make(map[string]*RequestMetrics),
+		statusCodes:    make(map[int]int64),
 		timeSeries:     make([]TimePoint, 0, 1000),
 	}
 }
@@ -155,6 +159,13 @@ func (m *Metrics) recordRequestMetrics(name string, duration time.Duration, err 
 	rm.mu.Lock()
 	_ = rm.Histogram.RecordValue(latencyUs)
 	rm.mu.Unlock()
+}
+
+// RecordStatus counts one response by its HTTP status code.
+func (m *Metrics) RecordStatus(code int) {
+	m.mu.Lock()
+	m.statusCodes[code]++
+	m.mu.Unlock()
 }
 
 // RecordTimeout records a timeout
@@ -312,6 +323,10 @@ type Summary struct {
 	Mean   time.Duration
 	StdDev time.Duration
 
+	// StatusCodes counts the responses received by HTTP status code. Requests
+	// that failed before a response (timeouts, connection errors) are not in it.
+	StatusCodes map[int]int64
+
 	// Per-request breakdown
 	RequestBreakdown map[string]*RequestSummary
 
@@ -388,6 +403,11 @@ func (m *Metrics) GetSummary() *Summary {
 		Mean:              time.Duration(m.histogram.Mean()) * time.Microsecond,
 		StdDev:            time.Duration(m.histogram.StdDev()) * time.Microsecond,
 		TimeSeries:        m.timeSeries,
+	}
+
+	summary.StatusCodes = make(map[int]int64, len(m.statusCodes))
+	for code, n := range m.statusCodes {
+		summary.StatusCodes[code] = n
 	}
 
 	// Per-request breakdown

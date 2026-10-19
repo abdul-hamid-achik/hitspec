@@ -548,6 +548,8 @@ func (r *Runner) executeScheduledRequest(ctx context.Context, sched *ScheduledRe
 		return err
 	}
 
+	r.metrics.RecordStatus(resp.StatusCode)
+
 	// Assertions are evaluated on the response; failures are counted in their
 	// own metric, apart from the errors. A non-2xx status the request itself
 	// asserts on (expect status 404) is expected, so it is not an error.

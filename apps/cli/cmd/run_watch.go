@@ -85,27 +85,28 @@ func (f adderFunc) Add(name string) error { return f(name) }
 // reloadRunSettings rebuilds the runner configuration for a watch pass from
 // hitspec.yaml, the env file and the flags as they are now, so an edit to
 // either takes effect on the next pass (a runner reads its env file once, at
-// construction). The history store is carried over. On error the caller keeps
-// the previous runner.
-func reloadRunSettings(flags *pflag.FlagSet, previous *runner.Config, tagsFilter []string) (*runner.Runner, *runner.Config, error) {
+// construction). The history store is carried over. noColor is the reloaded
+// color setting, which lives outside the runner configuration. On error the
+// caller keeps the previous runner.
+func reloadRunSettings(flags *pflag.FlagSet, previous *runner.Config, tagsFilter []string) (*runner.Runner, *runner.Config, bool, error) {
 	fileConfig, err := config.LoadConfig(configFlag)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
 	environment, _ := resolveEnvironment(envFlag, fileConfig)
 	cfg, _, err := buildRunnerConfig(flags, fileConfig, environment, tagsFilter)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
 	// Same rule as the first pass: a missing env file is a config error, so
 	// the previous settings stay rather than running without its variables.
 	if cfg.EnvFile != "" {
 		if _, err := os.Stat(cfg.EnvFile); err != nil {
-			return nil, nil, fmt.Errorf("env file: %w", err)
+			return nil, nil, false, fmt.Errorf("env file: %w", err)
 		}
 	}
 	if previous != nil {
 		cfg.HistoryStore = previous.HistoryStore
 	}
-	return runner.NewRunner(cfg), cfg, nil
+	return runner.NewRunner(cfg), cfg, noColorEnabled(flags, fileConfig.GetNoColor()), nil
 }
