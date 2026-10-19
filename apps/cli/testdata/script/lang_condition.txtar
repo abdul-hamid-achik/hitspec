@@ -1,0 +1,52 @@
+# @if / @unless compare with == and != (they used to run on any non-empty
+# string), and a bare value is still truthy/falsy.
+
+exitcode 0 hitspec run cond.http
+stdout 'Tests: 4 passed, 3 skipped, 7 total'
+stdout '✓ prodOnly'
+stdout '✓ notStaging'
+stdout '✓ bareTruthy'
+stdout '✓ unlessDev'
+stdout '- stagingOnly \(condition not met\)'
+stdout '- devOnly \(condition not met\)'
+stdout '- bareFalsy \(condition not met\)'
+
+-- cond.http --
+@env = prod
+@flag = true
+@off = false
+
+### stagingOnly
+# @name stagingOnly
+# @if {{env}} == "staging"
+GET {{$env(SERVER)}}/status/200
+
+### devOnly
+# @name devOnly
+# @if {{env}} == dev || {{env}} == "test"
+GET {{$env(SERVER)}}/status/200
+
+### prodOnly
+# @name prodOnly
+# @if {{env}} == "prod"
+GET {{$env(SERVER)}}/status/200
+
+### notStaging
+# @name notStaging
+# @if {{env}} != staging && {{flag}}
+GET {{$env(SERVER)}}/status/200
+
+### bareTruthy
+# @name bareTruthy
+# @if {{flag}}
+GET {{$env(SERVER)}}/status/200
+
+### bareFalsy
+# @name bareFalsy
+# @if {{off}}
+GET {{$env(SERVER)}}/status/200
+
+### unlessDev
+# @name unlessDev
+# @unless {{env}} == "dev"
+GET {{$env(SERVER)}}/status/200
