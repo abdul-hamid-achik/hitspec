@@ -1,0 +1,27 @@
+# Command-line mistakes found by the argument parser exit 64 (EX_USAGE) with
+# the error and a pointer to --help on stderr, and nothing on stdout.
+
+exitcode 64 hitspec run --bogus req.http
+stderr 'Error: unknown flag: --bogus'
+stderr 'Run ''hitspec run --help'' for usage'
+! stdout .
+
+exitcode 64 hitspec bogus
+stderr 'unknown command "bogus"'
+stderr 'Run ''hitspec --help'' for usage'
+
+exitcode 64 hitspec run --parallel=maybe req.http
+stderr 'invalid argument "maybe"'
+
+exitcode 64 hitspec import curl
+stderr 'accepts 1 arg'
+
+exitcode 64 hitspec mock
+stderr 'requires at least 1 arg'
+
+# A mistake found later by the command itself keeps its own code.
+exitcode 1 hitspec run missing.http
+stderr 'missing.http'
+
+-- req.http --
+GET {{$env(SERVER)}}/json

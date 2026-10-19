@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"runtime/debug"
@@ -36,7 +37,13 @@ func Execute(v, bt string) {
 	version, buildTime = resolveVersion(v, bt, info)
 	rootCmd.Version = version
 	rootCmd.SetVersionTemplate("hitspec version {{.Version}}\n")
+	markUsageErrors(rootCmd)
 	if err := rootCmd.Execute(); err != nil {
+		var usage usageError
+		if errors.As(err, &usage) || isCobraUsageError(err) {
+			fmt.Fprintf(os.Stderr, "Error: %v\nRun '%s --help' for usage.\n", err, commandPathFor(os.Args[1:]))
+			os.Exit(ExitUsageError)
+		}
 		// An ExitCoder carries a semantically distinct exit code (parse,
 		// config, ...); emit it directly without the generic "Error:" line,
 		// since the command already printed its own diagnostics.
@@ -46,6 +53,15 @@ func Execute(v, bt string) {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// commandPathFor names the deepest command args select ("hitspec run"), for
+// the usage hint; it falls back to "hitspec".
+func commandPathFor(args []string) string {
+	if c, _, err := rootCmd.Find(args); err == nil && c != nil {
+		return c.CommandPath()
+	}
+	return rootCmd.CommandPath()
 }
 
 func init() {

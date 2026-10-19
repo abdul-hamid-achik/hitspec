@@ -77,7 +77,7 @@ Examples:
 func init() {
 	f := studioCmd.Flags()
 	f.BoolVarP(&studioWatchFlag, "watch", "w", true, "Watch for file changes")
-	f.BoolVar(&studioReadOnlyFlag, "read-only", false, "Disallow file mutations")
+	f.BoolVar(&studioReadOnlyFlag, "read-only", false, "Refuse workspace and hitspec.yaml writes (running requests, stress, mock and contract stay available)")
 	f.StringVarP(&studioEnvFlag, "env", "e", "", "Default environment (default: hitspec.yaml defaultEnvironment, else dev)")
 	f.StringVar(&studioConfigFlag, "config", "", "Path to hitspec.yaml")
 	f.BoolVarP(&studioVerboseFlag, "verbose", "v", false, "Verbose logging")
