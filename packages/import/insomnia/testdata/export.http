@@ -29,12 +29,11 @@ expect status < 400
 ### Users - Upload
 # @name upload
 # TODO: auth type "oauth2" is not supported and was dropped
-# TODO: multipart file field name "doc" cannot be expressed by hitspec's `file @path` line; set the name by hand
 POST {{baseUrl}}/up
 
 >>>multipart
 field title = T
-file @./doc.pdf
+file doc @./doc.pdf
 <<<
 
 >>>
@@ -98,5 +97,4 @@ environments:
 # warnings:
 # - environment variable "nested" in "Base Environment" is an object/array; stored as a JSON string
 # - Upload: auth type "oauth2" is not supported and was dropped
-# - Upload: multipart file field name "doc" cannot be expressed by hitspec's `file @path` line; set the name by hand
 # - Insomnia template tags ({% ... %}) have no hitspec equivalent and were left as is

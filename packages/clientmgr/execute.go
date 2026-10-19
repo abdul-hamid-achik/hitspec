@@ -154,6 +154,7 @@ func (m *Manager) run(ctx context.Context, file, requestName string, requestInde
 		if event.Status == "completed" && event.Result != nil {
 			progress.Passed = event.Result.Passed
 			progress.Duration = float64(event.Result.Duration.Milliseconds())
+			progress.Warnings = event.Warnings
 		}
 		m.publish("request_progress", progress)
 	}

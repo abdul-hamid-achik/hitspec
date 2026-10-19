@@ -127,6 +127,9 @@ func (c *Config) GetBail() bool {
 
 // GetVerbose returns the verbose setting, defaulting to false
 func (c *Config) GetVerbose() bool {
+	if c == nil {
+		return false
+	}
 	return getBool(c.Verbose, false)
 }
 

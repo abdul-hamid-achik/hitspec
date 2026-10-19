@@ -1,0 +1,16 @@
+# --dry-run and --stress cannot be combined: a usage error, nothing is sent.
+exitcode 64 hitspec run --no-history --dry-run --stress api.http
+stderr '--dry-run cannot be combined with --stress'
+! stdout .
+
+# --dry-run alone still plans the file.
+exitcode 0 hitspec run --no-history --dry-run api.http
+stdout 'Would run: api\.http \(1 to run, 0 skipped\)'
+
+-- api.http --
+### One
+GET http://127.0.0.1:1/x
+
+>>>
+expect status 200
+<<<

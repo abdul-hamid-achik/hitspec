@@ -816,8 +816,8 @@ func (c *Converter) generateMultipartFromSchema(schema *openapi3.Schema, note fu
 			prop = ref.Value
 		}
 		if prop != nil && prop.Format == "binary" {
-			fmt.Fprintf(&sb, "file @./%s\n", n)
-			note("multipart file field name %q cannot be expressed by hitspec's `file @path` line; point it at a real file and set the name by hand", n)
+			fmt.Fprintf(&sb, "%s\n", result.MultipartFileLine(n, "./"+n))
+			note("multipart file field %q points at the placeholder ./%s; point it at a real file", n, n)
 			continue
 		}
 		value := "example"

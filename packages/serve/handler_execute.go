@@ -80,6 +80,7 @@ func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 		if event.Status == "completed" && event.Result != nil {
 			progress.Passed = event.Result.Passed
 			progress.Duration = float64(event.Result.Duration.Milliseconds())
+			progress.Warnings = event.Warnings
 		}
 		s.hub.Broadcast("request_progress", progress)
 	}

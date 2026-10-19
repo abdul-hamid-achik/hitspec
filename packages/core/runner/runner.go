@@ -188,6 +188,9 @@ type ProgressEvent struct {
 	Index       int            `json:"index"`
 	Total       int            `json:"total"`
 	Result      *RequestResult `json:"-"` // Only set for "completed" events
+	// Warnings are the finished request's RequestResult.Warnings; set only on
+	// "completed" events.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 func (r *Runner) RunFile(path string) (*RunResult, error) {

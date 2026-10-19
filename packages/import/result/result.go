@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"gopkg.in/yaml.v3"
 )
@@ -147,4 +148,24 @@ func Normalize(v any) any {
 		return int64(f)
 	}
 	return v
+}
+
+// CanNameMultipartFile reports whether name fits the `file <name> @<path>` line
+// of a >>>multipart block: one word, not starting with "@".
+func CanNameMultipartFile(name string) bool {
+	if name == "" || strings.HasPrefix(name, "@") {
+		return false
+	}
+	return !strings.ContainsFunc(name, unicode.IsSpace)
+}
+
+// MultipartFileLine renders a multipart file part so the form field name
+// survives a round trip: `file <name> @<path>`. A name that cannot be written
+// that way (see CanNameMultipartFile) gives the unnamed `file @<path>`, which
+// hitspec sends as field "file"; the caller should warn then.
+func MultipartFileLine(name, path string) string {
+	if CanNameMultipartFile(name) {
+		return "file " + name + " @" + path
+	}
+	return "file @" + path
 }

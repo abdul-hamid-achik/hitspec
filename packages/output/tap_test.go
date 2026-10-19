@@ -9,6 +9,7 @@ import (
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/assertions"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
+	"gopkg.in/yaml.v3"
 )
 
 func TestTAPFormatter_PassingTest(t *testing.T) {
@@ -212,12 +213,80 @@ func TestEscapeYAML(t *testing.T) {
 		{"simple text", "simple text"},
 		{"has: colon", `"has: colon"`},
 		{`has "quotes"`, `"has \"quotes\""`},
-		{"has\nnewline", "\"has\nnewline\""},
+		{"has\nnewline", `"has\nnewline"`},
+		{`back\slash`, `"back\\slash"`},
+		{"tab\there", `"tab\there"`},
 	}
 	for _, tt := range tests {
 		got := escapeYAML(tt.input)
 		if got != tt.want {
 			t.Errorf("escapeYAML(%q) = %q, want %q", tt.input, got, tt.want)
 		}
+	}
+}
+
+// A failure whose message holds newlines, quotes and backslashes must stay a
+// valid YAML block that round-trips to the original text.
+func TestTAPFormatter_MultilineMessageIsValidYAML(t *testing.T) {
+	var buf bytes.Buffer
+	f := NewTAPFormatter(TAPWithWriter(&buf))
+
+	actual := "line one\nline \"two\"\nC:\\path\\n"
+	f.FormatResult(makeRunResult([]*runner.RequestResult{
+		{
+			Name:   "multi",
+			Passed: false,
+			Assertions: []*assertions.Result{
+				{Subject: "body", Operator: "==", Expected: "x", Actual: actual, Passed: false},
+			},
+		},
+		{
+			Name:   "broken",
+			Passed: false,
+			Error:  errors.New("dial failed\nsecond line \\ backslash"),
+		},
+	}))
+	if err := f.Flush(time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+
+	// Cut out the two YAMLish blocks (between "  ---" and "  ...").
+	var blocks []string
+	var cur []string
+	in := false
+	for _, line := range strings.Split(buf.String(), "\n") {
+		switch {
+		case line == "  ---":
+			in, cur = true, nil
+		case line == "  ...":
+			in = false
+			blocks = append(blocks, strings.Join(cur, "\n"))
+		case in:
+			cur = append(cur, line)
+		}
+	}
+	if len(blocks) != 2 {
+		t.Fatalf("want 2 diagnostic blocks, got %d:\n%s", len(blocks), buf.String())
+	}
+
+	var first struct {
+		Failures []string `yaml:"failures"`
+	}
+	if err := yaml.Unmarshal([]byte(blocks[0]), &first); err != nil {
+		t.Fatalf("failure block is not valid YAML: %v\n%s", err, blocks[0])
+	}
+	want := "body ==: expected x, got " + actual
+	if len(first.Failures) != 1 || first.Failures[0] != want {
+		t.Errorf("failures = %q, want [%q]", first.Failures, want)
+	}
+
+	var second struct {
+		Message string `yaml:"message"`
+	}
+	if err := yaml.Unmarshal([]byte(blocks[1]), &second); err != nil {
+		t.Fatalf("error block is not valid YAML: %v\n%s", err, blocks[1])
+	}
+	if second.Message != "dial failed\nsecond line \\ backslash" {
+		t.Errorf("message = %q", second.Message)
 	}
 }

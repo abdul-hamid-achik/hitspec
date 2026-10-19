@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
+	hitspechttp "github.com/abdul-hamid-achik/hitspec/v2/packages/http"
 )
 
 // Exporter converts hitspec requests to curl commands.
@@ -202,8 +203,13 @@ func (e *Exporter) buildBody(body *parser.Body) []string {
 		}
 
 	case parser.BodyForm, parser.BodyFormBlock:
-		// The raw body is already a name=value&name=value string; --data-urlencode
-		// would percent-encode its & and = separators.
+		// A "& key = value" block keeps its fields unencoded; encode them the
+		// way the client does. An inline form body is already a
+		// name=value&name=value string, and --data-urlencode would
+		// percent-encode its & and = separators.
+		if body.ContentType == parser.BodyFormBlock && len(body.FormFields) > 0 {
+			return []string{"-d", quote(hitspechttp.EncodeFormFields(body.FormFields, e.resolve))}
+		}
 		if body.Raw != "" {
 			return []string{"-d", quote(e.resolve(body.Raw))}
 		}

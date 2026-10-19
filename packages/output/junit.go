@@ -126,13 +126,19 @@ func (f *JUnitFormatter) FormatResult(result *runner.RunResult) {
 				Content: failureContext(r),
 			}
 		} else if !r.Passed {
-			// Collect failure messages from assertions
+			// One line per failed assertion. The evaluator's message already
+			// states what was expected and what was found, so it is used on
+			// its own; expected/actual are spelled out only when it is empty.
 			var failureMsg strings.Builder
 			for _, a := range r.Assertions {
-				if !a.Passed {
-					fmt.Fprintf(&failureMsg, "%s %s: expected %v, got %v. %s\n",
-						a.Subject, a.Operator, a.Expected, a.Actual, a.Message)
+				if a.Passed {
+					continue
 				}
+				detail := a.Message
+				if detail == "" {
+					detail = fmt.Sprintf("expected %v, got %v", a.Expected, a.Actual)
+				}
+				fmt.Fprintf(&failureMsg, "%s %s: %s\n", a.Subject, a.Operator, detail)
 			}
 			failureMsg.WriteString(failureContext(r))
 			tc.Failure = &JUnitFailure{

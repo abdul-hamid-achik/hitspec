@@ -176,6 +176,7 @@ func (r *Runner) runRequests(ctx context.Context, file *parser.File) (*RunResult
 					Index:       i,
 					Total:       len(filteredRequests),
 					Result:      reqResult,
+					Warnings:    reqResult.Warnings,
 				})
 			}
 
@@ -271,6 +272,7 @@ func (r *Runner) runParallel(ctx context.Context, requests []*parser.Request, ba
 					Index:       idx,
 					Total:       total,
 					Result:      results[idx],
+					Warnings:    results[idx].Warnings,
 				})
 			}
 		}(i, req)

@@ -29,12 +29,12 @@ expect status == 200
 ### uploadPhoto
 # @name uploadPhoto
 # @tags pets
-# TODO: multipart file field name "file" cannot be expressed by hitspec's `file @path` line; point it at a real file and set the name by hand
+# TODO: multipart file field "file" points at the placeholder ./file; point it at a real file
 POST {{baseUrl}}/pets/{{petId}}/photos/{{photoId}}
 
 >>>multipart
 field caption = example
-file @./file
+file file @./file
 <<<
 
 >>>
@@ -54,5 +54,5 @@ expect header Content-Type contains application/json
 
 
 # warnings:
-# - POST /pets/{petId}/photos/{photoId}: multipart file field name "file" cannot be expressed by hitspec's `file @path` line; point it at a real file and set the name by hand
+# - POST /pets/{petId}/photos/{photoId}: multipart file field "file" points at the placeholder ./file; point it at a real file
 # - the spec declares security requirements; authentication was not imported (add # @auth to the requests that need it)

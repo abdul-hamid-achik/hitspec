@@ -345,8 +345,10 @@ func (w *writer) body(b *postmanBody, headers *[][2]string, hasHeader func(strin
 					note("form file field %q has no file path; add `file @./path` by hand", f.Key)
 					continue
 				}
-				fmt.Fprintf(&sb, "file @%s\n", relativePath(src))
-				note("multipart file field name %q cannot be expressed by hitspec's `file @path` line; set the name by hand", f.Key)
+				fmt.Fprintf(&sb, "%s\n", result.MultipartFileLine(f.Key, relativePath(src)))
+				if !result.CanNameMultipartFile(f.Key) {
+					note("multipart file field name %q cannot be written as `file <name> @path` (it has spaces); the part is sent as field \"file\", set the name by hand", f.Key)
+				}
 				continue
 			}
 			fmt.Fprintf(&sb, "field %s = %s\n", f.Key, oneLine(convertVariable(w.res, f.Value)))

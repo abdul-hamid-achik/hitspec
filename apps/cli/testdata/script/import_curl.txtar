@@ -20,7 +20,7 @@ exec hitspec validate outdir/cmds.http
 grep '< \./body.json' outdir/cmds.http
 grep '>>>multipart' outdir/cmds.http
 grep '^field name = Jo$' outdir/cmds.http
-grep '^file @\./me.png$' outdir/cmds.http
+grep '^file avatar @\./me.png$' outdir/cmds.http
 grep '^Content-Type: application/json$' outdir/cmds.http
 grep '^Accept: application/json$' outdir/cmds.http
 grep '^# @name post_json_2$' outdir/cmds.http
