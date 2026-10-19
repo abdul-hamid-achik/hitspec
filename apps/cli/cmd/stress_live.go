@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"context"
+	"net"
+	"strconv"
 	"time"
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/export/metrics"
@@ -55,4 +57,13 @@ func publishPrometheusLive(ctx context.Context, src summarySource, exporters []m
 		close(done)
 		<-stopped
 	}
+}
+
+// promDisplayAddr renders the Prometheus endpoint for the "available at" line:
+// a loopback or wildcard bind shows as localhost.
+func promDisplayAddr(host string, port int) string {
+	if ip := net.ParseIP(host); host == "" || (ip != nil && (ip.IsLoopback() || ip.IsUnspecified())) {
+		host = "localhost"
+	}
+	return net.JoinHostPort(host, strconv.Itoa(port))
 }

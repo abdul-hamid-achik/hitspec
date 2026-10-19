@@ -102,6 +102,7 @@ var (
 	// Metrics flags
 	metricsFlag       string
 	metricsPortFlag   int
+	metricsHostFlag   string
 	metricsFileFlag   string
 	datadogAPIKeyFlag string
 	datadogSiteFlag   string
@@ -180,6 +181,7 @@ func registerRunFlags(f *pflag.FlagSet) {
 
 	// Metrics flags
 	f.StringVar(&metricsFlag, "metrics", getEnvString("HITSPEC_METRICS", ""), "Metrics export format: prometheus, datadog, json (env: HITSPEC_METRICS)")
+	f.StringVar(&metricsHostFlag, "metrics-host", getEnvString("HITSPEC_METRICS_HOST", metrics.DefaultPrometheusHost), "Interface the Prometheus metrics endpoint binds; use 0.0.0.0 to expose it to the network (env: HITSPEC_METRICS_HOST)")
 	f.IntVar(&metricsPortFlag, "metrics-port", getEnvInt("HITSPEC_METRICS_PORT", 9090), "Port for Prometheus metrics HTTP endpoint (env: HITSPEC_METRICS_PORT)")
 	f.StringVar(&metricsFileFlag, "metrics-file", getEnvString("HITSPEC_METRICS_FILE", ""), "Output file for metrics (JSON format) (env: HITSPEC_METRICS_FILE)")
 	f.StringVar(&datadogAPIKeyFlag, "datadog-api-key", getEnvString("DD_API_KEY", ""), "DataDog API key (env: DD_API_KEY)")
@@ -804,9 +806,10 @@ func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config
 			case "prometheus":
 				promExporter := metrics.NewPrometheusExporter(
 					metrics.WithPrometheusHTTP(metricsPortFlag),
+					metrics.WithPrometheusHost(metricsHostFlag),
 				)
 				metricsExporters = append(metricsExporters, promExporter)
-				fmt.Fprintf(cmd.OutOrStdout(), "Prometheus metrics available at http://localhost:%d/metrics\n", metricsPortFlag)
+				fmt.Fprintf(cmd.OutOrStdout(), "Prometheus metrics available at http://%s/metrics\n", promDisplayAddr(metricsHostFlag, metricsPortFlag))
 
 			case "datadog":
 				ddOpts := []metrics.DataDogOption{}

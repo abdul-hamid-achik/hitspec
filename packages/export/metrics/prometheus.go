@@ -3,8 +3,10 @@ package metrics
 import (
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +19,7 @@ type PrometheusExporter struct {
 	aggregate    *AggregateMetrics
 	writer       io.Writer
 	serveHTTP    bool
+	host         string
 	port         int
 	server       *http.Server
 	shutdownChan chan struct{}
@@ -29,6 +32,20 @@ type PrometheusOption func(*PrometheusExporter)
 func WithPrometheusWriter(w io.Writer) PrometheusOption {
 	return func(p *PrometheusExporter) {
 		p.writer = w
+	}
+}
+
+// DefaultPrometheusHost is the interface the HTTP endpoint binds unless
+// WithPrometheusHost says otherwise: metrics are not exposed to the network by
+// default, like the mock server and the recording proxy.
+const DefaultPrometheusHost = "127.0.0.1"
+
+// WithPrometheusHost sets the interface the HTTP endpoint binds ("0.0.0.0" to
+// let a Prometheus server on another machine scrape it). Empty keeps the
+// loopback default.
+func WithPrometheusHost(host string) PrometheusOption {
+	return func(p *PrometheusExporter) {
+		p.host = host
 	}
 }
 
@@ -59,12 +76,21 @@ func NewPrometheusExporter(opts ...PrometheusOption) *PrometheusExporter {
 	return p
 }
 
+// listenAddr is the host:port the HTTP endpoint binds.
+func (p *PrometheusExporter) listenAddr() string {
+	host := p.host
+	if host == "" {
+		host = DefaultPrometheusHost
+	}
+	return net.JoinHostPort(host, strconv.Itoa(p.port))
+}
+
 func (p *PrometheusExporter) startHTTPServer() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/metrics", p.handleMetrics)
 
 	p.server = &http.Server{
-		Addr:    fmt.Sprintf(":%d", p.port),
+		Addr:    p.listenAddr(),
 		Handler: mux,
 	}
 

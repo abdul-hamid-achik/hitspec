@@ -67,3 +67,9 @@ func TestBuildStressConfigProfileThresholds(t *testing.T) {
 	assert.True(t, cfg.Thresholds.ErrorRateSet)
 	assert.Equal(t, 250*time.Millisecond, cfg.Thresholds.P95)
 }
+
+func TestPromDisplayAddr(t *testing.T) {
+	assert.Equal(t, "localhost:9090", promDisplayAddr("127.0.0.1", 9090))
+	assert.Equal(t, "localhost:9090", promDisplayAddr("0.0.0.0", 9090))
+	assert.Equal(t, "10.1.2.3:9090", promDisplayAddr("10.1.2.3", 9090))
+}
