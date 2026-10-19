@@ -1,0 +1,76 @@
+# A selected request pulls in the requests it depends on.
+# Regression: --name/--tags excluded the @depends target, so the selected
+# request was skipped as "dependency failed" and the run exited 0.
+
+exitcode 0 hitspec run chain.http --name get-profile
+stdout 'login'
+stdout 'get-profile'
+stdout 'Tests: 2 passed, 2 skipped, 4 total'
+! stdout 'dependency failed'
+
+# Dependencies are followed transitively and run first.
+exitcode 0 hitspec run chain.http --name get-orders
+stdout 'Tests: 3 passed, 1 skipped, 4 total'
+
+# Works for tags too.
+exitcode 0 hitspec run chain.http --tags profile
+stdout 'Tests: 2 passed, 2 skipped, 4 total'
+
+# A dependency that truly fails keeps its dependent skipped, and the run fails.
+exitcode 1 hitspec run broken.http --name needs-broken
+stdout 'dependency failed'
+stdout 'Tests: 1 failed, 1 skipped, 2 total'
+
+-- chain.http --
+### login
+# @name login
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 200
+<<<
+
+### get profile
+# @name get-profile
+# @tags profile
+# @depends login
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 200
+<<<
+
+### get orders
+# @name get-orders
+# @depends get-profile
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 200
+<<<
+
+### unrelated
+# @name unrelated
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 200
+<<<
+
+-- broken.http --
+### broken
+# @name broken
+GET {{$env(SERVER)}}/status/500
+
+>>>
+expect status 200
+<<<
+
+### needs broken
+# @name needs-broken
+# @depends broken
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 200
+<<<

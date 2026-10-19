@@ -53,10 +53,17 @@ func (r *Runner) runRequests(ctx context.Context, file *parser.File) (*RunResult
 		return nil, err
 	}
 
-	// Filter requests first
+	// Filter requests first. Dependencies of selected requests are pulled in so
+	// they run (and are reported) rather than leaving their dependent skipped.
+	// IndexFilter already reduced the file to one request, so there is nothing
+	// to pull in for it.
+	include := r.withDependencies(sortedRequests, hasOnly)
 	var filteredRequests []*parser.Request
 	for _, req := range sortedRequests {
-		if !r.shouldRun(req, hasOnly) {
+		if r.matchesFilters(req) {
+			result.Matched++
+		}
+		if !include[req] {
 			result.Results = append(result.Results, &RequestResult{
 				Name:        req.Name,
 				Description: req.Description,

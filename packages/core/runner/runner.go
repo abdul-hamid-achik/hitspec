@@ -108,6 +108,11 @@ type RunResult struct {
 	Passed   int
 	Failed   int
 	Skipped  int
+	// Matched counts the requests in the file that satisfied the NameFilter and
+	// TagsFilter (all requests when neither is set), including ones later
+	// skipped by @skip or @only. Zero across a whole run means the filters
+	// selected nothing.
+	Matched int
 }
 
 type RequestResult struct {
