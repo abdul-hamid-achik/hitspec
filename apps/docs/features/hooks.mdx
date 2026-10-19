@@ -98,7 +98,7 @@ expect status 200
 
 | Behavior | Detail |
 |----------|--------|
-| Execution engine | `sh -c` |
+| Execution engine | `sh -c` (on Windows, `sh` from Git for Windows when it is installed, otherwise `cmd /C`) |
 | Working directory | Location of the `.http` file |
 | Multiple hooks | Executed in declaration order |
 | `@before` failure | Request is not sent; `@after` hooks still run |

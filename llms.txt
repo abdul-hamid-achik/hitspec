@@ -291,7 +291,7 @@ echo "Processing complete"
 - Commands execute after HTTP assertions
 - Variables are resolved before execution
 - Prefix with `-` to ignore errors: `-rm temp.txt`
-- Commands run via `sh -c`
+- Commands run via `sh -c` (Windows: Git for Windows `sh` if installed, else `cmd /C`)
 - Working directory is the .http file location
 
 ## Authentication (8 types)

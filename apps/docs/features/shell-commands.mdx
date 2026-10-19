@@ -90,7 +90,7 @@ echo "Continues even if rm failed"
 
 ## Execution Details
 
-- Commands run via `sh -c`
+- Commands run via `sh -c`. On Windows they run through `sh` from Git for Windows when it is installed, otherwise through `cmd /C` (where POSIX syntax does not work)
 - Working directory is the `.http` file location
 - Commands execute sequentially in the order they appear
 - Each line is a separate command
