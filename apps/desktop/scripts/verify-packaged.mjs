@@ -52,7 +52,8 @@ try {
   console.log(`launching packaged app: ${exe}`);
   app = await electron.launch({
     executablePath: exe,
-    args: [workspace.dir],
+    // The unpacked Linux bundle's chrome-sandbox is not setuid root.
+    args: process.platform === 'linux' ? ['--no-sandbox', workspace.dir] : [workspace.dir],
     env: {
       ...process.env,
       HOME: home,

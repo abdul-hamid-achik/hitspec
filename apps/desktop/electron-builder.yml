@@ -62,6 +62,9 @@ win:
 
 linux:
   category: Development
+  # Pinned so scripts/packaged-layout.mjs and verify-packaged.mjs can find it
+  # (electron-builder would otherwise use the package name, hitspec-desktop).
+  executableName: hitspec-studio
   target:
     - target: AppImage
       arch: [x64]

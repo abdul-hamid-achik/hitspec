@@ -64,6 +64,9 @@ test.describe.serial('hitspec Studio desktop app', () => {
 
   test.afterAll(async () => {
     if (app) {
+      // A failed test can leave unsaved edits behind; quitting would then open a
+      // real native "discard changes?" dialog and hang. Answer it up front.
+      await app.evaluate(({ dialog }) => { dialog.showMessageBoxSync = () => 1; }).catch(() => {});
       if (consoleErrors.length || pageErrors.length) {
         console.error('renderer console errors:', consoleErrors);
         console.error('renderer page errors:', pageErrors);

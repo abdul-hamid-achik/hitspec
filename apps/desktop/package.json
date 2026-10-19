@@ -37,7 +37,7 @@
     "predist:dir": "node scripts/build-binary.mjs --dist",
     "dist:dir": "electron-builder --dir",
     "predist:dir:test": "node scripts/build-binary.mjs --dist",
-    "dist:dir:test": "electron-builder --dir -c.directories.output=release-test -c.electronFuses.enableNodeCliInspectArguments=true"
+    "dist:dir:test": "electron-builder --dir -c.directories.output=release-test -c.electronFuses.enableNodeCliInspectArguments=true -c.mac.identity=null"
   },
   "dependencies": {
     "ws": "^8.22.0"
