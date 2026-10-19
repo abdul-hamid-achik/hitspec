@@ -406,7 +406,9 @@ func capabilityNames(capabilities *sdkmcp.ServerCapabilities) []string {
 	if capabilities.Completions != nil {
 		names = append(names, "completions")
 	}
-	if capabilities.Logging != nil {
+	// Logging is deprecated as of protocol 2026-07-28 (SEP-2577), but servers
+	// still advertise it during the deprecation window, so probe reports it.
+	if capabilities.Logging != nil { //nolint:staticcheck // SA1019: see above
 		names = append(names, "logging")
 	}
 	if capabilities.Prompts != nil {
