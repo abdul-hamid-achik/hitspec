@@ -4,8 +4,8 @@
 #   hitspec mock examples/stress-test/stress.http     (terminal 1)
 #   hitspec run examples/stress-test/stress.http --stress --duration 30s --rate 50   (terminal 2)
 # Drop --stress for a single functional pass. Load-testing the in-process mock
-# measures hitspec and your machine, not an API: for realistic numbers set
-# @baseUrl to a staging service you own. The mock server picks the first block
+# measures hitspec and your machine, not an API: for realistic numbers point
+# the @baseUrl line at a staging service you own. The mock server picks the first block
 # matching a method + path, so one GET /get and one POST /post mock serve every
 # request that shares them.
 

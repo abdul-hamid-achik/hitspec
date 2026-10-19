@@ -5,8 +5,8 @@
 # Runs offline against the built-in mock server (>>>mock blocks):
 #   hitspec mock examples/contract/contract.http     (terminal 1)
 #   hitspec run examples/contract/contract.http      (terminal 2)
-# The mock replays canned responses shaped like the Petstore contract; point
-# @baseUrl at https://petstore.swagger.io/v2 to check the real service.
+# The mock replays canned responses shaped like the Petstore contract; to
+# check the real service, set the @baseUrl line to https://petstore.swagger.io/v2.
 # The mock server picks the first route matching a method + path, so the
 # 404 case is declared before GET /pet/{{createPet.petId}}, which would
 # otherwise also match /pet/0.

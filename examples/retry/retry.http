@@ -6,7 +6,7 @@
 #   hitspec run examples/retry/retry.http      (terminal 2)
 # The mock never fails, so no retry actually fires here: the run shows the
 # directives parsing and the happy path passing. To watch retries happen, set
-# @baseUrl = https://httpbin.org and point a request at /status/503 (httpbin
+# the @baseUrl line to https://httpbin.org and point a request at /status/503 (httpbin
 # can also be flaky on its own -- a 503 from it is not a hitspec issue).
 #
 # The mock server picks the first block matching a method + path and many

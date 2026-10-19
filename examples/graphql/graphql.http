@@ -7,8 +7,8 @@
 # The mock server routes on method + path only and cannot tell two GraphQL
 # queries apart, so each operation below posts to its own path
 # (/graphql/countries, /graphql/country, ...). A real GraphQL server has a
-# single /graphql endpoint: to use the public Countries API, set
-#   @baseUrl = https://countries.trevorblades.com
+# single /graphql endpoint: to use the public Countries API, set the @baseUrl
+# line to https://countries.trevorblades.com
 # and change every /graphql/<name> URL back to /graphql.
 
 @baseUrl = http://localhost:3000

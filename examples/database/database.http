@@ -9,8 +9,8 @@
 #   hitspec mock database.http                      (terminal 1)
 #   hitspec run database.http --allow-db            (terminal 2)
 #
-# To use the real JSONPlaceholder API, set
-#   @baseUrl = https://jsonplaceholder.typicode.com
+# To use the real JSONPlaceholder API, set the @baseUrl line to
+#   https://jsonplaceholder.typicode.com
 # The mock server picks the first block matching a method + path, so GET /users
 # (used twice) is mocked once.
 
