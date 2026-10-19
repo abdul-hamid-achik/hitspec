@@ -1,6 +1,6 @@
 import * as actions from '../actions.js';
 import { h, clear } from '../dom.js';
-import { formatDateTime } from '../format.js';
+import { formatDateTime, logSignature } from '../format.js';
 import { btn, card, kv, stat, statGrid } from '../ui.js';
 
 const THEMES = [
@@ -43,7 +43,9 @@ export function createSettingsView(root) {
   readOnlyBox.addEventListener('change', () => actions.setBackendOption('readOnly', readOnlyBox.checked));
   allowShellBox.addEventListener('change', () => actions.setBackendOption('allowShell', allowShellBox.checked));
 
-  let renderedLogCount = -1;
+  // Identity of what is on screen. The log buffer is capped, so once it is full
+  // its length never changes; compare the newest line too or the view freezes.
+  let renderedLogKey = null;
 
   function update(s) {
     const backend = s.settings?.backend ?? {};
@@ -103,12 +105,14 @@ export function createSettingsView(root) {
               ['Binary', s.status?.binary ?? '—'],
               ['Resolved from', s.status?.binarySource ?? '—'],
               ['Go', s.systemInfo ? `${s.systemInfo.goVersion} · ${s.systemInfo.os}/${s.systemInfo.arch}` : '—'],
+              ['Started', s.status?.startedAt ? formatDateTime(s.status.startedAt) : '—'],
             ]),
+            s.status?.warning ? h('pre', { class: 'code plain', style: { color: 'var(--warning)', maxHeight: '160px' }, text: s.status.warning }) : null,
             s.status?.error ? h('pre', { class: 'code plain', style: { color: 'var(--danger)', maxHeight: '160px' }, text: s.status.error }) : null,
             h('div', { class: 'row wrap' },
               h('label', { class: 'checkbox' }, watchBox, h('span', { text: 'Watch files' })),
               h('label', { class: 'checkbox' }, readOnlyBox, h('span', { text: 'Read-only (block writes)' })),
-              h('label', { class: 'checkbox', title: 'Allows shell commands in .http files — only enable this for workspaces you trust' },
+              h('label', { class: 'checkbox', title: 'Allows shell commands in .http files. Asks for confirmation for this workspace; lasts until you quit.' },
                 allowShellBox, h('span', { text: 'Allow shell execution' })),
               h('div', { class: 'field', style: { width: '130px' } }, h('label', { text: 'Log level' }),
                 h('div', { class: 'select-wrap' }, logLevelSelect))),
@@ -142,7 +146,7 @@ export function createSettingsView(root) {
             ['Node', s.appInfo?.node ?? '—'],
             ['Platform', s.appInfo ? `${s.appInfo.platform}/${s.appInfo.arch}` : '—'],
             ['Build', s.appInfo?.dev ? 'development' : 'packaged'],
-            ['Started', formatDateTime(new Date().toISOString())],
+            ['Started', s.appInfo?.startedAt ? formatDateTime(s.appInfo.startedAt) : '—'],
           ])),
       ),
     );
@@ -152,7 +156,8 @@ export function createSettingsView(root) {
 
   function renderLogs(s) {
     const logs = s.logs ?? [];
-    if (logs.length === renderedLogCount) return;
+    const key = logSignature(logs);
+    if (key === renderedLogKey) return;
     const atBottom = logBox.scrollTop + logBox.clientHeight >= logBox.scrollHeight - 24;
     clear(logBox);
     if (!logs.length) {
@@ -164,7 +169,7 @@ export function createSettingsView(root) {
           h('span', { text: line.msg ?? line.text }))));
     }
     if (atBottom) logBox.scrollTop = logBox.scrollHeight;
-    renderedLogCount = logs.length;
+    renderedLogKey = key;
   }
 
   return { update };

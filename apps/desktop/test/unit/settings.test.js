@@ -67,3 +67,26 @@ test('removeRecent() promotes the next entry to lastWorkspace', () => {
   assert.deepEqual(store.get('recents').map((r) => r.path), [path.resolve('/tmp/one')]);
   assert.equal(store.get('lastWorkspace'), path.resolve('/tmp/one'));
 });
+
+test('load() scrubs childEnv and allowShell that a stale or tampered file re-arms', () => {
+  const { dir, store } = tempSettings();
+  fs.writeFileSync(
+    path.join(dir, 'settings.json'),
+    JSON.stringify({ backend: { watch: false, allowShell: true, childEnv: { DYLD_INSERT_LIBRARIES: '/tmp/evil.dylib' } } }),
+    'utf8',
+  );
+  const data = store.load();
+  assert.equal(data.backend.watch, false, 'ordinary options survive');
+  assert.equal(data.backend.allowShell, false);
+  assert.equal('childEnv' in data.backend, false);
+});
+
+test('set() cannot persist childEnv or allowShell either', () => {
+  const { dir, store } = tempSettings();
+  store.load();
+  store.set({ backend: { allowShell: true, childEnv: { LD_PRELOAD: '/x' }, readOnly: true } });
+  const onDisk = JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8'));
+  assert.equal(onDisk.backend.readOnly, true);
+  assert.equal(onDisk.backend.allowShell, false);
+  assert.equal('childEnv' in onDisk.backend, false);
+});

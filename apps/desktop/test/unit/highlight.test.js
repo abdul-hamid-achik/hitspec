@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { escapeHtml, highlightHttp, highlightJson } from '../../src/renderer/src/highlight.js';
+import { HIGHLIGHT_LIMIT, canHighlight, escapeHtml, highlightHttp, highlightJson } from '../../src/renderer/src/highlight.js';
 
 const SOURCE = [
   '@baseUrl = https://api.example.com',
@@ -90,4 +90,12 @@ test('highlightJson classifies tokens and escapes the rest', () => {
 
 test('highlightJson leaves plain text untouched but escaped', () => {
   assert.equal(highlightJson('hello <world>'), 'hello &lt;world&gt;');
+});
+
+test('large bodies are not highlighted by default', () => {
+  assert.equal(HIGHLIGHT_LIMIT, 512 * 1024);
+  assert.equal(canHighlight('x'.repeat(HIGHLIGHT_LIMIT)), true);
+  assert.equal(canHighlight('x'.repeat(HIGHLIGHT_LIMIT + 1)), false);
+  assert.equal(canHighlight(''), true);
+  assert.equal(canHighlight(null), true);
 });

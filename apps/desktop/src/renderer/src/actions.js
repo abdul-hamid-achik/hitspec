@@ -1,6 +1,7 @@
 import { api } from './api.js';
 import { h } from './dom.js';
 import { formatDuration } from './format.js';
+import { diskChanged, openFileDecision } from './guard.js';
 import { state, set, setBusy, emit } from './store.js';
 import { toast, toastError, toastSuccess } from './toast.js';
 import { btn, confirmDialog, modal, prompt } from './ui.js';
@@ -42,7 +43,13 @@ export async function handleStatus(status) {
   if (status.state === 'error' && status.error) {
     toast(status.error, { severity: 'error', title: 'API server problem', timeout: 0 });
   }
+  if (status.state === 'ready' && status.warning && status.warning !== warnedAbout) {
+    warnedAbout = status.warning;
+    toast(status.warning, { severity: 'warning', title: 'Old hitspec CLI', timeout: 0 });
+  }
 }
+
+let warnedAbout = null;
 
 /* -------------------------------------------------------------------------- */
 /* workspace                                                                   */
@@ -59,6 +66,8 @@ export async function loadWorkspace() {
       api.config().catch(() => null),
       api.systemInfo().catch(() => null),
     ]);
+    // A different workspace must not inherit the previous editor buffer or selection.
+    const switched = Boolean(state.workspace) && state.workspace.root !== workspace.root;
     state.workspace = workspace;
     state.files = files ?? [];
     state.environments = environments ?? [];
@@ -66,7 +75,7 @@ export async function loadWorkspace() {
     state.systemInfo = systemInfo;
     state.activeEnv = workspace.environment || environments?.[0]?.name || 'dev';
 
-    const stillThere = state.selectedFile && state.files.some((f) => f.relativePath === state.selectedFile);
+    const stillThere = !switched && state.selectedFile && state.files.some((f) => f.relativePath === state.selectedFile);
     if (!stillThere) {
       state.selectedFile = state.files[0]?.relativePath ?? null;
       state.parsed = null;
@@ -75,7 +84,7 @@ export async function loadWorkspace() {
     }
     setBusy('workspace', false);
     emit();
-    if (state.selectedFile) await openFile(state.selectedFile, { keepSelection: true });
+    if (state.selectedFile) await openFile(state.selectedFile, { keepSelection: true, force: switched });
   } catch (err) {
     setBusy('workspace', false);
     toastError(err, { title: 'Could not load workspace' });
@@ -142,8 +151,25 @@ export async function restartBackend() {
 /* files                                                                       */
 /* -------------------------------------------------------------------------- */
 
-export async function openFile(relPath, { keepSelection = false } = {}) {
+export async function openFile(relPath, { keepSelection = false, force = false } = {}) {
   if (!relPath) return;
+  const decision = openFileDecision({
+    dirty: state.source.dirty,
+    currentPath: state.source.path,
+    targetPath: relPath,
+    keepSelection,
+    force,
+  });
+  if (decision === 'skip') return;
+  if (decision === 'confirm') {
+    const ok = await confirmDialog({
+      title: 'Discard unsaved changes?',
+      message: `${state.source.path} has unsaved changes. Opening ${relPath} discards them.`,
+      confirmLabel: 'Discard changes',
+      danger: true,
+    });
+    if (!ok) return;
+  }
   const previousRequest = keepSelection ? state.selectedRequest : null;
   setBusy('file', true);
   state.source = { ...state.source, loading: true };
@@ -152,7 +178,7 @@ export async function openFile(relPath, { keepSelection = false } = {}) {
     const [parsed, raw] = await Promise.all([api.file(relPath), api.fileRaw(relPath)]);
     state.parsed = parsed;
     state.selectedFile = relPath;
-    state.source = { path: relPath, text: raw ?? '', saved: raw ?? '', dirty: false, loading: false };
+    state.source = { path: relPath, text: raw ?? '', saved: raw ?? '', disk: raw ?? '', dirty: false, conflict: false, loading: false };
     state.lastRun = null;
     state.selectedResult = null;
     const names = (parsed.requests ?? []).map((r) => r.name);
@@ -185,8 +211,22 @@ export async function saveSource() {
   }
   setBusy('save', true);
   try {
-    const result = await api.saveFile(state.source.path, state.source.text);
-    state.source = { ...state.source, saved: state.source.text, dirty: false };
+    // Another program (git checkout, an external editor) may have rewritten the
+    // file since we loaded it; compare against what we last saw before overwriting.
+    const onDisk = await api.fileRaw(state.source.path).catch(() => null);
+    if (diskChanged(state.source.disk, onDisk)) {
+      const overwrite = await confirmDialog({
+        title: 'File changed on disk',
+        message: `${state.source.path} was modified outside hitspec Studio since you opened it. Saving overwrites those changes.`,
+        confirmLabel: 'Overwrite',
+        danger: true,
+      });
+      if (!overwrite) return;
+    }
+    const text = state.source.text;
+    const result = await api.saveFile(state.source.path, text);
+    const disk = await api.fileRaw(state.source.path).catch(() => text);
+    state.source = { ...state.source, saved: text, disk, dirty: state.source.text !== text, conflict: false };
     if (result?.requests) {
       state.parsed = result;
       const names = result.requests.map((r) => r.name);
@@ -215,7 +255,7 @@ export async function revertSource() {
     });
     if (!ok) return;
   }
-  await openFile(state.source.path);
+  await openFile(state.source.path, { force: true });
 }
 
 async function refreshFileCounts() {
@@ -567,6 +607,11 @@ export function handleBackendEvent(message) {
 
   state.events = [{ type, payload, at: message.timestamp ?? new Date().toISOString() }, ...state.events].slice(0, MAX_EVENTS);
 
+  // Re-rendering rebuilds the active view, so only emit when the event changed
+  // something that view shows. Stress/mock traffic can arrive many times a
+  // second; state is still updated and renders when the user opens that view.
+  let render = false;
+
   switch (type) {
     case 'file_changed': {
       const relPath = payload?.path;
@@ -575,13 +620,13 @@ export function handleBackendEvent(message) {
         toast(`${relPath} was deleted outside the app`, { severity: 'warning' });
         state.selectedFile = null;
         state.parsed = null;
+        render = true;
       }
       // Reload counts, and the open buffer only when it is clean.
       refreshFileCounts().then(() => {
-        if (relPath === state.selectedFile && !state.source.dirty) {
-          return openFile(relPath, { keepSelection: true });
-        }
-        return undefined;
+        if (relPath !== state.selectedFile) return undefined;
+        if (!state.source.dirty) return openFile(relPath, { keepSelection: true });
+        return flagExternalChange(relPath);
       });
       break;
     }
@@ -602,24 +647,29 @@ export function handleBackendEvent(message) {
           current: null,
         };
       }
+      render = true;
       break;
     }
     case 'execution_complete': {
       if (payload?.result && !state.lastRun) state.lastRun = payload.result;
       state.running = { ...state.running, active: false, current: null };
+      render = true;
       break;
     }
     case 'error': {
       if (payload?.error) toast(payload.error, { severity: 'error', title: 'Execution error' });
       state.running = { ...state.running, active: false, current: null };
+      render = true;
       break;
     }
     case 'environment_changed': {
       if (payload?.name) state.activeEnv = payload.name;
+      render = true;
       break;
     }
     case 'stress_update': {
       applyStressUpdate(payload);
+      render = state.view === 'stress';
       break;
     }
     case 'mock_request': {
@@ -634,11 +684,25 @@ export function handleBackendEvent(message) {
       } else if (payload?.event === 'stopped') {
         state.mock = { ...state.mock, status: { running: false } };
       }
+      render = state.view === 'mock';
       break;
     }
     default:
       break;
   }
+  if (render) emit();
+}
+
+/** The open file changed on disk while it has unsaved edits: tell the user, once. */
+async function flagExternalChange(relPath) {
+  const onDisk = await api.fileRaw(relPath).catch(() => null);
+  if (relPath !== state.source.path || !state.source.dirty) return;
+  if (!diskChanged(state.source.disk, onDisk) || state.source.conflict) return;
+  state.source = { ...state.source, conflict: true };
+  toast(`${relPath} changed on disk while you have unsaved edits. Saving will ask before overwriting.`, {
+    severity: 'warning',
+    title: 'File changed on disk',
+  });
   emit();
 }
 
@@ -1111,6 +1175,7 @@ export async function refreshSettings() {
 }
 
 export async function setBackendOption(key, value) {
+  if (key === 'allowShell') return setAllowShell(value);
   const backend = { ...(state.settings.backend ?? {}), [key]: value };
   const settings = await bridge().setSettings({ backend });
   state.settings = settings;
@@ -1120,6 +1185,24 @@ export async function setBackendOption(key, value) {
     timeout: 6000,
     action: { label: 'Restart now', onClick: () => restartBackend() },
   });
+}
+
+/** Shell execution is approved by the main process in a native dialog, not by this page. */
+async function setAllowShell(enabled) {
+  try {
+    const { allowed } = await bridge().setAllowShell(Boolean(enabled));
+    await refreshSettings();
+    if (allowed === Boolean(enabled)) {
+      toast('Restart the API server to apply this change', {
+        severity: 'info',
+        timeout: 6000,
+        action: { label: 'Restart now', onClick: () => restartBackend() },
+      });
+    }
+  } catch (err) {
+    await refreshSettings().catch(() => {});
+    toastError(err, { title: 'Could not change shell execution' });
+  }
 }
 
 export async function loadLogs() {

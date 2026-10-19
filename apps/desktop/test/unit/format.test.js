@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
-  errorMessage, formatBytes, formatDuration, formatNumber, formatPercent, formatRate,
+  createBodyFormatter, logSignature, errorMessage, formatBytes, formatDuration, formatNumber, formatPercent, formatRate,
   fuzzyScore, matches, methodClass, prettyJSON, relativeTime, statusTone, truncate,
 } from '../../src/renderer/src/format.js';
 
@@ -91,4 +91,30 @@ test('fuzzyScore rewards prefixes and contiguity', () => {
   assert.ok(prefix > scattered, `${prefix} should beat ${scattered}`);
   assert.equal(fuzzyScore('runFile', 'zzz'), -1);
   assert.equal(fuzzyScore('runFile', ''), 0);
+});
+
+test('createBodyFormatter parses and pretty-prints a body once, then reuses the result', () => {
+  const format = createBodyFormatter();
+  const body = JSON.stringify({ items: Array.from({ length: 50 }, (_, i) => ({ id: i })) });
+  const first = format(body, false);
+  assert.equal(first.json, true);
+  assert.ok(first.text.includes('\n  '));
+  assert.equal(first.lines, first.text.split('\n').length);
+  assert.equal(format(body, false), first, 'identical input must hit the cache (no re-parse per render)');
+  const compact = format(body, true);
+  assert.notEqual(compact, first);
+  assert.equal(compact.text, body);
+  assert.equal(compact.lines, 1);
+  assert.equal(format('plain text\nsecond line', false).json, false);
+  assert.equal(format('plain text\nsecond line', false).lines, 2);
+});
+
+test('logSignature changes as a capped buffer rotates, even at constant length', () => {
+  const buffer = (from) => Array.from({ length: 400 }, (_, i) => ({ at: `t${from + i}`, text: `line ${from + i}` }));
+  const a = buffer(0);
+  const b = buffer(1); // one new line pushed, one dropped: same length
+  assert.equal(a.length, b.length);
+  assert.notEqual(logSignature(a), logSignature(b));
+  assert.equal(logSignature(a), logSignature(buffer(0)));
+  assert.equal(logSignature(undefined), logSignature([]));
 });

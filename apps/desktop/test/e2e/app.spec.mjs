@@ -1,4 +1,5 @@
 import { expect, test, _electron as electron } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -314,8 +315,165 @@ test.describe.serial('hitspec Studio desktop app', () => {
     await expect(popover).toHaveCount(0);
   });
 
+  test('the renderer cannot arm childEnv, shell execution or arbitrary API paths', async () => {
+    const result = await page.evaluate(async () => {
+      const after = await window.hitspec.setSettings({
+        backend: { childEnv: { DYLD_INSERT_LIBRARIES: '/tmp/evil.dylib' }, allowShell: true, readOnly: false },
+        lastWorkspace: '/etc',
+      });
+      return {
+        after,
+        ws: await window.hitspec.api({ method: 'GET', path: '/ws' }),
+        traversal: await window.hitspec.api({ method: 'GET', path: '/files/../../etc/passwd' }),
+        foreign: await window.hitspec.api({ method: 'GET', path: 'http://evil.example/' }),
+        info: await window.hitspec.api({ method: 'GET', path: '/system/info' }),
+        app: await window.hitspec.getAppInfo(),
+      };
+    });
+    expect(result.after.backend.childEnv).toBeUndefined();
+    expect(result.after.backend.allowShell).toBe(false);
+    expect(result.after.lastWorkspace).not.toBe('/etc');
+    for (const blocked of [result.ws, result.traversal, result.foreign]) {
+      expect(blocked.ok).toBe(false);
+      expect(blocked.status).toBe(0);
+      expect(blocked.error).toMatch(/not allowed|invalid/);
+    }
+    expect(result.info.ok).toBe(true);
+    // "Started" is the real process start time, not the moment the page rendered.
+    expect(Date.now() - Date.parse(result.app.startedAt)).toBeGreaterThan(1000);
+    expect(result.app.backend.startedAt).toBeTruthy();
+
+    const stored = JSON.parse(fs.readFileSync(path.join(home, 'userdata', 'settings.json'), 'utf8'));
+    expect(stored.backend.childEnv).toBeUndefined();
+    expect(stored.backend.allowShell).not.toBe(true);
+  });
+
+  test('shell execution is only enabled through a native confirmation', async () => {
+    await page.locator('.rail-item', { hasText: 'Settings' }).click();
+    const box = page.locator('label.checkbox', { hasText: 'Allow shell execution' }).locator('input');
+    await expect(box).not.toBeChecked();
+
+    await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 0 }); });
+    await box.click();
+    await expect(box).not.toBeChecked(); // declined: the page does not get to flip it
+
+    await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 1 }); });
+    await box.click();
+    await expect(box).toBeChecked();
+    const stored = JSON.parse(fs.readFileSync(path.join(home, 'userdata', 'settings.json'), 'utf8'));
+    expect(stored.backend.allowShell, 'approval is session state, never persisted').not.toBe(true);
+
+    if (process.platform !== 'win32') {
+      // The approval takes effect on restart: the server is launched with --allow-shell.
+      const commandOf = async () => {
+        const pid = (await page.evaluate(() => window.hitspec.getStatus())).pid;
+        return execFileSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8' });
+      };
+      await page.evaluate(() => window.hitspec.restartBackend());
+      expect(await commandOf()).toContain('--allow-shell');
+      await box.click();
+      await expect(box).not.toBeChecked();
+      await page.evaluate(() => window.hitspec.restartBackend());
+      expect(await commandOf()).not.toContain('--allow-shell');
+    } else {
+      await box.click(); // turning it off needs no dialog
+      await expect(box).not.toBeChecked();
+    }
+    await page.locator('.rail-item', { hasText: 'Requests' }).click();
+  });
+
+  test('Settings shows the real server start time', async () => {
+    await page.locator('.rail-item', { hasText: 'Settings' }).click();
+    const server = page.locator('.card', { has: page.locator('.card-head h3', { hasText: 'API server' }) });
+    await expect(server.locator('.kv .k', { hasText: 'Started' })).toBeVisible();
+    const about = page.locator('.card', { has: page.locator('.card-head h3', { hasText: 'About' }) });
+    const started = await about.locator('.kv .k', { hasText: 'Started' }).locator('xpath=following-sibling::div[1]').textContent();
+    // Before the fix this was the render time, i.e. it advanced on every update.
+    await page.waitForTimeout(1500);
+    await page.locator('.btn', { hasText: 'Refresh' }).first().click();
+    expect(await about.locator('.kv .k', { hasText: 'Started' }).locator('xpath=following-sibling::div[1]').textContent()).toBe(started);
+    await page.locator('.rail-item', { hasText: 'Requests' }).click();
+  });
+
+  test('asks before discarding unsaved edits and before overwriting an external change', async () => {
+    const openHealth = async () => {
+      if (!(await page.locator('.tree-row', { hasText: 'health.http' }).isVisible())) {
+        await page.locator('.tree-row.dir', { hasText: 'api' }).click();
+      }
+      await page.locator('.tree-row', { hasText: 'health.http' }).click();
+    };
+    const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
+    await page.locator('.rail-item', { hasText: 'Requests' }).click();
+    await openHealth();
+    await page.locator('.tab', { hasText: 'Source' }).click();
+    const editor = page.locator('.editor-input');
+    await editor.click();
+    await page.keyboard.press(`${mod}+${process.platform === 'darwin' ? 'ArrowUp' : 'Home'}`);
+    await page.keyboard.type('# unsaved edit\n');
+    await expect(page.locator('.pill', { hasText: 'unsaved changes' })).toBeVisible();
+
+    // 1. switching files asks; Cancel keeps the buffer.
+    await page.locator('.tree-row', { hasText: 'users.http' }).click();
+    const modal = page.locator('.modal');
+    await expect(modal).toContainText('Discard unsaved changes?');
+    await modal.locator('.btn', { hasText: 'Cancel' }).click();
+    await expect(editor).toHaveValue(/# unsaved edit/);
+    await expect(page.locator('#statusbar')).toContainText('api/health.http');
+
+    // 2. an external edit while dirty is flagged, and saving asks before clobbering it.
+    fs.appendFileSync(workspace.file('api', 'health.http'), '\n# changed by another program\n');
+    await expect(page.locator('.toast', { hasText: 'changed on disk' })).toBeVisible({ timeout: 30_000 });
+    await expect(editor).toHaveValue(/# unsaved edit/); // never auto-reloaded over unsaved work
+    await page.keyboard.press(`${mod}+s`);
+    await expect(modal).toContainText('File changed on disk');
+    await modal.locator('.btn', { hasText: 'Cancel' }).click();
+    expect(fs.readFileSync(workspace.file('api', 'health.http'), 'utf8')).toContain('# changed by another program');
+    expect(fs.readFileSync(workspace.file('api', 'health.http'), 'utf8')).not.toContain('# unsaved edit');
+
+    await page.keyboard.press(`${mod}+s`);
+    await modal.locator('.btn', { hasText: 'Overwrite' }).click();
+    await expect(page.locator('.pill', { hasText: 'unsaved changes' })).toHaveCount(0, { timeout: 30_000 });
+    expect(fs.readFileSync(workspace.file('api', 'health.http'), 'utf8')).toContain('# unsaved edit');
+
+    // 3. edit again, then switch files and discard on purpose.
+    await editor.click();
+    await page.keyboard.type('# throwaway\n');
+    await page.locator('.tree-row', { hasText: 'users.http' }).click();
+    await modal.locator('.btn', { hasText: 'Discard changes' }).click();
+    await expect(page.locator('#statusbar')).toContainText('api/users.http', { timeout: 30_000 });
+    await expect(page.locator('.pill', { hasText: 'unsaved changes' })).toHaveCount(0);
+  });
+
   test('leaves no renderer errors behind', async () => {
     expect(pageErrors, `renderer threw:\n${pageErrors.join('\n')}`).toEqual([]);
     expect(consoleErrors, `console errors:\n${consoleErrors.join('\n')}`).toEqual([]);
+  });
+
+  test('closing the window with unsaved edits asks first', async () => {
+    const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
+    await page.locator('.rail-item', { hasText: 'Requests' }).click();
+    await page.locator('.tab', { hasText: 'Source' }).click();
+    await page.locator('.editor-input').click();
+    await page.keyboard.press(`${mod}+${process.platform === 'darwin' ? 'ArrowUp' : 'Home'}`);
+    await page.keyboard.type('# not saved\n');
+    await expect(page.locator('.pill', { hasText: 'unsaved changes' })).toBeVisible();
+    // dirty state reaches the main process asynchronously
+    await page.waitForTimeout(300);
+
+    const windowCount = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length);
+
+    await app.evaluate(({ dialog, BrowserWindow }) => {
+      dialog.showMessageBoxSync = () => 0; // Cancel
+      BrowserWindow.getAllWindows()[0].close();
+    });
+    await page.waitForTimeout(500);
+    expect(await windowCount()).toBe(1);
+
+    // Let the afterAll quit go through: quitting asks the same question.
+    await app.evaluate(({ dialog }) => { dialog.showMessageBoxSync = () => 1; });
+
+    // The Discard path is covered by the DirtyGuard unit tests: Playwright
+    // intercepts the renderer's beforeunload prompt itself, which makes closing a
+    // dirty window through it unreliable.
   });
 });

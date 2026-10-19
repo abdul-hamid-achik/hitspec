@@ -2,9 +2,9 @@ import * as actions from '../actions.js';
 import { h, clear } from '../dom.js';
 import { createEditor } from '../editor.js';
 import {
-  formatBytes, formatDuration, formatNumber, prettyJSON, statusTone, truncate,
+  createBodyFormatter, formatBytes, formatDuration, formatNumber, prettyJSON, statusTone, truncate,
 } from '../format.js';
-import { escapeHtml, highlightJson } from '../highlight.js';
+import { HIGHLIGHT_LIMIT, canHighlight, escapeHtml, highlightJson } from '../highlight.js';
 import { state, set } from '../store.js';
 import {
   btn, codeBlock, empty, kv, methodBadge, pill, progressBar, stat, statGrid, statusCode, tabs,
@@ -496,14 +496,27 @@ export function createWorkspaceView(root) {
     }
   }
 
+  const formatBody = createBodyFormatter();
+  /** Cached <pre> for the last rendered body: re-highlighting on every render is what hurt. */
+  let bodyPre = { key: null, node: null };
+  /** The body the user chose to highlight despite its size. */
+  let highlightForced = null;
+
   function responseBody(s, result) {
     const body = result.response?.body ?? '';
     if (!body) return h('div', { class: 'muted', style: { padding: '14px' }, text: 'Empty response body.' });
 
-    const pretty = prettyJSON(body);
-    const text = s.compactBody && pretty !== null ? JSON.stringify(JSON.parse(body)) : (pretty ?? body);
-    const pre = h('pre', { class: 'code', style: { maxHeight: '58vh' } });
-    pre.innerHTML = pretty !== null && !s.compactBody ? highlightJson(text) : escapeHtml(text);
+    const view = formatBody(body, s.compactBody);
+    const tooBig = view.json && !s.compactBody && !canHighlight(view.text);
+    const highlight = view.json && !s.compactBody && (!tooBig || highlightForced === body);
+
+    const key = `${highlight}`;
+    if (bodyPre.view !== view || bodyPre.key !== key) {
+      const pre = h('pre', { class: 'code', style: { maxHeight: '58vh' } });
+      // Token HTML comes from our own escaper, never from raw response markup.
+      pre.innerHTML = highlight ? highlightJson(view.text) : escapeHtml(view.text);
+      bodyPre = { view, key, node: pre };
+    }
 
     return h('div', {},
       h('div', { class: 'row', style: { padding: '8px 12px', gap: '8px' } },
@@ -511,16 +524,24 @@ export function createWorkspaceView(root) {
         h('span', { class: 'muted mono ell', text: truncate(result.response?.status ?? '', 60) }),
         h('div', { class: 'spacer' }),
         h('span', { class: 'muted mono', text: formatBytes(result.response?.size ?? body.length) }),
-        h('span', { class: 'muted mono', text: `${formatNumber(text.split('\n').length)} lines` }),
-        pretty !== null
+        h('span', { class: 'muted mono', text: `${formatNumber(view.lines)} lines` }),
+        tooBig && !highlight
+          ? btn('Highlight', {
+              size: 'sm',
+              variant: 'ghost',
+              title: `Syntax highlighting is off above ${formatBytes(HIGHLIGHT_LIMIT)}; it can take several seconds`,
+              onClick: () => { highlightForced = body; set({}); },
+            })
+          : null,
+        view.json
           ? btn(s.compactBody ? 'Pretty' : 'Compact', {
               size: 'sm',
               variant: 'ghost',
               onClick: () => set({ compactBody: !s.compactBody }),
             })
           : null,
-        btn('Copy', { size: 'sm', variant: 'ghost', onClick: () => actions.copyText(text, 'Body copied') })),
-      pre);
+        btn('Copy', { size: 'sm', variant: 'ghost', onClick: () => actions.copyText(view.text, 'Body copied') })),
+      bodyPre.node);
   }
 
   /* ---- source tab --------------------------------------------------------- */

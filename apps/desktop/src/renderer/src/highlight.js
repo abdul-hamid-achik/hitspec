@@ -4,6 +4,16 @@
  * the result is safe to inject into the editor's highlight layer.
  */
 
+/**
+ * Bodies above this many characters are shown as plain text (with an opt-in
+ * button): tokenising a 4 MB document takes seconds and blocks the UI.
+ */
+export const HIGHLIGHT_LIMIT = 512 * 1024;
+
+export function canHighlight(text, limit = HIGHLIGHT_LIMIT) {
+  return String(text ?? '').length <= limit;
+}
+
 const METHODS = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE|CONNECT)(?=\s|$)/;
 const HEADER = /^([A-Za-z0-9!#$%&'*+\-.^_`|~]+)[ \t]*:(.*)$/;
 const VAR_DEF = /^@([\w.$-]+)[ \t]*=[ \t]*(.*)$/;

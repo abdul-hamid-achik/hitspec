@@ -1,13 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { app, BrowserWindow, net, protocol, screen, shell } from 'electron';
+import { app, BrowserWindow, dialog, net, protocol, screen, session, shell } from 'electron';
 
 import { Backend } from './backend.js';
 import { resolveBinary } from './binary.js';
 import { registerIpc } from './ipc.js';
 import { buildMenu } from './menu.js';
+import { buildStartOptions, DirtyGuard, ShellTrust } from './policy.js';
 import { Settings } from './settings.js';
+import { reapStaleServer } from './stale.js';
 
 app.setName('hitspec Studio');
 
@@ -30,10 +32,38 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
+const startedAt = new Date().toISOString();
 const settings = new Settings(path.join(app.getPath('userData'), 'settings.json'));
 settings.load();
 
+/** Workspaces the user approved for --allow-shell in this session (never persisted). */
+const shellTrust = new ShellTrust();
+
+/** Everything `backend.start` may receive; nothing here is renderer-writable. */
+const startOptionsFor = (dir) => buildStartOptions(settings.get('backend'), { allowShell: shellTrust.has(dir) });
+
+const pidFile = path.join(app.getPath('userData'), 'serve.pid.json');
+
+const dirtyGuard = new DirtyGuard({
+  confirmDiscard: (context) => {
+    const win = getMainWindow();
+    const options = {
+      type: 'warning',
+      buttons: ['Cancel', 'Discard changes'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+      title: 'Unsaved changes',
+      message: 'You have unsaved changes in the source editor.',
+      detail: `Discard them and ${context ?? 'continue'}?`,
+    };
+    const result = win ? dialog.showMessageBoxSync(win, options) : dialog.showMessageBoxSync(options);
+    return result === 1;
+  },
+});
+
 const backend = new Backend({
+  pidFile,
   resolveBinary: () =>
     resolveBinary({
       platform: process.platform,
@@ -93,11 +123,24 @@ async function createWindow() {
       sandbox: true,
       spellcheck: false,
       webSecurity: true,
+      webviewTag: false,
+      allowRunningInsecureContent: false,
+      experimentalFeatures: false,
+      enableBlinkFeatures: '',
     },
   });
 
   windows.add(win);
-  win.once('closed', () => windows.delete(win));
+  const wcId = win.webContents.id;
+  win.once('closed', () => {
+    windows.delete(win);
+    dirtyGuard.clear(wcId);
+  });
+
+  // Closing the window throws the editor buffer away: ask first.
+  win.on('close', (event) => {
+    if (!dirtyGuard.confirm(wcId, 'close the window')) event.preventDefault();
+  });
 
   const persistBounds = () => {
     if (win.isDestroyed()) return;
@@ -119,6 +162,12 @@ async function createWindow() {
   win.webContents.on('will-navigate', (event, url) => {
     if (!url.startsWith(`${SCHEME}://app/`)) event.preventDefault();
   });
+  win.webContents.on('will-attach-webview', (event) => event.preventDefault());
+  // The renderer blocks unload (reload / devtools refresh) while it has unsaved
+  // edits; ask in a native dialog and let the unload through if the user agrees.
+  win.webContents.on('will-prevent-unload', (event) => {
+    if (dirtyGuard.confirm(wcId, 'reload the window')) event.preventDefault();
+  });
 
   await win.loadURL(`${SCHEME}://app/index.html`);
 
@@ -139,6 +188,31 @@ function getMainWindow() {
   return [...windows].find((w) => !w.isDestroyed()) ?? null;
 }
 
+/**
+ * The page also carries a CSP <meta>, but headers add what a meta tag cannot
+ * (`frame-ancestors`) and cover every asset served over the scheme.
+ */
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self'",
+  "img-src 'self' data:",
+  "connect-src 'self'",
+  "font-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-ancestors 'none'",
+].join('; ');
+
+function withSecurityHeaders(res) {
+  const headers = new Headers(res.headers);
+  headers.set('Content-Security-Policy', CSP);
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('Referrer-Policy', 'no-referrer');
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+}
+
 /** Serve renderer assets from disk over the custom scheme. */
 function registerProtocol() {
   protocol.handle(SCHEME, async (request) => {
@@ -151,10 +225,8 @@ function registerProtocol() {
     }
     try {
       const stat = await fs.promises.stat(target);
-      if (stat.isDirectory()) {
-        return await net.fetch(pathToFileURL(path.join(target, 'index.html')).href);
-      }
-      return await net.fetch(pathToFileURL(target).href);
+      const file = stat.isDirectory() ? path.join(target, 'index.html') : target;
+      return withSecurityHeaders(await net.fetch(pathToFileURL(file).href));
     } catch {
       return new Response('not found', { status: 404 });
     }
@@ -164,7 +236,7 @@ function registerProtocol() {
 async function startWithWorkspace(dirPath) {
   if (!dirPath) return;
   try {
-    await backend.start(path.resolve(dirPath), settings.get('backend') ?? {});
+    await backend.start(path.resolve(dirPath), startOptionsFor(path.resolve(dirPath)));
     settings.addRecent(path.resolve(dirPath));
     buildMenu({ getWindow: getMainWindow, settings });
     broadcast('hitspec:workspace', { path: path.resolve(dirPath) });
@@ -216,8 +288,18 @@ if (!gotLock) {
   });
 
   app.whenReady().then(async () => {
+    // Deny every Chromium permission prompt (camera, geolocation, ...): the UI needs none.
+    session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
+    session.defaultSession.setPermissionCheckHandler(() => false);
+
+    // A previous run that died without cleanup (SIGKILL, crash) may have left its API server running.
+    const reaped = await reapStaleServer(pidFile).catch(() => ({ reaped: false }));
+    if (reaped.reaped) console.warn(`[hitspec] stopped a stale API server left by a previous run (pid ${reaped.pid})`);
+
     registerProtocol();
-    registerIpc({ backend, settings, getWindow: getMainWindow, broadcast });
+    registerIpc({
+      backend, settings, getWindow: getMainWindow, broadcast, shellTrust, dirtyGuard, startOptionsFor, startedAt,
+    });
     buildMenu({ getWindow: getMainWindow, settings });
 
     await createWindow();
@@ -240,15 +322,25 @@ if (!gotLock) {
     if (process.platform !== 'darwin') app.quit();
   });
 
-  app.on('before-quit', async (event) => {
+  app.on('before-quit', (event) => {
+    // Quitting skips the windows' 'close' path (app.exit), so ask here too.
+    if (!dirtyGuard.confirm(undefined, 'quit')) {
+      event.preventDefault();
+      return;
+    }
     if (backend.state === 'idle' || backend.state === 'stopped') return;
     event.preventDefault();
-    try {
-      await backend.stop();
-    } finally {
-      app.exit(0);
-    }
+    backend.stop().finally(() => app.exit(0));
   });
+
+  // Best effort when we are asked to terminate or die with a JS error.
+  // SIGKILL cannot be intercepted; the next launch reaps the child via the pidfile.
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+    process.on(signal, () => {
+      backend.stop().finally(() => app.exit(0));
+    });
+  }
+  process.on('exit', () => backend.killSync());
 }
 
 process.on('uncaughtException', (err) => {
