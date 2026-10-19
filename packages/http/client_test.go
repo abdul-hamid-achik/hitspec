@@ -304,8 +304,32 @@ func TestClient_MaxRedirects(t *testing.T) {
 	require.NoError(t, err)
 	// Should stop after max redirects and return the redirect response
 	assert.Equal(t, 302, resp.StatusCode)
-	// The redirect check happens after following, so we get maxRedirects requests
-	assert.LessOrEqual(t, redirectCount, 4)
+	// The original request plus exactly maxRedirects followed redirects.
+	assert.Equal(t, 4, redirectCount)
+}
+
+func TestClient_MaxRedirectsFollowsExactlyN(t *testing.T) {
+	// /hop/N redirects to /hop/N-1; /hop/0 answers 200.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var n int
+		_, _ = fmt.Sscanf(r.URL.Path, "/hop/%d", &n)
+		if n == 0 {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/hop/%d", n-1), http.StatusFound)
+	}))
+	defer server.Close()
+
+	client := NewClient(WithMaxRedirects(2))
+
+	resp, err := client.Get(server.URL+"/hop/2", nil)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "two redirects are within maxRedirects=2")
+
+	resp, err = client.Get(server.URL+"/hop/3", nil)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusFound, resp.StatusCode, "a third redirect exceeds maxRedirects=2")
 }
 
 func TestValidateURL(t *testing.T) {

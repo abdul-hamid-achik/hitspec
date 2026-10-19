@@ -144,7 +144,9 @@ func NewClient(opts ...ClientOption) *Client {
 		if !c.followRedirect {
 			return http.ErrUseLastResponse
 		}
-		if len(via) >= c.maxRedirects {
+		// via holds the requests already sent, so len(via) is the number of
+		// this redirect: follow up to maxRedirects of them, like curl --max-redirs.
+		if len(via) > c.maxRedirects {
 			return http.ErrUseLastResponse
 		}
 		if !c.forwardRedirect && len(via) > 0 && !sameOrigin(via[0].URL, req.URL) {
