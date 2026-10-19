@@ -163,7 +163,7 @@ func TestNewRecorder_Defaults(t *testing.T) {
 		t.Errorf("expected empty seen map, got %d", len(r.seen))
 	}
 	// Default sanitized headers
-	expected := []string{"Authorization", "Cookie", "X-Api-Key", "Api-Key"}
+	expected := []string{"Authorization", "Proxy-Authorization", "Cookie", "Set-Cookie", "X-Api-Key", "Api-Key"}
 	if len(r.sanitize) != len(expected) {
 		t.Fatalf("expected %d sanitize headers, got %d", len(expected), len(r.sanitize))
 	}

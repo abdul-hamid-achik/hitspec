@@ -30,6 +30,8 @@ curl -X POST http://localhost:8080/users -d '{"name":"John"}'
 | Flag | Short | Description | Default |
 |------|-------|-------------|---------|
 | `--port` | `-p` | Port to run the proxy on | `8080` |
+| `--host` | | Address to bind (`0.0.0.0` to expose the proxy) | `127.0.0.1` |
+| `--no-redact` | | Keep secrets in the recording instead of redacting them | `false` |
 | `--target` | `-t` | Target URL to proxy to (required) | |
 | `--output` | `-o` | Output file path (default: stdout) | |
 | `--exclude` | | Paths to exclude (comma-separated) | |
@@ -66,20 +68,27 @@ hitspec record \
 ```
 </CodeGroup>
 
+## Network Access
+
+The proxy listens on `127.0.0.1` and forwards to whatever `--target` says, so it is not reachable from the network unless you ask: `--host 0.0.0.0` binds all interfaces. If the port is already in use, `hitspec record` exits with an error.
+
 ## What Gets Recorded
 
 The proxy captures:
-- HTTP method and URL
+- HTTP method and full URL, including a path prefix from `--target` (`--target https://api.example.com/v2` records `https://api.example.com/v2/users`)
 - Request headers
 - Request body
-- Response status code
+- Response status code, headers and body
 
-## What Gets Sanitized
+Responses are streamed to your client as they arrive, so server-sent events and chunked responses work through the proxy. The recording keeps up to 1 MiB of each body and is stored when the response ends (or the client disconnects).
 
-The proxy automatically sanitizes sensitive headers in the output:
-- `Authorization` headers are replaced with placeholders
-- `Cookie` headers are replaced with placeholders
-- Other sensitive headers are cleaned
+## What Gets Redacted
+
+Unless you pass `--no-redact`, the proxy replaces secrets with `{{PLACEHOLDER}}` references:
+- Headers: `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key` and `Api-Key` (for example `{{AUTHORIZATION}}`)
+- JSON fields named `password`, `secret`, `token` or `apiKey` in request and response bodies, including names that end in one of those such as `access_token` or `clientSecret` (the value becomes `"{{ACCESS_TOKEN}}"`)
+
+Define those variables in your environment to replay the recording. Other bodies, such as form data, are recorded as they are.
 
 ## Output Format
 
