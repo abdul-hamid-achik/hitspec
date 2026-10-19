@@ -274,6 +274,11 @@ func (m *Manager) GetRun(ctx context.Context, id int64) (HistoryRunDTO, error) {
 				rdto.Assertions = append(rdto.Assertions, convertAssertionToDTO(a))
 			}
 		}
+		if warnings, err := m.historyStore.Queries().ListWarningsByResult(ctx, res.ID); err == nil {
+			for _, w := range warnings {
+				rdto.Warnings = append(rdto.Warnings, w.Message)
+			}
+		}
 		dto.Results = append(dto.Results, rdto)
 	}
 	return dto, nil
@@ -324,6 +329,7 @@ func (m *Manager) recordRunToHistory(ctx context.Context, filePath, environment 
 			Skipped:     rr.Skipped,
 			Error:       rr.Error,
 			Description: rr.Description,
+			Warnings:    rr.Warnings,
 		}
 		if rr.Request != nil {
 			r.Method, r.URL = rr.Request.Method, rr.Request.URL

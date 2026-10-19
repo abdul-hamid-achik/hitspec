@@ -284,6 +284,7 @@ func (r *Runner) recordHistory(result *RunResult) {
 			Passed:      rr.Passed,
 			Skipped:     rr.Skipped,
 			Description: rr.Description,
+			Warnings:    rr.Warnings,
 		}
 		if rr.Request != nil {
 			res.Method, res.URL = rr.Request.Method, rr.Request.URL

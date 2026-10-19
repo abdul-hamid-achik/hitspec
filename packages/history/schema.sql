@@ -44,3 +44,15 @@ CREATE TABLE IF NOT EXISTS assertions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_assertions_result_id ON assertions(result_id);
+
+-- Per-request warnings (a capture that matched nothing, an unresolved
+-- {{reference}}). A table of its own, so a database created by an older
+-- version picks it up through CREATE TABLE IF NOT EXISTS without an ALTER:
+-- older runs simply have no rows here.
+CREATE TABLE IF NOT EXISTS result_warnings (
+    id        INTEGER PRIMARY KEY,
+    result_id INTEGER NOT NULL REFERENCES results(id) ON DELETE CASCADE,
+    message   TEXT    NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_result_warnings_result_id ON result_warnings(result_id);

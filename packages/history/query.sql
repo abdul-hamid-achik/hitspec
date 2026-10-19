@@ -17,6 +17,10 @@ RETURNING *;
 INSERT INTO assertions (result_id, operator, subject, expected, actual, passed, message)
 VALUES (?, ?, ?, ?, ?, ?, ?);
 
+-- name: InsertResultWarning :exec
+INSERT INTO result_warnings (result_id, message)
+VALUES (?, ?);
+
 -- name: GetRun :one
 SELECT * FROM runs WHERE id = ?;
 
@@ -31,6 +35,9 @@ SELECT * FROM results WHERE run_id = ? ORDER BY id;
 
 -- name: ListAssertionsByResult :many
 SELECT * FROM assertions WHERE result_id = ? ORDER BY id;
+
+-- name: ListWarningsByResult :many
+SELECT * FROM result_warnings WHERE result_id = ? ORDER BY id;
 
 -- name: DeleteRun :exec
 DELETE FROM runs WHERE id = ?;
