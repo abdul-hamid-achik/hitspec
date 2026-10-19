@@ -512,3 +512,18 @@ func TestClient_MultiValueSetCookieHeaders(t *testing.T) {
 	multi := resp.Headers["X-Multi"]
 	assert.Equal(t, "one, two", multi, "non-cookie multi-value headers join with \", \"")
 }
+
+func TestResponseIsJSONMediaTypes(t *testing.T) {
+	for ct, want := range map[string]bool{
+		"application/json":                true,
+		"application/json; charset=utf-8": true,
+		"application/problem+json":        true,
+		"application/vnd.api+json":        true,
+		"text/json":                       true,
+		"text/html":                       false,
+		"":                                false,
+	} {
+		r := &Response{Headers: map[string]string{"Content-Type": ct}}
+		assert.Equal(t, want, r.IsJSON(), ct)
+	}
+}

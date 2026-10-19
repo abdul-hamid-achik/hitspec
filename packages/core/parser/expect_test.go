@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -466,4 +468,31 @@ func TestShellBlockIsRaw(t *testing.T) {
 	_, err = Parse("GET http://x/\n\n>>>shell\necho hi\n", "t.http")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unclosed >>>shell")
+}
+
+// ParseFile's default warning output follows os.Stderr, so a caller that
+// swaps os.Stderr (the studio TUI redirects it to /dev/null) also silences
+// the warnings instead of having them painted over its screen.
+func TestWarningOutputFollowsStderr(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "w.http")
+	if err := os.WriteFile(path, []byte("### A\n# @followsstderrcheck x\nGET http://x.test/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sink, err := os.Create(filepath.Join(dir, "stderr"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	orig := os.Stderr
+	os.Stderr = sink
+	_, perr := ParseFile(path)
+	os.Stderr = orig
+	_ = sink.Close()
+	if perr != nil {
+		t.Fatal(perr)
+	}
+	out, _ := os.ReadFile(sink.Name())
+	if !strings.Contains(string(out), "followsstderrcheck") {
+		t.Fatalf("warning not written to the swapped os.Stderr; got %q", out)
+	}
 }

@@ -22,8 +22,14 @@ var printedWarnings sync.Map
 
 // WarningOutput is where ParseFile prints the warnings of the files it parses
 // ("warning: file:line:col: message"). Set it to nil to silence them; use Parse
-// and File.Warnings to handle them yourself.
-var WarningOutput io.Writer = os.Stderr
+// and File.Warnings to handle them yourself. The default writes to whatever
+// os.Stderr is at the time, so a caller that swaps os.Stderr (the studio TUI
+// sends it to /dev/null) silences the warnings too.
+var WarningOutput io.Writer = stderrWriter{}
+
+type stderrWriter struct{}
+
+func (stderrWriter) Write(p []byte) (int, error) { return os.Stderr.Write(p) }
 
 // warn records a suspicious-but-accepted construct at the given token.
 func (p *Parser) warn(tok Token, format string, args ...any) {

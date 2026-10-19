@@ -597,3 +597,15 @@ func TestEvaluator_BodyExistsSemantics(t *testing.T) {
 	assert.False(t, json.Evaluate(&parser.Assertion{Subject: "body.a", Operator: parser.OpExists}).Passed)
 	assert.False(t, json.Evaluate(&parser.Assertion{Subject: "body.b", Operator: parser.OpExists}).Passed)
 }
+
+// A quoted "/re/" (or a variable holding /re/) keeps working as a regex
+// literal, as it did before the parser learned /re/flags.
+func TestMatchesStripsSurroundingSlashes(t *testing.T) {
+	e := NewEvaluator(&http.Response{StatusCode: 200, Body: []byte(`{"email":"jo@example.com"}`), Headers: map[string]string{"Content-Type": "application/json"}})
+	for _, pattern := range []string{"/^jo@/", "^jo@"} {
+		r := e.Evaluate(&parser.Assertion{Subject: "body.email", Operator: parser.OpMatches, Expected: pattern})
+		if !r.Passed {
+			t.Errorf("matches %q: %s", pattern, r.Message)
+		}
+	}
+}

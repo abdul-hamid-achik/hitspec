@@ -110,9 +110,14 @@ func (e *Extractor) extractFromHeader(name string) (any, bool) {
 	return nil, false
 }
 
-// Warn receives the warnings of ExtractAll. The default prints to stderr; set
-// it to nil to silence them.
-var Warn io.Writer = os.Stderr
+// Warn receives the warnings of ExtractAll. The default prints to whatever
+// os.Stderr is at the time (so swapping os.Stderr, as the studio TUI does,
+// silences it too); set it to nil to silence them.
+var Warn io.Writer = stderrWriter{}
+
+type stderrWriter struct{}
+
+func (stderrWriter) Write(p []byte) (int, error) { return os.Stderr.Write(p) }
 
 var warned sync.Map
 

@@ -585,6 +585,12 @@ func quoteShort(s string) string {
 func (e *Evaluator) matches(actual, expected any) (bool, string) {
 	actualStr := e.text(actual)
 	pattern := valueText(expected)
+	// The parser turns an unquoted /re/flags literal into a Go pattern. A
+	// quoted "/re/" or a {{variable}} holding /re/ reaches here with its
+	// slashes; earlier releases stripped them, and suites rely on that.
+	if len(pattern) > 2 && strings.HasPrefix(pattern, "/") && strings.HasSuffix(pattern, "/") {
+		pattern = pattern[1 : len(pattern)-1]
+	}
 
 	re, err := regexp.Compile(pattern)
 	if err != nil {
