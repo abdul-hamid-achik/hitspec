@@ -1305,3 +1305,57 @@ expect status 200
 	assert.Equal(t, "payload", ev.Type)
 	assert.Equal(t, "line1\nline2", ev.Data)
 }
+
+// The CLI runner stores a run in one transaction: after WaitHistory the run is
+// finished, every result and assertion is there, and a failure to store leaves
+// no row at all (no run listed without its results).
+func TestRunner_HistoryRunIsRecordedAtomically(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	dir := t.TempDir()
+	store, err := history.NewStore(filepath.Join(dir, "history.db"))
+	require.NoError(t, err)
+	file := filepath.Join(dir, "h.http")
+	content := "### good\n# @name good\nGET " + server.URL + "/a\n\n>>>\nexpect status 200\nexpect body.ok == true\n<<<\n\n" +
+		"### bad\n# @name bad\nGET " + server.URL + "/b\n\n>>>\nexpect status 404\n<<<\n"
+	require.NoError(t, os.WriteFile(file, []byte(content), 0o644))
+
+	r := NewRunner(&Config{HistoryStore: store, Environment: "ci"})
+	res, err := r.RunFile(file)
+	require.NoError(t, err)
+	r.WaitHistory()
+
+	ctx := context.Background()
+	runs, err := store.Queries().ListRuns(ctx, history.ListRunsParams{Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, runs, 1)
+	run := runs[0]
+	assert.True(t, run.FinishedAt.Valid, "a recorded run is finished")
+	assert.Equal(t, "ci", run.Environment.String)
+	assert.Equal(t, int64(res.Passed), run.Passed)
+	assert.Equal(t, int64(res.Failed), run.Failed)
+	assert.Equal(t, int64(2), run.Total)
+	results, err := store.Queries().ListResultsByRun(ctx, run.ID)
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+	asserts, err := store.Queries().ListAssertionsByResult(ctx, results[0].ID)
+	require.NoError(t, err)
+	assert.Len(t, asserts, 2)
+
+	// A store that cannot write records nothing, not a partial run.
+	require.NoError(t, store.Close())
+	r2 := NewRunner(&Config{HistoryStore: store})
+	_, err = r2.RunFile(file)
+	require.NoError(t, err)
+	r2.WaitHistory()
+	store2, err := history.NewStore(filepath.Join(dir, "history.db"))
+	require.NoError(t, err)
+	defer store2.Close()
+	count, err := store2.Queries().CountRuns(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), count)
+}
