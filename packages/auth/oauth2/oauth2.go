@@ -2,7 +2,10 @@
 package oauth2
 
 import (
+	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,6 +25,14 @@ const (
 	Password GrantType = "password"
 	// RefreshToken is the refresh_token grant type
 	RefreshToken GrantType = "refresh_token"
+)
+
+const (
+	// DefaultTokenTimeout bounds a token request (including reading the
+	// response) when the caller's context carries no earlier deadline.
+	DefaultTokenTimeout = 30 * time.Second
+	// maxTokenResponseBytes bounds the token endpoint response body.
+	maxTokenResponseBytes = 1 << 20
 )
 
 // Config holds OAuth2 configuration
@@ -59,6 +70,7 @@ type Provider struct {
 	config     *Config
 	httpClient *http.Client
 	cache      *TokenCache
+	timeout    time.Duration
 }
 
 // NewProvider creates a new OAuth2 provider
@@ -66,58 +78,113 @@ func NewProvider(config *Config) *Provider {
 	return &Provider{
 		config: config,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: DefaultTokenTimeout,
 		},
-		cache: NewTokenCache(),
+		cache:   NewTokenCache(),
+		timeout: DefaultTokenTimeout,
 	}
+}
+
+// SetHTTPClient makes the provider send token requests through c (for example
+// a client carrying the caller's proxy and TLS settings). A nil c is ignored.
+// Returns the provider for chaining.
+func (p *Provider) SetHTTPClient(c *http.Client) *Provider {
+	if c != nil {
+		p.httpClient = c
+	}
+	return p
+}
+
+// SetCache makes the provider use cache instead of its private one, so several
+// providers (or one provider per request) can share tokens. A nil cache is
+// ignored. Returns the provider for chaining.
+func (p *Provider) SetCache(cache *TokenCache) *Provider {
+	if cache != nil {
+		p.cache = cache
+	}
+	return p
+}
+
+// SetTimeout overrides the token request timeout (default
+// DefaultTokenTimeout). The caller's context deadline still applies if it is
+// earlier. Non-positive values are ignored.
+func (p *Provider) SetTimeout(d time.Duration) *Provider {
+	if d > 0 {
+		p.timeout = d
+	}
+	return p
 }
 
 // GetToken retrieves a valid access token, fetching a new one if necessary
 func (p *Provider) GetToken() (*Token, error) {
-	// Check cache first
-	cacheKey := p.getCacheKey()
-	if token := p.cache.Get(cacheKey); token != nil && !token.IsExpired() {
-		return token, nil
+	return p.GetTokenContext(context.Background())
+}
+
+// GetTokenContext is GetToken bound to ctx: cancelling ctx (or its deadline)
+// aborts the token request. Concurrent callers for the same credentials share
+// a single token request.
+func (p *Provider) GetTokenContext(ctx context.Context) (*Token, error) {
+	token, _, err := p.TokenContext(ctx)
+	return token, err
+}
+
+// TokenContext is GetTokenContext that also reports whether a new token was
+// requested from the token endpoint (false when it came from the cache).
+func (p *Provider) TokenContext(ctx context.Context) (*Token, bool, error) {
+	return p.cache.GetOrFetch(ctx, p.getCacheKey(), p.fetchToken)
+}
+
+// Invalidate drops the cached token for this provider's credentials, e.g.
+// after the resource server rejected it with 401.
+func (p *Provider) Invalidate() {
+	p.cache.Delete(p.getCacheKey())
+}
+
+// CacheKey identifies the token a config yields: token URL, client id, scopes,
+// grant type and username, plus a digest of the secrets so that different
+// credentials never share a cached token.
+func (c *Config) CacheKey() string {
+	grant := c.GrantType
+	if grant == "" {
+		grant = ClientCredentials
 	}
-
-	// Fetch new token
-	token, err := p.fetchToken()
-	if err != nil {
-		return nil, err
-	}
-
-	// Cache the token
-	p.cache.Set(cacheKey, token)
-
-	return token, nil
+	sum := sha256.Sum256([]byte(c.ClientSecret + "\x00" + c.Password))
+	return strings.Join([]string{
+		c.TokenURL,
+		c.ClientID,
+		strings.Join(c.Scopes, ","),
+		string(grant),
+		c.Username,
+		hex.EncodeToString(sum[:8]),
+	}, "|")
 }
 
 func (p *Provider) getCacheKey() string {
-	return fmt.Sprintf("%s:%s:%s", p.config.TokenURL, p.config.ClientID, strings.Join(p.config.Scopes, ","))
+	return p.config.CacheKey()
 }
 
-func (p *Provider) fetchToken() (*Token, error) {
+func (p *Provider) fetchToken(ctx context.Context) (*Token, error) {
 	switch p.config.GrantType {
 	case ClientCredentials:
-		return p.fetchClientCredentialsToken()
+		return p.fetchClientCredentialsToken(ctx)
 	case Password:
-		return p.fetchPasswordToken()
+		return p.fetchPasswordToken(ctx)
 	default:
-		return p.fetchClientCredentialsToken()
+		return p.fetchClientCredentialsToken(ctx)
 	}
 }
 
-func (p *Provider) fetchClientCredentialsToken() (*Token, error) {
+func (p *Provider) fetchClientCredentialsToken(ctx context.Context) (*Token, error) {
 	data := url.Values{}
 	data.Set("grant_type", "client_credentials")
 	if len(p.config.Scopes) > 0 {
 		data.Set("scope", strings.Join(p.config.Scopes, " "))
 	}
 
-	return p.doTokenRequest(data)
+	return p.doTokenRequest(ctx, data)
 }
 
-func (p *Provider) fetchPasswordToken() (*Token, error) {
+func (p *Provider) fetchPasswordToken(ctx context.Context) (*Token, error) {
 	data := url.Values{}
 	data.Set("grant_type", "password")
 	data.Set("username", p.config.Username)
@@ -126,11 +193,14 @@ func (p *Provider) fetchPasswordToken() (*Token, error) {
 		data.Set("scope", strings.Join(p.config.Scopes, " "))
 	}
 
-	return p.doTokenRequest(data)
+	return p.doTokenRequest(ctx, data)
 }
 
-func (p *Provider) doTokenRequest(data url.Values) (*Token, error) {
-	req, err := http.NewRequest("POST", p.config.TokenURL, strings.NewReader(data.Encode()))
+func (p *Provider) doTokenRequest(ctx context.Context, data url.Values) (*Token, error) {
+	ctx, cancel := context.WithTimeout(ctx, p.timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", p.config.TokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create token request: %w", err)
 	}
@@ -149,7 +219,7 @@ func (p *Provider) doTokenRequest(data url.Values) (*Token, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxTokenResponseBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read token response: %w", err)
 	}
@@ -181,11 +251,16 @@ func (p *Provider) doTokenRequest(data url.Values) (*Token, error) {
 
 // RefreshAccessToken refreshes the access token using a refresh token
 func (p *Provider) RefreshAccessToken(refreshToken string) (*Token, error) {
+	return p.RefreshAccessTokenContext(context.Background(), refreshToken)
+}
+
+// RefreshAccessTokenContext is RefreshAccessToken bound to ctx.
+func (p *Provider) RefreshAccessTokenContext(ctx context.Context, refreshToken string) (*Token, error) {
 	data := url.Values{}
 	data.Set("grant_type", "refresh_token")
 	data.Set("refresh_token", refreshToken)
 
-	return p.doTokenRequest(data)
+	return p.doTokenRequest(ctx, data)
 }
 
 // ParseAuthAnnotation parses OAuth2 auth annotation and returns config
