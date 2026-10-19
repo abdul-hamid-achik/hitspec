@@ -278,7 +278,7 @@ func TestVerify_MultipleRequests_Aggregation(t *testing.T) {
 	assert.Equal(t, 1, result.Failed)
 	assert.Equal(t, 0, result.Skipped)
 	require.Len(t, result.Results, 3)
-	assert.True(t, result.Duration > 0)
+	assert.True(t, result.Duration >= 0) // Windows' coarse clock can report 0 for a fast loopback run
 }
 
 func TestVerify_ProviderURL_OverridesBaseUrl(t *testing.T) {
@@ -805,7 +805,7 @@ func TestVerify_InteractionResult_Duration(t *testing.T) {
 	result, err := v.Verify(file)
 	require.NoError(t, err)
 	require.Len(t, result.Results, 1)
-	assert.True(t, result.Results[0].Duration > 0)
+	assert.True(t, result.Results[0].Duration >= 0) // see above: 0 is a valid reading on Windows
 }
 
 func TestVerify_InteractionResult_Description(t *testing.T) {
