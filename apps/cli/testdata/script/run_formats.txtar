@@ -1,0 +1,28 @@
+# Every output format writes to stdout when --output-file is not set.
+# Regression: json/junit/tap/html failed with "error writing output: invalid
+# argument", which made the GitHub Action (output: junit) fail on every run.
+
+exitcode 0 hitspec run ok.http -o json
+stdout '"passed": 1'
+
+exitcode 0 hitspec run ok.http -o junit
+stdout '<testsuites'
+
+exitcode 0 hitspec run ok.http -o tap
+stdout '^ok 1 '
+
+exitcode 0 hitspec run ok.http -o html
+stdout '<html'
+
+# With --output-file the report goes to the file and stdout stays empty.
+exitcode 0 hitspec run ok.http -o json --output-file report.json
+! stdout .
+grep '"passed": 1' report.json
+
+-- ok.http --
+### ok-request
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 200
+<<<

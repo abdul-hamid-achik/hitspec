@@ -1,0 +1,17 @@
+# An invalid hitspec.yaml exits 3 with a message on stderr.
+# Regression: the error went through the broken writer, so the process exited
+# 3 without printing anything.
+
+exitcode 3 hitspec run ok.http
+stderr 'Error: '
+stderr 'hitspec.yaml'
+
+exitcode 3 hitspec run ok.http --config missing.yaml
+stderr 'Error: read config missing.yaml'
+
+-- hitspec.yaml --
+environments: [oops
+  bad: : :
+-- ok.http --
+### ok-request
+GET {{$env(SERVER)}}/status/200

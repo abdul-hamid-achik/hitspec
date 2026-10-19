@@ -1,0 +1,21 @@
+# validate exits 0 for valid files and 2 for syntax errors.
+
+exitcode 0 hitspec validate good.http
+stdout 'OK'
+
+exitcode 2 hitspec validate unclosed.http
+stderr 'unclosed >>> assertion block'
+
+-- good.http --
+### ok
+GET https://example.test/health
+
+>>>
+expect status 200
+<<<
+-- unclosed.http --
+### bad
+GET https://example.test/health
+
+>>>
+expect status 200

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -126,12 +127,12 @@ func FindAndLoadConfig(dir string) (*Config, error) {
 func loadConfigFromFile(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read config %s: %w", path, err)
 	}
 
 	config := DefaultConfig()
 	if err := yaml.Unmarshal(data, config); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse config %s: %w", path, err)
 	}
 
 	return config, nil

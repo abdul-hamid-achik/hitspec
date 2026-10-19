@@ -1,0 +1,4 @@
+# Plain builds (no -ldflags) still report a usable version.
+exitcode 0 hitspec version
+stdout '^hitspec version \S+'
+stdout '^Built: '

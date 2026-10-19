@@ -238,15 +238,18 @@ type Flushable interface {
 }
 
 func runCommand(cmd *cobra.Command, args []string) error {
-	// Setup output writer
-	var outWriter *os.File
+	// Setup output writer. outWriter must stay a nil interface (not a nil
+	// *os.File) when --output-file is unset, or every formatter would write
+	// to a nil file instead of stdout.
+	var outWriter io.Writer
 	var err error
 	if outputFileFlag != "" {
-		outWriter, err = os.Create(outputFileFlag)
-		if err != nil {
-			return fmt.Errorf("cannot create output file: %w", err)
+		outFile, createErr := os.Create(outputFileFlag)
+		if createErr != nil {
+			return fmt.Errorf("cannot create output file: %w", createErr)
 		}
-		defer outWriter.Close()
+		defer outFile.Close()
+		outWriter = outFile
 	}
 
 	// Validate output format
@@ -318,8 +321,8 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	// Load config from file (if present) and apply CLI overrides
 	fileConfig, err := config.LoadConfig(configFlag)
 	if err != nil {
-		formatter.FormatError(err)
-		os.Exit(ExitConfigError)
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return newExitError(ExitConfigError, err.Error())
 	}
 	// Warn if --env names an environment that isn't defined in the config.
 	// Only check when the env flag was explicitly set, so the implicit
