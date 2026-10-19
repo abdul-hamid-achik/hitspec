@@ -38,11 +38,11 @@ steps:
       screen:
         contains: "No stress test running"
       timeoutMs: 8000
-  # edit the duration field (field 0, pre-filled "30s") down to 2s, then start
+  # type a duration of 2s into field 0 (empty; "30s" is only its placeholder),
+  # then start with ctrl+s -- enter alone never starts a run
   - press: "e"
-  - press: "ctrl+u"
   - type: "2s"
-  - press: "enter"
+  - press: "ctrl+s"
   - wait:
       screen:
         contains: "Running: true"

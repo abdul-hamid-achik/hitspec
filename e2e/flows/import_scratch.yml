@@ -38,9 +38,12 @@ steps:
       screen:
         contains: "IMPORT"
       timeoutMs: 8000
-  # the form is pre-filled (format curl, input "curl https://example.com"); submit it
+  # the form starts empty (format defaults to curl): fill in the input, then
+  # submit explicitly with ctrl+s (enter only moves between fields)
   - press: "e"
-  - press: "enter"
+  - press: "down"
+  - type: "curl https://example.com"
+  - press: "ctrl+s"
   - wait:
       screen:
         contains: "imported-"

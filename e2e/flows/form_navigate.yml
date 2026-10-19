@@ -38,12 +38,13 @@ steps:
         contains: "rate: 5"
       timeoutMs: 5000
   - press: "e"
-  # `e` focuses field 0 (duration); down moves to field 1 (rate), seeded "5".
+  # `e` focuses field 0 (duration); down moves to field 1 (rate), whose
+  # placeholder is "5" (the field itself is empty).
   - press: "down"
   - type: "7"
   - wait:
       screen:
-        contains: "rate: 57"
+        contains: "rate: 7"
       timeoutMs: 5000
   - snapshot: navigated
   - press: "ctrl+c"
@@ -57,7 +58,7 @@ outcomes:
     description: down moves focus to the rate field and the typed digit lands there
     verify:
       screen:
-        contains: "rate: 57"
+        contains: "rate: 7"
   - id: duration_unchanged
     description: the first field is untouched by editing the second
     verify:

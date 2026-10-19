@@ -53,6 +53,14 @@ The workspace screen is split into panes you cycle through with `tab` /
 A top bar shows the active environment and version; a bottom navigation strip and
 status line show the current screen, contextual key hints, and toasts.
 
+The layout adapts to the terminal. From 120 columns the source and response sit
+side by side; below that they share one panel, and studio switches that panel to
+the response when a run finishes (`tab` brings the source back). On a short
+terminal (under 30 rows) the headers and assertions row is dropped so the
+request list and the main panel keep their room. The headers and assertions
+panels follow the request highlighted in the list: what the file declares for it,
+or what it returned on its last run.
+
 ## Screens
 
 Press a number key (or use the palette) to switch screens:
@@ -66,7 +74,7 @@ Press a number key (or use the palette) to switch screens:
 | `5` | Record | Start/stop a recording proxy and export captured traffic |
 | `6` | History | Browse persistent run history with drill-down |
 | `7` | Import | Import from curl, OpenAPI, Postman, or Insomnia |
-| `8` | Cookies | Inspect the local cookie store |
+| `8` | Cookies | Inspect the local cookie store (one global file shared by every workspace) |
 | `9` | Settings | View/edit config and environments |
 
 ## Keyboard shortcuts
@@ -88,10 +96,42 @@ Press `?` at any time for the in-app keyboard reference.
 | `ctrl+s` | Save the edited file |
 | `r` | Run the active request |
 | `R` | Run every request in the file |
+| `x` | Cancel the run in progress |
+| `<` / `>` (or `,` / `.`) | In the response pane, show the previous / next request of a file run |
 | `ctrl+r` | Refresh the workspace (rescan files + config) |
 | `n` | New scratch file |
 | `g` | Generate a sample project (`hitspec.yaml` + `example.http`) |
 | `D` | Delete the selected file |
+
+`r` and `R` run what is in the editor, including edits you have not saved yet;
+the file on disk is not touched. A run takes the whole terminal's attention: a
+second `r` while one is running is ignored, and `x` (or `ctrl+c`) cancels it --
+requests that had not started are skipped. After a file run, `<` and `>` step
+through every request's response; the run opens on its first failing request.
+
+### Unsaved edits
+
+Studio never drops your edits silently. Opening another file (`enter` in the file
+list, search), creating one, importing, renaming or duplicating, generating a
+sample, and quitting (`q` or `ctrl+c`) all ask first when the editor has unsaved
+changes. `ctrl+s` also checks the file on disk: if it was modified outside studio
+since you opened it, studio asks before overwriting it.
+
+### Forms (stress, mock, contract, record, import, cookies, settings)
+
+The screens that start something show a form with empty fields; the placeholder
+is the value used when a field is left blank. Nothing starts until you ask:
+
+| Key | Action |
+|-----|--------|
+| `e` or `enter` | Edit the fields |
+| `tab` / `shift+tab` or `enter` | Next / previous field (while editing) |
+| `ctrl+s` | Submit while editing the fields |
+| `s` | Submit when not editing the fields |
+| `x` | Stop (stress, mock, record) |
+| `esc` | Leave the fields, then go back to the workspace |
+
+`enter` never submits a form, so a stray key cannot start a load test.
 
 ### Global
 
@@ -104,7 +144,7 @@ Press `?` at any time for the in-app keyboard reference.
 | `tab` / `shift+tab` | Next / previous pane |
 | `esc` | Cancel / close an overlay |
 | `?` | Help overlay |
-| `q` / `ctrl+c` | Quit |
+| `q` / `ctrl+c` | Quit (`ctrl+c` cancels a run in progress first) |
 
 ## Command palette
 
@@ -135,7 +175,9 @@ Select a request and use the palette (`ctrl+p`) to copy it in the format you nee
 | Copy response body | The last response body |
 
 Each snippet includes the request's method, URL, headers, and body, so it is a
-runnable copy you can paste and tweak.
+runnable copy you can paste and tweak. It is the request highlighted in the list
+(named or not) as it is in the editor, and `{{variables}}` are filled in from the
+file and the active environment, the same values a run would use.
 
 <Note>
   Every format includes query parameters and renders `@auth bearer`, `basic`,
@@ -215,6 +257,11 @@ the file list and live execution progress as files change on disk. Disable it wi
 | `--log-format` | | Log format: `text` or `json` | `text` |
 | `--log-level` | | Log level: `debug`, `info`, `warn`, `error` | `info` |
 | `--theme` | | Color theme (see [Themes](#themes)) | |
+| `--mouse` | | Capture the mouse for wheel scrolling | `false` |
+
+Studio does not capture the mouse by default, so your terminal can select and copy
+text as usual. Pass `--mouse` if you want the wheel to scroll the response pane;
+the terminal's own selection then needs a modifier key (usually `shift`).
 
 <Warning>
   Shell commands and database assertions are disabled by default. Pass

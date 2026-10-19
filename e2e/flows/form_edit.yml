@@ -37,17 +37,19 @@ steps:
       screen:
         contains: "STRESS"
       timeoutMs: 5000
-  # The stress form seeds duration with "30s".
+  # The stress form starts empty; "30s" is only the placeholder (the default a
+  # blank field uses).
   - wait:
       screen:
         contains: "duration: 30s"
       timeoutMs: 5000
   - press: "e"
-  # `e` focuses the first field; the typed digit appends to "30s".
+  # `e` focuses the first field; the typed digit lands in the (empty) field and
+  # replaces the placeholder.
   - type: "9"
   - wait:
       screen:
-        contains: "duration: 30s9"
+        contains: "duration: 9"
       timeoutMs: 5000
   - snapshot: editing
   # esc bindings don't arrive over the PTY, but ctrl+c is a hard interrupt that
@@ -63,7 +65,7 @@ outcomes:
     description: characters typed after `e` land in the focused form field
     verify:
       screen:
-        contains: "duration: 30s9"
+        contains: "duration: 9"
   - id: clean_exit
     description: ctrl+c exits the app with status code 0
     verify:
