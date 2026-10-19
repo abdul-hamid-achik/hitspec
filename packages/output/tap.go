@@ -1,9 +1,12 @@
 package output
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,6 +29,12 @@ type tapResult struct {
 	skipReason  string
 	error       string
 	assertions  []string
+	request     string // "GET url" of a failed request
+	status      string // response status line of a failed request
+	millis      int64
+	body        bodyText
+	hasBody     bool
+	warnings    []string
 }
 
 type TAPOption func(*TAPFormatter)
@@ -60,7 +69,7 @@ func (f *TAPFormatter) FormatResult(result *runner.RunResult) {
 		}
 
 		if r.Error != nil {
-			tr.error = r.Error.Error()
+			tr.error = RedactText(r.Error.Error())
 		}
 
 		if !r.Passed && len(r.Assertions) > 0 {
@@ -70,6 +79,17 @@ func (f *TAPFormatter) FormatResult(result *runner.RunResult) {
 						"%s %s: expected %v, got %v",
 						a.Subject, a.Operator, a.Expected, a.Actual))
 				}
+			}
+		}
+
+		tr.warnings = r.Warnings
+		if !r.Skipped && !r.Passed {
+			tr.request = requestLine(r)
+			if r.Response != nil {
+				tr.status = responseStatus(r)
+				tr.millis = responseMillis(r)
+				tr.body = formatBody(r.Response.Body, true)
+				tr.hasBody = true
 			}
 		}
 
@@ -109,25 +129,32 @@ func (f *TAPFormatter) Flush(totalDuration time.Duration) error {
 			fmt.Fprintf(f.writer, "  ---\n")
 			fmt.Fprintf(f.writer, "  message: %s\n", escapeYAML(r.error))
 			fmt.Fprintf(f.writer, "  severity: error\n")
+			f.writeContext(r)
 			fmt.Fprintf(f.writer, "  ...\n")
 			continue
 		}
 
 		if r.passed {
 			fmt.Fprintf(f.writer, "ok %d - %s\n", r.number, r.name)
-			if r.description != "" {
+			if r.description != "" || len(r.warnings) > 0 {
 				fmt.Fprintf(f.writer, "  ---\n")
-				fmt.Fprintf(f.writer, "  description: %s\n", escapeYAML(r.description))
+				if r.description != "" {
+					fmt.Fprintf(f.writer, "  description: %s\n", escapeYAML(r.description))
+				}
+				f.writeContext(r)
 				fmt.Fprintf(f.writer, "  ...\n")
 			}
 		} else {
 			fmt.Fprintf(f.writer, "not ok %d - %s\n", r.number, r.name)
-			if len(r.assertions) > 0 {
+			if len(r.assertions) > 0 || r.request != "" || len(r.warnings) > 0 {
 				fmt.Fprintf(f.writer, "  ---\n")
-				fmt.Fprintf(f.writer, "  failures:\n")
-				for _, a := range r.assertions {
-					fmt.Fprintf(f.writer, "    - %s\n", escapeYAML(a))
+				if len(r.assertions) > 0 {
+					fmt.Fprintf(f.writer, "  failures:\n")
+					for _, a := range r.assertions {
+						fmt.Fprintf(f.writer, "    - %s\n", escapeYAML(a))
+					}
 				}
+				f.writeContext(r)
 				fmt.Fprintf(f.writer, "  ...\n")
 			}
 		}
@@ -137,6 +164,54 @@ func (f *TAPFormatter) Flush(totalDuration time.Duration) error {
 	fmt.Fprintln(f.writer)
 
 	return nil
+}
+
+// writeContext writes the YAMLish diagnostics of a failed request (request
+// line, response status and body excerpt) and any warnings. Strings go through
+// yamlString; the body is a literal block, so multi-line JSON stays readable.
+func (f *TAPFormatter) writeContext(r tapResult) {
+	if r.request != "" {
+		fmt.Fprintf(f.writer, "  request: %s\n", yamlString(r.request))
+	}
+	if r.status != "" {
+		fmt.Fprintf(f.writer, "  response:\n")
+		fmt.Fprintf(f.writer, "    status: %s\n", yamlString(r.status))
+		fmt.Fprintf(f.writer, "    durationMs: %d\n", r.millis)
+		if r.hasBody && r.body.Total > 0 {
+			// |2- : literal block, content indented two spaces past "body:",
+			// no trailing newline; the indicator keeps a leading-space first
+			// line from being misread.
+			fmt.Fprintf(f.writer, "    body: |2-\n")
+			for _, line := range strings.Split(sanitize(r.body.Text), "\n") {
+				if line == "" {
+					fmt.Fprintf(f.writer, "\n")
+					continue
+				}
+				fmt.Fprintf(f.writer, "      %s\n", line)
+			}
+			if r.body.Truncated {
+				fmt.Fprintf(f.writer, "    bodyTruncated: %s\n", yamlString(r.body.Note))
+			}
+		}
+	}
+	if len(r.warnings) > 0 {
+		fmt.Fprintf(f.writer, "  warnings:\n")
+		for _, w := range r.warnings {
+			fmt.Fprintf(f.writer, "    - %s\n", yamlString(sanitize(w)))
+		}
+	}
+}
+
+// yamlString quotes s as a YAML double-quoted scalar (JSON string syntax is a
+// subset of it).
+func yamlString(s string) string {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(s); err != nil {
+		return strconv.Quote(s)
+	}
+	return strings.TrimSuffix(buf.String(), "\n")
 }
 
 func escapeYAML(s string) string {

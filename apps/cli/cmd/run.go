@@ -418,7 +418,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Open history store unless disabled
-	if !noHistoryFlag {
+	if !noHistoryFlag && !dryRunFlag {
 		dbPath := historyDBFlag
 		if dbPath == "" {
 			home, err := os.UserHomeDir()
@@ -457,12 +457,19 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		startTime := time.Now()
 
 		for _, file := range files {
+			var result *runner.RunResult
+			var err error
 			if dryRunFlag {
-				fmt.Fprintf(cmd.OutOrStdout(), "Would run: %s\n", file)
-				continue
+				// Parses and plans the file but sends nothing. A file that
+				// cannot load fails the dry run as it would fail a real one.
+				var matched int
+				if matched, err = writeDryRun(cmd.OutOrStdout(), r, file); err == nil {
+					t.Matched += matched
+					continue
+				}
+			} else {
+				result, err = r.RunFileContext(ctx, file)
 			}
-
-			result, err := r.RunFileContext(ctx, file)
 			if err != nil {
 				// A file that cannot be loaded (syntax error, duplicate
 				// @name, @depends cycle) fails the run; the error goes to
@@ -535,7 +542,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 		if t.BrokenFiles > 0 {
 			fmt.Fprintln(stderr, brokenFilesSummary(t.BrokenFiles))
-		} else if !dryRunFlag && filtersSet && t.Matched == 0 {
+		} else if filtersSet && t.Matched == 0 {
 			fmt.Fprintln(stderr, noMatchMessage(nameFlag, tagsFilter))
 		}
 		return t, flushErr
@@ -751,7 +758,7 @@ func newFormatter(format string, outWriter io.Writer, verbose int, noColor, quie
 		return output.NewHTMLFormatter(opts...)
 	default: // "console"
 		consoleOpts := []output.ConsoleOption{
-			output.WithVerbose(verbose > 0),
+			output.WithVerbosity(verbose),
 			output.WithNoColor(noColor || quiet),
 		}
 		if outWriter != nil {

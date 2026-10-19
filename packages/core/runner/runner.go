@@ -172,7 +172,11 @@ type RequestResult struct {
 	ShellResults []*ShellResult
 	SSEEvents    []sse.Event
 	Captures     map[string]any
-	Error        error
+	// Warnings are non-fatal findings about the request: a capture that matched
+	// nothing, a {{reference}} that was sent unresolved. They never change
+	// Passed or the exit code.
+	Warnings []string
+	Error    error
 }
 
 // ProgressEvent is fired before and after each request execution.
