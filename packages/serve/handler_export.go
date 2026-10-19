@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"path/filepath"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
-	curlexport "github.com/abdul-hamid-achik/hitspec/packages/export/curl"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
+	curlexport "github.com/abdul-hamid-achik/hitspec/v2/packages/export/curl"
 )
 
 func (s *Server) handleExportCurl(w http.ResponseWriter, r *http.Request) {

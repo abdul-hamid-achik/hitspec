@@ -10,11 +10,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/abdul-hamid-achik/hitspec/internal/conv"
-	"github.com/abdul-hamid-achik/hitspec/internal/pathutil"
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
-	"github.com/abdul-hamid-achik/hitspec/packages/http"
-	"github.com/abdul-hamid-achik/hitspec/packages/snapshot"
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/conv"
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/pathutil"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/http"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/snapshot"
 	"github.com/tidwall/gjson"
 	"github.com/xeipuuv/gojsonschema"
 )

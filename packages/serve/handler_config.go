@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"path/filepath"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/config"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/config"
 )
 
 func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {

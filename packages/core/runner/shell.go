@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
 )
 
 // ShellResult represents the result of a shell command execution

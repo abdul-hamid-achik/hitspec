@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/artifact"
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
-	"github.com/abdul-hamid-achik/hitspec/packages/fetch"
-	"github.com/abdul-hamid-achik/hitspec/packages/search"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/artifact"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/fetch"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/search"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

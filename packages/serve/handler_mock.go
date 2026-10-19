@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/mock"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/mock"
 )
 
 func (s *Server) handleMockStart(w http.ResponseWriter, r *http.Request) {

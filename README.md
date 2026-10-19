@@ -27,7 +27,7 @@ brew install --cask abdul-hamid-achik/tap/hitspec
 ### Go Install
 
 ```bash
-go install github.com/abdul-hamid-achik/hitspec/apps/cli@latest
+go install github.com/abdul-hamid-achik/hitspec/v2/cmd/hitspec@latest
 ```
 
 ### Download Binary

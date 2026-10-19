@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/clientmgr"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/clientmgr"
 )
 
 // TestStatusLineClasses covers the status-code color branches (2xx/3xx/4xx/5xx

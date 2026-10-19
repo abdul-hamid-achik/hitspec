@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/assertions"
-	"github.com/abdul-hamid-achik/hitspec/packages/core/runner"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/assertions"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
 )
 
 func TestJUnitFormatter_PassingTest(t *testing.T) {

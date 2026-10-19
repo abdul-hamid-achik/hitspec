@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/assertions"
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
-	"github.com/abdul-hamid-achik/hitspec/packages/core/runner"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/assertions"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
 )
 
 // TestHTMLFormatter covers the HTML formatter's FormatResult + Flush path (a

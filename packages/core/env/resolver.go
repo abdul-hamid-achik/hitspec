@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/builtin"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/builtin"
 )
 
 var variablePattern = regexp.MustCompile(`\{\{([^}]+)\}\}`)

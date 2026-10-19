@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/runner"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
 )
 
 var cookieMu sync.Mutex

@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/serve"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/serve"
 	"github.com/spf13/cobra"
 )
 

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/env"
-	hithttp "github.com/abdul-hamid-achik/hitspec/packages/http"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/env"
+	hithttp "github.com/abdul-hamid-achik/hitspec/v2/packages/http"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

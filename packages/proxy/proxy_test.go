@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
-	hitspechttp "github.com/abdul-hamid-achik/hitspec/packages/http"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
+	hitspechttp "github.com/abdul-hamid-achik/hitspec/v2/packages/http"
 )
 
 // freePort returns an available TCP port.

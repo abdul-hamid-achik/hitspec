@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/env"
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
-	"github.com/abdul-hamid-achik/hitspec/packages/export/curl"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/env"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/export/curl"
 	"github.com/spf13/cobra"
 )
 

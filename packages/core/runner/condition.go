@@ -3,7 +3,7 @@ package runner
 import (
 	"strings"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
 )
 
 // evaluateCondition checks if a request's condition is met.

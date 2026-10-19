@@ -13,11 +13,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/config"
-	"github.com/abdul-hamid-achik/hitspec/packages/history"
-	"github.com/abdul-hamid-achik/hitspec/packages/mock"
-	"github.com/abdul-hamid-achik/hitspec/packages/proxy"
-	"github.com/abdul-hamid-achik/hitspec/packages/stress"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/config"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/history"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/mock"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/proxy"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/stress"
 )
 
 // Server is the hitspec serve HTTP server.

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/mcpclient"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/mcpclient"
 	"github.com/spf13/cobra"
 )
 

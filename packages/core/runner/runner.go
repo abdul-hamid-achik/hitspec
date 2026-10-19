@@ -9,13 +9,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/assertions"
-	"github.com/abdul-hamid-achik/hitspec/packages/core/env"
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
-	"github.com/abdul-hamid-achik/hitspec/packages/history"
-	"github.com/abdul-hamid-achik/hitspec/packages/http"
-	"github.com/abdul-hamid-achik/hitspec/packages/snapshot"
-	"github.com/abdul-hamid-achik/hitspec/packages/sse"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/assertions"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/env"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/history"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/http"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/snapshot"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/sse"
 )
 
 const (

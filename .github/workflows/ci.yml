@@ -28,8 +28,16 @@ jobs:
         with:
           version: '3.x'
 
+      # Build before `task generate` so a fresh clone (and `go install`)
+      # never depends on generated, untracked files.
+      - name: Build from a clean checkout
+        run: go build ./... && go build -o /tmp/hitspec ./cmd/hitspec
+
       - name: Generate code
         run: task generate
+
+      - name: Check generated files are committed
+        run: git diff --exit-code
 
       - name: Build Go binary
         run: task go:build

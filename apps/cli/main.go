@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/abdul-hamid-achik/hitspec/apps/cli/cmd"
+	"github.com/abdul-hamid-achik/hitspec/v2/apps/cli/cmd"
 )
 
 var (

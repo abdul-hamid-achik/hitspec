@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/assertions"
-	"github.com/abdul-hamid-achik/hitspec/packages/capture"
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
-	"github.com/abdul-hamid-achik/hitspec/packages/http"
-	"github.com/abdul-hamid-achik/hitspec/packages/sse"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/assertions"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/capture"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/http"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/sse"
 )
 
 // runRequests orchestrates execution of all requests in a parsed file,

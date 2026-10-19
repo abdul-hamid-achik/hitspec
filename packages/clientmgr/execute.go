@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/runner"
-	"github.com/abdul-hamid-achik/hitspec/packages/history"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/history"
 )
 
 // Execute runs one request from a file. RequestName selects by @name;

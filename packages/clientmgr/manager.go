@@ -13,13 +13,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/config"
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
-	"github.com/abdul-hamid-achik/hitspec/packages/core/runner"
-	"github.com/abdul-hamid-achik/hitspec/packages/history"
-	"github.com/abdul-hamid-achik/hitspec/packages/mock"
-	"github.com/abdul-hamid-achik/hitspec/packages/proxy"
-	"github.com/abdul-hamid-achik/hitspec/packages/stress"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/config"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/history"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/mock"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/proxy"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/stress"
 )
 
 const (

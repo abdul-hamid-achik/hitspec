@@ -10,8 +10,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
-	"github.com/abdul-hamid-achik/hitspec/packages/history"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/history"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

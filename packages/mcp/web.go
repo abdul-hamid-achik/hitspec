@@ -11,9 +11,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/artifact"
-	"github.com/abdul-hamid-achik/hitspec/packages/fetch"
-	"github.com/abdul-hamid-achik/hitspec/packages/search"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/artifact"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/fetch"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/search"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/net/html"
 )

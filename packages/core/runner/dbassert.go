@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/abdul-hamid-achik/hitspec/internal/conv"
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
-	"github.com/abdul-hamid-achik/hitspec/packages/db"
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/conv"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/db"
 )
 
 // DBAssertionResult represents the result of a database assertion

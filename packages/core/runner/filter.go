@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/core/parser"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
 )
 
 // shouldRun determines whether a request should be executed based on @only,

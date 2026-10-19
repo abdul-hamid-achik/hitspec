@@ -9,9 +9,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/abdul-hamid-achik/hitspec/packages/artifact"
-	hitspecmcp "github.com/abdul-hamid-achik/hitspec/packages/mcp"
-	"github.com/abdul-hamid-achik/hitspec/packages/search"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/artifact"
+	hitspecmcp "github.com/abdul-hamid-achik/hitspec/v2/packages/mcp"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/search"
 	"github.com/spf13/cobra"
 )
 
