@@ -445,6 +445,21 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		return runStressMode(cmd, files, fileConfig, environment, clientOpts)
 	}
 
+	// Where the reports go: -o/--output-file (or their variables), else the
+	// `reporters` and `outputDir` of hitspec.yaml. A dry run and a stress test
+	// ignore both. A bad value is a configuration error.
+	var plan *reportPlan
+	if !dryRunFlag {
+		plan, err = resolveReportPlan(cmd.Flags(), os.LookupEnv, fileConfig, reportConfigLabel())
+		if err == nil {
+			err = plan.ensureDir()
+		}
+		if err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+			return newExitError(ExitConfigError, err.Error())
+		}
+	}
+
 	// From here on SIGINT/SIGTERM stop the run gracefully: what finished is
 	// reported, --output-file is written and the exit code is 130. A second
 	// signal exits at once.
@@ -481,7 +496,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 	// runTests runs every file once and returns the accounting.
 	var allRunResults []*runner.RunResult
-	runTests := func(formatter Formatter, reporting bool) runTotals {
+	runTests := func(reports *reportSet, listFailures bool) runTotals {
 		var t runTotals
 		allRunResults = nil
 		startTime := time.Now()
@@ -513,17 +528,9 @@ func runCommand(cmd *cobra.Command, args []string) error {
 				// stderr so stdout stays a clean report stream.
 				t.BrokenFiles++
 				fmt.Fprintf(stderr, "Error: %s\n", brokenFileMessage(file, err))
-				if reporting {
-					if strings.EqualFold(outputFlag, "console") {
-						// Console report only carries the error when it goes
-						// to a file; on stdout it would duplicate stderr.
-						if outputFileFlag != "" {
-							formatter.FormatError(err)
-						}
-					} else {
-						formatter.FormatResult(brokenFileResult(file, err))
-					}
-				}
+				// Each report decides how to carry it: a console report on
+				// stdout would duplicate stderr, so only files get the error.
+				reports.FormatBroken(file, err)
 				if cfg.Bail {
 					break
 				}
@@ -531,10 +538,8 @@ func runCommand(cmd *cobra.Command, args []string) error {
 			}
 
 			allRunResults = append(allRunResults, result)
-			if reporting {
-				formatter.FormatResult(result)
-			}
-			if quietFlag {
+			reports.FormatResult(result)
+			if listFailures {
 				writeFailureList(stderr, result)
 			}
 			t.Passed += result.Passed
@@ -556,35 +561,37 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	// executeRun performs one full pass: open the report destination (fresh
 	// per pass), run, flush, close, and report filters that matched nothing.
 	executeRun := func(header bool) (runTotals, error) {
-		format, outFile := outputFlag, outputFileFlag
+		pass := plan
 		if dryRunFlag {
 			// A dry run prints its plan as text; there is no result document
 			// to put in -o json/junit/tap/html or --output-file.
-			if !strings.EqualFold(format, "console") || outFile != "" {
+			if !strings.EqualFold(outputFlag, "console") || outputFileFlag != "" {
 				fmt.Fprintln(stderr, "note: --dry-run prints the plan as text; -o and --output-file are ignored")
 			}
-			format, outFile = "console", ""
+			pass = cliPlan("console", "")
 		}
-		formatter, closeReport, err := openReport(format, outFile, verbosity, noColor, quietFlag)
+		if err := pass.ensureDir(); err != nil {
+			return runTotals{}, fmt.Errorf("cannot create outputDir: %w", err)
+		}
+		reports, err := openReports(pass, verbosity, noColor, quietFlag)
 		if err != nil {
 			return runTotals{}, err
 		}
-		// --quiet drops the stdout report, but --output-file still gets it.
-		reporting := !quietFlag || outFile != ""
-		if header && reporting {
-			formatter.FormatHeader(version)
+		// --quiet drops the stdout report, but report files are still written.
+		// A hitspec.yaml with no report on stdout lists failures the same way.
+		listFailures := quietFlag || pass.ListFailures
+		if header {
+			reports.FormatHeader(version)
 		}
 
-		t := runTests(formatter, reporting)
+		t := runTests(reports, listFailures)
 
 		// Flush output for formatters that accumulate results
 		var flushErr error
-		if flushable, ok := formatter.(Flushable); ok && reporting {
-			if err := flushable.Flush(t.Duration); err != nil {
-				flushErr = fmt.Errorf("error writing output: %w", err)
-			}
+		if err := reports.Flush(t.Duration); err != nil {
+			flushErr = fmt.Errorf("error writing output: %w", err)
 		}
-		if err := closeReport(); err != nil && flushErr == nil {
+		if err := reports.Close(); err != nil && flushErr == nil {
 			flushErr = fmt.Errorf("error writing output: %w", err)
 		}
 
@@ -720,11 +727,14 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 			if reload {
 				reload = false
-				newRunner, newCfg, newNoColor, err := reloadRunSettings(cmd.Flags(), cfg, tagsFilter)
+				newRunner, newCfg, newNoColor, newPlan, err := reloadSettings(cmd.Flags(), cfg, tagsFilter)
 				if err != nil {
 					fmt.Fprintf(stderr, "Error: %v\nKeeping the previous settings until the file is fixed.\n", err)
 				} else {
 					r, cfg = newRunner, newCfg
+					if newPlan != nil {
+						plan = newPlan
+					}
 					verbosity = verbosityLevel(cmd.Flags(), cfg.Verbose)
 					noColor = newNoColor
 					support = watchSupportFiles(configFlag, cfg.EnvFile)

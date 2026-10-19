@@ -66,7 +66,7 @@ headers:
 reporters:
   - console
 
-# Directory for output files (reports, coverage, etc.)
+# Directory for the report files of non-console reporters
 outputDir: ""
 
 # Run independent requests in parallel
@@ -165,8 +165,8 @@ Headers defined in individual requests override config-level headers with the sa
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `reporters` | string[] | `["console"]` | Output format(s): `console`, `json`, `junit`, `tap`, `html` |
-| `outputDir` | string | `""` | Directory for output files |
+| `reporters` | string[] | `["console"]` | Reports `hitspec run` writes: `console`, `json`, `junit`, `tap`, `html` (names are case-insensitive) |
+| `outputDir` | string | `""` | Directory for the report files, relative to this file. Created when a report is written there |
 
 ### Execution
 
@@ -179,8 +179,34 @@ Headers defined in individual requests override config-level headers with the sa
 | `noColor` | boolean | `false` | Disable colored terminal output |
 
 <Note>
-`verbose: true` is applied by `hitspec run` and means `-v`. A `-v`, `-vv` or `-vvv` flag wins over it, and `--verbose=0` turns it off. The key must be a boolean. `noColor: true` is applied by `hitspec run` too: `--no-color` (or `--no-color=false`) on the command line wins, then `HITSPEC_NO_COLOR`, then the file. The `NO_COLOR` environment variable is also honored and can only turn colors off. `reporters` and `outputDir` are read and validated, but `hitspec run` does not apply them yet. Use `--output` and `--output-file` (or their `HITSPEC_*` variables).
+`verbose: true` is applied by `hitspec run` and means `-v`. A `-v`, `-vv` or `-vvv` flag wins over it, and `--verbose=0` turns it off. The key must be a boolean. `noColor: true` is applied by `hitspec run` too: `--no-color` (or `--no-color=false`) on the command line wins, then `HITSPEC_NO_COLOR`, then the file. The `NO_COLOR` environment variable is also honored and can only turn colors off.
 </Note>
+
+### Reporters and outputDir
+
+`hitspec run` writes one report per entry of `reporters`. `console` always goes to stdout. With `outputDir` set, every other reporter writes a file there, replaced on each run (and on each `--watch` pass):
+
+| Reporter | File in `outputDir` |
+|----------|---------------------|
+| `json` | `hitspec-results.json` |
+| `junit` | `hitspec-junit.xml` |
+| `tap` | `hitspec-results.tap` |
+| `html` | `hitspec-report.html` |
+
+```yaml
+reporters:
+  - console
+  - junit
+outputDir: reports
+```
+
+- A relative `outputDir` is relative to the directory of the config file that sets it, not to the working directory. hitspec creates it before the run when at least one reporter writes a file there.
+- Without `outputDir`, every reporter writes to stdout, so only one is allowed. `reporters: [junit]` is the same as `-o junit`. Listing two or more exits with code `3`.
+- An unknown reporter name exits with code `3`. Duplicates are ignored. An empty list means `["console"]`.
+- `-o`/`--output` or `--output-file` on the command line, or a non-empty `HITSPEC_OUTPUT` or `HITSPEC_OUTPUT_FILE`, replace both keys: they are not read at all.
+- `--quiet` drops the report on stdout. The files are still written.
+- When no report goes to stdout (for example `reporters: [junit]` with `outputDir: reports`), the failed requests are listed on stderr, as with `--quiet`.
+- `--stress` and `--dry-run` ignore both keys.
 
 ### Environments
 

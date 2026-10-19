@@ -1,0 +1,80 @@
+# hitspec.yaml `reporters` without `outputDir`: the reporters write to stdout,
+# so only one is allowed. Bad values are configuration errors (exit 3).
+
+# a single non-console reporter behaves like -o.
+cd json
+exitcode 0 hitspec run --no-history ../ok.http
+stdout '"passed": 1'
+! stdout 'Tests:'
+
+# two reporters would share stdout.
+cd ../two
+exitcode 3 hitspec run --no-history ../ok.http
+stderr 'Error: hitspec\.yaml: reporters console and junit would all write to stdout; set outputDir'
+! stdout .
+
+# three reporters: the message names all of them.
+cd ../three
+exitcode 3 hitspec run --no-history ../ok.http
+stderr 'reporters console, json and tap would all write to stdout'
+
+# unknown reporter.
+cd ../unknown
+exitcode 3 hitspec run --no-history ../ok.http
+stderr 'Error: hitspec\.yaml: unknown reporter "xml" \(valid: console, json, junit, tap, html\)'
+! stdout .
+
+# -o on the command line wins completely, so a bad reporters list is not read.
+exitcode 0 hitspec run --no-history -o tap ../ok.http
+stdout '^TAP version'
+! stderr .
+
+# so does --output-file.
+exitcode 0 hitspec run --no-history --no-color --output-file out.txt ../ok.http
+! stdout .
+grep 'Tests: 1 passed' out.txt
+
+# HITSPEC_OUTPUT wins too.
+env HITSPEC_OUTPUT=json
+exitcode 0 hitspec run --no-history ../ok.http
+stdout '"passed": 1'
+env HITSPEC_OUTPUT=
+
+# HITSPEC_OUTPUT_FILE as well.
+env HITSPEC_OUTPUT_FILE=env-out.txt
+exitcode 0 hitspec run --no-history --no-color ../ok.http
+! stdout .
+exists env-out.txt
+env HITSPEC_OUTPUT_FILE=
+
+# commands that do not run tests never read the keys.
+exitcode 0 hitspec validate ../ok.http
+
+# --dry-run ignores both keys, even invalid ones.
+exitcode 0 hitspec run --no-history --dry-run ../ok.http
+stdout 'GET'
+
+# an empty list means console.
+cd ../empty
+exitcode 0 hitspec run --no-history --no-color ../ok.http
+stdout 'Tests: 1 passed, 1 total'
+
+-- .git/HEAD --
+ref: refs/heads/main
+-- ok.http --
+### ok
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 200
+<<<
+-- json/hitspec.yaml --
+reporters: [json]
+-- two/hitspec.yaml --
+reporters: [console, junit]
+-- three/hitspec.yaml --
+reporters: [console, json, tap]
+-- unknown/hitspec.yaml --
+reporters: [xml]
+-- empty/hitspec.yaml --
+reporters: []

@@ -1,0 +1,78 @@
+# hitspec.yaml `reporters` + `outputDir`: console stays on stdout, every other
+# reporter writes a fixed-name file in outputDir.
+
+# console + junit: stdout has the console report, the file is JUnit XML.
+cd both
+exitcode 0 hitspec run --no-history --no-color ../ok.http
+stdout 'Tests: 1 passed, 1 total'
+! stdout '<testsuites'
+exists reports/hitspec-junit.xml
+grep '<testsuites' reports/hitspec-junit.xml
+! exists reports/hitspec-results.json
+
+# every file reporter has its own name; the directory is created (with parents).
+cd ../all
+exitcode 0 hitspec run --no-history ../ok.http
+! stdout .
+grep '"passed": 1' deep/er/hitspec-results.json
+grep '<testsuites' deep/er/hitspec-junit.xml
+grep '^TAP version' deep/er/hitspec-results.tap
+grep '(?i)<html' deep/er/hitspec-report.html
+
+# names are case-insensitive and duplicates are dropped.
+cd ../dups
+exitcode 0 hitspec run --no-history --no-color ../ok.http
+stdout 'Tests: 1 passed, 1 total'
+grep '<testsuites' out/hitspec-junit.xml
+
+# outputDir is relative to the config file, not to the working directory.
+cd ../proj/sub
+exitcode 0 hitspec run --no-history --no-color ../../ok.http
+exists ../reports/hitspec-junit.xml
+! exists reports
+
+# --quiet drops stdout only: the files are still written, stdout stays empty.
+cd ../../quiet
+exitcode 0 hitspec run --no-history -q ../ok.http
+! stdout .
+! stderr .
+grep '<testsuites' reports/hitspec-junit.xml
+grep '"passed": 1' reports/hitspec-results.json
+
+# a re-run leaves one document per file (the file is truncated, not appended).
+exitcode 0 hitspec run --no-history -q ../ok.http
+grep -count=1 '<testsuites' reports/hitspec-junit.xml
+
+# an outputDir with only the console reporter is not created: nothing goes there.
+cd ../consoledir
+exitcode 0 hitspec run --no-history --no-color ../ok.http
+stdout 'Tests: 1 passed, 1 total'
+! exists unused
+
+-- .git/HEAD --
+ref: refs/heads/main
+-- ok.http --
+### ok
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 200
+<<<
+-- both/hitspec.yaml --
+reporters: [console, junit]
+outputDir: reports
+-- all/hitspec.yaml --
+reporters: [json, junit, tap, html]
+outputDir: deep/er
+-- dups/hitspec.yaml --
+reporters: [Console, JUNIT, junit, console]
+outputDir: out
+-- proj/hitspec.yaml --
+reporters: [console, junit]
+outputDir: reports
+-- proj/sub/.keep --
+-- quiet/hitspec.yaml --
+reporters: [console, junit, json]
+outputDir: reports
+-- consoledir/hitspec.yaml --
+outputDir: unused
