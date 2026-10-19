@@ -42,7 +42,7 @@ defaults:
 
 jobs:
   test:
-    name: Test (${{ matrix.os }})
+    name: Desktop test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
