@@ -39,11 +39,11 @@ checking what it says.
     - uses: abdul-hamid-achik/hitspec@v2
       with:
         files: tests/
-        version: v2.23.2
+        version: v2.24.0
     ```
 
     With Go, install an exact version:
-    `go install github.com/abdul-hamid-achik/hitspec/v2/cmd/hitspec@v2.23.2`.
+    `go install github.com/abdul-hamid-achik/hitspec/v2/cmd/hitspec@v2.24.0`.
   </Step>
 </Steps>
 
@@ -51,6 +51,39 @@ Every release lists its changes in the
 [changelog](https://github.com/abdul-hamid-achik/hitspec/blob/main/CHANGELOG.md),
 and from 2.20.0 on the GitHub release page of each version shows the same
 notes.
+
+## 2.24.0
+
+`reporters` and `outputDir` in `hitspec.yaml` used to be read and ignored. They
+now apply in `hitspec run`. Nothing changes if your config does not set them,
+or sets only `reporters: [console]`.
+
+### `reporters` and `outputDir`
+
+- An unknown reporter name exits 3. Valid names: `console`, `json`, `junit`,
+  `tap`, `html`.
+- Two or more reporters without `outputDir` exit 3: they would all write to
+  stdout. Set `outputDir` or keep one reporter.
+- One reporter other than `console` without `outputDir` replaces the console
+  report on stdout (`reporters: [json]` is `-o json`).
+- With `outputDir`, reports are written there as `hitspec-results.json`,
+  `hitspec-junit.xml`, `hitspec-results.tap` and `hitspec-report.html`,
+  relative to the config file. If no report goes to stdout, failures are listed
+  on stderr as with `--quiet`.
+- `-o`, `--output-file`, `HITSPEC_OUTPUT` and `HITSPEC_OUTPUT_FILE` still win
+  and skip both keys. See [Configuration](/reference/configuration#reporters-and-outputdir).
+
+### Windows
+
+- A connection the server resets before any response exits 4 (network error),
+  as on Linux and macOS. It used to exit 1 when Winsock reported the reset.
+
+### hitspec studio
+
+- The stress form has a new last field, `profile`, for a saved stress profile.
+  The other fields keep their order.
+- Search re-parses a file only when its modification time or size changed, or
+  when studio wrote it.
 
 ## 2.23.2
 
