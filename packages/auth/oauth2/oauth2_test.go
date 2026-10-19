@@ -1,13 +1,17 @@
 package oauth2
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -848,5 +852,211 @@ func TestGetToken_PasswordGrant_NoScopes(t *testing.T) {
 	}
 	if tok.AccessToken != "tok_pw_noscope" {
 		t.Errorf("AccessToken = %q", tok.AccessToken)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Context, timeout, cache key and concurrency
+// ---------------------------------------------------------------------------
+
+func TestGetTokenContext_CancelAbortsRequest(t *testing.T) {
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	}))
+	defer srv.Close()
+	defer close(release)
+
+	p := NewProvider(&Config{TokenURL: srv.URL, ClientID: "c", GrantType: ClientCredentials})
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() { _, err := p.GetTokenContext(ctx); done <- err }()
+	select {
+	case err := <-done:
+		if err == nil || !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("expected deadline exceeded, got %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("token request ignored its context")
+	}
+}
+
+func TestProvider_SetTimeoutBoundsTokenRequest(t *testing.T) {
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	}))
+	defer srv.Close()
+	defer close(release)
+
+	// A client without its own timeout (as hitspec's request client has): the
+	// provider's default cap must still apply.
+	p := NewProvider(&Config{TokenURL: srv.URL, ClientID: "c", GrantType: ClientCredentials}).
+		SetHTTPClient(&http.Client{}).SetTimeout(200 * time.Millisecond)
+	done := make(chan error, 1)
+	go func() { _, err := p.GetToken(); done <- err }()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected a timeout error")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("token request had no timeout")
+	}
+}
+
+func TestConfig_CacheKeyDistinguishesCredentials(t *testing.T) {
+	base := Config{TokenURL: "https://t", ClientID: "c", ClientSecret: "s", Scopes: []string{"a"}, GrantType: ClientCredentials}
+	keys := map[string]string{"base": base.CacheKey()}
+	variants := map[string]func(c *Config){
+		"url":      func(c *Config) { c.TokenURL = "https://t2" },
+		"client":   func(c *Config) { c.ClientID = "c2" },
+		"secret":   func(c *Config) { c.ClientSecret = "s2" },
+		"scope":    func(c *Config) { c.Scopes = []string{"b"} },
+		"grant":    func(c *Config) { c.GrantType = Password },
+		"username": func(c *Config) { c.Username = "u" },
+		"password": func(c *Config) { c.Password = "p" },
+	}
+	for name, mod := range variants {
+		c := base
+		mod(&c)
+		k := c.CacheKey()
+		for other, ok := range keys {
+			if k == ok {
+				t.Errorf("key for %q collides with %q", name, other)
+			}
+		}
+		keys[name] = k
+	}
+	// An empty grant is client_credentials.
+	c := base
+	c.GrantType = ""
+	if c.CacheKey() != base.CacheKey() {
+		t.Error("empty grant should key like client_credentials")
+	}
+}
+
+func TestGetTokenContext_ConcurrentCallsShareOneRequest(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		time.Sleep(100 * time.Millisecond)
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "t", "expires_in": 3600})
+	}))
+	defer srv.Close()
+
+	p := NewProvider(&Config{TokenURL: srv.URL, ClientID: "c", GrantType: ClientCredentials})
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := p.GetToken(); err != nil {
+				t.Errorf("GetToken: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+	if n := calls.Load(); n != 1 {
+		t.Errorf("token endpoint hit %d times, want 1", n)
+	}
+}
+
+func TestGetTokenContext_WaiterRetriesWhenLeaderContextEnds(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm() // consume the body so the server notices a client disconnect
+		if calls.Add(1) == 1 {
+			<-r.Context().Done() // leader: hangs until its context ends
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "second", "expires_in": 3600})
+	}))
+	defer srv.Close()
+
+	p := NewProvider(&Config{TokenURL: srv.URL, ClientID: "c", GrantType: ClientCredentials})
+	leaderCtx, cancel := context.WithCancel(context.Background())
+	leaderDone := make(chan struct{})
+	go func() { _, _ = p.GetTokenContext(leaderCtx); close(leaderDone) }()
+	for calls.Load() == 0 {
+		time.Sleep(5 * time.Millisecond)
+	}
+	waiterDone := make(chan *Token, 1)
+	go func() { tok, _ := p.GetTokenContext(context.Background()); waiterDone <- tok }()
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+	<-leaderDone
+	select {
+	case tok := <-waiterDone:
+		if tok == nil || tok.AccessToken != "second" {
+			t.Fatalf("waiter token = %+v", tok)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("waiter never recovered from the leader's cancellation")
+	}
+}
+
+func TestProvider_InvalidateAndSharedCache(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		n := calls.Add(1)
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": fmt.Sprintf("t%d", n), "expires_in": 3600})
+	}))
+	defer srv.Close()
+
+	shared := NewTokenCache()
+	cfg := &Config{TokenURL: srv.URL, ClientID: "c", GrantType: ClientCredentials}
+	p1 := NewProvider(cfg).SetCache(shared)
+	p2 := NewProvider(cfg).SetCache(shared)
+	if tok, _ := p1.GetToken(); tok.AccessToken != "t1" {
+		t.Fatalf("got %s", tok.AccessToken)
+	}
+	if tok, _ := p2.GetToken(); tok.AccessToken != "t1" {
+		t.Fatalf("shared cache not used: %s", tok.AccessToken)
+	}
+	p1.Invalidate()
+	if tok, fetched, _ := p2.TokenContext(context.Background()); tok.AccessToken != "t2" || !fetched {
+		t.Fatalf("expected a refetch after Invalidate, got %s fetched=%v", tok.AccessToken, fetched)
+	}
+}
+
+func TestGetToken_ErrorsAreNotCached(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if calls.Add(1) == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "ok", "expires_in": 3600})
+	}))
+	defer srv.Close()
+	p := NewProvider(&Config{TokenURL: srv.URL, ClientID: "c", GrantType: ClientCredentials})
+	if _, err := p.GetToken(); err == nil {
+		t.Fatal("expected first call to fail")
+	}
+	if tok, err := p.GetToken(); err != nil || tok.AccessToken != "ok" {
+		t.Fatalf("second call: %v %v", tok, err)
+	}
+}
+
+func TestGetToken_EmptyAccessTokenIsAnError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"token_type":"bearer","expires_in":3600}`))
+	}))
+	defer srv.Close()
+
+	p := NewProvider(&Config{TokenURL: srv.URL, ClientID: "id", ClientSecret: "secret", GrantType: ClientCredentials})
+	_, err := p.GetToken()
+	if err == nil || !strings.Contains(err.Error(), "no access_token") {
+		t.Fatalf("GetToken() error = %v, want a missing access_token error", err)
 	}
 }

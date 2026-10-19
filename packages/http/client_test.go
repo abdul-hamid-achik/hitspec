@@ -304,8 +304,32 @@ func TestClient_MaxRedirects(t *testing.T) {
 	require.NoError(t, err)
 	// Should stop after max redirects and return the redirect response
 	assert.Equal(t, 302, resp.StatusCode)
-	// The redirect check happens after following, so we get maxRedirects requests
-	assert.LessOrEqual(t, redirectCount, 4)
+	// The original request plus exactly maxRedirects followed redirects.
+	assert.Equal(t, 4, redirectCount)
+}
+
+func TestClient_MaxRedirectsFollowsExactlyN(t *testing.T) {
+	// /hop/N redirects to /hop/N-1; /hop/0 answers 200.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var n int
+		_, _ = fmt.Sscanf(r.URL.Path, "/hop/%d", &n)
+		if n == 0 {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/hop/%d", n-1), http.StatusFound)
+	}))
+	defer server.Close()
+
+	client := NewClient(WithMaxRedirects(2))
+
+	resp, err := client.Get(server.URL+"/hop/2", nil)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "two redirects are within maxRedirects=2")
+
+	resp, err = client.Get(server.URL+"/hop/3", nil)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusFound, resp.StatusCode, "a third redirect exceeds maxRedirects=2")
 }
 
 func TestValidateURL(t *testing.T) {
@@ -458,8 +482,9 @@ func TestResponse_IsJSON(t *testing.T) {
 // TestClient_MultiValueSetCookieHeaders guards the regression where a
 // response with multiple Set-Cookie headers was collapsed to only the first
 // value, because doRequest used httpResp.Header.Get(k) which returns a single
-// value. The fix joins all values via httpResp.Header.Values(k) with "; " for
-// Set-Cookie, so both cookies must survive in Response.Headers["Set-Cookie"].
+// value. All values are joined (", ", like every other multi-value header, which
+// is also what clientmgr's Set-Cookie splitter expects) so both cookies survive
+// in Response.Headers["Set-Cookie"]; Response.HeaderValues keeps them separate.
 func TestClient_MultiValueSetCookieHeaders(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Two Set-Cookie headers must both be preserved.
@@ -481,7 +506,8 @@ func TestClient_MultiValueSetCookieHeaders(t *testing.T) {
 	cookies := resp.Headers["Set-Cookie"]
 	assert.Contains(t, cookies, "session=abc123", "first Set-Cookie must be preserved")
 	assert.Contains(t, cookies, "csrf=xyz789", "second Set-Cookie must be preserved")
-	assert.Contains(t, cookies, "; ", "Set-Cookie values must be joined with \"; \"")
+	assert.Equal(t, "session=abc123, csrf=xyz789", cookies, "Set-Cookie values must be joined with \", \"")
+	assert.Equal(t, []string{"session=abc123", "csrf=xyz789"}, resp.Values("set-cookie"))
 
 	multi := resp.Headers["X-Multi"]
 	assert.Equal(t, "one, two", multi, "non-cookie multi-value headers join with \", \"")
