@@ -19,8 +19,8 @@ exitcode 1 hitspec run noassert.http --quiet
 stderr 'noassert-request'
 stderr '500'
 
-# A request that errors (connection refused).
-exitcode 1 hitspec run refused.http --quiet
+# A request that errors (connection refused): a network error, exit 4.
+exitcode 4 hitspec run refused.http --quiet
 ! stdout .
 stderr 'refused-request'
 

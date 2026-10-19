@@ -1,0 +1,120 @@
+# Inputs of `run`: stdin (-), ** globs, de-duplication, ignored directories.
+
+# `run -` reads one document from stdin; relative paths inside resolve against
+# the working directory.
+stdin one.http
+exitcode 0 hitspec run - --no-color
+stdout '<stdin>'
+stdout 'stdin-request'
+stdout '1 passed'
+
+stdin body_file.http
+exitcode 0 hitspec run - --no-color
+stdout 'body-file-request'
+
+# A parse error in the piped document is exit 2.
+stdin broken.http
+exitcode 2 hitspec run - --no-color
+stderr 'failed to parse <stdin>'
+
+# Empty stdin, and misuse, fail clearly.
+stdin empty.txt
+! exec hitspec run - --no-color
+stderr 'no input on stdin'
+stdin one.http
+exitcode 64 hitspec run - one.http --no-color
+stderr 'cannot be combined'
+stdin one.http
+exitcode 64 hitspec run - --watch --no-color
+stderr 'cannot be used with'
+
+# Quoted ** patterns (the shell did not expand them).
+exitcode 0 hitspec run 'suite/**/*.http' --no-color
+stdout -count=2 'Running:'
+stdout 'a-request'
+stdout 'b-request'
+! stdout 'c-request'
+! stdout 'ignored-request'
+exitcode 0 hitspec run 'suite/**' --no-color
+stdout -count=3 'Running:'
+stdout 'c-request'
+! stdout 'ignored-request'
+
+# The same file named several ways runs once.
+exitcode 0 hitspec run suite/a.http suite 'suite/**/a.http' ./suite/../suite/a.http --no-color
+stdout -count=3 'Running:'
+stdout -count=1 'a-request'
+
+# First-seen order is kept: b first, then the directory's remaining files.
+exitcode 0 hitspec run suite/sub/b.http suite --no-color
+stdout -count=3 'Running:'
+stdout 'Running: suite/sub/b.http\n(.|\n)*Running: suite/a.http'
+
+# node_modules, vendor and .git are skipped when walking a directory ...
+exitcode 0 hitspec run suite --no-color
+! stdout 'ignored-request'
+stdout -count=3 'Running:'
+
+# ... but an explicit path inside them still runs.
+exitcode 0 hitspec run suite/node_modules/pkg/ignored.http --no-color
+stdout 'ignored-request'
+exitcode 0 hitspec run suite/vendor --no-color
+stdout 'ignored-request'
+
+# A pattern that matches nothing is an error.
+! exec hitspec run 'nothing/**/*.http' --no-color
+stderr 'no .http or .hitspec files match'
+
+-- one.http --
+### stdin-request
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 200
+<<<
+
+-- body_file.http --
+### body-file-request
+POST {{$env(SERVER)}}/echo/x
+Content-Type: application/json
+
+< ./payload.json
+
+>>>
+expect status 200
+expect body.body contains "from-cwd"
+<<<
+
+-- payload.json --
+{"v": "from-cwd"}
+
+-- broken.http --
+### broken
+GET
+>>>
+bogus
+<<<
+
+-- empty.txt --
+-- suite/a.http --
+### a-request
+GET {{$env(SERVER)}}/status/200
+
+-- suite/sub/b.http --
+### b-request
+GET {{$env(SERVER)}}/status/200
+
+-- suite/sub/deep/c.hitspec --
+### c-request
+GET {{$env(SERVER)}}/status/200
+
+-- suite/node_modules/pkg/ignored.http --
+### ignored-request
+GET {{$env(SERVER)}}/status/200
+
+-- suite/vendor/ignored2.http --
+### ignored-request
+GET {{$env(SERVER)}}/status/200
+-- suite/.git/hooks.http --
+### ignored-request
+GET {{$env(SERVER)}}/status/200

@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/watchutil"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/config"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/env"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runconfig"
@@ -40,6 +41,14 @@ Examples:
   hitspec run api.http --env staging
   hitspec run ./tests/ --tags smoke
   hitspec run api.http --name "createUser"
+  hitspec run 'tests/**/*.http'      (quote it: ** matches any depth)
+  hitspec run - < api.http           (read one file from stdin)
+
+Directories are searched recursively, skipping .git, node_modules and vendor
+(name one of them explicitly to run what is inside). A file given twice runs
+once. Exit codes: 0 passed, 1 failed, 2 a file could not be loaded, 3
+configuration error, 4 a request got no response (connection error), 64 usage
+error, 130 interrupted (Ctrl+C).
 
 Stress Testing Mode:
   hitspec run api.http --stress --duration 1m --rate 100
@@ -347,7 +356,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	files, err := collectFiles(args)
+	files, stdinSrc, err := resolveRunInputs(cmd, args)
 	if err != nil {
 		// Root's Execute wrapper prints this to stderr once; avoid the
 		// double "Error:" line that formatter.FormatError + return caused.
@@ -406,6 +415,14 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		return runStressMode(cmd, files, fileConfig, environment, clientOpts)
 	}
 
+	// From here on SIGINT/SIGTERM stop the run gracefully: what finished is
+	// reported, --output-file is written and the exit code is 130. A second
+	// signal exits at once.
+	sigs, stopSignals := notifyInterrupts()
+	defer stopSignals()
+	ctx, interrupted, stopInterrupt := interruptContext(ctx, sigs, cmd.ErrOrStderr(), exitNow)
+	defer stopInterrupt()
+
 	// Open history store unless disabled
 	if !noHistoryFlag {
 		dbPath := historyDBFlag
@@ -430,10 +447,14 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	var dotenv dotenvTracker // watch mode: undo the env file's exports on reload
+	if watchFlag {
+		dotenv.capture(cfg.EnvFile)
+	}
 	r := runner.NewRunner(cfg)
 	// Flush any in-flight history writes before the deferred store.Close() runs.
 	// (defers are LIFO, so this runs before the store.Close registered above.)
-	defer r.WaitHistory()
+	defer func() { r.WaitHistory() }() // r is replaced when watch mode reloads settings
 
 	filtersSet := nameFlag != "" || len(tagsFilter) > 0
 	stderr := cmd.ErrOrStderr()
@@ -450,8 +471,17 @@ func runCommand(cmd *cobra.Command, args []string) error {
 				fmt.Fprintf(cmd.OutOrStdout(), "Would run: %s\n", file)
 				continue
 			}
+			if ctx.Err() != nil {
+				break // interrupted: the files not started are not part of the run
+			}
 
-			result, err := r.RunFileContext(ctx, file)
+			var result *runner.RunResult
+			var err error
+			if stdinSrc != nil {
+				result, err = r.RunSourceContext(ctx, file, stdinSrc)
+			} else {
+				result, err = r.RunFileContext(ctx, file)
+			}
 			if err != nil {
 				// A file that cannot be loaded (syntax error, duplicate
 				// @name, @depends cycle) fails the run; the error goes to
@@ -486,6 +516,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 			t.Failed += result.Failed
 			t.Skipped += result.Skipped
 			t.Matched += result.Matched
+			t.NetworkErrors += countNetworkErrors(result)
 
 			if cfg.Bail && result.Failed > 0 {
 				break
@@ -493,6 +524,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		}
 
 		t.Duration = time.Since(startTime)
+		t.Interrupted = interrupted()
 		return t
 	}
 
@@ -534,6 +566,9 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	totals, err := executeRun(true)
 	if err != nil {
 		return err
+	}
+	if totals.Interrupted {
+		return exitErrorFor(totals, filtersSet)
 	}
 	totalPassed, totalFailed, totalSkipped, totalDuration := totals.Passed, totals.Failed, totals.Skipped, totals.Duration
 
@@ -598,66 +633,82 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 	defer watcher.Close()
 
-	// Add files and directories to watch
-	watchedDirs := make(map[string]bool)
-	for _, file := range files {
-		dir := filepath.Dir(file)
-		if !watchedDirs[dir] {
-			if err := watcher.Add(dir); err != nil {
-				fmt.Fprintf(stderr, "Error: failed to watch %s: %v\n", dir, err)
-			}
-			watchedDirs[dir] = true
-		}
-	}
-
-	// Also watch the original args if they're directories
-	for _, arg := range args {
-		info, err := os.Stat(arg)
-		if err == nil && info.IsDir() {
-			_ = filepath.Walk(arg, func(path string, info os.FileInfo, err error) error {
-				if err != nil {
-					return err
-				}
-				if info.IsDir() && !watchedDirs[path] {
-					_ = watcher.Add(path)
-					watchedDirs[path] = true
-				}
-				return nil
-			})
-		}
-	}
+	// Besides the test files, a change to hitspec.yaml or the env file reloads
+	// the settings before the next pass.
+	support := watchSupportFiles(configFlag, cfg.EnvFile)
+	addWatchDirs(watcher, files, args, support, stderr)
 
 	// Banners go to stderr so stdout stays a clean stream of reports.
 	fmt.Fprintf(stderr, "\nWatching for changes... (press Ctrl+C to stop)\n\n")
 
-	// Debounce timer for rapid file changes
-	var debounceTimer *time.Timer
+	// A single debounce timer: the pass runs from this loop, never
+	// concurrently with itself, while further events queue up.
+	debounce := time.NewTimer(time.Hour)
+	debounce.Stop()
+	var changed string
+	reload := false
 
 	for {
 		select {
+		case <-ctx.Done():
+			if interrupted() {
+				return newExitError(ExitInterrupted, "")
+			}
+			return nil
+
 		case event, ok := <-watcher.Events:
 			if !ok {
 				return nil
 			}
-
-			// Only react to write events on hitspec files
-			if event.Has(fsnotify.Write) && isHitspecFile(event.Name) {
-				// Debounce: reset timer on each event
-				if debounceTimer != nil {
-					debounceTimer.Stop()
-				}
-				debounceTimer = time.AfterFunc(WatchDebounceDelay, func() {
-					fmt.Fprintf(stderr, "\n\nFile changed: %s\nRe-running tests...\n\n", event.Name)
-
-					// Each pass opens a fresh report (truncating --output-file),
-					// so JSON/JUnit output stays one valid document per run.
-					if _, err := executeRun(false); err != nil {
-						fmt.Fprintf(stderr, "Error: %v\n", err)
-					}
-
-					fmt.Fprintf(stderr, "\nWatching for changes... (press Ctrl+C to stop)\n")
-				})
+			if !watchutil.ContentChanged(event) {
+				continue
 			}
+			switch {
+			case isSupportFile(event.Name, support):
+				reload = true
+			case isHitspecFile(event.Name):
+			case event.Has(fsnotify.Create) && isDirectory(event.Name):
+				// A new directory under a watched one: watch it too, and
+				// re-run if it arrived with tests inside.
+				found := false
+				_ = watchutil.AddTree(watcher, event.Name, func(string) { found = true })
+				if !found {
+					continue
+				}
+			default:
+				continue
+			}
+			changed = event.Name
+			debounce.Reset(WatchDebounceDelay)
+
+		case <-debounce.C:
+			fmt.Fprintf(stderr, "\n\nFile changed: %s\nRe-running tests...\n\n", changed)
+
+			if reload {
+				reload = false
+				newRunner, newCfg, err := reloadRunSettings(cmd.Flags(), cfg, tagsFilter, &dotenv)
+				if err != nil {
+					fmt.Fprintf(stderr, "Error: %v\nKeeping the previous settings until the file is fixed.\n", err)
+				} else {
+					r, cfg = newRunner, newCfg
+					support = watchSupportFiles(configFlag, cfg.EnvFile)
+					addWatchDirs(watcher, nil, nil, support, stderr)
+				}
+			}
+			// Pick up files added or removed since the last pass.
+			if fresh, err := collectFiles(args); err != nil {
+				fmt.Fprintf(stderr, "Error: %v\n", err)
+			} else {
+				files = fresh
+			}
+
+			// Each pass opens a fresh report (truncating --output-file), so
+			// JSON/JUnit output stays one valid document per run.
+			if _, err := executeRun(false); err != nil {
+				fmt.Fprintf(stderr, "Error: %v\n", err)
+			}
+
+			fmt.Fprintf(stderr, "\nWatching for changes... (press Ctrl+C to stop)\n")
 
 		case err, ok := <-watcher.Errors:
 			if !ok {
@@ -668,43 +719,17 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 }
 
-func collectFiles(args []string) ([]string, error) {
-	var files []string
-
-	for _, arg := range args {
-		info, err := os.Stat(arg)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return nil, fmt.Errorf("file or directory not found: %s", arg)
-			}
-			return nil, fmt.Errorf("cannot access %s: %w", arg, err)
-		}
-
-		if info.IsDir() {
-			err := filepath.Walk(arg, func(path string, info os.FileInfo, err error) error {
-				if err != nil {
-					return err
-				}
-				if !info.IsDir() && isHitspecFile(path) {
-					files = append(files, path)
-				}
-				return nil
-			})
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			if !isHitspecFile(arg) {
-				return nil, fmt.Errorf("%s is not a .http or .hitspec file", arg)
-			}
-			files = append(files, arg)
-		}
-	}
-
-	return files, nil
+// isDirectory reports whether path is an existing directory.
+func isDirectory(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 func isHitspecFile(path string) bool {
+	// ".#name.http" is an Emacs lock file, a dangling symlink.
+	if strings.HasPrefix(filepath.Base(path), ".#") {
+		return false
+	}
 	ext := filepath.Ext(path)
 	return ext == ".http" || ext == ".hitspec"
 }
