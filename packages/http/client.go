@@ -16,10 +16,12 @@ import (
 	"net"
 	"net/http"
 	"net/http/cookiejar"
+	"net/http/httptrace"
 	neturl "net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/http/httpproxy"
@@ -435,12 +437,23 @@ func bodyReadError(ctx context.Context, err error, read int, contentLength int64
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		if timeout, ok := ctx.Value(timeoutKey{}).(time.Duration); ok {
-			return fmt.Errorf("timeout reading response body after %s (%s): %w", timeout, progress, err)
+			return &BodyReadError{msg: fmt.Sprintf("timeout reading response body after %s (%s)", timeout, progress), err: err}
 		}
-		return fmt.Errorf("timeout reading response body (%s): %w", progress, err)
+		return &BodyReadError{msg: fmt.Sprintf("timeout reading response body (%s)", progress), err: err}
 	}
-	return fmt.Errorf("error reading response body (%s): %w", progress, err)
+	return &BodyReadError{msg: fmt.Sprintf("error reading response body (%s)", progress), err: err}
 }
+
+// BodyReadError reports a failure while reading a response body, after the
+// response headers arrived. It unwraps to the underlying read error, and
+// IsNetworkError never classifies it as a network error: a response did arrive.
+type BodyReadError struct {
+	msg string
+	err error
+}
+
+func (e *BodyReadError) Error() string { return e.msg + ": " + e.err.Error() }
+func (e *BodyReadError) Unwrap() error { return e.err }
 
 func (c *Client) doRequest(ctx context.Context, req *Request, authHeader string) (*Response, error) {
 	// Validate URL before making request
@@ -486,10 +499,20 @@ func (c *Client) doRequest(ctx context.Context, req *Request, authHeader string)
 		httpReq.Header.Set("Authorization", authHeader)
 	}
 
+	// Remember whether a connection was ever obtained, to tell a deadline that
+	// expired while connecting (unreachable host) from one after connecting.
+	var connected atomic.Bool
+	httpReq = httpReq.WithContext(httptrace.WithClientTrace(httpReq.Context(), &httptrace.ClientTrace{
+		GotConn: func(httptrace.GotConnInfo) { connected.Store(true) },
+	}))
+
 	start := time.Now()
 	httpResp, err := c.httpClient.Do(httpReq)
 
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) && !connected.Load() {
+			err = &ConnectTimeoutError{err: err}
+		}
 		return nil, err
 	}
 	defer httpResp.Body.Close()

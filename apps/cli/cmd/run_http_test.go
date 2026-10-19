@@ -48,9 +48,9 @@ func TestRunHTTP_CACert(t *testing.T) {
 	srv := m.Server(t, nil, false)
 	dir := t.TempDir()
 
-	// Untrusted CA: the request fails (a test failure, exit 1).
+	// Untrusted CA: the request fails with a TLS (network) error, exit 4.
 	err := runHTTPFile(t, dir, oneRequest(srv.URL))
-	assert.Equal(t, 1, exitCodeOf(err), "an unknown CA must fail the request: %v", err)
+	assert.Equal(t, ExitNetworkError, exitCodeOf(err), "an unknown CA must fail the request: %v", err)
 
 	require.NoError(t, runHTTPFile(t, dir, oneRequest(srv.URL), "--cacert", m.CAPath))
 
@@ -79,7 +79,7 @@ func TestRunHTTP_MutualTLS(t *testing.T) {
 	dir := t.TempDir()
 
 	err := runHTTPFile(t, dir, oneRequest(srv.URL), "--cacert", m.CAPath)
-	assert.Equal(t, 1, exitCodeOf(err), "the server demands a client certificate: %v", err)
+	assert.Equal(t, ExitNetworkError, exitCodeOf(err), "the server demands a client certificate: %v", err)
 
 	require.NoError(t, runHTTPFile(t, dir, oneRequest(srv.URL), "--cacert", m.CAPath, "--cert", m.ClientCertPath, "--key", m.ClientKeyPath))
 

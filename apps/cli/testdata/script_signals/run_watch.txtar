@@ -1,0 +1,77 @@
+# --watch re-runs on atomic saves (write a temp file, rename it over the
+# target) and on changes to hitspec.yaml and the env file, and rewrites
+# --output-file on every pass.
+
+# 1. Atomic save of a test file.
+! exec hitspec run api.http --watch --no-history --no-color --output-file out.txt &atomic&
+waitfile out.txt 'first-version'
+cp api_v2.http api.http.tmp
+mv api.http.tmp api.http
+waitfile out.txt 'second-version'
+kill -INT atomic
+wait atomic
+stderr 'Watching for changes'
+stderr 'File changed: .*api.http'
+grep 'second-version' out.txt
+! grep 'first-version' out.txt
+
+# 2. hitspec.yaml edited (atomic save): the new settings apply to the next pass.
+! exec hitspec run cfg.http --watch --no-history --no-color --output-file cfg_out.txt &cfg&
+waitfile cfg_out.txt '1 passed'
+cp hitspec_500.yaml hitspec.yaml.tmp
+mv hitspec.yaml.tmp hitspec.yaml
+waitfile cfg_out.txt '1 failed'
+kill -INT cfg
+wait cfg
+stderr 'File changed: .*hitspec.yaml'
+grep '1 failed' cfg_out.txt
+
+# 3. The --env-file edited: the next pass reads it again.
+! exec hitspec run envf.http --watch --no-history --no-color --env-file vars.env --output-file env_out.txt &envf&
+waitfile env_out.txt '1 passed'
+cp vars_500.env vars.env.tmp
+mv vars.env.tmp vars.env
+waitfile env_out.txt '1 failed'
+kill -INT envf
+wait envf
+stderr 'File changed: .*vars.env'
+grep '1 failed' env_out.txt
+
+-- api.http --
+### first-version
+GET {{$env(SERVER)}}/status/200
+
+-- api_v2.http --
+### second-version
+GET {{$env(SERVER)}}/status/200
+
+-- cfg.http --
+### cfg-request
+GET {{$env(SERVER)}}/status/{{code}}
+
+>>>
+expect status 200
+<<<
+
+-- hitspec.yaml --
+environments:
+  dev:
+    code: "200"
+
+-- hitspec_500.yaml --
+environments:
+  dev:
+    code: "500"
+
+-- envf.http --
+### envf-request
+GET {{$env(SERVER)}}/status/{{$env(CODE)}}
+
+>>>
+expect status 200
+<<<
+
+-- vars.env --
+CODE=200
+-- vars_500.env --
+CODE=500

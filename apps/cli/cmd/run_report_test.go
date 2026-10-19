@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/config"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
+	hitspechttp "github.com/abdul-hamid-achik/hitspec/v2/packages/http"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -88,6 +90,10 @@ func TestExitErrorFor_Precedence(t *testing.T) {
 	assert.Equal(t, ExitParseError, code(exitErrorFor(runTotals{BrokenFiles: 1, Failed: 3}, true)), "parse error beats test failure")
 	assert.Equal(t, ExitParseError, code(exitErrorFor(runTotals{BrokenFiles: 1}, true)), "parse error beats no-match")
 	assert.Equal(t, ExitUsageError, code(exitErrorFor(runTotals{Skipped: 4}, true)), "filters matching nothing")
+	assert.Equal(t, ExitNetworkError, code(exitErrorFor(runTotals{NetworkErrors: 1, Failed: 1, Matched: 2}, false)), "network error beats test failure")
+	assert.Equal(t, ExitNetworkError, code(exitErrorFor(runTotals{NetworkErrors: 1}, true)), "network error beats no-match")
+	assert.Equal(t, ExitParseError, code(exitErrorFor(runTotals{BrokenFiles: 1, NetworkErrors: 2, Failed: 1}, false)), "parse error beats network error")
+	assert.Equal(t, ExitInterrupted, code(exitErrorFor(runTotals{Interrupted: true, BrokenFiles: 1, NetworkErrors: 1, Failed: 1}, true)), "interrupt beats everything")
 	assert.Equal(t, ExitSuccess, code(exitErrorFor(runTotals{Skipped: 1, Matched: 1}, true)), "an @skip'd match is still a match")
 }
 
@@ -114,4 +120,18 @@ func TestNoMatchMessage(t *testing.T) {
 	assert.Equal(t, "", noMatchMessage("", nil))
 	assert.Equal(t, `no requests matched --tags "smok"`, noMatchMessage("", []string{"smok"}))
 	assert.Equal(t, `no requests matched --name "x" --tags "a,b"`, noMatchMessage("x", []string{"a", "b"}))
+}
+
+func TestCountNetworkErrors(t *testing.T) {
+	_, refused := hitspechttp.NewClient().Get("http://127.0.0.1:1/", nil)
+	require.Error(t, refused)
+
+	result := &runner.RunResult{Results: []*runner.RequestResult{
+		{Name: "ok", Passed: true},
+		{Name: "refused", Error: refused},
+		{Name: "skipped", Skipped: true, SkipReason: "dependency failed"},
+		{Name: "assertion", Error: errors.New("expected status 200")},
+		{Name: "timeout", Error: context.DeadlineExceeded},
+	}}
+	assert.Equal(t, 1, countNetworkErrors(result))
 }

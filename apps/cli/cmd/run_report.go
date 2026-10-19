@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/http"
 )
 
 // runTotals is the accounting for one pass over all files of a `run`.
@@ -20,6 +21,13 @@ type runTotals struct {
 	// duplicate @name, @depends cycle). They are not requests, so they are not
 	// part of Passed/Failed/Skipped, but they fail the run with ExitParseError.
 	BrokenFiles int
+	// NetworkErrors counts requests that got no response because the
+	// connection failed (refused, DNS, TLS, reset); see http.IsNetworkError.
+	// A response timeout after connecting is an ordinary failure instead.
+	NetworkErrors int
+	// Interrupted is set when SIGINT/SIGTERM stopped the run; it wins over
+	// every other outcome (the totals only cover what ran before the signal).
+	Interrupted bool
 	// Matched counts the requests that satisfied --name/--tags across all files.
 	Matched  int
 	Duration time.Duration
@@ -99,15 +107,34 @@ func noMatchMessage(name string, tags []string) string {
 	return "no requests matched " + strings.Join(parts, " ")
 }
 
+// countNetworkErrors counts the requests of a file that got no response
+// because the connection failed (http.IsNetworkError). Requests skipped
+// because a dependency failed carry no error of their own, so a network error
+// is counted once, at the request that hit it.
+func countNetworkErrors(result *runner.RunResult) int {
+	n := 0
+	for _, rr := range result.Results {
+		if !rr.Skipped && rr.Error != nil && http.IsNetworkError(rr.Error) {
+			n++
+		}
+	}
+	return n
+}
+
 // exitErrorFor maps the totals of a finished run to its exit status.
-// Precedence: parse errors (2) > request failures (1) > filters that matched
-// nothing (64) > success. A broken file wins over "no match" because the
-// filter may well have matched inside the file that could not be loaded.
+// An interrupted run exits 130 regardless. Otherwise the precedence is
+// parse errors (2) > network errors (4) > request failures (1) > filters that
+// matched nothing (64) > success. A broken file wins over "no match" because
+// the filter may well have matched inside the file that could not be loaded.
 // Messages were already written to stderr, so the error text is empty.
 func exitErrorFor(t runTotals, filtersSet bool) error {
 	switch {
+	case t.Interrupted:
+		return newExitError(ExitInterrupted, "")
 	case t.BrokenFiles > 0:
 		return newExitError(ExitParseError, "")
+	case t.NetworkErrors > 0:
+		return newExitError(ExitNetworkError, "")
 	case t.Failed > 0:
 		return newExitError(ExitTestFailure, "")
 	case filtersSet && t.Matched == 0:

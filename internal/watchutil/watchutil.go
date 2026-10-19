@@ -77,3 +77,29 @@ func Operation(last fsnotify.Op, created bool) string {
 		return "changed"
 	}
 }
+
+// ContentChanged reports whether ev can mean that the watched file now has new
+// content: anything but a bare chmod. An atomic save (write a temp file, rename
+// it over the target, as vim, VS Code and JetBrains do) never writes the
+// target. A directory watcher sees it as a Create of the target's name, and
+// when the target is replaced quickly enough (vim renames the old file away and
+// recreates it at once) kqueue coalesces that into a lone Rename of the target.
+// Callers debounce, then look at what is on disk, so reacting to Rename and
+// Remove is safe: if the file is gone they just find it gone.
+func ContentChanged(ev fsnotify.Event) bool {
+	return ev.Op&^fsnotify.Chmod != 0
+}
+
+// SamePath reports whether a and b name the same file once made absolute and
+// cleaned. Event names are relative to the directory handed to Add, so they
+// need this before being compared with a path from a flag.
+func SamePath(a, b string) bool {
+	return absClean(a) == absClean(b)
+}
+
+func absClean(p string) string {
+	if abs, err := filepath.Abs(p); err == nil {
+		return abs
+	}
+	return filepath.Clean(p)
+}

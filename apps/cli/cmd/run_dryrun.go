@@ -15,8 +15,13 @@ import (
 // as written), its tags and dependencies, and why a request would be skipped.
 // It returns how many requests satisfy --name/--tags, and the error a real run
 // would report for a file that cannot load.
-func writeDryRun(w io.Writer, r *runner.Runner, file string) (matched int, err error) {
-	plan, err := r.PlanFile(file)
+func writeDryRun(w io.Writer, r *runner.Runner, file string, src []byte) (matched int, err error) {
+	var plan *runner.Plan
+	if src != nil {
+		plan, err = r.PlanSource(file, src)
+	} else {
+		plan, err = r.PlanFile(file)
+	}
 	if err != nil {
 		return 0, err
 	}

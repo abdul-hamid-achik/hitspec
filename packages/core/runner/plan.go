@@ -50,6 +50,21 @@ func (r *Runner) PlanFile(path string) (*Plan, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse %s: %w", path, err)
 	}
+	return r.planParsedFile(file, path)
+}
+
+// PlanSource is PlanFile for a document that did not come from a file on disk
+// (`hitspec run - --dry-run`); name is what the plan calls it.
+func (r *Runner) PlanSource(name string, src []byte) (*Plan, error) {
+	file, err := parser.ParseSource(string(src), name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse %s: %w", name, err)
+	}
+	return r.planParsedFile(file, name)
+}
+
+// planParsedFile plans a parsed document; path locates it for relative paths.
+func (r *Runner) planParsedFile(file *parser.File, path string) (*Plan, error) {
 	environment, err := env.LoadEnvironment(filepath.Dir(path), r.config.Environment, r.config.ConfigEnvironments)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load environment %q: %w", r.config.Environment, err)

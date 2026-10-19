@@ -201,7 +201,27 @@ func (r *Runner) RunFileContext(ctx context.Context, path string) (*RunResult, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse %s: %w", path, err)
 	}
+	return r.runParsedFile(ctx, file, path)
+}
 
+// RunSourceContext runs a hitspec document that did not come from a file on
+// disk (`hitspec run -` reads it from stdin). name is what reports call the
+// document, and relative paths inside it (environments, @file bodies,
+// snapshots) resolve against its directory, so name should be a path in the
+// directory they belong to, e.g. "<stdin>" for the working directory.
+func (r *Runner) RunSourceContext(ctx context.Context, name string, src []byte) (*RunResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	file, err := parser.ParseSource(string(src), name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse %s: %w", name, err)
+	}
+	return r.runParsedFile(ctx, file, name)
+}
+
+// runParsedFile runs a parsed document; path locates it for relative paths.
+func (r *Runner) runParsedFile(ctx context.Context, file *parser.File, path string) (*RunResult, error) {
 	environment, err := env.LoadEnvironment(filepath.Dir(path), r.config.Environment, r.config.ConfigEnvironments)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load environment %q: %w", r.config.Environment, err)

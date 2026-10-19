@@ -39,8 +39,9 @@ exitcode 1 hitspec run --no-history --no-color ansi.http
 stdout 'bad.*red.* gateway'
 ! stdout '\x1b'
 
-# A request that errors (nothing listening) still shows the request line.
-exitcode 1 hitspec run --no-history --no-color refused.http
+# A request that errors (nothing listening) still shows the request line. It is a
+# network error, so the run exits 4.
+exitcode 4 hitspec run --no-history --no-color refused.http
 stdout 'x refused'
 stdout 'Request:  GET http://127\.0\.0\.1:1/nothing\?api_key=\[REDACTED\]'
 ! stdout 'Response:'

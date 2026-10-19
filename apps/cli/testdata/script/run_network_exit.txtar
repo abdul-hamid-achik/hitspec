@@ -1,0 +1,143 @@
+# A request that never got a response because the connection failed exits 4.
+# Precedence: 2 (file failed to load) > 4 (network) > 1 (failures) > 64 > 0.
+# A response timeout after connecting stays an ordinary failure (1).
+
+# Connection refused.
+exitcode 4 hitspec run refused.http --no-color
+stdout 'refused-request'
+
+# DNS resolution failure (.invalid never resolves).
+exitcode 4 hitspec run dns.http --no-color --timeout 10s
+
+# Connection closed before any response.
+exitcode 4 hitspec run hangup.http --no-color
+
+# TLS handshake failure (https to a plain-HTTP listener, via redirect).
+exitcode 4 hitspec run tls.http --no-color
+
+# A host that never answers the connection (192.0.2.1 is TEST-NET-1): the
+# deadline expires before connecting, or the network is unreachable at once.
+# Either way nothing was reached, so 4.
+exitcode 4 hitspec run blackhole.http --no-color --timeout 300ms
+
+# A timeout after connecting is a test failure, not a network error.
+exitcode 1 hitspec run timeout.http --no-color --timeout 300ms
+stdout 'timeout-request'
+
+# The body breaking after the response started is not a network error.
+exitcode 1 hitspec run midbody.http --no-color
+
+# An assertion failure alone is 1.
+exitcode 1 hitspec run assert.http --no-color
+
+# 4 beats 1 when both happen in one run, in any order.
+exitcode 4 hitspec run assert.http refused.http --no-color
+exitcode 4 hitspec run refused.http assert.http --no-color
+
+# A request skipped because its dependency hit the network error adds nothing
+# on its own: the dependency's error is what makes the run exit 4.
+exitcode 4 hitspec run dependent.http --no-color
+stdout 'depA'
+stdout 'dependency failed'
+
+# Skipped dependents of an ordinary failure leave the code at 1.
+exitcode 1 hitspec run dependent_assert.http --no-color
+
+# A matched request that hits a network error still exits 4 with filters set.
+exitcode 4 hitspec run refused.http --name refused-request --no-color
+
+# 2 beats 4.
+exitcode 2 hitspec run refused.http broken.http --no-color
+
+# Every machine format reports the failure and exits 4 the same way.
+exitcode 4 hitspec run refused.http -o json --output-file r.json --no-color
+grep '"failed": 1' r.json
+exitcode 4 hitspec run refused.http -o junit --output-file r.xml --no-color
+grep '<testsuites' r.xml
+
+# --bail still reports 4.
+exitcode 4 hitspec run refused.http assert.http --bail --no-color
+
+# A passing run is still 0.
+exitcode 0 hitspec run ok.http --no-color
+
+-- ok.http --
+### ok-request
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 200
+<<<
+
+-- refused.http --
+### refused-request
+GET http://127.0.0.1:1/nothing
+
+>>>
+expect status 200
+<<<
+
+-- dns.http --
+### dns-request
+GET http://hitspec-no-such-host.invalid/
+
+-- blackhole.http --
+### blackhole-request
+GET http://192.0.2.1:81/
+
+-- hangup.http --
+### hangup-request
+GET {{$env(SERVER)}}/b2b/hangup
+
+-- tls.http --
+### tls-request
+GET {{$env(SERVER)}}/b2b/to-https
+
+-- timeout.http --
+### timeout-request
+GET {{$env(SERVER)}}/slow?ms=3000
+
+>>>
+expect status 200
+<<<
+
+-- midbody.http --
+### midbody-request
+GET {{$env(SERVER)}}/b2b/midbody
+
+-- assert.http --
+### assert-request
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 404
+<<<
+
+-- dependent.http --
+### dep-a
+# @name depA
+GET http://127.0.0.1:1/nothing
+
+### dep-b
+# @depends depA
+GET {{$env(SERVER)}}/status/200
+
+-- dependent_assert.http --
+### dep-a
+# @name depA
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 404
+<<<
+
+### dep-b
+# @depends depA
+GET {{$env(SERVER)}}/status/200
+
+-- broken.http --
+### broken
+GET
+>>>
+this is not valid
+<<<

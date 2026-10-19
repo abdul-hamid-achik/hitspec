@@ -20,7 +20,7 @@ stdout 'Response: 404 Not Found'
 stdout 'user not found'
 
 # JUnit <error> for a request that never got a response.
-exitcode 1 hitspec run --no-history -o junit refused.http
+exitcode 4 hitspec run --no-history -o junit refused.http
 stdout '<error message="[^"]*" type="Error">'
 stdout 'Request: GET http://127\.0\.0\.1:1/nothing\?api_key=\[REDACTED\]'
 ! stdout 'secret-value'
@@ -35,7 +35,7 @@ stdout '    status: "404 Not Found"'
 stdout '    body: \|2-'
 stdout '      "error": "user not found"'
 
-exitcode 1 hitspec run --no-history -o tap refused.http
+exitcode 4 hitspec run --no-history -o tap refused.http
 stdout 'severity: error'
 stdout '  request: "GET http://127\.0\.0\.1:1/nothing\?api_key=\[REDACTED\]"'
 ! stdout 'secret-value'

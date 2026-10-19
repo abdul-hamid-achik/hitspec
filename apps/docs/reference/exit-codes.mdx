@@ -13,12 +13,17 @@ hitspec uses specific exit codes to indicate the result of a test run. These are
 | `1` | `ExitTestFailure` | One or more tests failed or thresholds exceeded |
 | `2` | `ExitParseError` | A file could not be loaded: invalid syntax, a duplicate `@name`, or a circular `@depends` in a `.http` / `.hitspec` file |
 | `3` | `ExitConfigError` | Configuration error (invalid `hitspec.yaml`, missing required flags) |
-| `4` | `ExitNetworkError` | Network or connection error |
+| `4` | `ExitNetworkError` | At least one request got no response because the connection failed: connection refused or unreachable, DNS resolution failure, TLS handshake or certificate error, the request timeout expiring before a connection was established, or the connection reset or closed before a response arrived. This includes an unreachable OAuth2 token endpoint |
 | `64` | `ExitUsageError` | Invalid CLI usage (wrong arguments, missing required flags), or `--name` / `--tags` matched no request in any file |
+| `130` | `ExitInterrupted` | The run was stopped with Ctrl+C (SIGINT) or SIGTERM. The results of the requests that finished are printed, `--output-file` is written, and requests that had not started are marked as cancelled. A second Ctrl+C exits immediately |
 
 ## Precedence
 
-`hitspec run` always runs every file it can, even when another file fails to load. When several outcomes apply, the exit code follows this order: `2` (a file could not be loaded) over `1` (a request failed) over `64` (filters matched nothing) over `0`. A run with a broken file never exits `0`, so a broken file cannot hide behind green results.
+`hitspec run` always runs every file it can, even when another file fails to load. When several outcomes apply, the exit code follows this order: `2` (a file could not be loaded) over `4` (a request hit a network error) over `1` (a request failed) over `64` (filters matched nothing) over `0`. A run with a broken file never exits `0`, so a broken file cannot hide behind green results. An interrupted run exits `130` whatever else happened.
+
+### Network errors and timeouts
+
+Exit `4` means hitspec could not reach the server, so there is nothing to assert on: use it to tell "the API is down or unreachable" apart from "the API answered wrongly" (`1`). It applies only to connection-level errors. A request that connects but then exceeds `@timeout` or `--timeout` while waiting for the response is an ordinary test failure (`1`), and so is a response whose body breaks off part-way, because a response did arrive. Requests skipped because a dependency failed do not change the exit code on their own.
 
 ## Usage in Scripts
 
@@ -31,8 +36,9 @@ case $EXIT_CODE in
   1) echo "Tests failed" ;;
   2) echo "Parse error in test files" ;;
   3) echo "Configuration error" ;;
-  4) echo "Network error" ;;
+  4) echo "Network error: the API could not be reached" ;;
   64) echo "Invalid CLI usage" ;;
+  130) echo "Interrupted" ;;
   *) echo "Unknown exit code: $EXIT_CODE" ;;
 esac
 ```
@@ -55,5 +61,5 @@ Most CI systems treat any non-zero exit code as failure. hitspec's exit codes le
 ```
 
 <Tip>
-Use `--bail` to stop on the first failure and exit immediately with code `1`. Without `--bail`, hitspec runs all tests before exiting.
+Use `--bail` to stop on the first failure and exit immediately with that failure's code (`1` for a failed test, `4` for a network error). Without `--bail`, hitspec runs all tests before exiting.
 </Tip>
