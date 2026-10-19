@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.22.0] - 2026-10-20
+## [2.22.0] - 2026-10-19
 
 `hitspec run` explains its failures, tells a network problem apart from a
 wrong answer, and finds `hitspec.yaml` the way git finds `.git`. Requests are
@@ -262,6 +262,9 @@ studio with keystrokes.
 
 - The `-v` output format (see the upgrade notes). `snapshot.SetGlobalManager`
   is deprecated for library users; pass `assertions.WithSnapshotManager`.
+- Dependencies: Bubble Tea 2.1.0, Lip Gloss 2.0.6, pflag 1.0.10, testify
+  1.12.1 and x/time 0.16.0; the desktop app moves to Electron 44.9.0 and its
+  lockfile drops a high-severity `http-cache-semantics` advisory.
 
 ## [2.21.0] - 2026-10-19
 
