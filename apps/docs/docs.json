@@ -133,6 +133,7 @@
           "guides/load-testing",
           "guides/contract-testing",
           "guides/migrating-from-postman",
+          "guides/upgrading",
           "guides/troubleshooting"
         ]
       },

@@ -1,0 +1,178 @@
+---
+title: 'Upgrading'
+description: 'Tests that may start failing after an upgrade, why, and how to upgrade safely'
+icon: 'arrow-up'
+---
+
+Some releases fix checks that used to pass without checking anything, or
+settings that were silently ignored. After such an upgrade a test can fail, or
+a file can stop loading, even though nothing in your files changed. In every
+case listed here the old result was wrong: the new failure is the test finally
+checking what it says.
+
+## Upgrade safely
+
+<Steps>
+  <Step title="Validate with the new version">
+    `hitspec validate` reports every file that no longer loads, with
+    `file:line:col` and a suggested fix. `--strict` also reports warnings such
+    as unknown directives and undefined variables.
+
+    ```bash
+    hitspec validate tests/ --strict
+    ```
+  </Step>
+  <Step title="Run the suite once locally">
+    Run your tests with the new version and read each failure against the
+    lists below before you touch CI.
+
+    ```bash
+    hitspec run tests/ --env staging
+    ```
+  </Step>
+  <Step title="Pin the version in CI">
+    Upgrade CI on purpose, not as a side effect of a new release. With the
+    GitHub Action, set `version:`:
+
+    ```yaml
+    - uses: abdul-hamid-achik/hitspec@v2
+      with:
+        files: tests/
+        version: v2.21.0
+    ```
+
+    With Go, install an exact version:
+    `go install github.com/abdul-hamid-achik/hitspec/v2/cmd/hitspec@v2.21.0`.
+  </Step>
+</Steps>
+
+Every release lists its changes in the
+[changelog](https://github.com/abdul-hamid-achik/hitspec/blob/main/CHANGELOG.md),
+and the GitHub release page of each version shows the same notes.
+
+## 2.21.0
+
+### Files that no longer load (exit code 2)
+
+- **Misspelled operators.** They were silently treated as `==`.
+  `expect body.name contians "x"` now fails with
+  `unknown operator "contians" (did you mean "contains"?)`.
+- **An operator with no value, or with two.** `expect status 200 201` is an
+  error. To accept several values, use `in`:
+
+  ```http
+  GET https://api.example.com/health
+
+  >>>
+  expect status in [200, 201]
+  <<<
+  ```
+
+- **Blocks that do not belong to a request.** A `>>>`, `>>>capture`, `>>>db`
+  or `>>>shell` block above its request, a block with an unknown type, or a
+  block without its closing `<<<` was dropped without a word. Move the block
+  below its request, fix the type, or close it.
+- **`>>>db <connection>`.** That form never existed, so its checks never ran.
+  Set the connection with `# @db` and put the SQL and the column checks inside
+  the block (see [Database Testing](/guides/database-testing)).
+- **Unsupported `jsonpath` features** (`..`, `?()` filters, slices, unions)
+  are errors instead of silently matching nothing.
+
+### Assertions that now check what they say
+
+- **null versus absent.** `== null` needs a JSON `null`; a missing field no
+  longer equals null. Use `!exists` to check that a field is absent. Value
+  operators (`==`, `>`, `contains`, ...) fail on a missing field; the negated
+  ones (`!=`, `!contains`, `!includes`, `!in`) pass.
+- **Non-JSON bodies.** `body.x` on an HTML or plain-text response fails with
+  "response body is not JSON" instead of comparing against nothing.
+  `application/problem+json`, other `+json` types and `text/json` count as
+  JSON.
+- **Unquoted values are read whole.** `expect body.name == Jane Doe` compares
+  `Jane Doe`; it used to compare only `Jane`. A trailing `# comment` is no
+  longer part of the value.
+- **`jsonpath $.x` subjects are evaluated.** They used to resolve to nothing,
+  so `!exists` and `!=` passed whatever the response held.
+- **Objects and arrays compare by value**, and numbers compare numerically:
+
+  ```http
+  GET https://api.example.com/users/1
+
+  >>>
+  expect body.address == {"city": "Monterrey", "zip": "64000"}
+  <<<
+  ```
+
+- **`length` counts characters, not bytes.** `"café"` has length 4; it was 5.
+- **`contains`, `startsWith`, `endsWith` and `matches`** on a whole JSON body,
+  an object or an array use its JSON text.
+- **Paths with `.#` and `#(...)` work.** The `#` used to start a comment and
+  cut the path short.
+- **`# @if` and `# @unless` evaluate `==`, `!=`, `!`, `&&` and `||`.** Before,
+  any non-empty text was true, so `# @if {{env}} == prod` ran the request in
+  every environment. It is now skipped outside prod.
+- **Directives above the first request** of a file without a `###` line were
+  dropped. Its `@name`, `@tags`, `@skip` and `@depends` now apply, so tag
+  filters and dependencies can select different requests.
+- **`>>>db` blocks written as bare SQL** were dropped. They now run, and need
+  `--allow-db`.
+
+### Settings that now apply
+
+- **hitspec.yaml in `hitspec run`.** `timeout`, `retries`, `retryDelay`,
+  `maxRedirects`, `parallel`, `concurrency` and `bail` were overridden by the
+  flag defaults. A yaml `timeout: 5000` now fails requests slower than five
+  seconds, `retries: 3` repeats failing requests, and `bail: true` stops at the
+  first failure.
+- **`HITSPEC_*=false` overrides hitspec.yaml** (`HITSPEC_INSECURE`,
+  `HITSPEC_PARALLEL`, `HITSPEC_BAIL`). The order everywhere is: flag, then
+  `HITSPEC_*` variable, then hitspec.yaml, then the built-in default.
+- **`maxRedirects: N` follows N redirects.** It followed N-1.
+
+### HTTP behavior
+
+- **Proxy variables are honored.** `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY`
+  apply when no proxy is configured. On a runner with a proxy in its
+  environment, requests now go through it; list hosts that must be reached
+  directly in `NO_PROXY`. Loopback hosts are never proxied.
+- **Credentials stay on their origin.** On a redirect to another scheme, host
+  or port, the headers you set (`Authorization`, `Cookie`, `X-Api-Key`, ...)
+  are not forwarded. A test that relied on the credential following the
+  redirect gets a 401: point it at the final URL.
+- **`Host:` is sent as the request's Host.** It used to be ignored.
+- **Compressed bodies are decoded.** With an explicit `Accept-Encoding: gzip`
+  or `deflate`, assertions see the decoded body, not compressed bytes.
+- **Repeated `Set-Cookie` headers are joined with `, `** (it was `; `), like
+  every other repeated header.
+- **Response bodies over 100 MiB fail** with "response body exceeds".
+- **HTTP/2 is negotiated over TLS.**
+
+### Other commands
+
+- **`hitspec diff`.** Skipped tests have their own status and no longer count
+  as failures or regressions. A 0 ms baseline never trips `--threshold`.
+- **`hitspec mcp serve`.** Saved requests run by `hitspec_fetch` no longer read
+  the server's environment variables; allow one with `--allow-env NAME`.
+  `--workspace` refuses your home directory, its parents and `/` unless you
+  pass `--allow-broad-workspace`.
+
+## 2.20.0
+
+- **`expect header X exists`** passed even when the header was missing. It now
+  fails in that case.
+- **A body cut short by a timeout** (`@timeout`, `--timeout`) counted as a
+  success with a partial body. It is now a failure. Only `text/event-stream`
+  (SSE) responses may end at the deadline.
+- **Files that fail to load** (a syntax error, a duplicate `@name`, a circular
+  `@depends`) were skipped and the run could still exit 0. `hitspec run` now
+  exits 2. `--name` and `--tags` filters that match nothing exit 64. See
+  [Exit Codes](/reference/exit-codes).
+- **`@auth`** with an unknown type or the wrong number of arguments is a parse
+  error.
+- **The default environment.** Without `--env` or `HITSPEC_ENV`, `hitspec run`
+  uses hitspec.yaml `defaultEnvironment` (it always used `dev`), so variables
+  such as `{{baseUrl}}` can resolve differently.
+- **Header values are sent verbatim.** Quotes and text after `#` are kept:
+  `If-None-Match: "abc"` sends the quotes.
+- **Captured values are inserted literally.** A `{{...}}` inside a captured
+  value is no longer expanded.
