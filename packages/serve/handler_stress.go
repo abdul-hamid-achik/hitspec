@@ -3,6 +3,7 @@ package serve
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"path/filepath"
 	"time"
@@ -75,8 +76,15 @@ func (s *Server) handleStressStart(w http.ResponseWriter, r *http.Request) {
 		absFiles = append(absFiles, absPath)
 	}
 
-	runnerOpts := make([]stress.RunnerOption, 0, 3)
-	runnerOpts = append(runnerOpts, stress.WithHTTPClient(hitspechttp.NewClient(clientOpts...)), stress.WithFileRoot(runCfg.FileRoot))
+	// The default reporter prints a header, a live progress bar and a summary to
+	// os.Stdout. Under the desktop app that is the child process's pipe, so the
+	// reporter writes nowhere; progress reaches clients over the WebSocket.
+	runnerOpts := make([]stress.RunnerOption, 0, 4)
+	runnerOpts = append(runnerOpts,
+		stress.WithHTTPClient(hitspechttp.NewClient(clientOpts...)),
+		stress.WithFileRoot(runCfg.FileRoot),
+		stress.WithReporter(stress.NewReporter(stress.WithWriter(io.Discard), stress.WithNoProgress(true))),
+	)
 	if envName != "" {
 		runnerOpts = append(runnerOpts, stress.WithEnvironment(envName))
 	}
