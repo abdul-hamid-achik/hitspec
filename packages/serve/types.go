@@ -278,6 +278,9 @@ type HistoryResultDTO struct {
 	Description string                `json:"description,omitempty"`
 	BodyPreview string                `json:"bodyPreview,omitempty"`
 	Assertions  []HistoryAssertionDTO `json:"assertions,omitempty"`
+	// Warnings are the request's non-fatal findings, as recorded with the run.
+	// Runs stored by older versions have none.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // HistoryAssertionDTO is an assertion result in persistent history.
@@ -325,6 +328,9 @@ type StressStartReq struct {
 	VUs         int      `json:"vus,omitempty"`
 	MaxVUs      int      `json:"maxVUs,omitempty"`
 	Environment string   `json:"environment,omitempty"`
+	// Profile names a saved hitspec.yaml stress profile. Its values (including
+	// thresholds) are the base; duration, rate, vus and maxVUs given here win.
+	Profile string `json:"profile,omitempty"`
 }
 
 // StressStatusDTO is the current stress test status.

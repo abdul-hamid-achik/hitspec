@@ -556,6 +556,7 @@ func (r *Runner) executeScheduledRequest(ctx context.Context, sched *ScheduledRe
 		toCheck := stressAssertions(reqWithDir.request.Assertions)
 		results := assertions.EvaluateAllWithBaseDir(resp, toCheck, reqWithDir.baseDir,
 			assertions.WithRequestName(reqWithDir.request.Name),
+			assertions.WithFileRoot(r.fileRoot),
 			assertions.WithResolver(r.resolver.Resolve))
 		failed := false
 		for i, res := range results {

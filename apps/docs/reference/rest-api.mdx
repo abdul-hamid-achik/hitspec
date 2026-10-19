@@ -763,6 +763,7 @@ curl http://localhost:8080/api/v1/history/runs/42
       "passed": true,
       "description": "Fetch all users",
       "bodyPreview": "{\"data\":[{\"id\":1,\"name\":\"Alice\"}]}",
+      "warnings": ["{{nobody.token}} was not resolved and was sent literally (in header X-Token)"],
       "assertions": [
         {
           "id": 201,
@@ -777,6 +778,8 @@ curl http://localhost:8080/api/v1/history/runs/42
   ]
 }
 ```
+
+A result carries `warnings` (an array of strings, omitted when empty) when its request produced non-fatal findings. Runs stored by older versions have none.
 
 ---
 
@@ -898,6 +901,7 @@ curl -X POST http://localhost:8080/api/v1/stress/start \
   rate?: number;         // Optional. Target requests per second
   vus?: number;          // Optional. Number of virtual users (switches to VU mode)
   maxVUs?: number;       // Optional. Maximum concurrent virtual users
+  profile?: string;      // Optional. Name of a saved stress profile (stress.profiles in hitspec.yaml)
 }
 ```
 
@@ -906,7 +910,11 @@ curl -X POST http://localhost:8080/api/v1/stress/start \
 </ParamField>
 
 <ParamField body="duration" type="string" required>
-  Duration of the stress test as a Go duration string (e.g., `"30s"`, `"5m"`, `"1h"`).
+  Duration of the stress test as a Go duration string (e.g., `"30s"`, `"5m"`, `"1h"`). Optional when `profile` is set: the profile's duration is used.
+</ParamField>
+
+<ParamField body="profile" type="string">
+  Name of a saved stress profile. The profile's duration, rate, VUs, max VUs, think time, ramp-up and thresholds are the base for the run; `duration`, `rate`, `vus` and `maxVUs` in the request win over the profile's. A threshold written without an operator gets the metric's natural one (`rps` means `>`, the others `<`), and one written with an operator keeps it. An unknown profile is a `400 Bad Request`.
 </ParamField>
 
 <ParamField body="rate" type="number">

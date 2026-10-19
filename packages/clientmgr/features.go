@@ -28,18 +28,29 @@ import (
 func (m *Manager) StartStress(ctx context.Context, req StressStartReq) error {
 	runCfg, clientOpts := m.runSettings(req.Environment)
 	envName, configEnvs := runCfg.Environment, runCfg.ConfigEnvironments
+	// The profile is read before taking m.mu: configMu is never held while
+	// waiting for it.
+	cfg := stress.DefaultConfig()
+	if req.Profile != "" {
+		if err := m.applyStressProfile(cfg, req.Profile); err != nil {
+			return err
+		}
+	}
 	m.mu.Lock()
 	if m.stressRunner != nil {
 		m.mu.Unlock()
 		return fmt.Errorf("stress test already running")
 	}
-	duration, err := time.ParseDuration(req.Duration)
-	if err != nil {
-		m.mu.Unlock()
-		return fmt.Errorf("invalid duration: %w", err)
+	// An empty duration falls back to the profile's; without a profile it is
+	// still required.
+	if req.Duration != "" || req.Profile == "" {
+		duration, err := time.ParseDuration(req.Duration)
+		if err != nil {
+			m.mu.Unlock()
+			return fmt.Errorf("invalid duration: %w", err)
+		}
+		cfg.Duration = duration
 	}
-	cfg := stress.DefaultConfig()
-	cfg.Duration = duration
 	if req.Rate > 0 {
 		cfg.Rate = req.Rate
 	}
@@ -167,6 +178,20 @@ func (m *Manager) StressResult(ctx context.Context) (*StressResultDTO, error) {
 		return nil, fmt.Errorf("no stress test result available")
 	}
 	return m.lastStressResult, nil
+}
+
+// applyStressProfile overlays the saved profile name onto cfg.
+func (m *Manager) applyStressProfile(cfg *stress.Config, name string) error {
+	m.configMu.RLock()
+	defer m.configMu.RUnlock()
+	var profile *config.StressProfile
+	if m.fileConfig != nil && m.fileConfig.Stress != nil {
+		profile = m.fileConfig.Stress.Profiles[name]
+	}
+	if profile == nil {
+		return fmt.Errorf("stress profile %q not found", name)
+	}
+	return stress.ApplyProfile(cfg, profile)
 }
 
 // ListStressProfiles returns configured stress profiles.
@@ -646,11 +671,11 @@ func (m *Manager) ImportInsomnia(ctx context.Context, req ImportInsomniaReq) (Im
 
 // ImportOpenAPI imports from OpenAPI.
 func (m *Manager) ImportOpenAPI(ctx context.Context, req ImportOpenAPIReq) (ImportResultDTO, error) {
-	_ = ctx
 	if req.SpecPath == "" {
 		return ImportResultDTO{}, fmt.Errorf("specPath is required")
 	}
-	opts := []openapi.Option{}
+	// The caller's context cancels fetching a remote spec.
+	opts := []openapi.Option{openapi.WithContext(ctx)}
 	if req.BaseURL != "" {
 		opts = append(opts, openapi.WithBaseURL(req.BaseURL))
 	}

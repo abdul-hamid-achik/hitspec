@@ -40,6 +40,7 @@ type Evaluator struct {
 	requestName string              // Name of the current request (for snapshots)
 	resolver    func(string) string // Optional resolver for variable interpolation
 	snapshots   *snapshot.Manager   // Per-run snapshot manager; nil falls back to the global one
+	fileRoot    string              // When set, schema files must live under it once symlinks are resolved
 }
 
 // EvaluatorOption is a functional option for configuring an Evaluator.
@@ -65,6 +66,16 @@ func WithRequestName(name string) EvaluatorOption {
 func WithSnapshotManager(m *snapshot.Manager) EvaluatorOption {
 	return func(e *Evaluator) {
 		e.snapshots = m
+	}
+}
+
+// WithFileRoot confines schema files to root, symlinks resolved: for callers
+// that run files on behalf of someone else (hitspec serve, the studio). The
+// check comes on top of the one that keeps a schema inside the request file's
+// directory, which does not follow symlinks.
+func WithFileRoot(root string) EvaluatorOption {
+	return func(e *Evaluator) {
+		e.fileRoot = root
 	}
 }
 
@@ -793,6 +804,10 @@ func (e *Evaluator) schema(actual, expected any) (bool, string) {
 
 	// Validate path doesn't escape base directory (prevent path traversal)
 	if err := pathutil.ValidateWithinBase(schemaPath, e.baseDir); err != nil {
+		return false, err.Error()
+	}
+
+	if err := http.CheckPathWithinRoot(e.fileRoot, schemaPath); err != nil {
 		return false, err.Error()
 	}
 

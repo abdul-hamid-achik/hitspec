@@ -2,6 +2,7 @@ package serve
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"time"
@@ -24,6 +25,14 @@ func (s *Server) handleStressStart(w http.ResponseWriter, r *http.Request) {
 	// Read here to keep the lock order mu -> configMu out of the picture.
 	runCfg, clientOpts := s.runSettings(req.Environment)
 	envName, configEnvs := runCfg.Environment, runCfg.ConfigEnvironments
+	// Same reason: the profile is read before s.mu is taken.
+	cfg := stress.DefaultConfig()
+	if req.Profile != "" {
+		if err := s.applyStressProfile(cfg, req.Profile); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
 
 	s.mu.Lock()
 	if s.stressRunner != nil {
@@ -32,15 +41,17 @@ func (s *Server) handleStressStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	duration, err := time.ParseDuration(req.Duration)
-	if err != nil {
-		s.mu.Unlock()
-		writeError(w, http.StatusBadRequest, "invalid duration: "+err.Error())
-		return
+	// An empty duration falls back to the profile's; without a profile it is
+	// still required.
+	if req.Duration != "" || req.Profile == "" {
+		duration, err := time.ParseDuration(req.Duration)
+		if err != nil {
+			s.mu.Unlock()
+			writeError(w, http.StatusBadRequest, "invalid duration: "+err.Error())
+			return
+		}
+		cfg.Duration = duration
 	}
-
-	cfg := stress.DefaultConfig()
-	cfg.Duration = duration
 	if req.Rate > 0 {
 		cfg.Rate = req.Rate
 	}
@@ -171,6 +182,20 @@ func (s *Server) handleStressStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, dto)
+}
+
+// applyStressProfile overlays the saved profile name onto cfg.
+func (s *Server) applyStressProfile(cfg *stress.Config, name string) error {
+	s.configMu.RLock()
+	defer s.configMu.RUnlock()
+	var profile *config.StressProfile
+	if s.fileConfig != nil && s.fileConfig.Stress != nil {
+		profile = s.fileConfig.Stress.Profiles[name]
+	}
+	if profile == nil {
+		return fmt.Errorf("stress profile %q not found", name)
+	}
+	return stress.ApplyProfile(cfg, profile)
 }
 
 func (s *Server) handleStressProfiles(w http.ResponseWriter, r *http.Request) {
