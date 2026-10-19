@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.23.1] - 2026-10-19
+
+Small fixes on top of 2.23.0:
+- `--metrics` without `--stress` warns instead of doing nothing;
+- stress metrics report status codes;
+- `hitspec export --exec` no longer needs bash;
+- studio and `serve` keep `__snapshots__` inside the workspace.
+
+**The upgrade notes below list what a CI job can notice.**
+
+### Upgrade notes: tests that may start failing
+
+- **`--metrics` without `--stress` prints a warning.** `hitspec run --metrics
+  json` (or `HITSPEC_METRICS` set in the environment) on a normal run used to
+  export nothing without a word. It still exits 0 and exports nothing, but
+  stderr now says `warning: --metrics only applies with --stress; ...`.
+  A CI step that fails on any stderr output, or a `HITSPEC_METRICS` exported
+  for every job, will see it. Add `--stress`, or unset the variable for
+  non-stress runs.
+- **studio and `serve` refuse a `__snapshots__` directory or snapshot file
+  that a symlink points to outside the workspace.** The snapshot assertion
+  fails with `snapshot: file reference "<path>" is outside the workspace`.
+  It used to read and, in update mode, write there. `hitspec run` on the
+  command line is unchanged. Keep snapshots inside the workspace.
+- **`status_codes` is filled in the stress metrics.** This covers the JSON
+  file, Prometheus's status-code series and DataDog. It used to be empty
+  (`{}`), because the stress summary never counted status codes. Dashboards
+  and checks that expected it empty will now see data. Requests that got no
+  response (timeouts, connection errors) are not counted there.
+- **`hitspec export --exec` runs the generated curl command through `sh`**
+  instead of `bash`. On Windows that is Git for Windows' `sh`, or `cmd /C`
+  when it is not installed. The command is plain POSIX quoting, so nothing
+  changes for it. Systems without bash can now use `--exec`. curl must still
+  be installed.
+
+### Fixed
+
+- `hitspec serve` no longer prints the stress progress and summary to its
+  stdout. The desktop app runs it as a child process; use the REST or
+  WebSocket result instead.
+- Two stress runs at once in `serve` no longer race on the global color
+  setting.
+- `hitspec run --watch` picks up a changed `noColor` in `hitspec.yaml` on the
+  next pass.
+- The run reference and the metrics guide say that `--metrics` applies to
+  `--stress` runs.
+
 ## [2.23.0] - 2026-10-19
 
 hitspec's whole test suite now runs on Windows, and this release fixes what
@@ -1294,7 +1341,8 @@ before upgrading CI.
 - `hitspec init` - Initialize a new project
 - `hitspec version` - Show version information
 
-[Unreleased]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.23.0...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.23.1...HEAD
+[2.23.1]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.23.0...v2.23.1
 [2.23.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.22.0...v2.23.0
 [2.22.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.21.0...v2.22.0
 [2.21.0]: https://github.com/abdul-hamid-achik/hitspec/compare/v2.20.0...v2.21.0

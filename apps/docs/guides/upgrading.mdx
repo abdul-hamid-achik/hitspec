@@ -39,11 +39,11 @@ checking what it says.
     - uses: abdul-hamid-achik/hitspec@v2
       with:
         files: tests/
-        version: v2.23.0
+        version: v2.23.1
     ```
 
     With Go, install an exact version:
-    `go install github.com/abdul-hamid-achik/hitspec/v2/cmd/hitspec@v2.23.0`.
+    `go install github.com/abdul-hamid-achik/hitspec/v2/cmd/hitspec@v2.23.1`.
   </Step>
 </Steps>
 
@@ -51,6 +51,17 @@ Every release lists its changes in the
 [changelog](https://github.com/abdul-hamid-achik/hitspec/blob/main/CHANGELOG.md),
 and from 2.20.0 on the GitHub release page of each version shows the same
 notes.
+
+## 2.23.1
+
+- `hitspec run --metrics ...` without `--stress`, or with `HITSPEC_METRICS`
+  set, prints a warning on stderr. It still exits 0. Add `--stress` or unset
+  the variable for normal runs.
+- studio and `serve` refuse a `__snapshots__` directory or snapshot file that
+  a symlink points to outside the workspace. `hitspec run` is unchanged.
+- Stress metrics (JSON, Prometheus, DataDog) now include `status_codes`;
+  before, they were always empty.
+- `hitspec export --exec` runs through `sh` instead of `bash`.
 
 ## 2.23.0
 
