@@ -298,6 +298,8 @@ bodies outside `curl`) is skipped with a `warning:` on stderr and a
 | `--exec` | | Execute the curl command directly (curl only) | `false` |
 | `--verbose` | `-v` | Include `-v` in curl output (curl only) | `false` |
 
+The exported command is run through `sh` (on Windows, the `sh` from Git for Windows, or `cmd` when there is none), so `bash` is not required. `curl` itself must be installed.
+
 <Warning>
 The `--exec` flag requires exactly one matching request. Use `--name` to filter to a single request when using `--exec`.
 </Warning>

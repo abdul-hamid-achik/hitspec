@@ -1,0 +1,31 @@
+# `export --exec` runs the curl command through sh (internal/shellcmd), not
+# bash. A bash that fails if it is ever called sits first on PATH.
+[windows] skip 'sh and curl come from Git for Windows there; the shell lookup is covered by internal/shellcmd'
+[!exec:curl] skip 'curl is not installed'
+[!exec:sh] skip 'sh is not installed'
+
+chmod 755 bin/bash
+env PATH=$WORK/bin:$PATH
+
+exitcode 0 hitspec export --exec --name Echo api.http
+stdout 'hello-from-exec'
+
+# Quotes in header values survive the POSIX quoting.
+exitcode 0 hitspec export --exec --name Quoted api.http
+stdout 'it''s quoted'
+
+-- bin/bash --
+#!/bin/sh
+echo 'bash must not be used' >&2
+exit 97
+-- api.http --
+@baseUrl = {{$env(SERVER)}}
+
+### Echo
+# @name Echo
+GET {{baseUrl}}/echo/hello-from-exec
+
+### Quoted
+# @name Quoted
+GET {{baseUrl}}/echo/quoted
+X-Note: it's quoted

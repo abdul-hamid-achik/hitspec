@@ -3,10 +3,10 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/abdul-hamid-achik/hitspec/v2/internal/shellcmd"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/env"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/export/snippet"
@@ -187,9 +187,10 @@ func runExport(cmd *cobra.Command, format, filePath string) error {
 			return err
 		}
 
-		// Parse the curl command and execute it
-		// We'll use bash -c to handle the command properly
-		execCmd := exec.Command("bash", "-c", curlCmd)
+		// The exported curl command is plain POSIX sh (single-quoted words),
+		// so it runs through sh, which every Unix has; on Windows shellcmd
+		// finds Git's sh or falls back to cmd.exe, and bash is not needed.
+		execCmd := shellcmd.Command(curlCmd)
 		execCmd.Stdout = cmd.OutOrStdout()
 		execCmd.Stderr = cmd.ErrOrStderr()
 		execCmd.Stdin = os.Stdin
