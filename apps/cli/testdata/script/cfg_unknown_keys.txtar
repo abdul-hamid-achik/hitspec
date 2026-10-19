@@ -1,0 +1,55 @@
+# An unknown key in hitspec.yaml is a warning: the run still goes ahead with
+# the rest of the file. `validate --strict` makes it an error.
+
+exitcode 0 hitspec run --no-history ok.http
+stdout 'Tests: 1 passed, 1 total'
+stderr 'warning: hitspec.yaml:2: unknown key "tiemout" \(did you mean "timeout"\?\)'
+stderr 'warning: hitspec.yaml:6: unknown key "duraton" \(did you mean "duration"\?\)'
+! stderr 'headers'
+
+# the known keys still apply (timeout: 30000 is not the 200ms typo'd one)
+exitcode 0 hitspec validate ok.http
+stdout 'warning: hitspec.yaml:2: unknown key "tiemout"'
+stdout 'OK    ok.http'
+
+exitcode 2 hitspec validate --strict ok.http
+stderr 'FAIL  hitspec.yaml'
+stderr 'unknown key "tiemout"'
+
+exitcode 2 hitspec validate --strict --json ok.http
+stdout '"file": "hitspec.yaml"'
+stdout 'unknown key'
+
+# a clean config prints nothing
+rm hitspec.yaml
+cp clean.yaml hitspec.yaml
+exitcode 0 hitspec run --no-history ok.http
+! stderr 'warning'
+exitcode 0 hitspec validate --strict ok.http
+
+-- hitspec.yaml --
+timeout: 30000
+tiemout: 200
+stress:
+  profiles:
+    p:
+      duraton: 1s
+headers:
+  Anything-Goes: 1
+environments:
+  dev:
+    custom: also-fine
+-- clean.yaml --
+timeout: 30000
+retries: 0
+stress:
+  profiles:
+    p:
+      duration: 1s
+-- ok.http --
+### ok
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 200
+<<<

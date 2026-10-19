@@ -53,7 +53,11 @@ Examples:
 		if ctx == nil {
 			ctx = context.Background()
 		}
-		return launchStudio(ctx, normalizeServeWorkDir(workDir), studioLaunchFlags{
+		workDir = normalizeServeWorkDir(workDir)
+		if err := preflightWorkspaceConfig(cmd, workDir, studioConfigFlag); err != nil {
+			return err
+		}
+		return launchStudio(ctx, workDir, studioLaunchFlags{
 			watch:      studioWatchFlag,
 			readOnly:   studioReadOnlyFlag,
 			env:        studioEnvFlag,
