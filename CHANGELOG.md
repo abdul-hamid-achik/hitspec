@@ -7,12 +7,233 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.21.0] - 2026-10-19
+
+The `.http` language is now strict and assertions check what they say. Some
+suites that were green on 2.20 will go red on 2.21 without any edit: in each
+case the old result was wrong. **Read the upgrade notes below before you bump
+hitspec in CI.**
+
+### Upgrade notes: tests that may start failing
+
+Every item below used to pass without checking anything, or ran with
+settings other than the ones you configured. After upgrading, such a test
+fails, or its file fails to load (exit code 2), even though the file did not
+change. To find them before your CI does:
+
+1. Run `hitspec validate <dir>` with the new version. It reports every file
+   that no longer loads, with file:line:col and a fix, and prints warnings
+   such as unknown directives. `hitspec validate --strict` turns the warnings
+   into errors and also checks that every `{{variable}}` is defined.
+2. Run the suite once locally with the new version and read the failures.
+3. Pin the version in CI (the GitHub Action's `version:` input, or
+   `go install .../cmd/hitspec@v2.21.0`) and bump it on purpose.
+
+**Files that no longer load (exit code 2)**
+
+- A misspelled operator was silently treated as `==`:
+  `expect body.name contians "x"` now fails with
+  `unknown operator "contians" (did you mean "contains"?)`.
+- An operator without a value, or two values (`expect status 200 201`), is an
+  error. Write `expect status in [200, 201]`.
+- A `>>>`, `>>>capture`, `>>>db` or `>>>shell` block that is not under a
+  request line (for example a capture block placed above the request), a block
+  with an unknown type, or a block without its closing `<<<` was dropped
+  without a word. Move the block below its request, fix the type, or close it.
+- `>>>db <connection>` never existed: those blocks were ignored, so their
+  checks never ran. Set the connection with `# @db <connection>` on the
+  request and put the SQL and `expect <column> <op> <value>` lines inside
+  `>>>db`.
+- `jsonpath` features hitspec does not support (`..`, `?()` filters, slices,
+  unions) are errors instead of silently matching nothing.
+
+**Assertions that now check what they say**
+
+- `== null` needs a JSON `null`; a missing field no longer equals null. Use
+  `!exists` for "absent". Other value operators (`==`, `>`, `contains`, ...)
+  fail on a missing field; the negated ones (`!=`, `!contains`, `!includes`,
+  `!in`) pass.
+- `body.x` on a response that is not JSON (HTML, plain text) fails with
+  "response body is not JSON" instead of comparing against nothing.
+  `application/problem+json`, other `+json` types and `text/json` count as
+  JSON.
+- Unquoted values are read whole: `expect body.name == Jane Doe` compares
+  `Jane Doe` (it compared `Jane`), `./x` keeps its first character, and a
+  trailing `# comment` is no longer part of the value.
+- `jsonpath $.x` subjects are evaluated. They used to resolve to nothing, so
+  `!exists` and `!=` passed whatever the response held.
+- Objects and arrays compare by value (`expect body.user == {"id": 1}`) and
+  numbers compare numerically.
+- `length` counts characters, not bytes: `"café"` has length 4 (it was 5).
+- `contains`, `startsWith`, `endsWith` and `matches` on a whole JSON body, an
+  object or an array use its JSON text instead of Go's `map[...]` rendering.
+- Paths with `.#` and `#(...)` work; the `#` used to start a comment and cut
+  the path short.
+- `# @if` / `# @unless` evaluate `==`, `!=`, `!`, `&&` and `||`. Before, any
+  non-empty text was true, so `# @if {{env}} == prod` ran the request in every
+  environment; it is now skipped outside prod.
+- Directives above the first request of a file that has no `###` line were
+  dropped. Its `@name`, `@tags`, `@skip` and `@depends` now apply, so tag
+  filters and dependencies can select different requests.
+- `>>>db` blocks written as bare SQL (without a `query` prefix) were dropped;
+  they now run, and need `--allow-db`.
+
+**Settings that now apply**
+
+- `hitspec run` honors hitspec.yaml `timeout`, `retries`, `retryDelay`,
+  `maxRedirects`, `parallel`, `concurrency` and `bail`; the flag defaults
+  (30s, concurrency 5) used to override them. A yaml `timeout: 5000` now fails
+  requests slower than 5 seconds, `retries: 3` repeats failing requests and
+  `bail: true` stops at the first failure.
+- `HITSPEC_INSECURE=false`, `HITSPEC_PARALLEL=false` and `HITSPEC_BAIL=false`
+  override hitspec.yaml. The order everywhere is: flag, `HITSPEC_*` variable,
+  hitspec.yaml, built-in default.
+- `maxRedirects: N` follows N redirects; it followed N-1.
+
+**HTTP behavior**
+
+- `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` (and the lowercase forms) are
+  honored when no proxy is configured. On a machine or runner with a proxy in
+  its environment, requests now go through it; list hosts that must be reached
+  directly in `NO_PROXY`. Loopback hosts are never proxied.
+- On a redirect to another scheme, host or port, headers you set
+  (`Authorization`, `Cookie`, `X-Api-Key`, ...) are no longer forwarded, so
+  they cannot leak to another origin. A test that relied on the credential
+  following the redirect gets a 401: point it at the final URL.
+- A `Host:` header is sent as the request's Host; it used to be ignored.
+- With an explicit `Accept-Encoding: gzip` or `deflate`, the body is decoded
+  before assertions; they used to see compressed bytes.
+- Several `Set-Cookie` headers are joined with `, ` (it was `; `) in
+  `header Set-Cookie` assertions, like every other repeated header.
+- Response bodies over 100 MiB fail with "response body exceeds".
+- HTTP/2 is negotiated over TLS.
+
+**Other commands**
+
+- `hitspec diff`: skipped tests have their own status and no longer count as
+  failures or regressions; a 0 ms baseline never trips `--threshold`.
+- `hitspec mcp serve`: saved requests run by `hitspec_fetch` no longer read the
+  server's environment variables; allow one with `--allow-env NAME`.
+  `--workspace` refuses your home directory, its parents and `/` unless you
+  pass `--allow-broad-workspace`. Run the MCP canary before switching a
+  gateway to this version.
+
+### Security
+
+- `hitspec mcp serve`: saved requests resolve variables in an isolated
+  environment (process secrets such as `TAVILY_API_KEY` stay out of reach),
+  `hitspec_fetch` is annotated as destructive, and broad workspaces are
+  refused (see the upgrade notes).
+- Credentials no longer follow cross-origin redirects (see the upgrade notes).
+- OAuth2 token requests honor the request timeout (30s cap) and read at most
+  1 MB; they used to have no timeout at all.
+- hitspec Studio (desktop): the renderer can no longer set the server's
+  environment or `--allow-shell` (shell access needs approval in a native
+  dialog, per workspace, until quit); every IPC call is checked against an
+  allowlist of senders, methods and paths; Electron fuses disable
+  `ELECTRON_RUN_AS_NODE`, `NODE_OPTIONS` and `--inspect` and enforce ASAR
+  integrity; the CSP no longer allows inline styles.
+- CI blocks on high-severity gosec findings.
+
+### Added
+
+- `hitspec validate --strict`: warnings become errors and `{{variables}}` are
+  checked against the file, its captures, hitspec.yaml environments, `.env`
+  files and the process environment. Parse warnings (unknown directives with
+  a did-you-mean, bad `@timeout` values, directives that apply to nothing,
+  capture paths with spaces) carry file:line:col.
+- `hitspec export` writes fetch, wget, python, httpie, go and ruby as well as
+  curl (`hitspec export --format python api.http` or
+  `hitspec export python api.http`), including query parameters, `@auth` and
+  GraphQL bodies.
+- `hitspec import openapi -o dir/` writes one file per tag. Postman and
+  Insomnia environments become hitspec.yaml environments; Postman collection
+  variables, inherited auth and common `pm.test` checks are converted.
+- `jsonpath` subjects and captures (`$`, `.a`, `['a']`, `[n]`, `[*]`); every
+  documented form of `each`; `/re/flags` literals for `matches`.
+- `@if` / `@unless` comparisons with `==`, `!=`, `!`, `&&`, `||`.
+- Runs started from studio or `serve --api-only` stop when cancelled or when
+  the client disconnects; requests that never started are reported as
+  skipped ("cancelled").
+- hitspec Studio desktop: unsaved-edit guards (switching files, closing,
+  quitting, external changes), a per-architecture bundled CLI, and a desktop
+  CI workflow. Installers are unsigned until signing credentials are set up.
+- Every example under `examples/` runs offline against `hitspec mock`.
+
+### Fixed
+
+- Studio and `serve --api-only` ignored most of hitspec.yaml (timeout, proxy,
+  headers, SSL, redirects, retries) and the `HITSPEC_*` variables; stress and
+  contract runs used a bare HTTP client. Every surface now builds its settings
+  the same way.
+- `>>>db` SQL, `>>>capture` paths and `>>>shell` commands keep their quotes,
+  spacing and `{{braces}}`.
+- OAuth2 tokens are cached per client until shortly before they expire,
+  fetched once under concurrency, and refetched once when a cached token gets
+  a 401. A token response without `access_token` is an error.
+- AWS SigV4 signs `x-amz-content-sha256`, the session token
+  (`AWS_SESSION_TOKEN`) and `x-amz-*` headers, encodes paths and query strings
+  per RFC 3986, and no longer panics on a request without headers.
+- Importers stopped dropping input: curl (`--json`, `-F`, `-d @file`,
+  repeated `-d`, `$'...'` quoting, header order), Postman (form-data, GraphQL
+  and file bodies, `:path` variables), Insomnia (form, multipart, GraphQL and
+  file bodies, apikey and digest auth) and OpenAPI (path parameter values,
+  multipart bodies, stable output, no panic on untyped parameters). Large
+  numbers stay plain (`1234567`).
+- `hitspec export curl` sends form bodies with `-d` (they were URL-encoded a
+  second time) and file bodies with `--data-binary @file`.
+- `hitspec diff` lists tests in file and request order (it was random) and
+  keeps duplicate names apart.
+- `hitspec record` no longer writes assertions that fail to parse for JSON
+  keys such as `first name`.
+- hitspec Studio desktop: a CLI that cannot start (permissions, quarantine,
+  wrong CPU) reports why instead of hanging; a server left behind by a crash
+  is cleaned up on the next launch; the server version is shown and old CLIs
+  are flagged; the log view no longer freezes; bodies over 512 KB render as
+  plain text with a Highlight button.
+- Editors: the Neovim plugin installs with lazy.nvim and packer; the Neovim
+  and VS Code grammars no longer highlight syntax hitspec does not have.
+- Docs: samples that the parser rejects or that never worked (database
+  guides, troubleshooting, captures) are fixed, and CI parses every `http`
+  block in the docs.
+
+### Changed
+
+- HTTP/2, proxy variables and the 100 MiB body limit are on by default (see
+  the upgrade notes).
+- Releases run the full test suite and a smoke test of the built binary
+  before publishing, and the GitHub release notes are this changelog.
+
 ## [2.20.0] - 2026-10-19
 
 This release fixes the regressions and false passes found in the 2026-10-19
 review. Upgrade if you use `hitspec run` in CI: v2.16.0 through v2.19.1 print
 nothing on stdout, and until now a file that failed to parse did not fail the
 run.
+
+### Upgrade notes: tests that may start failing
+
+These fixes can turn a green run red without any change to your files; in
+each case the old result was wrong. Run the suite once locally with 2.20
+before upgrading CI.
+
+- `expect header X exists` passed even when the header was missing; it now
+  fails in that case.
+- A response body cut short by a timeout (`@timeout`, `--timeout`) counted as
+  a success with a partial body; it is now a failure. Only
+  `text/event-stream` (SSE) responses may end at the deadline.
+- A file that fails to load (syntax error, duplicate `@name`, circular
+  `@depends`) was skipped and the run could still exit 0; `hitspec run` now
+  exits 2. `--name`/`--tags` filters that match nothing exit 64.
+- `@auth` with an unknown type or the wrong number of arguments is a parse
+  error.
+- Without `--env` or `HITSPEC_ENV`, `hitspec run` uses hitspec.yaml
+  `defaultEnvironment` (it always used `dev`), so variables such as
+  `{{baseUrl}}` can resolve differently.
+- Header values are sent verbatim: quotes and text after `#` are kept
+  (`If-None-Match: "abc"` sends the quotes).
+- Captured values are inserted literally; a `{{...}}` inside a captured value
+  is no longer expanded.
 
 ### Security
 

@@ -27,8 +27,8 @@ hitspec run tests/ --parallel --concurrency 10
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--parallel` | `false` | Enable parallel execution |
-| `--concurrency` | `5` | Maximum concurrent requests |
+| `--parallel` | hitspec.yaml `parallel`, else `false` | Enable parallel execution |
+| `--concurrency` | hitspec.yaml `concurrency`, else `5` | Maximum concurrent requests |
 
 ## Configuration
 
@@ -85,5 +85,5 @@ Captured variables from parallel requests are not shared. Only use captures acro
 
 | Variable | Flag | Default |
 |----------|------|---------|
-| `HITSPEC_PARALLEL` | `--parallel` | `false` |
-| `HITSPEC_CONCURRENCY` | `--concurrency` | `5` |
+| `HITSPEC_PARALLEL` | `--parallel` | hitspec.yaml `parallel`, else `false` |
+| `HITSPEC_CONCURRENCY` | `--concurrency` | hitspec.yaml `concurrency`, else `5` |

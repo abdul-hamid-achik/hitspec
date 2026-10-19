@@ -128,6 +128,13 @@ varName from body.field
 
 Types: `null`, `boolean`, `number`, `string`, `array`, `object`
 
+Values: a JSON literal (`"Jane Doe"`, `42`, `true`, `null`, `[200, 201]`,
+`{"a": 1}`), a `/regex/flags` after `matches`, or else the rest of the line,
+trimmed, as a string: `expect body.name == Jane Doe` compares `Jane Doe`. Text
+after a closing quote is an error. `== null` needs a JSON null; use `!exists`
+for an absent field. `each` takes an operator and a value, optionally after a
+path inside the element: `expect body.users each email matches /@/`.
+
 ## Built-in Functions (17)
 
 | Function | Description |
@@ -164,8 +171,8 @@ Types: `null`, `boolean`, `number`, `string`, `array`, `object`
 | `# @retryDelay 1000` | Delay between retries (ms) |
 | `# @retryOn 500, 502, 503` | Only retry on these status codes |
 | `# @depends login, setup` | Dependencies (request names) |
-| `# @if {{flag}}` | Run only when the expression is truthy |
-| `# @unless {{flag}}` | Skip when the expression is truthy |
+| `# @if {{flag}}` | Run only when the condition is true (see below) |
+| `# @unless {{flag}}` | Skip when the condition is true |
 | `# @auth type args` | Authentication method |
 | `# @before script.sh` | Run script before request |
 | `# @after script.sh` | Run script after request (always runs) |
@@ -176,6 +183,11 @@ Types: `null`, `boolean`, `number`, `string`, `array`, `object`
 | `# @stress.skip` | Exclude from stress runs |
 | `# @stress.setup` | Run once before the stress test |
 | `# @stress.teardown` | Run once after the stress test |
+
+`@if` / `@unless` conditions: a bare value is true when it is defined and not
+empty, "0", "false", "no" or "null". Compare with `==` and `!=`, negate with
+`!`, combine with `&&` and `||` (`&&` binds tighter), for example
+`# @if {{env}} == prod && {{runSlow}}`.
 
 Any other `@name` in a comment is kept as a custom annotation and ignored by the
 runner (`@contract.*` and `@x-*` are the supported extension namespaces).
@@ -351,8 +363,9 @@ hitspec run <file|dir> [flags]
 # Stress testing mode (supports files, directories, or multiple files)
 hitspec run <file|dir|files...> --stress [stress-flags]
 
-# Validate syntax without executing
-hitspec validate <file|dir>
+# Validate syntax without executing (--strict: warnings and undefined
+# variables are errors)
+hitspec validate [--strict] <file|dir>
 
 # List all requests
 hitspec list <file|dir>
@@ -370,10 +383,13 @@ hitspec docs
 hitspec diff <results1.json> <results2.json> [flags]
 
 # Import OpenAPI/Swagger spec
-hitspec import openapi <spec.yaml|url> -o <output.http>
+hitspec import openapi <spec.yaml|url> -o <output.http|dir/>   # dir/ writes one file per tag
 
 # Import Postman collection
 hitspec import postman <collection.json> -o <output-dir>
+
+# Export requests as curl, fetch, wget, python, httpie, go or ruby
+hitspec export [curl|fetch|wget|python|httpie|go|ruby] <file>   # or --format <fmt>
 
 # Start mock server from .http files
 hitspec mock <file|dir> --port 3000
@@ -538,18 +554,18 @@ Connect to `/api/v1/ws` for real-time updates. Message envelope: `{"type": "stri
 | `--name, -n` | Filter by request name pattern (dependencies of selected requests run too) |
 | `--tags, -t` | Filter by tags (comma-separated; dependencies of selected requests run too) |
 | `--verbose, -v` | Show detailed output |
-| `--bail` | Stop on first failure |
-| `--timeout` | Request timeout as a duration, e.g. `30s`, `1m` (default: 30s) |
+| `--bail` | Stop on first failure (default: hitspec.yaml `bail`) |
+| `--timeout` | Request timeout as a duration, e.g. `30s`, `1m` (env: HITSPEC_TIMEOUT; default: hitspec.yaml `timeout`, else 30s) |
 | `--no-color` | Disable colored output |
 | `--dry-run` | Show what would run |
 | `--output, -o` | Format: console, json, junit, tap, html |
 | `--output-file` | Write output to file (recreated on every watch rerun) |
 | `--quiet, -q` | Suppress the stdout report; failures are still listed on stderr and `--output-file` is still written |
-| `--parallel, -p` | Run requests in parallel |
-| `--concurrency` | Max concurrent requests (default: 5) |
+| `--parallel, -p` | Run requests in parallel (default: hitspec.yaml `parallel`) |
+| `--concurrency` | Max concurrent requests (default: hitspec.yaml `concurrency`, else 5) |
 | `--watch, -w` | Watch files for changes |
-| `--proxy` | Proxy URL for requests |
-| `--insecure, -k` | Disable SSL validation |
+| `--proxy` | Proxy URL for requests (default: hitspec.yaml `proxy`, else `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY`) |
+| `--insecure, -k` | Disable SSL validation (default: hitspec.yaml `validateSSL: false`) |
 | `--config` | Path to the config file (default: `hitspec.yaml` in the current directory) |
 | `--allow-shell` | Allow `>>>shell` blocks and `@before`/`@after` hooks (refused otherwise) |
 | `--allow-db` | Allow `>>>db` blocks (refused otherwise) |
@@ -1089,6 +1105,9 @@ project/
 ```bash
 # Validate without running
 hitspec validate test.http
+
+# Also fail on warnings (unknown directives) and undefined variables
+hitspec validate --strict tests/
 ```
 
 ### Common Mistakes
