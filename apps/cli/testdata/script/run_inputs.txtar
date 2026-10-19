@@ -12,6 +12,13 @@ stdin body_file.http
 exitcode 0 hitspec run - --no-color
 stdout 'body-file-request'
 
+# --dry-run plans the piped document without sending it.
+stdin one.http
+exitcode 0 hitspec run - --dry-run --no-color
+stdout 'Would run: <stdin>'
+stdout 'stdin-request'
+! stdout 'passed'
+
 # A parse error in the piped document is exit 2.
 stdin broken.http
 exitcode 2 hitspec run - --no-color

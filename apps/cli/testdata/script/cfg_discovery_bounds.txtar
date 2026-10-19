@@ -1,0 +1,55 @@
+# Discovery is bounded: it stops at the first directory holding .git and never
+# reads a config from $HOME or above it.
+
+# --- a config above the repository root is not used
+cd outer/repo/src
+exitcode 0 hitspec run --no-history -v ../../../hit.http
+stdout 'Tests: 1 passed, 1 total'
+stderr 'config: none found'
+
+# --- but the config in the directory that holds .git is
+cd ../../..
+cp hitspec.yaml.repo outer/repo/hitspec.yaml
+cd outer/repo/src
+exitcode 0 hitspec run --no-history -v ../../../hit-repo.http
+stdout 'Tests: 1 passed, 1 total'
+stderr 'config: \.\.[/\\]hitspec\.yaml'
+
+# --- $HOME's own hitspec.yaml is never read, from anywhere below it
+cd $HOME/proj
+exitcode 0 hitspec run --no-history -v $WORK/hit.http
+stdout 'Tests: 1 passed, 1 total'
+stderr 'config: none found'
+cd $HOME
+exitcode 0 hitspec run --no-history -v $WORK/hit.http
+stderr 'config: none found'
+
+-- hitspec.yaml.repo --
+headers:
+  X-Where: repo
+-- outer/hitspec.yaml --
+headers:
+  X-Where: outer
+-- outer/repo/.git/HEAD --
+ref: refs/heads/main
+-- outer/repo/src/.keep --
+-- .home/hitspec.yaml --
+headers:
+  X-Where: home
+-- .home/proj/.keep --
+-- hit.http --
+### no-config-header
+GET {{$env(SERVER)}}/echo/headers
+
+>>>
+expect status 200
+expect body.headers.X-Where !exists
+<<<
+-- hit-repo.http --
+### repo-config-header
+GET {{$env(SERVER)}}/echo/headers
+
+>>>
+expect status 200
+expect body.headers.X-Where == "repo"
+<<<

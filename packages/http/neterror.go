@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"syscall"
 )
 
@@ -23,7 +24,8 @@ func (e *ConnectTimeoutError) Unwrap() error { return e.err }
 
 // IsNetworkError reports whether err means a request never got a response
 // because the connection itself failed: connect errors (refused, unreachable),
-// DNS resolution failures, TLS handshake or certificate errors, a connection
+// DNS resolution failures, TLS handshake or certificate errors (including a
+// TLS alert from the server, such as a client certificate it requires), a connection
 // reset or closed before any response arrived, and proxy connect errors.
 // `hitspec run` maps it to exit code 4.
 //
@@ -59,7 +61,9 @@ func IsNetworkError(err error) bool {
 	var opErr *net.OpError
 	if errors.As(err, &opErr) {
 		switch opErr.Op {
-		case "dial", "proxyconnect":
+		// "remote error" is a TLS alert from the peer during the handshake
+		// (a server that demands a client certificate, a protocol mismatch).
+		case "dial", "proxyconnect", "remote error":
 			return true
 		}
 	}
@@ -72,6 +76,12 @@ func IsNetworkError(err error) bool {
 	// truncated file, a hook's pipe) from counting.
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {
+		// HTTP/2 hides why a new connection closed before its first request
+		// (for example a TLS alert that arrived after the client's half of the
+		// handshake) behind this unexported error, so it is matched by text.
+		if urlErr.Err != nil && strings.HasSuffix(urlErr.Err.Error(), http2NotEstablished) {
+			return true
+		}
 		return errors.Is(urlErr, io.EOF) ||
 			errors.Is(urlErr, io.ErrUnexpectedEOF) ||
 			errors.Is(urlErr, syscall.ECONNRESET) ||
@@ -81,6 +91,10 @@ func IsNetworkError(err error) bool {
 	}
 	return false
 }
+
+// http2NotEstablished is the message of net/http's unexported
+// http2errClientConnNotEstablished.
+const http2NotEstablished = "http2: client conn could not be established"
 
 // isTLSError reports handshake and certificate failures.
 func isTLSError(err error) bool {

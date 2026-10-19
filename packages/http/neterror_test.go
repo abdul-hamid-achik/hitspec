@@ -2,11 +2,13 @@ package http
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -64,12 +66,29 @@ func TestIsNetworkError_TLS(t *testing.T) {
 		err := doErr(t, NewClient(WithTimeout(5*time.Second)), srv.URL)
 		assert.True(t, IsNetworkError(err), "got %v", err)
 	})
+	t.Run("server requires a client certificate", func(t *testing.T) {
+		srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+		srv.TLS = &tls.Config{ClientAuth: tls.RequireAnyClientCert}
+		srv.StartTLS()
+		defer srv.Close()
+		err := doErr(t, NewClient(WithTimeout(5*time.Second), WithValidateSSL(false)), srv.URL)
+		assert.True(t, IsNetworkError(err), "got %v", err)
+	})
 	t.Run("https sent to a plain HTTP server", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 		defer srv.Close()
 		err := doErr(t, NewClient(WithTimeout(5*time.Second)), "https://"+srv.Listener.Addr().String())
 		assert.True(t, IsNetworkError(err), "got %v", err)
 	})
+}
+
+func TestIsNetworkError_HTTP2ConnNotEstablished(t *testing.T) {
+	// What net/http returns when a new HTTP/2 connection closed before its
+	// first request could use it (seen with a server that rejects the client
+	// certificate after the client's half of a TLS 1.3 handshake).
+	err := &url.Error{Op: "Get", URL: "https://127.0.0.1:1", Err: errors.New("http2: client conn could not be established")}
+	assert.True(t, IsNetworkError(err))
+	assert.False(t, IsNetworkError(errors.New("http2: client conn could not be established")), "only inside a *url.Error")
 }
 
 func TestIsNetworkError_OAuth2TokenEndpointUnreachable(t *testing.T) {

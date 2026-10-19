@@ -393,6 +393,31 @@ expect header Cache-Control contains "no-cache"
 <<<
 ```
 
+## Reading a failure
+
+When a request fails, the console output alone says why: the failed assertions with their expected and actual values, then the request as it was sent, the response status line with its duration, and an excerpt of the response body.
+
+```text
+  ✗ getUser (12ms)
+    → status == (line 5)
+      Expected: 200
+      Actual:   404
+      expected 200, got 404
+    → body.id == (line 6)
+      Expected: 1
+      Actual:   42
+      expected 1, got 42
+    Request:  GET https://api.example.com/users/42?api_key=[REDACTED]
+    Response: 404 Not Found (9ms)
+    Body:
+      {
+        "error": "user not found",
+        "id": 42
+      }
+```
+
+JSON bodies are pretty-printed and the excerpt is capped at about 2 KB or 30 lines; a note says how much was cut, and `-vvv` prints the whole body. Credentials are redacted: header values such as `Authorization` and `Cookie`, the password in `user:password@host`, and query parameters named like `api_key` or `access_token`. If a request errored before any response arrived (connection refused, timeout), you get the request line and the error. See [output formats](/reference/output-formats) for `-v`, `-vv` and `-vvv`.
+
 ## Testing Error Responses
 
 Assertions are equally useful for verifying error behavior:

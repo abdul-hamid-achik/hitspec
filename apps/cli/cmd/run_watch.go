@@ -22,7 +22,7 @@ func watchSupportFiles(configFlagValue, envFile string) []string {
 	var out []string
 	if configFlagValue != "" {
 		out = append(out, configFlagValue)
-	} else if p := config.FindConfigPath("."); p != "" {
+	} else if p := config.FindConfigPathUp("."); p != "" {
 		out = append(out, p)
 	} else {
 		out = append(out, config.ConfigFilenames...) // not there yet; watch for it to appear
@@ -131,6 +131,13 @@ func reloadRunSettings(flags *pflag.FlagSet, previous *runner.Config, tagsFilter
 	cfg, _, err := buildRunnerConfig(flags, fileConfig, environment, tagsFilter)
 	if err != nil {
 		return nil, nil, err
+	}
+	// Same rule as the first pass: a missing env file is a config error, so
+	// the previous settings stay rather than running without its variables.
+	if cfg.EnvFile != "" {
+		if _, err := os.Stat(cfg.EnvFile); err != nil {
+			return nil, nil, fmt.Errorf("env file: %w", err)
+		}
 	}
 	if previous != nil {
 		cfg.HistoryStore = previous.HistoryStore

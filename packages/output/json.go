@@ -4,37 +4,10 @@ import (
 	"encoding/json"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
 )
-
-// sensitiveHeaders lists header names whose values should be redacted in output.
-var sensitiveHeaders = map[string]bool{
-	"authorization":       true,
-	"proxy-authorization": true,
-	"cookie":              true,
-	"set-cookie":          true,
-	"x-api-key":           true,
-	"x-auth-token":        true,
-}
-
-// redactHeaders returns a copy of headers with sensitive values replaced.
-func redactHeaders(headers map[string]string) map[string]string {
-	if headers == nil {
-		return nil
-	}
-	redacted := make(map[string]string, len(headers))
-	for k, v := range headers {
-		if sensitiveHeaders[strings.ToLower(k)] {
-			redacted[k] = "[REDACTED]"
-		} else {
-			redacted[k] = v
-		}
-	}
-	return redacted
-}
 
 // JSONOutput represents the complete JSON output structure
 type JSONOutput struct {
@@ -66,6 +39,9 @@ type JSONTest struct {
 	Response    *JSONResponse   `json:"response,omitempty"`
 	Assertions  []JSONAssertion `json:"assertions,omitempty"`
 	Captures    map[string]any  `json:"captures,omitempty"`
+	// Warnings are non-fatal findings (a capture that matched nothing, a
+	// {{reference}} sent unresolved); they never change "passed".
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // JSONRequest represents request details
@@ -81,6 +57,10 @@ type JSONResponse struct {
 	Status     string            `json:"status"`
 	Headers    map[string]string `json:"headers,omitempty"`
 	Duration   float64           `json:"duration"`
+	// BodyExcerpt is the (pretty-printed, capped) response body of a failed or
+	// errored request; BodyTruncated is set when it was cut.
+	BodyExcerpt   string `json:"bodyExcerpt,omitempty"`
+	BodyTruncated bool   `json:"bodyTruncated,omitempty"`
 }
 
 // JSONAssertion represents an assertion result
@@ -152,6 +132,15 @@ func (f *JSONFormatter) FormatResult(result *runner.RunResult) {
 				Headers:    redactHeaders(r.Response.Headers),
 				Duration:   float64(r.Response.Duration.Milliseconds()),
 			}
+			if !r.Passed && !r.Skipped {
+				b := formatBody(r.Response.Body, true)
+				test.Response.BodyExcerpt = b.Text
+				test.Response.BodyTruncated = b.Truncated
+			}
+		}
+
+		if len(r.Warnings) > 0 {
+			test.Warnings = r.Warnings
 		}
 
 		if len(r.Assertions) > 0 {

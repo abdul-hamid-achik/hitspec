@@ -378,6 +378,9 @@ func (c *Client) DoWithContext(ctx context.Context, req *Request) (*Response, er
 	if c.configErr != nil {
 		return nil, c.configErr
 	}
+	if req.Err != nil {
+		return nil, req.Err
+	}
 	// The effective timeout is the per-request @timeout when set, otherwise the
 	// client-level timeout. A per-request timeout longer than the client default
 	// (e.g. @timeout 60000 with a 30s default) must not be silently capped, so the
@@ -704,6 +707,27 @@ func (c *Client) doWithDigestAuth(ctx context.Context, req *Request) (*Response,
 }
 
 func (c *Client) doWithAWSAuth(ctx context.Context, req *Request) (*Response, error) {
+	// SigV4 signs a hash of the exact bytes sent. A multipart body is normally
+	// assembled at send time with a random boundary, so assemble it now and
+	// sign (and send) those bytes.
+	if len(req.Multipart) > 0 {
+		body, contentType, err := BuildMultipartBody(req.Multipart, req.BaseDir)
+		if err != nil {
+			return nil, err
+		}
+		fixed := *req
+		fixed.Body = body.String()
+		fixed.Multipart = nil
+		fixed.Headers = make(map[string]string, len(req.Headers)+1)
+		for k, v := range req.Headers {
+			if !strings.EqualFold(k, "Content-Type") {
+				fixed.Headers[k] = v
+			}
+		}
+		fixed.Headers["Content-Type"] = contentType
+		req = &fixed
+	}
+
 	// Sign the request with AWS Signature v4
 	authHeader, err := SignAWSRequest(req)
 	if err != nil {
@@ -828,12 +852,12 @@ func BuildMultipartBody(fields []*parser.MultipartField, baseDir string) (*bytes
 
 			// Validate path doesn't escape base directory (prevent path traversal)
 			if err := pathutil.ValidateWithinBase(filePath, baseDir); err != nil {
-				return nil, "", err
+				return nil, "", fmt.Errorf("multipart file %q: %w", field.Path, err)
 			}
 
 			file, err := os.Open(filePath)
 			if err != nil {
-				return nil, "", err
+				return nil, "", fmt.Errorf("multipart file %q: %w", field.Path, err)
 			}
 
 			part, err := writer.CreateFormFile(field.Name, filepath.Base(filePath))

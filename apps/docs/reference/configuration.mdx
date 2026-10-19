@@ -3,7 +3,7 @@ title: "Configuration Reference"
 description: "Complete reference for hitspec.yaml configuration file options with defaults and examples."
 ---
 
-hitspec is configured through a `hitspec.yaml` (or `hitspec.yml`) file in your project root. All settings are optional -- hitspec uses sensible defaults when no config file is present.
+hitspec is configured through a `hitspec.yaml` (or `hitspec.yml`) file in your project root (hitspec also finds it from a subdirectory of the project; see [Config File Search](#config-file-search)). All settings are optional -- hitspec uses sensible defaults when no config file is present.
 
 ## Creating a Config File
 
@@ -225,13 +225,33 @@ hitspec run api.http --stress --profile load
 
 ## Config File Search
 
-hitspec looks for config files in this order:
+hitspec picks the config file in this order:
 
-1. Path specified by `--config` flag
-2. `hitspec.yaml` in the current directory
-3. `hitspec.yml` in the current directory
+1. the path given with `--config` (or `HITSPEC_CONFIG`) -- used as is;
+2. otherwise the nearest `hitspec.yaml` (then `hitspec.yml`) found by looking in
+   the working directory and then in each parent directory.
 
-If no config file is found, all default values are used.
+The search is bounded. It stops at the first directory that contains `.git`
+(your project root, after checking that directory itself), it never reads a
+config file from your home directory or from anything above it, and it stops at
+the filesystem root. If nothing is found, all default values are used.
+
+The working directory is where you ran the command for `hitspec run`,
+`hitspec validate` and `hitspec contract verify`, and the workspace directory
+for `hitspec studio` and `hitspec serve`. `hitspec mcp serve` never looks
+outside its workspace: a `hitspec.yaml` above the workspace root is ignored.
+
+Run `hitspec run -v` to print the config file in use on stderr.
+
+A config file that cannot be parsed stops the command with exit code 3 and a
+`file:line` message. An unknown key is only a warning:
+
+```text
+warning: hitspec.yaml:3: unknown key "tiemout" (did you mean "timeout"?)
+```
+
+The run goes ahead with the keys it understands. `hitspec validate --strict`
+turns the warning into an error (exit code 2), which makes it a good CI check.
 
 ---
 
@@ -275,8 +295,8 @@ no run flags. They read `HITSPEC_TIMEOUT`, `HITSPEC_PROXY`, `HITSPEC_INSECURE`,
 `HITSPEC_PARALLEL`, `HITSPEC_CONCURRENCY` and `HITSPEC_BAIL`, then `hitspec.yaml`,
 then the defaults. Studio and serve choose the environment with their own
 `--env` (else `defaultEnvironment`, else `dev`) and ignore `HITSPEC_ENV`.
-`contract verify` reads `hitspec.yaml` from the current directory (or the path in
-`HITSPEC_CONFIG`) and has no environment of its own.
+`contract verify` finds `hitspec.yaml` from the current directory upward (or uses
+the path in `HITSPEC_CONFIG`) and has no environment of its own.
 
 ---
 

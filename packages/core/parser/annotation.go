@@ -200,6 +200,8 @@ type authSpec struct {
 	typ   AuthType
 	args  []string // names of the required arguments, for error messages
 	scope bool     // extra arguments after the required ones are scopes
+	// optional names the arguments that may follow the required ones, in order.
+	optional []string
 }
 
 var authSpecs = map[string]authSpec{
@@ -209,7 +211,7 @@ var authSpecs = map[string]authSpec{
 	"apikey-query": {typ: AuthAPIKeyQuery, args: []string{"paramName", "value"}},
 	"apikeyquery":  {typ: AuthAPIKeyQuery, args: []string{"paramName", "value"}},
 	"digest":       {typ: AuthDigest, args: []string{"username", "password"}},
-	"aws":          {typ: AuthAWS, args: []string{"accessKey", "secretKey", "region", "service"}},
+	"aws":          {typ: AuthAWS, args: []string{"accessKey", "secretKey", "region", "service"}, optional: []string{"sessionToken"}},
 }
 
 var oauth2Specs = map[string]authSpec{
@@ -254,12 +256,16 @@ func parseAuthConfig(value string) (*AuthConfig, error) {
 
 	args := splitAuthArgs(rest)
 	n := len(spec.args)
-	if len(args) < n || (!spec.scope && len(args) > n) {
+	if len(args) < n || (!spec.scope && len(args) > n+len(spec.optional)) {
 		want := fmt.Sprintf("%d", n)
 		if spec.scope {
 			want += " or more"
 		}
-		return nil, fmt.Errorf("@auth %s expects %s arguments (%s), got %d", label, want, strings.Join(spec.args, ", "), len(args))
+		names := strings.Join(spec.args, ", ")
+		if len(spec.optional) > 0 {
+			names += " and optionally " + strings.Join(spec.optional, ", ")
+		}
+		return nil, fmt.Errorf("@auth %s expects %s arguments (%s), got %d", label, want, names, len(args))
 	}
 	if spec.scope && len(args) > n {
 		// Everything after the required arguments is the scope list, which the

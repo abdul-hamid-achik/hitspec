@@ -54,49 +54,38 @@ func (p *Parser) parseBody() (*Body, error) {
 	return body, nil
 }
 
-// parseFormBlockBody parses a form body written with & field syntax.
+// parseFormBlockBody parses a form body written with "& key = value" lines. It
+// reads raw lines so spaces inside values survive; the fields are kept apart in
+// Body.FormFields so the HTTP layer can URL-encode them, and Body.Raw is the
+// unencoded "key=value&key=value" form.
 func (p *Parser) parseFormBlockBody() (*Body, error) {
 	line := p.curToken.Line
-	var fields []string
+	l := p.lexer
+	l.seekLineStart(p.curToken.Offset, p.curToken.Line)
 
-	for p.curToken.Type == TokenQueryParam && p.curToken.Value == "&" {
-		p.nextToken()
-		if p.curToken.Type == TokenWhitespace {
-			p.nextToken()
+	var fields []*QueryParam
+	var raw []string
+	for !l.atEOF() {
+		text := strings.TrimSpace(l.peekLine())
+		if text == "" {
+			// Blank lines between fields are allowed.
+			l.skipLine()
+			continue
 		}
-
-		key := p.curToken.Value
-		p.nextToken()
-
-		if p.curToken.Type == TokenWhitespace {
-			p.nextToken()
+		if text[0] != '&' {
+			break
 		}
-		if p.curToken.Type == TokenEquals {
-			p.nextToken()
-		}
-		if p.curToken.Type == TokenWhitespace {
-			p.nextToken()
-		}
-
-		var value strings.Builder
-		for p.curToken.Type != TokenNewline && p.curToken.Type != TokenEOF {
-			if p.curToken.Type == TokenVariableRef {
-				value.WriteString("{{")
-				value.WriteString(p.curToken.Value)
-				value.WriteString("}}")
-			} else {
-				value.WriteString(p.curToken.Value)
-			}
-			p.nextToken()
-		}
-
-		fields = append(fields, key+"="+strings.TrimSpace(value.String()))
-		p.skipNewlines()
+		f := parseQueryParamLine(text, l.line)
+		fields = append(fields, f)
+		raw = append(raw, f.Key+"="+f.Value)
+		l.skipLine()
 	}
+	p.nextToken()
 
 	return &Body{
 		ContentType: BodyFormBlock,
-		Raw:         strings.Join(fields, "&"),
+		Raw:         strings.Join(raw, "&"),
+		FormFields:  fields,
 		Line:        line,
 	}, nil
 }
@@ -123,10 +112,7 @@ func (p *Parser) parseMultipartBody() (*Body, error) {
 
 			if fieldType == "file" {
 				field.Type = MultipartFieldFile
-				if l.ch == '@' {
-					l.readChar()
-				}
-				field.Path = l.ReadRestOfLine()
+				field.Name, field.Path = splitMultipartFile(l.ReadRestOfLine())
 			} else if fieldType == "field" {
 				field.Type = MultipartFieldValue
 				// Read the field name
@@ -154,6 +140,31 @@ func (p *Parser) parseMultipartBody() (*Body, error) {
 	}
 
 	return body, nil
+}
+
+// defaultMultipartFileName is the form field name of a file part that does not
+// name one.
+const defaultMultipartFileName = "file"
+
+// splitMultipartFile splits the rest of a "file" line in a >>>multipart block:
+//
+//	file <name> @<path>   the part is sent as form field <name>
+//	file @<path>          field name "file"
+//	file <path>           field name "file" (the @ is optional)
+//
+// A first word followed by "@..." is the field name; anything else is a path,
+// so a path with spaces still works.
+func splitMultipartFile(rest string) (name, path string) {
+	rest = strings.TrimSpace(rest)
+	if strings.HasPrefix(rest, "@") {
+		return defaultMultipartFileName, strings.TrimSpace(rest[1:])
+	}
+	if i := strings.IndexAny(rest, " \t"); i > 0 {
+		if after := strings.TrimSpace(rest[i+1:]); strings.HasPrefix(after, "@") {
+			return rest[:i], strings.TrimSpace(after[1:])
+		}
+	}
+	return defaultMultipartFileName, rest
 }
 
 // parseGraphQLBody parses a >>>graphql ... <<< block with optional >>>variables block.

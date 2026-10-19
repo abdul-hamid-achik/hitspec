@@ -400,6 +400,7 @@ func (r *Runner) executeRequest(ctx context.Context, req *parser.Request, baseDi
 
 	httpReq := http.BuildRequestFromASTWithBaseDir(req, r.resolver.Resolve, baseDir)
 	result.Request = httpReq
+	result.Warnings = append(result.Warnings, unresolvedWarnings(httpReq)...)
 
 	resp, err := r.client.DoWithContext(ctx, httpReq)
 	result.Duration = time.Since(start)
@@ -462,7 +463,9 @@ func (r *Runner) executeRequest(ctx context.Context, req *parser.Request, baseDi
 	}
 
 	if len(req.Captures) > 0 {
-		captures := capture.ExtractAll(resp, req.Captures)
+		captures, misses := capture.ExtractAllReport(resp, req.Captures)
+		capture.Report(misses)
+		result.Warnings = append(result.Warnings, misses...)
 		for name, value := range captures {
 			result.Captures[name] = value
 			if !parallel {
