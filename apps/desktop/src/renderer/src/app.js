@@ -203,6 +203,21 @@ function render(s) {
 
 subscribe(render);
 
+/* Report unsaved edits to the main process so closing the window, quitting or
+   switching workspace can ask before discarding them. */
+let reportedDirty = false;
+subscribe((s) => {
+  const dirty = Boolean(s.source?.dirty);
+  if (dirty === reportedDirty) return;
+  reportedDirty = dirty;
+  window.hitspec.setDirty(dirty).catch(() => {});
+});
+window.addEventListener('beforeunload', (event) => {
+  if (!reportedDirty) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
+
 /* -------------------------------------------------------------------------- */
 /* workspace (project) switcher                                                */
 /* -------------------------------------------------------------------------- */

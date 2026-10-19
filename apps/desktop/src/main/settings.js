@@ -27,6 +27,20 @@ function merge(base, incoming) {
 }
 
 /**
+ * `backend.childEnv` (child process environment) and `backend.allowShell`
+ * (shell execution) are security-sensitive and must never come from the
+ * settings file: a file written by an older build, another program, or a
+ * compromised renderer would otherwise re-arm them on the next launch.
+ */
+function scrub(data) {
+  if (data?.backend && typeof data.backend === 'object') {
+    delete data.backend.childEnv;
+    data.backend.allowShell = false;
+  }
+  return data;
+}
+
+/**
  * Small JSON settings store in Electron's userData directory. Writes are atomic
  * (tmp + rename) so a crash mid-write cannot corrupt the file.
  */
@@ -39,9 +53,9 @@ export class Settings {
   load() {
     try {
       const text = fs.readFileSync(this.filePath, 'utf8');
-      this.data = merge(DEFAULTS, JSON.parse(text));
+      this.data = scrub(merge(DEFAULTS, JSON.parse(text)));
     } catch {
-      this.data = merge(DEFAULTS, {});
+      this.data = scrub(merge(DEFAULTS, {}));
     }
     return this.data;
   }
@@ -68,7 +82,7 @@ export class Settings {
   }
 
   set(key, value) {
-    this.data = key && typeof key === 'object' ? merge(this.data, key) : merge(this.data, { [key]: value });
+    this.data = scrub(key && typeof key === 'object' ? merge(this.data, key) : merge(this.data, { [key]: value }));
     this.save();
     return this.data;
   }

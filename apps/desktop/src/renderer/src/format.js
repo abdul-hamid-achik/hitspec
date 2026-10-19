@@ -107,6 +107,36 @@ export function prettyJSON(text, indent = 2) {
   }
 }
 
+/**
+ * Memoised response-body formatter. Rendering happens on every state change,
+ * and re-parsing/pretty-printing a multi-megabyte body each time is what made
+ * unrelated events feel slow. The last result is reused while the inputs are
+ * identical.
+ */
+export function createBodyFormatter() {
+  let last = null;
+  return function format(body, compact = false) {
+    if (last && last.body === body && last.compact === compact) return last;
+    const pretty = prettyJSON(body);
+    const text = compact && pretty !== null ? JSON.stringify(JSON.parse(body)) : (pretty ?? body);
+    let lines = 1;
+    for (let i = text.indexOf('\n'); i !== -1; i = text.indexOf('\n', i + 1)) lines++;
+    last = { body, compact, json: pretty !== null, text, lines };
+    return last;
+  };
+}
+
+/**
+ * Cheap identity for a capped log buffer. Once the buffer is full its length
+ * stays constant while old lines rotate out, so length alone cannot tell the
+ * view whether anything new arrived.
+ */
+export function logSignature(logs) {
+  const list = logs ?? [];
+  const last = list[list.length - 1];
+  return `${list.length}|${list[0]?.at ?? ''}|${last?.at ?? ''}|${last?.text ?? ''}`;
+}
+
 export function isJSON(text) {
   return prettyJSON(text) !== null;
 }

@@ -1,6 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { app, clipboard, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron';
+
+import {
+  createSecureHandle, isTrustedSender, requestAllowShell, sanitizeSettingsPatch, validateApiRequest,
+} from './policy.js';
 
 /** Reject relative paths that escape the workspace root. */
 function safeJoin(root, rel) {
@@ -15,7 +19,15 @@ function safeJoin(root, rel) {
  * Wires the renderer-facing IPC surface. The renderer never touches the network
  * or the API token: every call is proxied here.
  */
-export function registerIpc({ backend, settings, getWindow, broadcast }) {
+export function registerIpc({
+  backend, settings, getWindow, broadcast, shellTrust, dirtyGuard, startOptionsFor, startedAt = new Date().toISOString(),
+}) {
+  // Every handler is wrapped: only the app's own top-level page may call in.
+  const handle = createSecureHandle(
+    ipcMain,
+    (event) => isTrustedSender(event, { isKnownSender: (wc) => Boolean(wc && BrowserWindow.fromWebContents(wc)) }),
+  );
+
   /** Absolute paths the user picked in a save dialog; the only writable targets. */
   const approvedWritePaths = new Set();
 
@@ -24,10 +36,10 @@ export function registerIpc({ backend, settings, getWindow, broadcast }) {
     return backend.workDir;
   };
 
-  ipcMain.handle('hitspec:status:get', () => backend.snapshot());
-  ipcMain.handle('hitspec:backend:logs', (_e, limit = 200) => backend.getLogs(limit));
+  handle('hitspec:status:get', () => backend.snapshot());
+  handle('hitspec:backend:logs', (_e, limit = 200) => backend.getLogs(limit));
 
-  ipcMain.handle('hitspec:app:info', () => ({
+  handle('hitspec:app:info', () => ({
     version: app.getVersion(),
     electron: process.versions.electron,
     node: process.versions.node,
@@ -35,27 +47,65 @@ export function registerIpc({ backend, settings, getWindow, broadcast }) {
     platform: process.platform,
     arch: process.arch,
     dev: !app.isPackaged,
+    startedAt,
     backend: backend.snapshot(),
   }));
 
-  ipcMain.handle('hitspec:api', async (_e, req) => {
-    if (!req || typeof req.path !== 'string') {
-      return { ok: false, status: 0, data: null, text: '', error: 'invalid api request' };
-    }
-    return backend.request(req);
+  handle('hitspec:api', async (_e, req) => {
+    // Not a generic passthrough: method + path must match what the UI uses.
+    const checked = validateApiRequest(req);
+    if (!checked.ok) return { ok: false, status: 0, data: null, text: '', error: checked.error };
+    return backend.request(checked.request);
   });
 
-  ipcMain.handle('hitspec:settings:get', () => settings.all());
+  /** Settings as the renderer sees them: shell approval is session state, not a stored flag. */
+  const publicSettings = () => {
+    const all = settings.all();
+    return { ...all, backend: { ...all.backend, allowShell: shellTrust.has(backend.workDir) } };
+  };
 
-  ipcMain.handle('hitspec:settings:set', (_e, patch) => {
-    if (!patch || typeof patch !== 'object') return settings.all();
-    // Only allow known top-level keys so a renderer bug cannot inject junk.
-    const allowed = ['theme', 'view', 'window', 'backend', 'lastWorkspace'];
-    const clean = Object.fromEntries(Object.entries(patch).filter(([k]) => allowed.includes(k)));
-    return settings.set(clean);
+  handle('hitspec:settings:get', () => publicSettings());
+
+  handle('hitspec:settings:set', (_e, patch) => {
+    // Whitelist keys *and* value shapes; childEnv/allowShell are not writable here.
+    settings.set(sanitizeSettingsPatch(patch));
+    return publicSettings();
   });
 
-  async function openWorkspaceDir(dirPath) {
+  handle('hitspec:backend:allowShell', (_e, enabled) =>
+    requestAllowShell({
+      enabled: enabled === true,
+      dir: backend.workDir,
+      trust: shellTrust,
+      confirm: async (dir) => {
+        const win = getWindow();
+        const options = {
+          type: 'warning',
+          buttons: ['Cancel', 'Allow shell execution'],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true,
+          title: 'Allow shell execution?',
+          message: `Let "${path.basename(dir)}" run shell commands?`,
+          detail:
+            `${dir}\n\n` +
+            'With this on, .http files in this workspace can run arbitrary commands as your user. ' +
+            'Only enable it for workspaces you wrote or fully trust.\n\n' +
+            'The approval lasts until you quit hitspec Studio and takes effect when the API server restarts.',
+        };
+        const result = win ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
+        return result.response === 1;
+      },
+    }));
+
+  handle('hitspec:dirty:set', (event, value) => {
+    dirtyGuard.set(event.sender.id, value === true);
+    return true;
+  });
+
+  async function openWorkspaceDir(dirPath, { guard = true } = {}) {
+    // Switching workspaces discards the editor buffer: ask first (null = cancelled).
+    if (guard && !dirtyGuard.confirm(undefined, 'open another workspace')) return null;
     const resolved = path.resolve(dirPath);
     let st;
     try {
@@ -65,13 +115,13 @@ export function registerIpc({ backend, settings, getWindow, broadcast }) {
     }
     if (!st.isDirectory()) throw new Error(`${resolved} is not a directory`);
 
-    await backend.start(resolved, settings.get('backend') ?? {});
+    await backend.start(resolved, startOptionsFor(resolved));
     settings.addRecent(resolved);
     broadcast('hitspec:workspace', { path: resolved, name: path.basename(resolved) });
     return backend.snapshot();
   }
 
-  ipcMain.handle('hitspec:workspace:open', async () => {
+  handle('hitspec:workspace:open', async () => {
     const win = getWindow();
     const result = await dialog.showOpenDialog(win, {
       title: 'Open a hitspec workspace',
@@ -83,31 +133,31 @@ export function registerIpc({ backend, settings, getWindow, broadcast }) {
     return openWorkspaceDir(result.filePaths[0]);
   });
 
-  ipcMain.handle('hitspec:workspace:openPath', async (_e, dirPath) => {
+  handle('hitspec:workspace:openPath', async (_e, dirPath) => {
     if (typeof dirPath !== 'string' || !dirPath) throw new Error('path is required');
     return openWorkspaceDir(dirPath);
   });
 
-  ipcMain.handle('hitspec:workspace:close', async () => {
+  handle('hitspec:workspace:close', async () => {
     await backend.stop();
     settings.set('lastWorkspace', null);
     return backend.snapshot();
   });
 
-  ipcMain.handle('hitspec:workspace:recents', () => settings.get('recents') ?? []);
+  handle('hitspec:workspace:recents', () => settings.get('recents') ?? []);
 
-  ipcMain.handle('hitspec:workspace:removeRecent', (_e, dirPath) => {
+  handle('hitspec:workspace:removeRecent', (_e, dirPath) => {
     if (typeof dirPath !== 'string' || !dirPath) return settings.get('recents') ?? [];
     return settings.removeRecent(dirPath);
   });
 
-  ipcMain.handle('hitspec:backend:restart', async () => {
+  handle('hitspec:backend:restart', async () => {
     const workDir = backend.workDir ?? settings.get('lastWorkspace');
     if (!workDir) throw new Error('no workspace to restart');
-    return openWorkspaceDir(workDir);
+    return openWorkspaceDir(workDir, { guard: false });
   });
 
-  ipcMain.handle('hitspec:workspace:reveal', (_e, relPath) => {
+  handle('hitspec:workspace:reveal', (_e, relPath) => {
     const root = requireReady();
     const abs = safeJoin(root, relPath);
     if (!abs) throw new Error('path outside workspace');
@@ -115,19 +165,19 @@ export function registerIpc({ backend, settings, getWindow, broadcast }) {
     return abs;
   });
 
-  ipcMain.handle('hitspec:workspace:openInEditor', (_e, relPath) => {
+  handle('hitspec:workspace:openInEditor', (_e, relPath) => {
     const root = requireReady();
     const abs = safeJoin(root, relPath);
     if (!abs) throw new Error('path outside workspace');
     return shell.openPath(abs);
   });
 
-  ipcMain.handle('hitspec:workspace:openRoot', () => {
+  handle('hitspec:workspace:openRoot', () => {
     const root = requireReady();
     return shell.openPath(root);
   });
 
-  ipcMain.handle('hitspec:dialog:saveFile', async (_e, opts = {}) => {
+  handle('hitspec:dialog:saveFile', async (_e, opts = {}) => {
     const win = getWindow();
     const result = await dialog.showSaveDialog(win, {
       title: opts.title ?? 'Save file',
@@ -139,7 +189,7 @@ export function registerIpc({ backend, settings, getWindow, broadcast }) {
     return result.filePath;
   });
 
-  ipcMain.handle('hitspec:fs:writeFile', async (_e, args = {}) => {
+  handle('hitspec:fs:writeFile', async (_e, args = {}) => {
     const target = typeof args.path === 'string' ? path.resolve(args.path) : null;
     if (!target) throw new Error('path is required');
     if (!approvedWritePaths.has(target)) {
@@ -151,12 +201,12 @@ export function registerIpc({ backend, settings, getWindow, broadcast }) {
     return { path: target, bytes: Buffer.byteLength(args.content, 'utf8') };
   });
 
-  ipcMain.handle('hitspec:clipboard:write', (_e, text) => {
+  handle('hitspec:clipboard:write', (_e, text) => {
     clipboard.writeText(typeof text === 'string' ? text : String(text ?? ''));
     return true;
   });
 
-  ipcMain.handle('hitspec:app:quit', () => {
+  handle('hitspec:app:quit', () => {
     app.quit();
     return true;
   });

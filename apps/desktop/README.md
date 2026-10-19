@@ -93,14 +93,39 @@ never touched.
 ## Packaging
 
 ```bash
-npm run dist      # electron-builder (runs build:binary first via predist)
-npm run dist:dir  # unpacked app, fastest way to sanity check a bundle
+npm run dist       # installers for this OS (runs build:binary --dist first via predist)
+npm run dist:dir   # unpacked app(s), fastest way to sanity check a bundle
+npm run test:bundled   # each unpacked bundle carries a CLI for its own OS and CPU
+npm run test:fuses     # the release fuses are flipped (see below)
+npm run build:binary:all   # cross-compile the CLI for every target
 ```
 
-`electron-builder.yml` copies the Go binary into `extraResources`, so packaged
-apps ship the CLI next to the Electron binary. macOS builds are unsigned by
-default (`identity: null`); clear the quarantine flag after installing locally:
+`scripts/build-binary.mjs` cross-compiles the (pure Go, `CGO_ENABLED=0`) CLI
+into `build/bin/<os>-<arch>/` (`mac-arm64`, `mac-x64`, `win-x64`, `linux-x64`).
+`electron-builder.yml` copies `build/bin/${os}-${arch}` into `extraResources`
+per target, so an x64 build can never carry the arm64 CLI and the Windows build
+gets `hitspec.exe`. In development the app looks in
+`build/bin/<os>-<arch>/` for the running CPU first.
+
+Electron fuses are flipped by electron-builder before signing (`electronFuses`
+in `electron-builder.yml`): `RunAsNode`, `NODE_OPTIONS` and `--inspect` are off;
+ASAR integrity validation and `OnlyLoadAppFromAsar` are on.
+`resetAdHocDarwinSignature` is required: without it an unsigned arm64 macOS app
+is SIGKILLed at launch because flipping fuses invalidates Electron's ad-hoc
+signature. Playwright attaches through the inspector, so `npm run test:packaged`
+boots a *test-only* build (`npm run dist:dir:test` -> `release-test/`, inspect
+fuse back on); never ship that output.
+
+Signing is environment driven: without `CSC_LINK` (or a Developer ID certificate
+in the keychain) builds are unsigned; `CSC_IDENTITY_AUTO_DISCOVERY=false` forces
+that. Notarization is `-c.mac.notarize=true` with `APPLE_ID`,
+`APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID`. Unsigned macOS builds need
 `xattr -dr com.apple.quarantine "/Applications/hitspec Studio.app"`.
+
+CI is `.github/workflows/desktop.yml`: the four test suites on Linux and macOS,
+a per-OS packaging job (`electron-builder --dir`, bundled-CLI and fuse checks),
+and an `installers` job (manual run or `desktop-v*` tag) that signs, notarizes
+and publishes only when the credentials exist in the repository secrets.
 
 ## Keyboard shortcuts
 
@@ -132,3 +157,55 @@ default (`identity: null`); clear the quarantine flag after installing locally:
 - `fs.writeFile` from the renderer only accepts paths the user picked in a
   native save dialog during the session; workspace paths are confined to the
   workspace root.
+- Every IPC handler checks `event.senderFrame`: only the top-level
+  `hitspec://app/` page of one of our windows is served (`src/main/policy.js`).
+- `api(req)` is not a passthrough. Method + path must match an allowlist that
+  mirrors `src/renderer/src/api.js` (a unit test fails when they drift); paths
+  with `..`, encoded separators, query strings or foreign hosts are rejected,
+  and only the known request fields are forwarded.
+- The renderer cannot write `backend.childEnv` or `backend.allowShell`
+  (`sanitizeSettingsPatch`), and the settings file is scrubbed of both on load.
+  The child's environment never contains `DYLD_*`, `LD_*`, `NODE_OPTIONS`,
+  `ELECTRON_*` or `PATH` overrides. `--allow-shell` needs a native confirmation
+  dialog per workspace; the approval is in memory only and lasts until quit.
+- CSP is set both as a `<meta>` tag and as a header on every `hitspec://`
+  response (no `unsafe-inline`, `frame-ancestors 'none'`); permission requests
+  (camera, geolocation, ...) are denied; `<webview>` is disabled.
+- Release builds flip the Electron fuses (see Packaging).
+
+## Lifecycle
+
+- **Spawn failures** (`EACCES`, wrong CPU architecture, macOS Gatekeeper
+  killing an unsigned binary) reject `start()` immediately with a message that
+  names the binary and a fix, instead of waiting out the 30 s readiness timeout.
+- **Version gate:** the app reads `version` from `GET /api/v1/system/info` and
+  warns (in a toast and in Settings) when the CLI is older than v2.20.0. Source
+  builds (`dev`, bare commit hashes) are assumed current.
+- **Unsaved edits** are guarded when switching files, closing the window,
+  quitting, reloading and opening another workspace (native dialog in the main
+  process, fed by the renderer's dirty flag). Auto-reload from the file watcher
+  never overwrites a dirty buffer, and saving re-reads the file first: if its
+  content differs from what the editor last saw, the user is asked before
+  overwriting.
+- **Large responses:** bodies above 512 KB are shown as plain text with a
+  "Highlight" button, the pretty-printed body is memoised, and stress/mock
+  events no longer re-render views that are not on screen.
+
+### Known limitation: orphaned API server after SIGKILL
+
+If Electron dies without running any code (SIGKILL, kernel OOM kill, power
+loss), the `hitspec serve --api-only` child keeps running, because the Go
+server does not watch its parent. Handled without Go changes:
+
+- graceful quit, `SIGINT`/`SIGTERM`/`SIGHUP`, and `process.on('exit')` stop the
+  child;
+- the child's pid is written to `<userData>/serve.pid.json`, and the next launch
+  stops a leftover server after verifying with `ps` that the pid still belongs
+  to a `hitspec serve --api-only` (never a reused pid).
+
+Not solved until the server cooperates: between the crash and the next launch the
+orphan keeps its port and file watcher (it is bound to 127.0.0.1 and protected
+by a token nobody else knows). Proposed Go-side change for a follow-up PR: a
+`hitspec serve --parent-pid N` flag (poll the pid every second, shut down when it
+is gone) or `--exit-on-stdin-eof` (the desktop would then keep a stdin pipe open
+instead of `stdio[0] = 'ignore'`, and the OS closes it when the parent dies).

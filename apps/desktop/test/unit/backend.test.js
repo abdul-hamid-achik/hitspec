@@ -4,7 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
-import { Backend } from '../../src/main/backend.js';
+import { Backend, describeSpawnError } from '../../src/main/backend.js';
+import { readPidFile } from '../../src/main/stale.js';
 
 // The stand-in server is an extensionless shebang script.
 const opts = { skip: process.platform === 'win32' && 'needs a POSIX shebang executable' };
@@ -26,7 +27,7 @@ const port = Number(argv[argv.indexOf('--port') + 1]);
 const token = process.env.HITSPEC_API_TOKEN;
 const logFile = process.env.FAKE_LOG;
 const log = (rec) => fs.appendFileSync(logFile, JSON.stringify(rec) + '\n');
-log({ kind: 'start', argv, envToken: token ?? null });
+log({ kind: 'start', argv, envToken: token ?? null, dyld: process.env.DYLD_INSERT_LIBRARIES ?? null, nodeOptions: process.env.NODE_OPTIONS ?? null, custom: process.env.HARMLESS_KEY ?? null });
 
 const hostOk = (h) => h === '127.0.0.1:' + port || h === 'localhost:' + port || h === '[::1]:' + port;
 const authOk = (req, url) => {
@@ -50,7 +51,7 @@ const server = http.createServer((req, res) => {
     if (body.length > 0 && !raw && !/^application\/json(;|$)/i.test(req.headers['content-type'] || '')) {
       return send(415, { error: 'content-type' });
     }
-    send(200, { version: 'fake', echo: raw ? body : body ? JSON.parse(body) : null });
+    send(200, { version: process.env.FAKE_VERSION || 'fake', echo: raw ? body : body ? JSON.parse(body) : null });
   });
 });
 
@@ -81,8 +82,8 @@ function fakeBackend() {
   });
   const records = () =>
     fs.readFileSync(logFile, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
-  const start = () => backend.start(dir, { childEnv: { FAKE_LOG: logFile } });
-  return { backend, records, start };
+  const start = (extraEnv = {}) => backend.start(dir, { childEnv: { FAKE_LOG: logFile, ...extraEnv } });
+  return { backend, records, start, dir, bin };
 }
 
 async function waitFor(fn, ms = 3000) {
@@ -171,5 +172,96 @@ test('each start generates a fresh token', opts, async () => {
     assert.notEqual(backend.token, first);
   } finally {
     await backend.stop();
+  }
+});
+
+test('childEnv cannot inject loader or interpreter variables into the child', opts, async () => {
+  const { backend, records, start } = fakeBackend();
+  try {
+    await start({
+      DYLD_INSERT_LIBRARIES: '/tmp/evil.dylib',
+      NODE_OPTIONS: '--require /tmp/evil.js',
+      HARMLESS_KEY: 'kept',
+    });
+    const started = records().find((r) => r.kind === 'start');
+    assert.equal(started.dyld, null, 'DYLD_INSERT_LIBRARIES must be dropped');
+    assert.equal(started.nodeOptions, null, 'NODE_OPTIONS must be dropped');
+    assert.equal(started.custom, 'kept', 'ordinary keys still pass');
+  } finally {
+    await backend.stop();
+  }
+});
+
+test('start() rejects promptly with a clear message when the binary is not executable (EACCES)', opts, async () => {
+  const { backend, bin } = fakeBackend();
+  fs.chmodSync(bin, 0o644);
+  const states = [];
+  backend.on('status', (s) => states.push(s.state));
+  const t0 = Date.now();
+  await assert.rejects(() => backend.start(path.dirname(bin)), (err) => {
+    assert.match(err.message, /Could not start the hitspec CLI at /);
+    assert.match(err.message, /EACCES/);
+    assert.match(err.message, /chmod \+x/);
+    return true;
+  });
+  assert.ok(Date.now() - t0 < 5000, 'must not wait for the 30s readiness timeout');
+  assert.equal(backend.state, 'error');
+  assert.match(backend.error, /EACCES/);
+  assert.ok(states.includes('error'));
+  assert.equal(backend.child, null);
+});
+
+test('start() rejects promptly when the binary does not exist (ENOENT)', opts, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hitspec-backend-'));
+  const backend = new Backend({ resolveBinary: async () => ({ path: path.join(dir, 'missing'), source: 'test' }) });
+  await assert.rejects(() => backend.start(dir), /Could not start the hitspec CLI at .*ENOENT/s);
+  assert.equal(backend.state, 'error');
+});
+
+test('start() reports a child that exits before it is ready, with its output', opts, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hitspec-backend-'));
+  const bin = path.join(dir, 'hitspec');
+  fs.writeFileSync(bin, '#!/bin/sh\necho boom-from-child >&2\nexit 3\n', { mode: 0o755 });
+  const backend = new Backend({ resolveBinary: async () => ({ path: bin, source: 'test' }) });
+  await assert.rejects(() => backend.start(dir), /exited before becoming ready \(code 3.*boom-from-child/s);
+  assert.equal(backend.state, 'error');
+});
+
+test('describeSpawnError gives actionable hints per failure', () => {
+  const bin = '/Applications/hitspec Studio.app/Contents/Resources/hitspec';
+  assert.match(describeSpawnError({ code: 'EACCES', message: 'spawn EACCES' }, bin, 'linux'), /chmod \+x/);
+  assert.match(describeSpawnError({ code: 'EPERM', message: 'spawn EPERM' }, bin, 'darwin'), /xattr -dr com\.apple\.quarantine/);
+  assert.match(describeSpawnError({ code: 'EBADARCH', message: 'bad cpu' }, bin, 'darwin'), /different CPU architecture/);
+  assert.match(describeSpawnError({ code: 'ENOENT', message: 'spawn ENOENT' }, bin, 'linux'), /does not exist/);
+});
+
+test('the child pid is recorded while it runs and removed after stop', opts, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hitspec-backend-'));
+  const pidFile = path.join(dir, 'serve.pid.json');
+  const { backend: _unused, bin, dir: wd } = fakeBackend();
+  const backend = new Backend({ resolveBinary: async () => ({ path: bin, source: 'test' }), pidFile });
+  try {
+    await backend.start(wd, { childEnv: { FAKE_LOG: path.join(wd, 'log.jsonl') } });
+    const rec = readPidFile(pidFile);
+    assert.equal(rec.pid, backend.child.pid);
+    assert.equal(rec.port, backend.port);
+  } finally {
+    await backend.stop();
+  }
+  assert.equal(readPidFile(pidFile), null);
+});
+
+test('an old CLI version is flagged in the status snapshot, a current or dev one is not', opts, async () => {
+  for (const [version, expectWarning] of [['2.19.1', true], ['2.20.0', false], ['v2.21.3', false], ['dev', false]]) {
+    const { backend, start } = fakeBackend();
+    try {
+      await start({ FAKE_VERSION: version });
+      // the fake answers every GET with {version}, but system/info reads data.version
+      assert.equal(backend.version, version);
+      assert.equal(Boolean(backend.snapshot().warning), expectWarning, version);
+      assert.ok(backend.snapshot().startedAt, 'startedAt is recorded when the server becomes ready');
+    } finally {
+      await backend.stop();
+    }
   }
 });

@@ -21,17 +21,23 @@
     "start": "electron .",
     "dev": "HITSPEC_DESKTOP_DEV=1 electron .",
     "build:binary": "node scripts/build-binary.mjs",
+    "build:binary:all": "node scripts/build-binary.mjs --all",
     "build:icon": "node scripts/build-icon.mjs",
     "test": "node --test \"test/unit/*.test.js\"",
     "test:syntax": "node --experimental-vm-modules --no-warnings scripts/check-syntax.mjs",
     "test:smoke": "node scripts/smoke.mjs",
     "test:e2e": "playwright test",
     "test:packaged": "node scripts/verify-packaged.mjs",
+    "test:fuses": "node scripts/verify-fuses.mjs",
+    "test:bundled": "node scripts/verify-bundled.mjs",
     "screenshots": "node scripts/screenshots.mjs",
     "check": "npm run test && npm run test:smoke && npm run test:e2e",
-    "predist": "node scripts/build-binary.mjs",
+    "predist": "node scripts/build-binary.mjs --dist",
     "dist": "electron-builder",
-    "dist:dir": "electron-builder --dir"
+    "predist:dir": "node scripts/build-binary.mjs --dist",
+    "dist:dir": "electron-builder --dir",
+    "predist:dir:test": "node scripts/build-binary.mjs --dist",
+    "dist:dir:test": "electron-builder --dir -c.directories.output=release-test -c.electronFuses.enableNodeCliInspectArguments=true -c.mac.identity=null"
   },
   "dependencies": {
     "ws": "^8.22.0"

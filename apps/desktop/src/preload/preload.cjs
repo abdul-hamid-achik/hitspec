@@ -30,6 +30,12 @@ contextBridge.exposeInMainWorld('hitspec', {
   setSettings: (patch) => invoke('hitspec:settings:set', patch),
   getLogs: (limit) => invoke('hitspec:backend:logs', limit),
 
+  // --- guarded capabilities (the main process decides, usually via a native dialog) ---
+  /** Ask to (dis)allow shell execution for the open workspace; resolves {allowed}. */
+  setAllowShell: (enabled) => invoke('hitspec:backend:allowShell', enabled === true),
+  /** Report unsaved editor changes so the main process can guard close/quit/switch. */
+  setDirty: (dirty) => invoke('hitspec:dirty:set', dirty === true),
+
   // --- REST proxy to `hitspec serve --api-only` ---
   api: (req) => invoke('hitspec:api', req),
 

@@ -4,6 +4,10 @@ import crypto from 'node:crypto';
 import net from 'node:net';
 import WebSocket from 'ws';
 
+import { sanitizeChildEnv } from './policy.js';
+import { removePidFile, writePidFile } from './stale.js';
+import { versionWarning } from './version.js';
+
 const MAX_LOG_LINES = 1000;
 const READY_TIMEOUT_MS = 30_000;
 const READY_POLL_MS = 100;
@@ -24,6 +28,54 @@ function pickFreePort() {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * Turn a `spawn` failure into something a user can act on. These are the
+ * failures a packaged app hits in the wild: a bundle that lost its exec bit,
+ * a binary built for the other CPU architecture, or macOS Gatekeeper
+ * refusing an unsigned/quarantined executable.
+ */
+export function describeSpawnError(err, binary, platform = process.platform) {
+  const code = err?.code ?? '';
+  const detail = err?.message ? String(err.message) : String(err);
+  let hint;
+  switch (code) {
+    case 'ENOENT':
+      hint = 'The file does not exist (or its interpreter is missing). Rebuild the app or point HITSPEC_BIN at a working hitspec binary.';
+      break;
+    case 'EACCES':
+      hint = platform === 'win32'
+        ? 'Access was denied; security software may be blocking the executable.'
+        : `The file is not executable. Try: chmod +x "${binary}"`;
+      break;
+    case 'EPERM':
+      hint = platform === 'darwin'
+        ? `macOS blocked the program (Gatekeeper/quarantine). Try: xattr -dr com.apple.quarantine "${binary}"`
+        : 'The operating system refused to run the program.';
+      break;
+    case 'ENOEXEC':
+    case 'EBADARCH':
+    case 'EFTYPE':
+      hint = 'The binary is not runnable on this machine, usually because it was built for a different CPU architecture or OS.';
+      break;
+    default:
+      hint = 'Check that the file is a hitspec binary for this platform.';
+  }
+  return `Could not start the hitspec CLI at ${binary}: ${detail}\n${hint}`;
+}
+
+/** Extra context for a child that died before it served a request. */
+function describeEarlyExit({ code, signal }, binary, platform = process.platform) {
+  let hint = '';
+  if (signal === 'SIGKILL' && platform === 'darwin') {
+    hint = `\nmacOS killed the process at launch, which usually means a code-signing/Gatekeeper rejection. Try: xattr -dr com.apple.quarantine "${binary}"`;
+  } else if (code === 126 || code === 127) {
+    hint = '\nThe binary could not be executed (permissions or architecture).';
+  } else if (code === 0xC0000135 || code === 3221225781) {
+    hint = '\nA required DLL is missing.';
+  }
+  return hint;
+}
+
+/**
  * Owns the `hitspec serve --api-only` child process: lifecycle, auth token,
  * REST proxying and the realtime WebSocket bridge.
  *
@@ -42,11 +94,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * Events: `status` ({state, ...}), `event` (WS payload), `log` (line object).
  */
 export class Backend extends EventEmitter {
-  constructor({ resolveBinary, env = process.env, log = console } = {}) {
+  constructor({ resolveBinary, env = process.env, log = console, pidFile = null } = {}) {
     super();
     this.resolveBinary = resolveBinary;
     this.env = env;
     this.log = log;
+    this.pidFile = pidFile;
 
     this.state = 'idle'; // idle | starting | ready | error | stopped
     this.error = null;
@@ -54,6 +107,8 @@ export class Backend extends EventEmitter {
     this.port = null;
     this.token = null;
     this.version = '';
+    this.warning = null;
+    this.startedAt = null;
     this.binary = null;
     this.binarySource = null;
 
@@ -72,6 +127,8 @@ export class Backend extends EventEmitter {
       workDir: this.workDir,
       port: this.state === 'ready' ? this.port : null,
       version: this.version,
+      warning: this.warning,
+      startedAt: this.startedAt,
       binary: this.binary,
       binarySource: this.binarySource,
       pid: this.child?.pid ?? null,
@@ -114,7 +171,10 @@ export class Backend extends EventEmitter {
    * @param {string} workDir
    * @param {{watch?:boolean, readOnly?:boolean, allowShell?:boolean, env?:string, logLevel?:string, childEnv?:Record<string,string>}} [options]
    *   `options.env` selects the hitspec environment (--env); `options.childEnv`
-   *   is merged into the child process environment (the API token always wins).
+   *   is merged into the child process environment (the API token always wins;
+   *   loader/interpreter variables such as DYLD_* or NODE_OPTIONS are dropped).
+   *   `childEnv` is for the main process and tests only: it must never be fed
+   *   from renderer-controlled data.
    */
   async start(workDir, options = {}) {
     if (!workDir) throw new Error('workDir is required');
@@ -125,6 +185,8 @@ export class Backend extends EventEmitter {
     this.error = null;
     this.workDir = workDir;
     this.version = '';
+    this.warning = null;
+    this.startedAt = null;
     this.setStatus({ state: 'starting' });
 
     let resolved;
@@ -161,27 +223,39 @@ export class Backend extends EventEmitter {
 
       const child = spawn(this.binary, args, {
         cwd: workDir,
-        env: { ...process.env, ...(options.childEnv ?? {}), HITSPEC_API_TOKEN: this.token },
+        env: { ...process.env, ...sanitizeChildEnv(options.childEnv), HITSPEC_API_TOKEN: this.token },
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
       });
       this.child = child;
 
-      child.stdout.setEncoding('utf8');
-      child.stderr.setEncoding('utf8');
-      child.stdout.on('data', (d) => this.pushLine('stdout', d));
-      child.stderr.on('data', (d) => this.pushLine('stderr', d));
-
+      // A failed spawn (EACCES, wrong arch, Gatekeeper...) is reported through
+      // 'error' and may never emit 'exit'. Without this listener start() would
+      // hang until the readiness timeout, and an unhandled 'error' event would
+      // throw inside the main process.
       const exited = new Promise((resolve) => {
+        child.once('error', (error) => resolve({ code: null, signal: null, error }));
         child.once('exit', (code, signal) => resolve({ code, signal }));
       });
+      child.on('error', (error) => this.pushLine('stderr', `child process error: ${error?.message ?? error}`));
 
+      child.stdout?.setEncoding('utf8');
+      child.stderr?.setEncoding('utf8');
+      child.stdout?.on('data', (d) => this.pushLine('stdout', d));
+      child.stderr?.on('data', (d) => this.pushLine('stderr', d));
+
+      if (this.pidFile && child.pid) {
+        writePidFile(this.pidFile, { pid: child.pid, port, binary: this.binary, parentPid: process.pid, startedAt: new Date().toISOString() });
+      }
+
+      let info;
       try {
-        await this.waitReady(exited);
+        info = await this.waitReady(exited);
       } catch (err) {
         this.killChild(child);
         await exited;
         this.child = null;
+        if (this.pidFile && child.pid) removePidFile(this.pidFile, child.pid);
         const msg = String(err?.message ?? err);
         if (retriesLeft > 0 && /address already in use|bind/i.test(msg)) {
           return attempt(retriesLeft - 1);
@@ -189,12 +263,13 @@ export class Backend extends EventEmitter {
         throw err;
       }
 
-      return child;
+      return { child, info };
     };
 
     let child;
+    let info;
     try {
-      child = await attempt(3);
+      ({ child, info } = await attempt(3));
     } catch (err) {
       const message = err?.message ? String(err.message) : String(err);
       this.child = null;
@@ -203,6 +278,7 @@ export class Backend extends EventEmitter {
     }
 
     child.once('exit', (code, signal) => {
+      if (this.pidFile && child.pid) removePidFile(this.pidFile, child.pid);
       if (this.child !== child) return;
       this.child = null;
       this.closeSocket();
@@ -216,10 +292,11 @@ export class Backend extends EventEmitter {
       }
     });
 
-    const info = await this.request({ method: 'GET', path: '/system/info' }).catch(() => null);
-    this.version = info?.data?.version ?? '';
+    // The readiness probe already fetched /system/info (request() refuses to run
+    // until the state is 'ready', so asking again here would always come back empty).
+    this.version = typeof info?.version === 'string' ? info.version : '';
     this.connectSocket();
-    this.setStatus({ state: 'ready', error: null });
+    this.setStatus({ state: 'ready', error: null, warning: versionWarning(this.version), startedAt: new Date().toISOString() });
     return this.snapshot();
   }
 
@@ -229,10 +306,12 @@ export class Backend extends EventEmitter {
 
     while (Date.now() < deadline) {
       const done = await Promise.race([exited.then((r) => r), sleep(READY_POLL_MS).then(() => null)]);
+      if (done?.error) throw new Error(describeSpawnError(done.error, this.binary));
       if (done) {
         throw new Error(
           `hitspec API server exited before becoming ready (code ${done.code ?? 'null'}, signal ${done.signal ?? 'none'}). ` +
-          `Last output:\n${this.getLogs(15).map((l) => l.text).join('\n') || '(no output)'}`,
+          `Last output:\n${this.getLogs(15).map((l) => l.text).join('\n') || '(no output)'}` +
+          describeEarlyExit(done, this.binary),
         );
       }
       try {
@@ -240,7 +319,7 @@ export class Backend extends EventEmitter {
           headers: { Authorization: `Bearer ${this.token}` },
           signal: AbortSignal.timeout(2000),
         });
-        if (res.ok) return;
+        if (res.ok) return res.json().catch(() => null);
         lastError = `readiness probe returned HTTP ${res.status}`;
       } catch (err) {
         lastError = err?.message ? String(err.message) : String(err);
@@ -383,6 +462,21 @@ export class Backend extends EventEmitter {
     } catch {
       // already gone
     }
+  }
+
+  /**
+   * Last-resort synchronous kill for `process.on('exit')`: no awaiting, no
+   * state events. Covers app.exit() and fatal JS errors, but not SIGKILL.
+   */
+  killSync() {
+    const child = this.child;
+    if (!child) return;
+    try {
+      child.kill('SIGKILL');
+    } catch {
+      // already gone
+    }
+    if (this.pidFile && child.pid) removePidFile(this.pidFile, child.pid);
   }
 
   async stop() {
