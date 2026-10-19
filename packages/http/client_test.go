@@ -458,8 +458,9 @@ func TestResponse_IsJSON(t *testing.T) {
 // TestClient_MultiValueSetCookieHeaders guards the regression where a
 // response with multiple Set-Cookie headers was collapsed to only the first
 // value, because doRequest used httpResp.Header.Get(k) which returns a single
-// value. The fix joins all values via httpResp.Header.Values(k) with "; " for
-// Set-Cookie, so both cookies must survive in Response.Headers["Set-Cookie"].
+// value. All values are joined (", ", like every other multi-value header, which
+// is also what clientmgr's Set-Cookie splitter expects) so both cookies survive
+// in Response.Headers["Set-Cookie"]; Response.HeaderValues keeps them separate.
 func TestClient_MultiValueSetCookieHeaders(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Two Set-Cookie headers must both be preserved.
@@ -481,7 +482,8 @@ func TestClient_MultiValueSetCookieHeaders(t *testing.T) {
 	cookies := resp.Headers["Set-Cookie"]
 	assert.Contains(t, cookies, "session=abc123", "first Set-Cookie must be preserved")
 	assert.Contains(t, cookies, "csrf=xyz789", "second Set-Cookie must be preserved")
-	assert.Contains(t, cookies, "; ", "Set-Cookie values must be joined with \"; \"")
+	assert.Equal(t, "session=abc123, csrf=xyz789", cookies, "Set-Cookie values must be joined with \", \"")
+	assert.Equal(t, []string{"session=abc123", "csrf=xyz789"}, resp.Values("set-cookie"))
 
 	multi := resp.Headers["X-Multi"]
 	assert.Equal(t, "one, two", multi, "non-cookie multi-value headers join with \", \"")

@@ -44,6 +44,10 @@ type AWSAuthCredentials struct {
 	SecretKey string
 	Region    string
 	Service   string
+	// SessionToken is the optional temporary-credentials token sent as
+	// X-Amz-Security-Token. When empty and AccessKey equals
+	// $AWS_ACCESS_KEY_ID, $AWS_SESSION_TOKEN is used.
+	SessionToken string
 }
 
 func NewRequest(method, requestURL string) *Request {

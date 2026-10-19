@@ -2,22 +2,31 @@ package http
 
 import (
 	"bytes"
+	"compress/flate"
+	"compress/gzip"
+	"compress/zlib"
 	"context"
 	"crypto/tls"
-	"encoding/json"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
+	"net"
 	"net/http"
+	"net/http/cookiejar"
 	neturl "net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"golang.org/x/net/http/httpproxy"
+	"golang.org/x/net/publicsuffix"
+
 	"github.com/abdul-hamid-achik/hitspec/v2/internal/pathutil"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/auth/oauth2"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/parser"
 )
 
@@ -32,7 +41,20 @@ const (
 	DefaultMaxIdleConnsPerHost = 10
 	// DefaultIdleConnTimeout is how long idle connections stay in the pool
 	DefaultIdleConnTimeout = 90 * time.Second
+	// DefaultMaxBodyBytes bounds a response body (raw and decoded) when no
+	// explicit limit is configured. Pass a negative value to WithMaxBodyBytes
+	// for no limit.
+	DefaultMaxBodyBytes int64 = 100 << 20
 )
+
+// sensitiveRedirectKeep lists request headers that are forwarded on a
+// cross-origin redirect even though the user set them: they describe the
+// payload or content negotiation, not credentials.
+var sensitiveRedirectKeep = map[string]bool{
+	"Accept": true, "Accept-Encoding": true, "Accept-Language": true,
+	"User-Agent": true, "Content-Type": true, "Content-Length": true,
+	"Cache-Control": true, "Pragma": true,
+}
 
 type Client struct {
 	httpClient     *http.Client
@@ -43,6 +65,16 @@ type Client struct {
 	proxyURL       string
 	defaultHeaders map[string]string
 	maxBodyBytes   int64
+
+	caCertPath      string
+	clientCertPath  string
+	clientKeyPath   string
+	disableHTTP2    bool
+	jar             http.CookieJar
+	enableCookies   bool
+	forwardRedirect bool // forward user headers on cross-origin redirects
+	oauthCache      *oauth2.TokenCache
+	configErr       error // deferred option error, returned by Do
 }
 
 // DigestAuthCredentials holds credentials for digest auth
@@ -53,6 +85,9 @@ type DigestAuthCredentials struct {
 
 type ClientOption func(*Client)
 
+// NewClient builds a Client. Option problems that cannot be reported here
+// (an unreadable CA file, a bad proxy URL, ...) are returned by every request;
+// use NewClientE to get them up front.
 func NewClient(opts ...ClientOption) *Client {
 	c := &Client{
 		timeout:        DefaultTimeout,
@@ -60,31 +95,49 @@ func NewClient(opts ...ClientOption) *Client {
 		maxRedirects:   DefaultMaxRedirects,
 		validateSSL:    true,
 		defaultHeaders: make(map[string]string),
+		oauthCache:     oauth2.NewTokenCache(),
 	}
 
 	for _, opt := range opts {
 		opt(c)
 	}
 
+	switch {
+	case c.maxBodyBytes == 0:
+		c.maxBodyBytes = DefaultMaxBodyBytes
+	case c.maxBodyBytes < 0:
+		c.maxBodyBytes = 0 // explicitly unlimited
+	}
+
 	transport := &http.Transport{
 		MaxIdleConns:        DefaultMaxIdleConns,
 		MaxIdleConnsPerHost: DefaultMaxIdleConnsPerHost,
 		IdleConnTimeout:     DefaultIdleConnTimeout,
+		DialContext:         (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		TLSHandshakeTimeout: 10 * time.Second,
+		// A custom TLSClientConfig disables HTTP/2 unless this is set.
+		ForceAttemptHTTP2: !c.disableHTTP2,
+	}
+	if c.disableHTTP2 {
+		transport.TLSNextProto = map[string]func(string, *tls.Conn) http.RoundTripper{}
 	}
 
-	// Configure TLS verification
-	if !c.validateSSL {
-		transport.TLSClientConfig = &tls.Config{
-			InsecureSkipVerify: true,
-		}
+	tlsCfg, err := c.tlsConfig()
+	if err != nil {
+		c.setConfigErr(err)
 	}
+	transport.TLSClientConfig = tlsCfg
 
-	// Configure proxy if specified
+	// Proxy: an explicit URL wins; otherwise HTTP_PROXY/HTTPS_PROXY/NO_PROXY.
 	if c.proxyURL != "" {
-		proxyURL, err := neturl.Parse(c.proxyURL)
-		if err == nil {
+		proxyURL, err := parseProxyURL(c.proxyURL)
+		if err != nil {
+			c.setConfigErr(err)
+		} else {
 			transport.Proxy = http.ProxyURL(proxyURL)
 		}
+	} else {
+		transport.Proxy = proxyFromEnvironment()
 	}
 
 	redirectPolicy := func(req *http.Request, via []*http.Request) error {
@@ -94,16 +147,128 @@ func NewClient(opts ...ClientOption) *Client {
 		if len(via) >= c.maxRedirects {
 			return http.ErrUseLastResponse
 		}
+		if !c.forwardRedirect && len(via) > 0 && !sameOrigin(via[0].URL, req.URL) {
+			// Go only drops Authorization/Cookie (and only across domains);
+			// API keys and other user headers would leak to the new origin.
+			for k := range via[0].Header {
+				if !sensitiveRedirectKeep[http.CanonicalHeaderKey(k)] {
+					req.Header.Del(k)
+				}
+			}
+		}
 		return nil
 	}
 
+	jar := c.jar
+	if jar == nil && c.enableCookies {
+		jar, err = cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+		if err != nil {
+			c.setConfigErr(err)
+		}
+	}
+	c.jar = jar
+
 	c.httpClient = &http.Client{
 		Transport:     transport,
+		Jar:           jar,
 		Timeout:       0, // no client-level cap; the per-request context deadline in Do() is the single source of truth
 		CheckRedirect: redirectPolicy,
 	}
 
 	return c
+}
+
+// NewClientE is NewClient that reports invalid options (unreadable or invalid
+// CA/client-certificate files, malformed proxy URL) as an error.
+func NewClientE(opts ...ClientOption) (*Client, error) {
+	c := NewClient(opts...)
+	if c.configErr != nil {
+		return nil, c.configErr
+	}
+	return c, nil
+}
+
+func (c *Client) setConfigErr(err error) {
+	if c.configErr == nil {
+		c.configErr = err
+	}
+}
+
+// tlsConfig builds the TLS settings from the CA / client-certificate /
+// validate-SSL options.
+func (c *Client) tlsConfig() (*tls.Config, error) {
+	cfg := &tls.Config{}
+	if !c.validateSSL {
+		cfg.InsecureSkipVerify = true
+	}
+	var err error
+	if c.caCertPath != "" {
+		pem, rerr := os.ReadFile(c.caCertPath)
+		if rerr != nil {
+			err = fmt.Errorf("reading CA certificate %q: %w", c.caCertPath, rerr)
+		} else {
+			pool, perr := x509.SystemCertPool()
+			if perr != nil || pool == nil {
+				pool = x509.NewCertPool()
+			}
+			if !pool.AppendCertsFromPEM(pem) {
+				err = fmt.Errorf("CA certificate %q contains no valid PEM certificates", c.caCertPath)
+			} else {
+				cfg.RootCAs = pool
+			}
+		}
+	}
+	if err == nil && (c.clientCertPath != "" || c.clientKeyPath != "") {
+		switch {
+		case c.clientCertPath == "" || c.clientKeyPath == "":
+			err = errors.New("client certificate and key must be configured together")
+		default:
+			cert, lerr := tls.LoadX509KeyPair(c.clientCertPath, c.clientKeyPath)
+			if lerr != nil {
+				err = fmt.Errorf("loading client certificate %q / key %q: %w", c.clientCertPath, c.clientKeyPath, lerr)
+			} else {
+				cfg.Certificates = []tls.Certificate{cert}
+			}
+		}
+	}
+	return cfg, err
+}
+
+// parseProxyURL parses an explicit proxy URL; a bare host:port means http://.
+func parseProxyURL(raw string) (*neturl.URL, error) {
+	if !strings.Contains(raw, "://") {
+		raw = "http://" + raw
+	}
+	u, err := neturl.Parse(raw)
+	if err != nil || u.Host == "" {
+		return nil, fmt.Errorf("invalid proxy URL %q", raw)
+	}
+	return u, nil
+}
+
+// proxyFromEnvironment resolves HTTP_PROXY/HTTPS_PROXY/NO_PROXY (and their
+// lower-case forms) as of client creation. Loopback destinations are never
+// proxied, matching net/http.
+func proxyFromEnvironment() func(*http.Request) (*neturl.URL, error) {
+	proxy := httpproxy.FromEnvironment().ProxyFunc()
+	return func(r *http.Request) (*neturl.URL, error) { return proxy(r.URL) }
+}
+
+// sameOrigin reports whether a and b share scheme, host name and port.
+func sameOrigin(a, b *neturl.URL) bool {
+	return strings.EqualFold(a.Scheme, b.Scheme) &&
+		strings.EqualFold(a.Hostname(), b.Hostname()) &&
+		effectivePort(a) == effectivePort(b)
+}
+
+func effectivePort(u *neturl.URL) string {
+	if p := u.Port(); p != "" {
+		return p
+	}
+	if strings.EqualFold(u.Scheme, "https") {
+		return "443"
+	}
+	return "80"
 }
 
 func WithTimeout(d time.Duration) ClientOption {
@@ -153,11 +318,50 @@ func WithProxy(proxyURL string) ClientOption {
 	}
 }
 
-// WithMaxBodyBytes bounds response bodies. Non-positive values preserve the
-// existing unbounded behavior.
+// WithMaxBodyBytes bounds response bodies (the bytes on the wire and, for
+// gzip/deflate responses, the decoded bytes). n > 0 sets the limit, n < 0
+// removes it, and 0 (the default) means DefaultMaxBodyBytes.
 func WithMaxBodyBytes(maxBytes int64) ClientOption {
 	return func(c *Client) { c.maxBodyBytes = maxBytes }
 }
+
+// WithCACert trusts the PEM CA bundle at path in addition to the system roots
+// (for private CAs). An unreadable or certificate-less file is an error
+// reported by NewClientE and by every request.
+func WithCACert(path string) ClientOption {
+	return func(c *Client) { c.caCertPath = path }
+}
+
+// WithClientCert presents the PEM certificate/key pair for mutual TLS.
+func WithClientCert(certPath, keyPath string) ClientOption {
+	return func(c *Client) { c.clientCertPath, c.clientKeyPath = certPath, keyPath }
+}
+
+// WithHTTP2 enables or disables HTTP/2 negotiation over TLS (default on).
+func WithHTTP2(enabled bool) ClientOption {
+	return func(c *Client) { c.disableHTTP2 = !enabled }
+}
+
+// WithCookieJar makes the client store Set-Cookie responses in jar and send
+// them on later requests (also across redirects). Default: no cookie handling.
+func WithCookieJar(jar http.CookieJar) ClientOption {
+	return func(c *Client) { c.jar = jar }
+}
+
+// WithCookies enables a private in-memory cookie jar (public-suffix aware)
+// when enabled is true. WithCookieJar takes precedence.
+func WithCookies(enabled bool) ClientOption {
+	return func(c *Client) { c.enableCookies = enabled }
+}
+
+// WithForwardRedirectHeaders keeps user-set headers (API keys, Authorization,
+// Cookie, ...) on redirects that change origin. The default is to drop them.
+func WithForwardRedirectHeaders(forward bool) ClientOption {
+	return func(c *Client) { c.forwardRedirect = forward }
+}
+
+// CookieJar returns the client's cookie jar, or nil when cookies are disabled.
+func (c *Client) CookieJar() http.CookieJar { return c.jar }
 
 func (c *Client) Do(req *Request) (*Response, error) {
 	return c.DoWithContext(context.Background(), req)
@@ -167,6 +371,9 @@ func (c *Client) Do(req *Request) (*Response, error) {
 // cancellation or a deadline from the caller (e.g. a stress run's duration
 // timeout) stops in-flight requests instead of running to completion.
 func (c *Client) DoWithContext(ctx context.Context, req *Request) (*Response, error) {
+	if c.configErr != nil {
+		return nil, c.configErr
+	}
 	// The effective timeout is the per-request @timeout when set, otherwise the
 	// client-level timeout. A per-request timeout longer than the client default
 	// (e.g. @timeout 60000 with a 30s default) must not be silently capped, so the
@@ -257,11 +464,11 @@ func (c *Client) doRequest(ctx context.Context, req *Request, authHeader string)
 	}
 
 	for k, v := range c.defaultHeaders {
-		httpReq.Header.Set(k, v)
+		setRequestHeader(httpReq, k, v)
 	}
 
 	for k, v := range req.Headers {
-		httpReq.Header.Set(k, v)
+		setRequestHeader(httpReq, k, v)
 	}
 
 	// Set multipart content type if present (must be after headers to override)
@@ -281,11 +488,17 @@ func (c *Client) doRequest(ctx context.Context, req *Request, authHeader string)
 		return nil, err
 	}
 	defer httpResp.Body.Close()
+
+	// Fail fast on a declared length over the limit instead of downloading it.
+	if c.maxBodyBytes > 0 && httpReq.Method != http.MethodHead && httpResp.ContentLength > c.maxBodyBytes {
+		return nil, &ResponseTooLargeError{Limit: c.maxBodyBytes}
+	}
 	var responseReader io.Reader = httpResp.Body
 	if c.maxBodyBytes > 0 {
 		responseReader = io.LimitReader(httpResp.Body, c.maxBodyBytes+1)
 	}
 	respBody, err := io.ReadAll(responseReader)
+	truncatedEventStream := false
 	if err != nil {
 		// A context deadline while reading the body is the expected termination
 		// for a time-bounded SSE/event stream: the caller set @timeout to bound
@@ -296,9 +509,21 @@ func (c *Client) doRequest(ctx context.Context, req *Request, authHeader string)
 		if !(errors.Is(err, context.DeadlineExceeded) && isEventStream(httpResp.Header.Get("Content-Type"))) {
 			return nil, bodyReadError(ctx, err, len(respBody), httpResp.ContentLength)
 		}
+		truncatedEventStream = true
 	}
 	if c.maxBodyBytes > 0 && int64(len(respBody)) > c.maxBodyBytes {
 		return nil, &ResponseTooLargeError{Limit: c.maxBodyBytes}
+	}
+	rawSize := int64(len(respBody))
+
+	// net/http only decompresses when it added Accept-Encoding itself; when the
+	// request asked for gzip explicitly the body arrives still compressed.
+	if !truncatedEventStream && !httpResp.Uncompressed {
+		decoded, derr := decodeContentEncoding(respBody, httpResp.Header.Values("Content-Encoding"), c.maxBodyBytes)
+		if derr != nil {
+			return nil, derr
+		}
+		respBody = decoded
 	}
 
 	// Duration covers the full request including body download (previously it was
@@ -307,32 +532,93 @@ func (c *Client) doRequest(ctx context.Context, req *Request, authHeader string)
 	duration := time.Since(start)
 
 	headers := make(map[string]string)
+	headerValues := make(map[string][]string, len(httpResp.Header))
 	for k := range httpResp.Header {
 		values := httpResp.Header.Values(k)
-		switch {
-		case len(values) == 0:
+		headerValues[k] = append([]string(nil), values...)
+		switch len(values) {
+		case 0:
 			headers[k] = ""
-		case len(values) == 1:
+		case 1:
 			headers[k] = values[0]
-		case k == "Set-Cookie":
-			// Cookies are semicolon-separated per RFC 6265; joining with
-			// "; " keeps each cookie distinguishable in a single string.
-			headers[k] = strings.Join(values, "; ")
 		default:
-			// Other multi-value headers (e.g. Accept-Ranges, Vary) collapse
-			// with ", " per RFC 7230 §3.2.2.
+			// Multi-value headers (Set-Cookie, Vary, ...) collapse with ", "
+			// per RFC 9110 5.3; HeaderValues keeps the individual values.
 			headers[k] = strings.Join(values, ", ")
 		}
 	}
 
 	return &Response{
-		StatusCode: httpResp.StatusCode,
-		Status:     httpResp.Status,
-		Headers:    headers,
-		Body:       respBody,
-		Duration:   duration,
-		FinalURL:   httpResp.Request.URL.String(),
+		StatusCode:   httpResp.StatusCode,
+		Status:       httpResp.Status,
+		Headers:      headers,
+		HeaderValues: headerValues,
+		Body:         respBody,
+		Duration:     duration,
+		FinalURL:     httpResp.Request.URL.String(),
+		Proto:        httpResp.Proto,
+		RawBodySize:  rawSize,
 	}, nil
+}
+
+// setRequestHeader sets a header on r. net/http ignores a "Host" entry in
+// Header, so it is applied to r.Host instead.
+func setRequestHeader(r *http.Request, key, value string) {
+	if strings.EqualFold(key, "Host") {
+		r.Host = value
+		return
+	}
+	r.Header.Set(key, value)
+}
+
+// decodeContentEncoding undoes gzip/deflate content codings (applied in the
+// order listed, so undone in reverse). Unknown codings (br, zstd, ...) stop the
+// decoding and the remaining body is returned as-is. limit bounds the decoded
+// size when positive.
+func decodeContentEncoding(body []byte, encodings []string, limit int64) ([]byte, error) {
+	if len(body) == 0 {
+		return body, nil
+	}
+	var codings []string
+	for _, e := range encodings {
+		for _, part := range strings.Split(e, ",") {
+			if p := strings.ToLower(strings.TrimSpace(part)); p != "" && p != "identity" {
+				codings = append(codings, p)
+			}
+		}
+	}
+	for i := len(codings) - 1; i >= 0; i-- {
+		var r io.Reader
+		switch codings[i] {
+		case "gzip", "x-gzip":
+			zr, err := gzip.NewReader(bytes.NewReader(body))
+			if err != nil {
+				return nil, fmt.Errorf("decoding gzip response body: %w", err)
+			}
+			r = zr
+		case "deflate":
+			// HTTP "deflate" is zlib-wrapped, but some servers send raw DEFLATE.
+			if zr, err := zlib.NewReader(bytes.NewReader(body)); err == nil {
+				r = zr
+			} else {
+				r = flate.NewReader(bytes.NewReader(body))
+			}
+		default:
+			return body, nil
+		}
+		if limit > 0 {
+			r = io.LimitReader(r, limit+1)
+		}
+		out, err := io.ReadAll(r)
+		if err != nil {
+			return nil, fmt.Errorf("decoding %s response body: %w", codings[i], err)
+		}
+		if limit > 0 && int64(len(out)) > limit {
+			return nil, &ResponseTooLargeError{Limit: limit}
+		}
+		body = out
+	}
+	return body, nil
 }
 
 func (c *Client) doWithDigestAuth(ctx context.Context, req *Request) (*Response, error) {
@@ -403,74 +689,37 @@ func (c *Client) doWithAWSAuth(ctx context.Context, req *Request) (*Response, er
 }
 
 func (c *Client) doWithOAuth2Auth(ctx context.Context, req *Request) (*Response, error) {
-	// Fetch OAuth2 token
-	token, err := c.fetchOAuth2Token(req.OAuth2Auth)
+	auth := req.OAuth2Auth
+	provider := oauth2.NewProvider(&oauth2.Config{
+		TokenURL:     auth.TokenURL,
+		ClientID:     auth.ClientID,
+		ClientSecret: auth.ClientSecret,
+		Scopes:       auth.Scopes,
+		Username:     auth.Username,
+		Password:     auth.Password,
+		GrantType:    oauth2.GrantType(auth.GrantType),
+	}).SetHTTPClient(c.httpClient).SetCache(c.oauthCache)
+
+	// The token request shares the request's context (and so its deadline);
+	// the provider additionally caps it at oauth2.DefaultTokenTimeout.
+	token, fetched, err := provider.TokenContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get OAuth2 token: %w", err)
 	}
 
-	// Add Bearer token to Authorization header
-	authHeader := "Bearer " + token
-	return c.doRequest(ctx, req, authHeader)
-}
-
-func (c *Client) fetchOAuth2Token(auth *OAuth2AuthCredentials) (string, error) {
-	// Build token request
-	data := neturl.Values{}
-	data.Set("grant_type", auth.GrantType)
-
-	if auth.GrantType == "password" {
-		data.Set("username", auth.Username)
-		data.Set("password", auth.Password)
+	resp, err := c.doRequest(ctx, req, "Bearer "+token.AccessToken)
+	if err != nil || resp.StatusCode != http.StatusUnauthorized || fetched {
+		return resp, err
 	}
 
-	if len(auth.Scopes) > 0 {
-		data.Set("scope", strings.Join(auth.Scopes, " "))
-	}
-
-	tokenReq, err := http.NewRequest("POST", auth.TokenURL, strings.NewReader(data.Encode()))
+	// A cached token may have been revoked or expired early: get a fresh one
+	// and retry once.
+	provider.Invalidate()
+	token, _, err = provider.TokenContext(ctx)
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("failed to get OAuth2 token: %w", err)
 	}
-
-	tokenReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	// Add client credentials via Basic auth
-	if auth.ClientID != "" && auth.ClientSecret != "" {
-		tokenReq.SetBasicAuth(auth.ClientID, auth.ClientSecret)
-	}
-
-	resp, err := c.httpClient.Do(tokenReq)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("token request failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	// Parse token response
-	var tokenResp struct {
-		AccessToken string `json:"access_token"`
-		TokenType   string `json:"token_type"`
-		ExpiresIn   int    `json:"expires_in"`
-	}
-
-	if err := json.Unmarshal(body, &tokenResp); err != nil {
-		return "", fmt.Errorf("failed to parse token response: %w", err)
-	}
-
-	if tokenResp.AccessToken == "" {
-		return "", fmt.Errorf("no access_token in response: %s", string(body))
-	}
-
-	return tokenResp.AccessToken, nil
+	return c.doRequest(ctx, req, "Bearer "+token.AccessToken)
 }
 
 func (c *Client) Get(url string, headers map[string]string) (*Response, error) {
