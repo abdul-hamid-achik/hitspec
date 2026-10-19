@@ -13,7 +13,14 @@ func (r *Runner) shouldRun(req *parser.Request, hasOnly bool) bool {
 	if hasOnly && (req.Metadata == nil || !req.Metadata.Only) {
 		return false
 	}
+	return r.matchesFilters(req)
+}
 
+// matchesFilters reports whether a request satisfies the name and tag filters
+// (NameFilter / TagsFilter), ignoring @only and @skip. The CLI uses the count
+// of such requests to tell "the filters matched nothing" (a usage error) apart
+// from "everything that matched was skipped on purpose".
+func (r *Runner) matchesFilters(req *parser.Request) bool {
 	if r.config.NameFilter != "" {
 		if req.Name == "" || !matchesPattern(req.Name, r.config.NameFilter) {
 			return false
@@ -27,6 +34,50 @@ func (r *Runner) shouldRun(req *parser.Request, hasOnly bool) bool {
 	}
 
 	return true
+}
+
+// withDependencies returns the set of requests to consider for execution:
+// every request selected by shouldRun plus, transitively, the requests they
+// @depends on, so a dependency excluded by --name/--tags/@only still runs
+// instead of leaving its dependent skipped as "dependency failed". Requests
+// marked @skip are never pulled in as roots (they would not run anyway), and a
+// skipped dependency still makes its dependents skip. sorted must already be
+// free of duplicate names and cycles (topologicalSort guarantees that).
+func (r *Runner) withDependencies(sorted []*parser.Request, hasOnly bool) map[*parser.Request]bool {
+	include := make(map[*parser.Request]bool, len(sorted))
+	byName := make(map[string]*parser.Request, len(sorted))
+	for _, req := range sorted {
+		if req.Name != "" {
+			byName[req.Name] = req
+		}
+	}
+
+	var pull func(req *parser.Request)
+	pull = func(req *parser.Request) {
+		if req.Metadata == nil {
+			return
+		}
+		for _, depName := range req.Metadata.Depends {
+			dep := byName[depName]
+			if dep == nil || include[dep] {
+				continue
+			}
+			include[dep] = true
+			pull(dep)
+		}
+	}
+
+	for _, req := range sorted {
+		if r.shouldRun(req, hasOnly) {
+			include[req] = true
+		}
+	}
+	for _, req := range sorted {
+		if r.shouldRun(req, hasOnly) && (req.Metadata == nil || req.Metadata.Skip == "") {
+			pull(req)
+		}
+	}
+	return include
 }
 
 // matchesPattern checks if a name matches a glob-like pattern with optional

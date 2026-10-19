@@ -16,12 +16,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestRun_QuietSuppressesOutput guards the regression where `hitspec run --quiet`
-// was a documented no-op: it only forced no-color and printed the full header +
-// per-request results. --quiet must suppress all normal formatter output
-// (header + results + summary). Output is captured via --output-file so the
-// formatter writes to a file we control instead of os.Stdout.
-func TestRun_QuietSuppressesOutput(t *testing.T) {
+// TestRun_QuietSuppressesStdout guards two sides of --quiet. It was once a
+// documented no-op (full report on stdout); the fix then over-corrected and
+// dropped the --output-file report too. --quiet must keep stdout empty but
+// still write the formatted report to --output-file. (Stderr failure lists and
+// exit codes are covered by testdata/script/run_quiet.txtar.)
+func TestRun_QuietSuppressesStdout(t *testing.T) {
 	resetRootCommandForTest(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -35,26 +35,49 @@ func TestRun_QuietSuppressesOutput(t *testing.T) {
 	content := "### Passing\nGET " + server.URL + "\n\n>>>\nexpect status 200\n<<<\n"
 	require.NoError(t, os.WriteFile(testFile, []byte(content), 0o644))
 
-	runOnce := func(label string, extra ...string) string {
+	runOnce := func(label string, extra ...string) (stdout, file string) {
+		rOut, wOut, err := os.Pipe()
+		require.NoError(t, err)
+		origStdout := os.Stdout
+		os.Stdout = wOut
 		outFile := filepath.Join(dir, "out-"+label+".txt")
 		args := []string{"run", testFile, "--output-file", outFile}
 		args = append(args, extra...)
 		rootCmd.SetArgs(args)
-		require.NoError(t, rootCmd.Execute())
+		execErr := rootCmd.Execute()
+		os.Stdout = origStdout
+		_ = wOut.Close()
+		require.NoError(t, execErr)
+		out, _ := io.ReadAll(rOut)
 		b, err := os.ReadFile(outFile)
 		if os.IsNotExist(err) {
-			return ""
+			return string(out), ""
 		}
 		require.NoError(t, err)
-		return string(b)
+		return string(out), string(b)
 	}
 
-	normal := runOnce("normal", "--no-color")
-	quiet := runOnce("quiet", "--quiet")
+	_, normal := runOnce("normal", "--no-color")
+	stdout, quiet := runOnce("quiet", "--quiet")
 
-	assert.NotEmpty(t, normal, "non-quiet run must produce output")
 	assert.Contains(t, normal, "Tests:")
-	assert.Empty(t, quiet, "--quiet must suppress all normal output")
+	assert.Empty(t, stdout, "--quiet must keep stdout empty")
+	assert.Contains(t, quiet, "Tests:", "--quiet must still write the report to --output-file")
+
+	// Without --output-file nothing at all reaches stdout. Reset first so the
+	// previous run's --output-file value doesn't carry over.
+	require.NoError(t, restoreRootCommandDefaults())
+	rOut, wOut, err := os.Pipe()
+	require.NoError(t, err)
+	origStdout := os.Stdout
+	os.Stdout = wOut
+	rootCmd.SetArgs([]string{"run", testFile, "--quiet"})
+	execErr := rootCmd.Execute()
+	os.Stdout = origStdout
+	_ = wOut.Close()
+	require.NoError(t, execErr)
+	out, _ := io.ReadAll(rOut)
+	assert.Empty(t, string(out))
 }
 
 // TestNewFormatter_WiresOutputFile guards the regression where watch-mode

@@ -1,0 +1,31 @@
+# Environment resolution: hitspec.yaml defaultEnvironment is used when neither
+# --env nor HITSPEC_ENV is set.
+# Regression: run always fell back to "dev" and ignored defaultEnvironment.
+
+exitcode 0 hitspec run api.http -o json
+stdout '/echo/from-staging'
+! stdout 'from-dev'
+
+# An implicit default never triggers the "not defined" warning.
+! stderr 'Warning'
+
+-- hitspec.yaml --
+defaultEnvironment: staging
+environments:
+  dev:
+    tier: from-dev
+  staging:
+    tier: from-staging
+  prod:
+    tier: from-prod
+  ci:
+    tier: from-ci
+
+-- api.http --
+### which-env
+GET {{$env(SERVER)}}/echo/{{tier}}
+
+>>>
+expect status 200
+<<<
+

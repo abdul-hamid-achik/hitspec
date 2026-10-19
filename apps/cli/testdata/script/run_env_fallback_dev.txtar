@@ -1,0 +1,20 @@
+# Environment resolution: with no flag, no HITSPEC_ENV and no
+# defaultEnvironment the environment is "dev".
+
+exitcode 0 hitspec run api.http -o json
+stdout '/echo/from-dev'
+
+-- hitspec.yaml --
+environments:
+  dev:
+    tier: from-dev
+  staging:
+    tier: from-staging
+-- api.http --
+### which-env
+GET {{$env(SERVER)}}/echo/{{tier}}
+
+>>>
+expect status 200
+<<<
+

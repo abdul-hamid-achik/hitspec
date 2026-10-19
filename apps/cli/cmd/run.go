@@ -121,7 +121,7 @@ var (
 
 func init() {
 	// Core flags
-	runCmd.Flags().StringVarP(&envFlag, "env", "e", getEnvString("HITSPEC_ENV", "dev"), "Environment to use (env: HITSPEC_ENV)")
+	runCmd.Flags().StringVarP(&envFlag, "env", "e", getEnvString("HITSPEC_ENV", ""), "Environment to use (env: HITSPEC_ENV; default: hitspec.yaml defaultEnvironment, else dev)")
 	runCmd.Flags().StringVar(&envFileFlag, "env-file", getEnvString("HITSPEC_ENV_FILE", ""), "Path to .env file for variable interpolation (env: HITSPEC_ENV_FILE)")
 	runCmd.Flags().StringVar(&configFlag, "config", getEnvString("HITSPEC_CONFIG", ""), "Path to config file (env: HITSPEC_CONFIG)")
 	runCmd.Flags().StringVarP(&nameFlag, "name", "n", "", "Run only tests matching name pattern")
@@ -129,7 +129,7 @@ func init() {
 
 	// Output flags
 	runCmd.Flags().CountVarP(&verboseFlag, "verbose", "v", "Verbose output (-v, -vv, -vvv for more detail)")
-	runCmd.Flags().BoolVarP(&quietFlag, "quiet", "q", getEnvBool("HITSPEC_QUIET", false), "Suppress all output except errors (env: HITSPEC_QUIET)")
+	runCmd.Flags().BoolVarP(&quietFlag, "quiet", "q", getEnvBool("HITSPEC_QUIET", false), "Suppress the report on stdout; failures are still listed on stderr and --output-file is still written (env: HITSPEC_QUIET)")
 	runCmd.Flags().BoolVar(&noColorFlag, "no-color", getEnvBool("HITSPEC_NO_COLOR", false), "Disable colored output (env: HITSPEC_NO_COLOR)")
 	runCmd.Flags().StringVarP(&outputFlag, "output", "o", getEnvString("HITSPEC_OUTPUT", "console"), "Output format: console, json, junit, tap, html (env: HITSPEC_OUTPUT)")
 	runCmd.Flags().StringVar(&outputFileFlag, "output-file", getEnvString("HITSPEC_OUTPUT_FILE", ""), "Write output to file (default: stdout) (env: HITSPEC_OUTPUT_FILE)")
@@ -190,6 +190,19 @@ func init() {
 	runCmd.Flags().BoolVar(&noHistoryFlag, "no-history", getEnvBool("HITSPEC_NO_HISTORY", false), "Disable run history recording (env: HITSPEC_NO_HISTORY)")
 }
 
+// resolveEnvironment picks the environment: the --env flag (whose default is
+// HITSPEC_ENV), then hitspec.yaml defaultEnvironment, then "dev". explicit is
+// true when the user chose it (flag or HITSPEC_ENV) rather than a default.
+func resolveEnvironment(flagValue string, cfg *config.Config) (name string, explicit bool) {
+	if flagValue != "" {
+		return flagValue, true
+	}
+	if cfg != nil && cfg.DefaultEnvironment != "" {
+		return cfg.DefaultEnvironment, false
+	}
+	return "dev", false
+}
+
 // Environment variable helpers
 func getEnvString(key, defaultVal string) string {
 	if val := os.Getenv(key); val != "" {
@@ -238,31 +251,10 @@ type Flushable interface {
 }
 
 func runCommand(cmd *cobra.Command, args []string) error {
-	// Setup output writer. outWriter must stay a nil interface (not a nil
-	// *os.File) when --output-file is unset, or every formatter would write
-	// to a nil file instead of stdout.
-	var outWriter io.Writer
-	var err error
-	if outputFileFlag != "" {
-		outFile, createErr := os.Create(outputFileFlag)
-		if createErr != nil {
-			return fmt.Errorf("cannot create output file: %w", createErr)
-		}
-		defer outFile.Close()
-		outWriter = outFile
-	}
-
 	// Validate output format
 	validFormats := map[string]bool{"console": true, "json": true, "junit": true, "tap": true, "html": true}
 	if !validFormats[strings.ToLower(outputFlag)] {
 		return fmt.Errorf("unknown output format %q (valid formats: console, json, junit, tap, html)", outputFlag)
-	}
-
-	// Create formatter based on output flag
-	formatter := newFormatter(outputFlag, outWriter, verboseFlag, noColorFlag, quietFlag)
-
-	if !quietFlag {
-		formatter.FormatHeader(version)
 	}
 
 	// Set up notification manager
@@ -324,20 +316,26 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
 		return newExitError(ExitConfigError, err.Error())
 	}
-	// Warn if --env names an environment that isn't defined in the config.
-	// Only check when the env flag was explicitly set, so the implicit
-	// default ("dev") doesn't trigger a warning on every run. Backward
-	// compatible: this is only a stderr warning, never a hard failure.
-	if cmd.Flags().Changed("env") && len(fileConfig.Environments) > 0 {
-		if _, ok := fileConfig.Environments[envFlag]; !ok {
+	// Resolve the environment: --env flag > HITSPEC_ENV (the flag's default)
+	// > hitspec.yaml defaultEnvironment > "dev". envFlag is left untouched so
+	// repeated in-process invocations don't mistake a resolved default for an
+	// explicit choice.
+	environment, envExplicit := resolveEnvironment(envFlag, fileConfig)
+
+	// Warn if the explicitly chosen environment isn't defined in the config.
+	// Only check when the user picked it (flag or HITSPEC_ENV), so an implicit
+	// default doesn't trigger a warning on every run. Backward compatible:
+	// this is only a stderr warning, never a hard failure.
+	if envExplicit && len(fileConfig.Environments) > 0 {
+		if _, ok := fileConfig.Environments[environment]; !ok {
 			fmt.Fprintf(os.Stderr, "Warning: environment %q is not defined in hitspec.yaml (defined: %s)\n",
-				envFlag, joinEnvNames(fileConfig.Environments))
+				environment, joinEnvNames(fileConfig.Environments))
 		}
 	}
 
 	// If stress mode is enabled, delegate to stress runner
 	if stressFlag {
-		return runStressMode(cmd, files, fileConfig)
+		return runStressMode(cmd, files, fileConfig, environment)
 	}
 
 	// Determine proxy and validateSSL from config file, allowing CLI flags to override
@@ -358,7 +356,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	cfg := &runner.Config{
-		Environment:        envFlag,
+		Environment:        environment,
 		EnvFile:            envFileFlag,
 		Verbose:            verboseFlag > 0,
 		Timeout:            timeout,
@@ -406,12 +404,13 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	// (defers are LIFO, so this runs before the store.Close registered above.)
 	defer r.WaitHistory()
 
-	// Create a function to run all tests
+	filtersSet := nameFlag != "" || len(tagsFilter) > 0
+	stderr := cmd.ErrOrStderr()
+
+	// runTests runs every file once and returns the accounting.
 	var allRunResults []*runner.RunResult
-	runTests := func() (int, int, int, time.Duration) {
-		totalPassed := 0
-		totalFailed := 0
-		totalSkipped := 0
+	runTests := func(formatter Formatter, reporting bool) runTotals {
+		var t runTotals
 		allRunResults = nil
 		startTime := time.Now()
 
@@ -423,7 +422,22 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 			result, err := r.RunFile(file)
 			if err != nil {
-				formatter.FormatError(err)
+				// A file that cannot be loaded (syntax error, duplicate
+				// @name, @depends cycle) fails the run; the error goes to
+				// stderr so stdout stays a clean report stream.
+				t.BrokenFiles++
+				fmt.Fprintf(stderr, "Error: %s\n", brokenFileMessage(file, err))
+				if reporting {
+					if strings.EqualFold(outputFlag, "console") {
+						// Console report only carries the error when it goes
+						// to a file; on stdout it would duplicate stderr.
+						if outputFileFlag != "" {
+							formatter.FormatError(err)
+						}
+					} else {
+						formatter.FormatResult(brokenFileResult(file, err))
+					}
+				}
 				if bailFlag {
 					break
 				}
@@ -431,32 +445,66 @@ func runCommand(cmd *cobra.Command, args []string) error {
 			}
 
 			allRunResults = append(allRunResults, result)
-			if !quietFlag {
+			if reporting {
 				formatter.FormatResult(result)
 			}
-			totalPassed += result.Passed
-			totalFailed += result.Failed
-			totalSkipped += result.Skipped
+			if quietFlag {
+				writeFailureList(stderr, result)
+			}
+			t.Passed += result.Passed
+			t.Failed += result.Failed
+			t.Skipped += result.Skipped
+			t.Matched += result.Matched
 
 			if bailFlag && result.Failed > 0 {
 				break
 			}
 		}
 
-		return totalPassed, totalFailed, totalSkipped, time.Since(startTime)
+		t.Duration = time.Since(startTime)
+		return t
+	}
+
+	// executeRun performs one full pass: open the report destination (fresh
+	// per pass), run, flush, close, and report filters that matched nothing.
+	executeRun := func(header bool) (runTotals, error) {
+		formatter, closeReport, err := openReport(outputFlag, outputFileFlag, verboseFlag, noColorFlag, quietFlag)
+		if err != nil {
+			return runTotals{}, err
+		}
+		// --quiet drops the stdout report, but --output-file still gets it.
+		reporting := !quietFlag || outputFileFlag != ""
+		if header && reporting {
+			formatter.FormatHeader(version)
+		}
+
+		t := runTests(formatter, reporting)
+
+		// Flush output for formatters that accumulate results
+		var flushErr error
+		if flushable, ok := formatter.(Flushable); ok && reporting {
+			if err := flushable.Flush(t.Duration); err != nil {
+				flushErr = fmt.Errorf("error writing output: %w", err)
+			}
+		}
+		if err := closeReport(); err != nil && flushErr == nil {
+			flushErr = fmt.Errorf("error writing output: %w", err)
+		}
+
+		if t.BrokenFiles > 0 {
+			fmt.Fprintln(stderr, brokenFilesSummary(t.BrokenFiles))
+		} else if !dryRunFlag && filtersSet && t.Matched == 0 {
+			fmt.Fprintln(stderr, noMatchMessage(nameFlag, tagsFilter))
+		}
+		return t, flushErr
 	}
 
 	// Run tests once
-	totalPassed, totalFailed, totalSkipped, totalDuration := runTests()
-
-	// Flush output for formatters that accumulate results
-	if !quietFlag {
-		if flushable, ok := formatter.(Flushable); ok {
-			if err := flushable.Flush(totalDuration); err != nil {
-				return fmt.Errorf("error writing output: %w", err)
-			}
-		}
+	totals, err := executeRun(true)
+	if err != nil {
+		return err
 	}
+	totalPassed, totalFailed, totalSkipped, totalDuration := totals.Passed, totals.Failed, totals.Skipped, totals.Duration
 
 	// Generate coverage report if --coverage flag is set
 	if coverageFlag {
@@ -495,12 +543,12 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	if notifyManager != nil {
 		summary := &notify.RunSummary{
 			TotalFiles:   len(files),
-			TotalTests:   totalPassed + totalFailed + totalSkipped,
+			TotalTests:   totalPassed + totalFailed + totalSkipped + totals.BrokenFiles,
 			PassedTests:  totalPassed,
-			FailedTests:  totalFailed,
+			FailedTests:  totalFailed + totals.BrokenFiles,
 			SkippedTests: totalSkipped,
 			Duration:     totalDuration,
-			Environment:  envFlag,
+			Environment:  environment,
 		}
 		if err := notifyManager.Notify(summary); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to send notification: %v\n", err)
@@ -509,10 +557,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 	// If watch mode is not enabled, exit normally
 	if !watchFlag {
-		if totalFailed > 0 {
-			os.Exit(ExitTestFailure)
-		}
-		return nil
+		return exitErrorFor(totals, filtersSet)
 	}
 
 	// Watch mode: set up file watcher
@@ -528,7 +573,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		dir := filepath.Dir(file)
 		if !watchedDirs[dir] {
 			if err := watcher.Add(dir); err != nil {
-				formatter.FormatError(fmt.Errorf("failed to watch %s: %w", dir, err))
+				fmt.Fprintf(stderr, "Error: failed to watch %s: %v\n", dir, err)
 			}
 			watchedDirs[dir] = true
 		}
@@ -551,7 +596,8 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "\nWatching for changes... (press Ctrl+C to stop)\n\n")
+	// Banners go to stderr so stdout stays a clean stream of reports.
+	fmt.Fprintf(stderr, "\nWatching for changes... (press Ctrl+C to stop)\n\n")
 
 	// Debounce timer for rapid file changes
 	var debounceTimer *time.Timer
@@ -570,21 +616,15 @@ func runCommand(cmd *cobra.Command, args []string) error {
 					debounceTimer.Stop()
 				}
 				debounceTimer = time.AfterFunc(WatchDebounceDelay, func() {
-					fmt.Fprintf(cmd.OutOrStdout(), "\n\nFile changed: %s\nRe-running tests...\n\n", event.Name)
+					fmt.Fprintf(stderr, "\n\nFile changed: %s\nRe-running tests...\n\n", event.Name)
 
-					// Re-create formatter for new output (for JSON/JUnit, need fresh state).
-					// Wire --output-file so it isn't dropped on watch re-runs.
-					formatter = newFormatter(outputFlag, outWriter, verboseFlag, noColorFlag, quietFlag)
-
-					// Re-run tests
-					_, _, _, duration := runTests()
-
-					// Flush output
-					if flushable, ok := formatter.(Flushable); ok {
-						_ = flushable.Flush(duration)
+					// Each pass opens a fresh report (truncating --output-file),
+					// so JSON/JUnit output stays one valid document per run.
+					if _, err := executeRun(false); err != nil {
+						fmt.Fprintf(stderr, "Error: %v\n", err)
 					}
 
-					fmt.Fprintf(cmd.OutOrStdout(), "\nWatching for changes... (press Ctrl+C to stop)\n")
+					fmt.Fprintf(stderr, "\nWatching for changes... (press Ctrl+C to stop)\n")
 				})
 			}
 
@@ -592,7 +632,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 			if !ok {
 				return nil
 			}
-			formatter.FormatError(fmt.Errorf("watcher error: %w", err))
+			fmt.Fprintf(stderr, "Error: watcher error: %v\n", err)
 		}
 	}
 }
@@ -680,7 +720,7 @@ func newFormatter(format string, outWriter io.Writer, verbose int, noColor, quie
 }
 
 // runStressMode executes stress tests using the stress runner
-func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config) error {
+func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config, environment string) error {
 	// Build stress config
 	cfg, err := buildStressConfig(fileConfig)
 	if err != nil {
@@ -782,8 +822,8 @@ func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config
 		stress.WithResolver(resolver),
 		stress.WithReporter(reporter),
 	}
-	if envFlag != "" {
-		runnerOpts = append(runnerOpts, stress.WithEnvironment(envFlag))
+	if environment != "" {
+		runnerOpts = append(runnerOpts, stress.WithEnvironment(environment))
 	}
 	if envFileFlag != "" {
 		runnerOpts = append(runnerOpts, stress.WithEnvFile(envFileFlag))

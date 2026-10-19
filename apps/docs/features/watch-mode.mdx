@@ -52,6 +52,16 @@ Each re-run creates fresh output. For structured formats (JSON, JUnit), the form
 hitspec run tests/ --watch --output json
 ```
 
+With `--output-file`, the file is truncated and rewritten on every re-run, so it always holds exactly one complete report from the latest run (not the reports of all runs appended together).
+
+The `Watching for changes...` and `File changed` lines are written to stderr. Stdout carries only the reports, so you can pipe or redirect it without the banners:
+
+```bash
+hitspec run tests/ --watch --output json 2>/dev/null
+```
+
+In watch mode, filters that match no request print `no requests matched ...` to stderr on every run, but watch mode keeps running instead of exiting.
+
 <Note>
 Watch mode currently watches directories containing your test files. Changes to environment files (`hitspec.yaml`, `.env`) do not trigger re-runs -- restart the command to pick up config changes.
 </Note>

@@ -26,7 +26,7 @@ You can pass multiple files and directories as arguments.
 
 | Flag | Short | Description | Default | Env Var |
 |------|-------|-------------|---------|---------|
-| `--env` | `-e` | Environment name to use | `dev` | `HITSPEC_ENV` |
+| `--env` | `-e` | Environment name to use. Order: flag, then `HITSPEC_ENV`, then `defaultEnvironment` in `hitspec.yaml`, then `dev` | `defaultEnvironment`, else `dev` | `HITSPEC_ENV` |
 | `--env-file` | | Path to `.env` file for variable interpolation | | `HITSPEC_ENV_FILE` |
 | `--config` | | Path to config file (`hitspec.yaml`) | | `HITSPEC_CONFIG` |
 | `--name` | `-n` | Run only tests matching name pattern | | |
@@ -37,7 +37,7 @@ You can pass multiple files and directories as arguments.
 | Flag | Short | Description | Default | Env Var |
 |------|-------|-------------|---------|---------|
 | `--verbose` | `-v` | Verbose output (use `-vv` or `-vvv` for more detail) | `false` | |
-| `--quiet` | `-q` | Suppress all output except errors | `false` | `HITSPEC_QUIET` |
+| `--quiet` | `-q` | Suppress the report on stdout. Failures are still listed on stderr and `--output-file` is still written | `false` | `HITSPEC_QUIET` |
 | `--no-color` | | Disable colored output | `false` | `HITSPEC_NO_COLOR` |
 | `--output` | `-o` | Output format: `console`, `json`, `junit`, `tap`, `html` | `console` | `HITSPEC_OUTPUT` |
 | `--output-file` | | Write output to a file instead of stdout | | `HITSPEC_OUTPUT_FILE` |
@@ -174,6 +174,26 @@ hitspec run tests/ --name "*Profile"
 hitspec run tests/ --tags smoke --name "*Auth*"
 ```
 
+If the filters select no request in any of the files (for example a typo such as `--tags smok`), hitspec prints `no requests matched --tags "smok"` to stderr and exits with code `64`. A filter only needs to match in one of the files of the run. Requests skipped on purpose with `@skip` still count as matches.
+
+When a selected request has `@depends`, the requests it depends on are run too (transitively) even if the filters would exclude them, and they are reported like any other request. A dependency that fails still causes its dependents to be skipped.
+
+### Quiet Mode
+
+`--quiet` keeps stdout empty, but it never hides failures:
+
+- With `--output-file`, the formatted report is still written to the file.
+- When anything fails, one line per failed request is written to stderr with the request name and the first failing assertion or error.
+- Exit codes are unchanged.
+
+```bash
+hitspec run tests/ --quiet --output junit --output-file results.xml
+```
+
+### Files That Cannot Be Loaded
+
+A file with a syntax error, a duplicate `@name`, or a circular `@depends` does not stop the run. The remaining files still run, the error is written to stderr (for example `1 file failed to parse`), and the run exits with code `2`. With `--output json`, `junit`, `tap` or `html`, the broken file also appears in the report as an error entry.
+
 ### Parallel Execution
 
 ```bash
@@ -288,10 +308,12 @@ hitspec run tests/ --allow-shell
 |------|----------|-------------|
 | `0` | `ExitSuccess` | All tests passed |
 | `1` | `ExitTestFailure` | One or more tests failed |
-| `2` | `ExitParseError` | File parsing error (invalid syntax) |
+| `2` | `ExitParseError` | A file could not be loaded (invalid syntax, duplicate `@name`, `@depends` cycle) |
 | `3` | `ExitConfigError` | Configuration error |
 | `4` | `ExitNetworkError` | Network or connection error |
-| `64` | `ExitUsageError` | Invalid CLI usage |
+| `64` | `ExitUsageError` | Invalid CLI usage, or `--name`/`--tags` matched no request |
+
+When several apply, `2` wins over `1`, and `1` wins over `0`.
 
 ## Environment Variables
 

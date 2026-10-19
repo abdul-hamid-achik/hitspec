@@ -11,10 +11,14 @@ hitspec uses specific exit codes to indicate the result of a test run. These are
 |------|----------|-------------|
 | `0` | `ExitSuccess` | All tests passed |
 | `1` | `ExitTestFailure` | One or more tests failed or thresholds exceeded |
-| `2` | `ExitParseError` | File parsing error (invalid syntax in `.http` / `.hitspec` file) |
+| `2` | `ExitParseError` | A file could not be loaded: invalid syntax, a duplicate `@name`, or a circular `@depends` in a `.http` / `.hitspec` file |
 | `3` | `ExitConfigError` | Configuration error (invalid `hitspec.yaml`, missing required flags) |
 | `4` | `ExitNetworkError` | Network or connection error |
-| `64` | `ExitUsageError` | Invalid CLI usage (wrong arguments, missing required flags) |
+| `64` | `ExitUsageError` | Invalid CLI usage (wrong arguments, missing required flags), or `--name` / `--tags` matched no request in any file |
+
+## Precedence
+
+`hitspec run` always runs every file it can, even when another file fails to load. When several outcomes apply, the exit code follows this order: `2` (a file could not be loaded) over `1` (a request failed) over `64` (filters matched nothing) over `0`. A run with a broken file never exits `0`, so a broken file cannot hide behind green results.
 
 ## Usage in Scripts
 

@@ -267,38 +267,128 @@ GET ` + server.URL + `/a`
 	assert.Equal(t, []string{"/a", "/b"}, executionOrder)
 }
 
-// TestRunner_DependencyOnFilteredRequestSkips guards the regression where a
-// request whose @depends target was filtered out (or skipped/nonexistent) ran
-// anyway because the dependency check only flagged deps that ran and failed.
-// The dependent must be skipped when its dependency didn't run.
-func TestRunner_DependencyOnFilteredRequestSkipsDependent(t *testing.T) {
+// runDependencyFixture runs content against a server that records the paths it
+// served and answers /fail with 500, everything else with 200.
+func runDependencyFixture(t *testing.T, cfg *Config, build func(base string) string) (*RunResult, []string) {
+	t.Helper()
 	var hit []string
 	var mu sync.Mutex
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		hit = append(hit, r.URL.Path)
 		mu.Unlock()
+		if r.URL.Path == "/fail" {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 
-	// A (name a) -> B (name b, depends on a). Run with --name b so a is filtered
-	// out; B must be skipped because its dependency didn't run.
-	content := "### A\n# @name a\nGET " + server.URL + "/a\n\n### B\n# @name b\n# @depends a\nGET " + server.URL + "/b\n"
-	tmpDir := t.TempDir()
-	testFile := filepath.Join(tmpDir, "test.http")
-	require.NoError(t, os.WriteFile(testFile, []byte(content), 0o644))
+	testFile := filepath.Join(t.TempDir(), "test.http")
+	require.NoError(t, os.WriteFile(testFile, []byte(build(server.URL)), 0o644))
 
-	r := NewRunner(&Config{NameFilter: "b"})
-	result, err := r.RunFile(testFile)
+	result, err := NewRunner(cfg).RunFile(testFile)
 	require.NoError(t, err)
-	// A is filtered out ("filtered out" stub) and B is skipped because its
-	// dependency a didn't run; nothing executes against the server.
-	assert.Equal(t, 0, result.Passed)
-	assert.Equal(t, 2, result.Skipped)
 	mu.Lock()
 	defer mu.Unlock()
-	assert.Empty(t, hit, "dependent must not run when its dependency was filtered out")
+	return result, append([]string(nil), hit...)
+}
+
+func resultByName(t *testing.T, result *RunResult, name string) *RequestResult {
+	t.Helper()
+	for _, rr := range result.Results {
+		if rr.Name == name {
+			return rr
+		}
+	}
+	t.Fatalf("no result named %q in %+v", name, result.Results)
+	return nil
+}
+
+const dependencyChain = "### A\n# @name a\nGET %s/a\n\n" +
+	"### B\n# @name b\n# @depends a\nGET %s/b\n\n" +
+	"### C\n# @name c\n# @depends b\n# @tags wanted\nGET %s/c\n\n" +
+	"### D\n# @name d\nGET %s/d\n"
+
+func chainContent(base string) string {
+	return fmt.Sprintf(dependencyChain, base, base, base, base)
+}
+
+// TestRunner_FilterPullsInDependencies guards the false green where selecting a
+// request with --name/--tags excluded its @depends target, so the selected
+// request was skipped as "dependency failed" and nothing ran. The selected
+// request's dependencies (transitively) now run and are reported normally.
+func TestRunner_FilterPullsInDependencies(t *testing.T) {
+	for name, cfg := range map[string]*Config{
+		"name": {NameFilter: "c"},
+		"tags": {TagsFilter: []string{"wanted"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result, hit := runDependencyFixture(t, cfg, chainContent)
+			assert.Equal(t, []string{"/a", "/b", "/c"}, hit, "dependencies must run first, unrelated d must not run")
+			assert.Equal(t, 3, result.Passed)
+			assert.Equal(t, 1, result.Skipped, "only unrelated d stays filtered out")
+			assert.Equal(t, 0, result.Failed)
+			assert.True(t, resultByName(t, result, "a").Passed)
+			assert.True(t, resultByName(t, result, "b").Passed)
+			assert.True(t, resultByName(t, result, "c").Passed)
+			d := resultByName(t, result, "d")
+			assert.True(t, d.Skipped)
+			assert.Equal(t, "filtered out", d.SkipReason)
+			assert.Equal(t, 1, result.Matched, "pulled-in dependencies are not filter matches")
+		})
+	}
+}
+
+// A dependency that really fails still leaves its dependent skipped; the run
+// fails through the failed dependency.
+func TestRunner_FilterPulledDependencyFailureSkipsDependent(t *testing.T) {
+	content := func(base string) string {
+		return "### A\n# @name a\nGET " + base + "/fail\n\n" +
+			"### B\n# @name b\n# @depends a\nGET " + base + "/b\n"
+	}
+	result, hit := runDependencyFixture(t, &Config{NameFilter: "b"}, content)
+	assert.Equal(t, []string{"/fail"}, hit)
+	assert.Equal(t, 1, result.Failed)
+	assert.Equal(t, 1, result.Skipped)
+	b := resultByName(t, result, "b")
+	assert.True(t, b.Skipped)
+	assert.Equal(t, "dependency failed", b.SkipReason)
+}
+
+// A dependency marked @skip is not pulled in as a root, so its dependent is
+// still skipped (nothing ran to satisfy it).
+func TestRunner_SkippedDependencyStillSkipsDependent(t *testing.T) {
+	content := func(base string) string {
+		return "### A\n# @name a\n# @skip not ready\nGET " + base + "/a\n\n" +
+			"### B\n# @name b\n# @depends a\nGET " + base + "/b\n"
+	}
+	result, hit := runDependencyFixture(t, &Config{NameFilter: "b"}, content)
+	assert.Empty(t, hit)
+	assert.Equal(t, 0, result.Failed)
+	assert.Equal(t, 2, result.Skipped)
+	assert.Equal(t, "dependency failed", resultByName(t, result, "b").SkipReason)
+}
+
+// Without filters everything runs exactly as before, and Matched counts every
+// request (including @skip ones).
+func TestRunner_MatchedCountsFilterSelections(t *testing.T) {
+	result, _ := runDependencyFixture(t, &Config{}, chainContent)
+	assert.Equal(t, 4, result.Passed)
+	assert.Equal(t, 4, result.Matched)
+
+	result, hit := runDependencyFixture(t, &Config{TagsFilter: []string{"nothing"}}, chainContent)
+	assert.Empty(t, hit)
+	assert.Equal(t, 0, result.Matched)
+	assert.Equal(t, 4, result.Skipped)
+
+	skipped := func(base string) string {
+		return "### A\n# @name a\n# @skip later\nGET " + base + "/a\n"
+	}
+	result, _ = runDependencyFixture(t, &Config{NameFilter: "a"}, skipped)
+	assert.Equal(t, 1, result.Matched, "a filter match skipped by @skip is still a match")
+	assert.Equal(t, 1, result.Skipped)
 }
 
 // TestRunner_WaitHistoryFlushesBeforeClose guards the close/write race that

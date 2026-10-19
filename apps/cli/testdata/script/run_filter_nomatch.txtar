@@ -1,0 +1,62 @@
+# Filters that select nothing are a usage error, not a green run.
+# Regression: --tags smok (a typo) skipped every request and exited 0.
+
+exitcode 64 hitspec run api.http --tags smok
+stderr 'no requests matched --tags "smok"'
+
+exitcode 64 hitspec run api.http --name nope
+stderr 'no requests matched --name "nope"'
+
+exitcode 64 hitspec run api.http --name nope --tags smok
+stderr 'no requests matched --name "nope" --tags "smok"'
+
+# A filter that matches in at least one file of the run is fine.
+exitcode 0 hitspec run api.http other.http --tags other
+stdout 'other-request'
+! stderr 'no requests matched'
+
+# A directory aggregates over all of its files.
+exitcode 0 hitspec run . --tags other
+! stderr 'no requests matched'
+
+# A match that is skipped on purpose with @skip is still a match.
+exitcode 0 hitspec run api.http --name skipped-request
+! stderr 'no requests matched'
+
+# Matching, but failing, still exits 1.
+exitcode 1 hitspec run api.http --tags bad
+! stderr 'no requests matched'
+
+-- api.http --
+### smoke-request
+# @name smoke-request
+# @tags smoke
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 200
+<<<
+
+### skipped-request
+# @name skipped-request
+# @skip not ready
+GET {{$env(SERVER)}}/status/200
+
+### bad-request
+# @name bad-request
+# @tags bad
+GET {{$env(SERVER)}}/status/500
+
+>>>
+expect status 200
+<<<
+
+-- other.http --
+### other-request
+# @name other-request
+# @tags other
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 200
+<<<
