@@ -116,6 +116,115 @@ jobs:
       - name: Run Go tests
         run: go test -v -race -timeout 10m ./...
 
+  # Root cause of a silent `hitspec run` shipping for six releases: nothing ran
+  # the built binary and looked at its stdout. This job does, end to end:
+  # init -> validate -> mock -> run for a fresh project, then every example.
+  smoke:
+    name: Smoke (binary, examples, docs snippets)
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Build the binary
+        run: go build -o "$RUNNER_TEMP/hitspec" ./cmd/hitspec
+
+      - name: Lint shell scripts
+        run: shellcheck .github/scripts/*.sh
+
+      # The database example needs the sqlite3 CLI to create its seed database.
+      - name: Ensure sqlite3
+        run: command -v sqlite3 >/dev/null || { sudo apt-get update && sudo apt-get install -y sqlite3; }
+
+      - name: Smoke test (init, validate, mock, run, every example)
+        env:
+          SMOKE_REQUIRE_SQLITE: '1'
+        run: .github/scripts/smoke.sh "$RUNNER_TEMP/hitspec"
+
+      # Every ```http block in the docs, README and llms.txt goes through the
+      # real parser, and `hitspec <command> --flag` lines in shell blocks are
+      # checked against the binary's --help. Mark an intentionally partial
+      # block with {/* docsnippets: skip */} (mdx) or <!-- docsnippets: skip -->.
+      - name: Docs snippets
+        run: go run ./tools/docsnippets -bin "$RUNNER_TEMP/hitspec"
+
+  # The suite has only ever run on Linux. These jobs report how it fares on the
+  # other release platforms without blocking merges yet; once they are green
+  # (or their failures fixed) drop continue-on-error to make them required.
+  test-os:
+    name: Test (${{ matrix.os }}, non-blocking)
+    runs-on: ${{ matrix.os }}
+    needs: build
+    continue-on-error: true
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Run Go tests
+        run: go test -timeout 20m ./...
+
+  # Black-box studio TUI specs driven through a real PTY by glyphrun
+  # (https://github.com/abdul-hamid-achik/glyphrun, public releases). Non-blocking
+  # until it has a track record on CI runners.
+  e2e:
+    name: Studio e2e (glyphrun, non-blocking)
+    runs-on: ubuntu-latest
+    needs: build
+    continue-on-error: true
+    timeout-minutes: 25
+    env:
+      GLYPH_VERSION: '0.22.0'
+      GLYPH_SHA256: '1c045cb2c03616f7d4f18eafa7e781f6080cadafa25cd7a92ec8128afd6b29ba'
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Install glyph
+        run: |
+          set -euo pipefail
+          url="https://github.com/abdul-hamid-achik/glyphrun/releases/download/v${GLYPH_VERSION}/glyph_${GLYPH_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/glyph.tar.gz" "$url"
+          echo "${GLYPH_SHA256}  $RUNNER_TEMP/glyph.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/glyph-bin"
+          tar -xzf "$RUNNER_TEMP/glyph.tar.gz" -C "$RUNNER_TEMP/glyph-bin" glyph
+          echo "$RUNNER_TEMP/glyph-bin" >> "$GITHUB_PATH"
+
+      - name: Run studio specs
+        run: glyph run e2e/flows/*.yml --format md
+
+      - name: Upload glyph artifacts
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: glyph-runs
+          path: e2e/.glyphrun/runs
+          if-no-files-found: ignore
+
   security:
     name: Security Scan
     runs-on: ubuntu-latest
@@ -142,16 +251,21 @@ jobs:
         run: task generate
 
       - name: Install gosec
-        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+        run: go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
 
+      # Blocks on HIGH severity findings (>= medium confidence) after the
+      # triaged exclusions documented in the script; the full medium-and-up
+      # report is uploaded below for reading, not gating.
       - name: Run gosec
-        run: gosec -severity=medium -confidence=medium -fmt=json -out=gosec-results.json ./... || true
+        run: .github/scripts/gosec.sh gosec-results.json
 
       - name: Upload gosec results
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: gosec-results
           path: gosec-results.json
+          if-no-files-found: ignore
 
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0

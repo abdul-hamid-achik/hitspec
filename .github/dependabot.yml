@@ -1,0 +1,43 @@
+# Weekly, grouped updates so a week's worth of bumps arrive as one PR per
+# ecosystem instead of a stream of single-package PRs.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      go-dependencies:
+        patterns: ['*']
+    commit-message:
+      prefix: 'chore(deps)'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ['*']
+    commit-message:
+      prefix: 'ci(deps)'
+
+  - package-ecosystem: npm
+    directory: /apps/desktop
+    schedule:
+      interval: weekly
+    groups:
+      desktop-npm:
+        patterns: ['*']
+    commit-message:
+      prefix: 'chore(deps)'
+
+  - package-ecosystem: npm
+    directory: /apps/vscode
+    schedule:
+      interval: weekly
+    groups:
+      vscode-npm:
+        patterns: ['*']
+    commit-message:
+      prefix: 'chore(deps)'

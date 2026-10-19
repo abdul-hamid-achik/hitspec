@@ -10,8 +10,42 @@ on:
 permissions:
   contents: write
 
+env:
+  GO_VERSION: '1.26.9'
+
 jobs:
+  # A tag must never publish a release whose tests fail. goreleaser runs only
+  # after the full Go suite and the binary smoke test pass on the tagged commit.
+  test:
+    name: Test before release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Run Go tests
+        run: go test -race -timeout 20m ./...
+
+      - name: Smoke test the built binary
+        env:
+          SMOKE_REQUIRE_SQLITE: '1'
+        run: |
+          command -v sqlite3 >/dev/null || { sudo apt-get update && sudo apt-get install -y sqlite3; }
+          go build -o "$RUNNER_TEMP/hitspec" ./cmd/hitspec
+          .github/scripts/smoke.sh "$RUNNER_TEMP/hitspec"
+
   release:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -22,7 +56,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          go-version: '1.26.9'
+          go-version: ${{ env.GO_VERSION }}
           cache: true
           cache-dependency-path: go.sum
 
