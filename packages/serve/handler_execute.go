@@ -11,7 +11,7 @@ import (
 func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 	var req ExecuteReq
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeReadError(w, err)
 		return
 	}
 
@@ -146,7 +146,7 @@ func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleRunFile(w http.ResponseWriter, r *http.Request) {
 	var req RunReq
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeReadError(w, err)
 		return
 	}
 

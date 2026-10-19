@@ -12,7 +12,7 @@ import (
 func (s *Server) handleMockStart(w http.ResponseWriter, r *http.Request) {
 	var req MockStartReq
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeReadError(w, err)
 		return
 	}
 

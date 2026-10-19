@@ -55,6 +55,7 @@ func TestExecuteConcurrentPutEnvironment(t *testing.T) {
 		defer wg.Done()
 		for j := 0; j < 40; j++ {
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/run", bytes.NewReader(runBody()))
+			req.Header.Set("Content-Type", "application/json")
 			s.handleRunFile(httptest.NewRecorder(), req)
 		}
 	}()
@@ -64,6 +65,7 @@ func TestExecuteConcurrentPutEnvironment(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < 40; j++ {
 				req := httptest.NewRequest(http.MethodPut, "/api/v1/environments/prod", bytes.NewReader(putBody()))
+				req.Header.Set("Content-Type", "application/json")
 				s.handlePutEnvironment(httptest.NewRecorder(), req)
 			}
 		}()

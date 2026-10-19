@@ -10,6 +10,16 @@ The hitspec server exposes a REST API when you run `hitspec serve --api-only`. A
 hitspec serve --api-only --port 8080
 ```
 
+## Security and Request Requirements
+
+The API can read, write and delete workspace files and send arbitrary requests, so the server protects itself against web pages that try to reach it through your browser:
+
+- **JSON bodies need `Content-Type: application/json`.** A request that has a JSON body but any other content type (`text/plain`, `application/x-www-form-urlencoded`, none at all) is rejected with `415 Unsupported Media Type`. `curl -d` sends form-encoded data by default, so add `-H "Content-Type: application/json"`. Requests without a body (for example `POST /stress/stop`) need no content type. `PUT /files/{path}` takes the raw file text and is not affected.
+- **Host.** When the server is bound to a loopback address, the `Host` header must be `localhost`, `127.0.0.1` or `[::1]` (optionally with the server's port); anything else gets `403 Forbidden` (DNS-rebinding protection).
+- **Origin.** A request that carries an `Origin` header (browsers always send one cross-site) must come from `http(s)://localhost`, `127.0.0.1` or `[::1]` on the server's own port, or on any port when `--cors` is set; otherwise `403 Forbidden`. This also applies to the WebSocket upgrade. Requests without `Origin` (curl, scripts, server-side code) are not affected.
+- **Token.** If `--api-token` / `HITSPEC_API_TOKEN` is set, every request needs `Authorization: Bearer <token>` (scheme is case-insensitive) or `?token=<token>`, else `401`. If the server binds to a non-loopback address, or `--allow-shell` / `--allow-db` is set, and no token is configured, a random token is generated and printed once to stderr.
+- **CORS preflights.** With `--cors`, `OPTIONS` preflights from an allowed origin are answered with `204` and CORS headers without a token; the actual request still needs it.
+
 ## Error Format
 
 All error responses follow a consistent structure:
@@ -1298,7 +1308,7 @@ curl -X POST http://localhost:8080/api/v1/contract/verify \
   -H "Content-Type: application/json" \
   -d '{
     "providerUrl": "http://localhost:3000",
-    "stateHandler": "http://localhost:3000/_state",
+    "stateHandler": "./scripts/setup-state.sh",
     "files": ["contracts/users.http"]
   }'
 ```
@@ -1309,7 +1319,7 @@ curl -X POST http://localhost:8080/api/v1/contract/verify \
 ```typescript
 {
   providerUrl: string;      // Required. Base URL of the provider to verify against
-  stateHandler?: string;    // Optional. URL for provider state setup endpoint
+  stateHandler?: string;    // Optional. Path to an executable that sets up provider state (needs --allow-shell)
   files?: string[];         // Optional. Specific contract files (defaults to all workspace files)
 }
 ```
@@ -1319,7 +1329,7 @@ curl -X POST http://localhost:8080/api/v1/contract/verify \
 </ParamField>
 
 <ParamField body="stateHandler" type="string">
-  URL of an endpoint that accepts state setup requests before each interaction.
+  Path to a script that is run with the state name as its argument before each interaction that declares a state. Because this executes a program on the server, the request is rejected with `403 Forbidden` unless the server was started with `--allow-shell`, and the script (after resolving symlinks) must be inside the workspace. Relative paths are resolved from the workspace root.
 </ParamField>
 
 <ParamField body="files" type="string[]">

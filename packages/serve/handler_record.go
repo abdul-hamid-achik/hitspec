@@ -38,7 +38,7 @@ type RecordingDTO struct {
 func (s *Server) handleRecordStart(w http.ResponseWriter, r *http.Request) {
 	var req RecordStartReq
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeReadError(w, err)
 		return
 	}
 

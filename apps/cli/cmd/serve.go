@@ -45,6 +45,7 @@ compatibility, but 'hitspec studio' is the dedicated command.)
 
 Examples:
   hitspec serve --api-only --port 8080 --cors
+  HITSPEC_API_TOKEN=secret hitspec serve --api-only
   hitspec serve --api-only ./tests/ --read-only`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: serveCommand,
@@ -64,7 +65,7 @@ func init() {
 	serveCmd.Flags().BoolVar(&serveAllowDBFlag, "allow-db", false, "Allow database assertions")
 	serveCmd.Flags().StringVar(&serveLogFormatFlag, "log-format", "text", "Log format: text or json")
 	serveCmd.Flags().StringVar(&serveLogLevelFlag, "log-level", "info", "Log level: debug, info, warn, error")
-	serveCmd.Flags().StringVar(&serveAPITokenFlag, "api-token", getEnvString("HITSPEC_API_TOKEN", ""), "Require a bearer token for all REST/WebSocket requests (env: HITSPEC_API_TOKEN). When set, requests must send Authorization: Bearer <token> or ?token=<token>")
+	serveCmd.Flags().StringVar(&serveAPITokenFlag, "api-token", "", "Require a bearer token for all REST/WebSocket requests (env: HITSPEC_API_TOKEN, preferred: argv is visible in ps). Requests must send Authorization: Bearer <token> or ?token=<token>. A random token is generated and printed when the bind address is not loopback or --allow-shell/--allow-db is set")
 }
 
 func serveCommand(cmd *cobra.Command, args []string) error {
@@ -96,6 +97,13 @@ func serveCommand(cmd *cobra.Command, args []string) error {
 		})
 	}
 
+	// The env var is read here rather than used as the flag default so that
+	// `--help` never prints the secret.
+	apiToken := serveAPITokenFlag
+	if apiToken == "" {
+		apiToken = os.Getenv("HITSPEC_API_TOKEN")
+	}
+
 	s := serve.NewServer(
 		serve.WithPort(servePortFlag),
 		serve.WithHost(serveHostFlag),
@@ -110,7 +118,7 @@ func serveCommand(cmd *cobra.Command, args []string) error {
 		serve.WithVerbose(serveVerboseFlag),
 		serve.WithAllowShell(serveAllowShellFlag),
 		serve.WithAllowDB(serveAllowDBFlag),
-		serve.WithAPIToken(serveAPITokenFlag),
+		serve.WithAPIToken(apiToken),
 		serve.WithLogFormat(serveLogFormatFlag),
 		serve.WithLogLevel(serveLogLevelFlag),
 	)

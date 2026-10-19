@@ -35,6 +35,7 @@ func startStressAndWait(t *testing.T, s *Server, body string) *StressResultDTO {
 	t.Helper()
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/stress/start", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	s.handleStressStart(w, req)
 	if w.Code != http.StatusOK {

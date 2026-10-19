@@ -13,7 +13,7 @@ import (
 func (s *Server) handleStressStart(w http.ResponseWriter, r *http.Request) {
 	var req StressStartReq
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeReadError(w, err)
 		return
 	}
 
@@ -225,7 +225,7 @@ func (s *Server) saveConfig(w http.ResponseWriter) bool {
 func (s *Server) handleCreateStressProfile(w http.ResponseWriter, r *http.Request) {
 	var req StressProfileReq
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeReadError(w, err)
 		return
 	}
 
@@ -282,7 +282,7 @@ func (s *Server) handleUpdateStressProfile(w http.ResponseWriter, r *http.Reques
 
 	var req StressProfileReq
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeReadError(w, err)
 		return
 	}
 

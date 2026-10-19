@@ -67,7 +67,7 @@ func (s *Server) handleSelectEnvironment(w http.ResponseWriter, r *http.Request)
 		Name string `json:"name"`
 	}
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeReadError(w, err)
 		return
 	}
 
@@ -97,7 +97,7 @@ func (s *Server) handlePutEnvironment(w http.ResponseWriter, r *http.Request) {
 
 	var dto EnvironmentDTO
 	if err := readJSON(r, &dto); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeReadError(w, err)
 		return
 	}
 

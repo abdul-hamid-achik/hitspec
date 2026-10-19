@@ -30,6 +30,7 @@ func TestHandleExecuteRequest(t *testing.T) {
 
 	body, _ := json.Marshal(ExecuteReq{File: "api.http", RequestName: "ping"})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	s.handleExecuteRequest(rec, req)
 
@@ -58,6 +59,7 @@ func TestHandleCreateAndSaveFile(t *testing.T) {
 		Content string `json:"content"`
 	}{Path: "new.http", Content: "### r\nGET https://example.com\n"})
 	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/files", bytes.NewReader(createBody))
+	createReq.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	s.handleCreateFile(rec, createReq)
 	if rec.Code != http.StatusOK && rec.Code != http.StatusCreated {
