@@ -1,0 +1,27 @@
+# Environment resolution: HITSPEC_ENV beats the hitspec.yaml defaultEnvironment.
+
+env HITSPEC_ENV=prod
+exitcode 0 hitspec run api.http -o json
+stdout '/echo/from-prod'
+! stdout 'from-staging'
+
+-- hitspec.yaml --
+defaultEnvironment: staging
+environments:
+  dev:
+    tier: from-dev
+  staging:
+    tier: from-staging
+  prod:
+    tier: from-prod
+  ci:
+    tier: from-ci
+
+-- api.http --
+### which-env
+GET {{$env(SERVER)}}/echo/{{tier}}
+
+>>>
+expect status 200
+<<<
+

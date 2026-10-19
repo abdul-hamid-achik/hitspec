@@ -1,0 +1,76 @@
+# --quiet silences the stdout report, not the failures.
+# Regression: --quiet hid failures completely and never wrote --output-file.
+
+# All green: nothing on stdout or stderr.
+exitcode 0 hitspec run ok.http --quiet
+! stdout .
+! stderr .
+
+# A failing assertion is listed on stderr with the request and the assertion.
+exitcode 1 hitspec run fail.http --quiet
+! stdout .
+stderr 'fail-request'
+stderr 'status'
+stderr 'expected 200'
+
+# A request without assertions that returns an error status.
+exitcode 1 hitspec run noassert.http --quiet
+! stdout .
+stderr 'noassert-request'
+stderr '500'
+
+# A request that errors (connection refused).
+exitcode 1 hitspec run refused.http --quiet
+! stdout .
+stderr 'refused-request'
+
+# -q is the same flag.
+exitcode 1 hitspec run fail.http -q
+! stdout .
+stderr 'fail-request'
+
+# --output-file still receives the report.
+exitcode 0 hitspec run ok.http --quiet --output-file report.txt
+! stdout .
+! stderr .
+grep 'Tests: 1 passed' report.txt
+
+exitcode 1 hitspec run fail.http --quiet -o json --output-file report.json
+! stdout .
+stderr 'fail-request'
+grep '"failed": 1' report.json
+
+exitcode 1 hitspec run fail.http --quiet -o junit --output-file report.xml
+grep '<testsuites' report.xml
+
+# Machine formats without a file stay off stdout.
+exitcode 0 hitspec run ok.http --quiet -o json
+! stdout .
+
+-- ok.http --
+### ok-request
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 200
+<<<
+
+-- fail.http --
+### fail-request
+GET {{$env(SERVER)}}/status/500
+
+>>>
+expect status 200
+<<<
+
+-- noassert.http --
+### noassert-request
+GET {{$env(SERVER)}}/status/500
+
+-- refused.http --
+### refused-request
+GET http://127.0.0.1:1/nothing
+
+>>>
+expect status 200
+<<<

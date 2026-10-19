@@ -1,0 +1,103 @@
+# A file that cannot be loaded must fail the run, not vanish from it.
+# Regression: files with a syntax error, a duplicate @name or a @depends cycle
+# were reported and skipped, and the run exited 0 (CI false green).
+
+# Syntax error: the good file still runs, the error goes to stderr, exit 2.
+exitcode 2 hitspec run ok.http unclosed.http
+stdout 'ok-request'
+stdout 'Tests: 1 passed, 1 total'
+stderr 'unclosed.http'
+stderr 'unclosed >>> assertion block'
+stderr '1 file failed to parse'
+! stdout 'unclosed'
+
+# Duplicate request name.
+exitcode 2 hitspec run ok.http dup.http
+stderr 'dup.http'
+stderr 'duplicate request name'
+stderr '1 file failed to parse'
+
+# Dependency cycle.
+exitcode 2 hitspec run ok.http cycle.http
+stderr 'cycle.http'
+stderr 'circular dependency'
+stderr '1 file failed to parse'
+
+# Several broken files are all counted.
+exitcode 2 hitspec run ok.http dup.http cycle.http unclosed.http
+stderr '3 files failed to parse'
+
+# Parse errors win over assertion failures.
+exitcode 2 hitspec run fail.http unclosed.http
+stdout 'Tests: 1 failed, 1 total'
+
+# Assertion failures alone still exit 1.
+exitcode 1 hitspec run fail.http ok.http
+
+# A directory run keeps going past the broken files.
+exitcode 2 hitspec run .
+stdout 'ok-request'
+stderr '3 files failed to parse'
+
+# Machine formats represent the broken file.
+exitcode 2 hitspec run ok.http unclosed.http -o junit
+stdout '<testsuites'
+stdout 'errors="1"'
+stdout 'unclosed.http'
+stdout 'unclosed &gt;&gt;&gt; assertion block'
+stderr '1 file failed to parse'
+
+exitcode 2 hitspec run ok.http unclosed.http -o json
+stdout '"failed": 1'
+stdout 'assertion block'
+
+exitcode 2 hitspec run ok.http unclosed.http -o tap
+stdout 'not ok 2 '
+
+# --quiet does not hide it.
+exitcode 2 hitspec run ok.http unclosed.http --quiet
+! stdout .
+stderr 'unclosed.http'
+
+-- ok.http --
+### ok-request
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 200
+<<<
+
+-- fail.http --
+### fail-request
+GET {{$env(SERVER)}}/status/500
+
+>>>
+expect status 200
+<<<
+
+-- unclosed.http --
+### bad
+GET {{$env(SERVER)}}/status/200
+
+>>>
+expect status 200
+
+-- dup.http --
+### one
+# @name same
+GET {{$env(SERVER)}}/status/200
+
+### two
+# @name same
+GET {{$env(SERVER)}}/status/200
+
+-- cycle.http --
+### a
+# @name a
+# @depends b
+GET {{$env(SERVER)}}/status/200
+
+### b
+# @name b
+# @depends a
+GET {{$env(SERVER)}}/status/200
