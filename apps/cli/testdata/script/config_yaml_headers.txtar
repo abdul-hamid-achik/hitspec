@@ -1,0 +1,30 @@
+# hitspec.yaml `headers` are sent with every request; a header set on the
+# request itself wins for the same name.
+
+exitcode 0 hitspec run echo.http
+stdout 'Tests: 2 passed, 2 total'
+
+-- hitspec.yaml --
+headers:
+  X-From-Yaml: yaml-value
+  X-Shared: yaml-shared
+
+-- echo.http --
+### default-header-is-sent
+GET {{$env(SERVER)}}/echo/headers
+
+>>>
+expect status 200
+expect body.headers.X-From-Yaml == "yaml-value"
+expect body.headers.X-Shared == "yaml-shared"
+<<<
+
+### request-header-wins
+GET {{$env(SERVER)}}/echo/headers
+X-Shared: request-shared
+
+>>>
+expect status 200
+expect body.headers.X-From-Yaml == "yaml-value"
+expect body.headers.X-Shared == "request-shared"
+<<<

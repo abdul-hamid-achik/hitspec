@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/config"
+	hitspechttp "github.com/abdul-hamid-achik/hitspec/v2/packages/http"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/stress"
 )
 
@@ -21,13 +22,8 @@ func (s *Server) handleStressStart(w http.ResponseWriter, r *http.Request) {
 	// {{variables}} from config environments, and without them every request in
 	// a workspace that uses {{baseUrl}} fails with "unsupported URL scheme".
 	// Read here to keep the lock order mu -> configMu out of the picture.
-	s.configMu.RLock()
-	envName := s.config.Env
-	configEnvs := s.getConfigEnvsLocked()
-	s.configMu.RUnlock()
-	if req.Environment != "" {
-		envName = req.Environment
-	}
+	runCfg, clientOpts := s.runSettings(req.Environment)
+	envName, configEnvs := runCfg.Environment, runCfg.ConfigEnvironments
 
 	s.mu.Lock()
 	if s.stressRunner != nil {
@@ -68,7 +64,8 @@ func (s *Server) handleStressStart(w http.ResponseWriter, r *http.Request) {
 		absFiles = append(absFiles, absPath)
 	}
 
-	runnerOpts := make([]stress.RunnerOption, 0, 2)
+	runnerOpts := make([]stress.RunnerOption, 0, 3)
+	runnerOpts = append(runnerOpts, stress.WithHTTPClient(hitspechttp.NewClient(clientOpts...)))
 	if envName != "" {
 		runnerOpts = append(runnerOpts, stress.WithEnvironment(envName))
 	}

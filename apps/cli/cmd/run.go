@@ -16,6 +16,7 @@ import (
 
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/config"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/env"
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runconfig"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/coverage"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/export/metrics"
@@ -120,8 +121,13 @@ var (
 	noHistoryFlag bool
 )
 
-// registerRunFlags binds the run flags to their package variables (defaults
-// are read from the environment at registration time).
+// registerRunFlags binds the run flags to their package variables.
+//
+// Flags that mirror a hitspec.yaml key (timeout, concurrency, proxy, insecure,
+// parallel, bail) default to "not set" instead of the effective default, so
+// the config file can supply the value; runOverrides layers the HITSPEC_*
+// variable under an explicit flag and runconfig.Build resolves the rest. The
+// help text states the effective default.
 func registerRunFlags(f *pflag.FlagSet) {
 	// Core flags
 	f.StringVarP(&envFlag, "env", "e", getEnvString("HITSPEC_ENV", ""), "Environment to use (env: HITSPEC_ENV; default: hitspec.yaml defaultEnvironment, else dev)")
@@ -138,16 +144,16 @@ func registerRunFlags(f *pflag.FlagSet) {
 	f.StringVar(&outputFileFlag, "output-file", getEnvString("HITSPEC_OUTPUT_FILE", ""), "Write output to file (default: stdout) (env: HITSPEC_OUTPUT_FILE)")
 
 	// Execution flags
-	f.BoolVar(&bailFlag, "bail", getEnvBool("HITSPEC_BAIL", false), "Stop on first failure (env: HITSPEC_BAIL)")
-	f.StringVar(&timeoutFlag, "timeout", getEnvString("HITSPEC_TIMEOUT", "30s"), "Request timeout (e.g., 30s, 1m) (env: HITSPEC_TIMEOUT)")
+	f.BoolVar(&bailFlag, "bail", false, "Stop on first failure (env: HITSPEC_BAIL; default: hitspec.yaml bail, else false)")
+	f.StringVar(&timeoutFlag, "timeout", "", "Request timeout, e.g. 30s, 1m (env: HITSPEC_TIMEOUT; default: hitspec.yaml timeout, else 30s)")
 	f.BoolVar(&dryRunFlag, "dry-run", false, "Parse and show what would run without executing")
-	f.BoolVarP(&parallelFlag, "parallel", "p", getEnvBool("HITSPEC_PARALLEL", false), "Run requests in parallel (when no dependencies) (env: HITSPEC_PARALLEL)")
-	f.IntVar(&concurrencyFlag, "concurrency", getEnvInt("HITSPEC_CONCURRENCY", 5), "Number of concurrent requests when running in parallel (env: HITSPEC_CONCURRENCY)")
+	f.BoolVarP(&parallelFlag, "parallel", "p", false, "Run requests in parallel (when no dependencies) (env: HITSPEC_PARALLEL; default: hitspec.yaml parallel, else false)")
+	f.IntVar(&concurrencyFlag, "concurrency", 0, "Number of concurrent requests when running in parallel (env: HITSPEC_CONCURRENCY; default: hitspec.yaml concurrency, else 5)")
 	f.BoolVarP(&watchFlag, "watch", "w", false, "Watch files for changes and re-run tests")
 
 	// Network flags
-	f.StringVar(&proxyFlag, "proxy", getEnvString("HITSPEC_PROXY", ""), "Proxy URL for HTTP requests (env: HITSPEC_PROXY)")
-	f.BoolVarP(&insecureFlag, "insecure", "k", getEnvBool("HITSPEC_INSECURE", false), "Disable SSL certificate validation (env: HITSPEC_INSECURE)")
+	f.StringVar(&proxyFlag, "proxy", "", "Proxy URL for HTTP requests (env: HITSPEC_PROXY; default: hitspec.yaml proxy)")
+	f.BoolVarP(&insecureFlag, "insecure", "k", false, "Disable SSL certificate validation (env: HITSPEC_INSECURE; default: hitspec.yaml validateSSL, else validate)")
 
 	// Stress testing flags
 	f.BoolVar(&stressFlag, "stress", false, "Enable stress testing mode")
@@ -195,58 +201,64 @@ func registerRunFlags(f *pflag.FlagSet) {
 
 func init() { registerRunFlags(runCmd.Flags()) }
 
+// runOverrides collects what the user pinned on the command line, under the
+// HITSPEC_* variables, as runconfig overrides: flag > env var; hitspec.yaml and
+// the built-in default fill in whatever is left (runconfig.Build).
+func runOverrides(flags *pflag.FlagSet, environment string) (runconfig.Overrides, error) {
+	o := runconfig.Overrides{
+		Environment: environment,
+		EnvFile:     envFileFlag,
+		Proxy:       proxyFlag,
+		Concurrency: concurrencyFlag,
+	}
+	if timeoutFlag != "" {
+		timeout, err := time.ParseDuration(timeoutFlag)
+		if err != nil {
+			return o, fmt.Errorf("invalid timeout value %q: %w (use format like 30s, 1m, 500ms)", timeoutFlag, err)
+		}
+		o.Timeout = timeout
+	}
+	// A bool flag overrides hitspec.yaml when it is true or was passed
+	// explicitly (so --parallel=false can beat parallel: true).
+	if insecureFlag || flags.Changed("insecure") {
+		validate := !insecureFlag
+		o.ValidateSSL = &validate
+	}
+	if parallelFlag || flags.Changed("parallel") {
+		o.Parallel = &parallelFlag
+	}
+	if bailFlag || flags.Changed("bail") {
+		o.Bail = &bailFlag
+	}
+	fromEnv, err := runconfig.FromEnv()
+	if err != nil {
+		return o, err
+	}
+	return o.Over(fromEnv), nil
+}
+
 // buildRunnerConfig turns hitspec.yaml plus the run flags into the runner
 // configuration for `hitspec run`.
-func buildRunnerConfig(fileConfig *config.Config, environment string, tagsFilter []string) (*runner.Config, error) {
-	// Determine proxy and validateSSL from config file, allowing CLI flags to override
-	proxy := fileConfig.Proxy
-	if proxyFlag != "" {
-		proxy = proxyFlag
-	}
-
-	validateSSL := fileConfig.GetValidateSSL()
-	if insecureFlag {
-		validateSSL = false
-	}
-
-	// Parse timeout duration string
-	timeout, err := time.ParseDuration(timeoutFlag)
+func buildRunnerConfig(flags *pflag.FlagSet, fileConfig *config.Config, environment string, tagsFilter []string) (*runner.Config, []http.ClientOption, error) {
+	overrides, err := runOverrides(flags, environment)
 	if err != nil {
-		return nil, fmt.Errorf("invalid timeout value %q: %w (use format like 30s, 1m, 500ms)", timeoutFlag, err)
+		return nil, nil, err
 	}
-
-	return &runner.Config{
-		Environment:        environment,
-		EnvFile:            envFileFlag,
-		Verbose:            verboseFlag > 0,
-		Timeout:            timeout,
-		FollowRedirect:     fileConfig.GetFollowRedirects(),
-		Bail:               bailFlag,
-		NameFilter:         nameFlag,
-		TagsFilter:         tagsFilter,
-		Parallel:           parallelFlag,
-		Concurrency:        concurrencyFlag,
-		ValidateSSL:        validateSSL,
-		Proxy:              proxy,
-		DefaultHeaders:     fileConfig.Headers,
-		ConfigEnvironments: fileConfig.Environments,
-		UpdateSnapshots:    updateSnapshotsFlag,
-		AllowShell:         allowShellFlag,
-		AllowDB:            allowDBFlag,
-	}, nil
+	cfg, clientOpts := runconfig.Build(fileConfig, overrides)
+	cfg.Verbose = verboseFlag > 0
+	cfg.NameFilter = nameFlag
+	cfg.TagsFilter = tagsFilter
+	cfg.UpdateSnapshots = updateSnapshotsFlag
+	cfg.AllowShell = allowShellFlag
+	cfg.AllowDB = allowDBFlag
+	return cfg, clientOpts, nil
 }
 
 // resolveEnvironment picks the environment: the --env flag (whose default is
 // HITSPEC_ENV), then hitspec.yaml defaultEnvironment, then "dev". explicit is
 // true when the user chose it (flag or HITSPEC_ENV) rather than a default.
 func resolveEnvironment(flagValue string, cfg *config.Config) (name string, explicit bool) {
-	if flagValue != "" {
-		return flagValue, true
-	}
-	if cfg != nil && cfg.DefaultEnvironment != "" {
-		return cfg.DefaultEnvironment, false
-	}
-	return "dev", false
+	return runconfig.ResolveEnvironment(flagValue, cfg)
 }
 
 // Environment variable helpers
@@ -379,14 +391,19 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// If stress mode is enabled, delegate to stress runner
-	if stressFlag {
-		return runStressMode(cmd, files, fileConfig, environment)
-	}
-
-	cfg, err := buildRunnerConfig(fileConfig, environment, tagsFilter)
+	cfg, clientOpts, err := buildRunnerConfig(cmd.Flags(), fileConfig, environment, tagsFilter)
 	if err != nil {
 		return err
+	}
+
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	// If stress mode is enabled, delegate to stress runner
+	if stressFlag {
+		return runStressMode(cmd, files, fileConfig, environment, clientOpts)
 	}
 
 	// Open history store unless disabled
@@ -434,7 +451,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 				continue
 			}
 
-			result, err := r.RunFile(file)
+			result, err := r.RunFileContext(ctx, file)
 			if err != nil {
 				// A file that cannot be loaded (syntax error, duplicate
 				// @name, @depends cycle) fails the run; the error goes to
@@ -452,7 +469,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 						formatter.FormatResult(brokenFileResult(file, err))
 					}
 				}
-				if bailFlag {
+				if cfg.Bail {
 					break
 				}
 				continue
@@ -470,7 +487,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 			t.Skipped += result.Skipped
 			t.Matched += result.Matched
 
-			if bailFlag && result.Failed > 0 {
+			if cfg.Bail && result.Failed > 0 {
 				break
 			}
 		}
@@ -734,7 +751,7 @@ func newFormatter(format string, outWriter io.Writer, verbose int, noColor, quie
 }
 
 // runStressMode executes stress tests using the stress runner
-func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config, environment string) error {
+func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config, environment string, clientOpts []http.ClientOption) error {
 	// Build stress config
 	cfg, err := buildStressConfig(fileConfig)
 	if err != nil {
@@ -797,7 +814,7 @@ func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config
 	}()
 
 	// Create HTTP client
-	client := http.NewClient(resolveStressClientSettings(fileConfig).options()...)
+	client := http.NewClient(clientOpts...)
 
 	// Create resolver
 	resolver := env.NewResolver()
@@ -873,38 +890,6 @@ func runStressMode(cmd *cobra.Command, files []string, fileConfig *config.Config
 	}
 
 	return nil
-}
-
-// stressClientSettings is what `run --stress` tells its HTTP client; the
-// timeout, redirect limit and default headers are left at the client defaults.
-type stressClientSettings struct {
-	followRedirects bool
-	proxy           string
-	validateSSL     bool
-}
-
-func resolveStressClientSettings(fileConfig *config.Config) stressClientSettings {
-	st := stressClientSettings{followRedirects: true, validateSSL: true}
-	if fileConfig != nil {
-		st.followRedirects = fileConfig.GetFollowRedirects()
-		if fileConfig.Proxy != "" && proxyFlag == "" {
-			proxyFlag = fileConfig.Proxy
-		}
-		st.validateSSL = fileConfig.GetValidateSSL()
-	}
-	st.proxy = proxyFlag
-	if insecureFlag {
-		st.validateSSL = false
-	}
-	return st
-}
-
-func (st stressClientSettings) options() []http.ClientOption {
-	opts := []http.ClientOption{http.WithFollowRedirects(st.followRedirects)}
-	if st.proxy != "" {
-		opts = append(opts, http.WithProxy(st.proxy))
-	}
-	return append(opts, http.WithValidateSSL(st.validateSSL))
 }
 
 // buildStressConfig builds stress configuration from flags and profile

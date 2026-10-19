@@ -155,29 +155,43 @@ func Check(t *testing.T, path string, table map[string]map[string]Settings) {
 	}
 }
 
-// FromRunner reports what a runner.Config makes the runner do. The runner
-// cannot be told a redirect limit or default retries, so those are the
-// implicit http/runner defaults.
+// FromRunner reports what a runner.Config makes the runner (and the HTTP
+// client built from Config.ClientOptions) do.
 func FromRunner(cfg *runner.Config) Settings {
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = http.DefaultTimeout
+	s := Bare()
+	if cfg.Timeout > 0 {
+		s.Timeout = cfg.Timeout.String()
+	}
+	if cfg.MaxRedirects > 0 {
+		s.MaxRedirects = cfg.MaxRedirects
+	}
+	if cfg.RetryDelay > 0 {
+		s.RetryDelay = cfg.RetryDelay.String()
 	}
 	concurrency := cfg.Concurrency
 	if concurrency <= 0 {
 		concurrency = runner.DefaultConcurrency
 	}
-	s := Bare()
 	s.Environment = cfg.Environment
-	s.Timeout = timeout.String()
 	s.FollowRedirects = cfg.FollowRedirect
 	s.ValidateSSL = cfg.ValidateSSL
 	s.Proxy = cfg.Proxy
 	if len(cfg.DefaultHeaders) > 0 {
 		s.Headers = cfg.DefaultHeaders
 	}
+	s.Retries = cfg.Retries
 	s.Parallel = Bool(cfg.Parallel)
 	s.Concurrency = Int(concurrency)
 	s.Bail = Bool(cfg.Bail)
+	return s
+}
+
+// ClientOnly drops the run-only settings (environment, retries, parallelism)
+// from s, for surfaces that only configure an HTTP client (stress, contract).
+func ClientOnly(s Settings) Settings {
+	s.Environment = ""
+	s.Retries = 0
+	s.RetryDelay = Bare().RetryDelay
+	s.Parallel, s.Concurrency, s.Bail = nil, nil, nil
 	return s
 }

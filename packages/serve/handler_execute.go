@@ -3,23 +3,32 @@ package serve
 import (
 	"net/http"
 	"path/filepath"
-	"time"
 
+	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runconfig"
 	"github.com/abdul-hamid-achik/hitspec/v2/packages/core/runner"
+	hitspechttp "github.com/abdul-hamid-achik/hitspec/v2/packages/http"
 )
 
-// runnerConfig is the runner configuration shared by the execute and run
-// handlers; callers add their filters and progress callback.
-func (s *Server) runnerConfig(env string, configEnvs map[string]map[string]any) *runner.Config {
-	return &runner.Config{
-		Environment:        env,
-		Timeout:            30 * time.Second,
-		FollowRedirect:     true,
-		ValidateSSL:        true,
-		ConfigEnvironments: configEnvs,
-		AllowShell:         s.config.AllowShell,
-		AllowDB:            s.config.AllowDB,
+// runSettings resolves hitspec.yaml (as currently held, including edits made
+// through PUT /config), the HITSPEC_* variables and the active environment into
+// the runner configuration and the matching HTTP client options. Callers add
+// their filters and progress callback. The result does not alias the live
+// config, so it stays valid after the lock is released.
+func (s *Server) runSettings(environment string) (*runner.Config, []hitspechttp.ClientOption) {
+	overrides, err := runconfig.FromEnv()
+	if err != nil {
+		s.logger.Warn("ignoring invalid environment setting", "error", err)
 	}
+	s.configMu.RLock()
+	defer s.configMu.RUnlock()
+	overrides.Environment = s.config.Env
+	if environment != "" {
+		overrides.Environment = environment
+	}
+	cfg, clientOpts := runconfig.Build(s.fileConfig, overrides)
+	cfg.AllowShell = s.config.AllowShell
+	cfg.AllowDB = s.config.AllowDB
+	return cfg, clientOpts
 }
 
 func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
@@ -40,14 +49,8 @@ func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.configMu.RLock()
-	env := s.config.Env
-	configEnvs := s.getConfigEnvsLocked()
-	s.configMu.RUnlock()
-
-	if req.Environment != "" {
-		env = req.Environment
-	}
+	cfg, _ := s.runSettings(req.Environment)
+	env := cfg.Environment
 
 	execID := generateID()
 	s.logger.Info("execution started", "exec_id", execID, "file", req.File, "request_name", req.RequestName, "environment", env)
@@ -59,7 +62,6 @@ func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 		Timestamp: nowISO(),
 	})
 
-	cfg := s.runnerConfig(env, configEnvs)
 	cfg.NameFilter = req.RequestName
 
 	cfg.OnProgress = func(event runner.ProgressEvent) {
@@ -80,7 +82,7 @@ func (s *Server) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rn := runner.NewRunner(cfg)
-	result, err := rn.RunFile(absPath)
+	result, err := rn.RunFileContext(r.Context(), absPath)
 	if err != nil {
 		s.logger.Error("execution failed", "exec_id", execID, "file", req.File, "error", err)
 		s.hub.Broadcast("error", WSExecEvent{
@@ -167,18 +169,10 @@ func (s *Server) handleRunFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.configMu.RLock()
-	env := s.config.Env
-	configEnvs := s.getConfigEnvsLocked()
-	s.configMu.RUnlock()
-
-	if req.Environment != "" {
-		env = req.Environment
-	}
+	cfg, _ := s.runSettings(req.Environment)
+	env := cfg.Environment
 
 	execID := generateID()
-
-	cfg := s.runnerConfig(env, configEnvs)
 
 	cfg.OnProgress = func(event runner.ProgressEvent) {
 		progress := WSRequestProgress{
@@ -207,7 +201,7 @@ func (s *Server) handleRunFile(w http.ResponseWriter, r *http.Request) {
 	})
 
 	rn := runner.NewRunner(cfg)
-	result, err := rn.RunFile(absPath)
+	result, err := rn.RunFileContext(r.Context(), absPath)
 	if err != nil {
 		s.logger.Error("run file failed", "exec_id", execID, "file", req.File, "error", err)
 		s.hub.Broadcast("error", WSExecEvent{
@@ -256,24 +250,4 @@ func (s *Server) handleRunFile(w http.ResponseWriter, r *http.Request) {
 	s.logger.Info("run file completed", "exec_id", execID, "file", req.File, "duration_ms", result.Duration.Milliseconds(), "passed", result.Passed, "failed", result.Failed, "skipped", result.Skipped)
 
 	writeJSON(w, http.StatusOK, dto)
-}
-
-// getConfigEnvsLocked returns a deep copy of fileConfig environments. The caller
-// holds s.configMu (at least RLock), but the runner consumes the map AFTER the
-// lock is released while PUT /environments mutates s.fileConfig.Environments
-// under the write lock — handing out the live map caused a concurrent map
-// read/write that crashed the process. A snapshot copy breaks that race.
-func (s *Server) getConfigEnvsLocked() map[string]map[string]any {
-	if s.fileConfig == nil || s.fileConfig.Environments == nil {
-		return nil
-	}
-	snapshot := make(map[string]map[string]any, len(s.fileConfig.Environments))
-	for name, vars := range s.fileConfig.Environments {
-		copied := make(map[string]any, len(vars))
-		for k, v := range vars {
-			copied[k] = v
-		}
-		snapshot[name] = copied
-	}
-	return snapshot
 }

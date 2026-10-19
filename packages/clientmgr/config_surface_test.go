@@ -24,14 +24,14 @@ func TestConfigSurfaces(t *testing.T) {
 			m := New(WithWorkDir(dir), WithWatch(false), WithHistoryDBPath(filepath.Join(dir, "h.db")))
 			defer func() { _ = m.Close() }()
 
-			env, configEnvs := m.envSnapshot("")
-			cfg := m.runnerConfig(env, configEnvs)
-			table["studio.execute"][sc.Name] = cfgsurface.FromRunner(cfg)
-			table["studio.adhoc"][sc.Name] = cfgsurface.FromRunner(cfg)
+			cfg, _ := m.runSettings("")
+			run := cfgsurface.FromRunner(cfg)
+			table["studio.execute"][sc.Name] = run
+			table["studio.adhoc"][sc.Name] = run
 
-			// Stress and contract build their clients with no options.
-			table["studio.stress"][sc.Name] = cfgsurface.Bare()
-			table["studio.contract"][sc.Name] = cfgsurface.Bare()
+			// Stress and contract build their clients from the same options.
+			table["studio.stress"][sc.Name] = cfgsurface.ClientOnly(run)
+			table["studio.contract"][sc.Name] = cfgsurface.ClientOnly(run)
 		})
 	}
 	cfgsurface.Check(t, filepath.Join("testdata", "config_surfaces.golden.json"), table)

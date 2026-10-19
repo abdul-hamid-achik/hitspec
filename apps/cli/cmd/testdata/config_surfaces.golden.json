@@ -9,26 +9,41 @@
       "retryDelay": "1s"
     },
     "yaml": {
-      "timeout": "30s",
-      "followRedirects": true,
-      "maxRedirects": 10,
-      "validateSSL": true,
+      "timeout": "2.5s",
+      "followRedirects": false,
+      "maxRedirects": 4,
+      "validateSSL": false,
+      "proxy": "http://yaml-proxy.invalid:8080",
+      "headers": {
+        "Accept": "application/yaml",
+        "X-From": "yaml"
+      },
       "retries": 0,
       "retryDelay": "1s"
     },
     "yaml+env": {
-      "timeout": "30s",
-      "followRedirects": true,
-      "maxRedirects": 10,
-      "validateSSL": true,
+      "timeout": "7s",
+      "followRedirects": false,
+      "maxRedirects": 4,
+      "validateSSL": false,
+      "proxy": "http://env-proxy.invalid:8080",
+      "headers": {
+        "Accept": "application/yaml",
+        "X-From": "yaml"
+      },
       "retries": 0,
       "retryDelay": "1s"
     },
     "yaml+env+flags": {
-      "timeout": "30s",
-      "followRedirects": true,
-      "maxRedirects": 10,
+      "timeout": "7s",
+      "followRedirects": false,
+      "maxRedirects": 4,
       "validateSSL": true,
+      "proxy": "http://env-proxy.invalid:8080",
+      "headers": {
+        "Accept": "application/yaml",
+        "X-From": "yaml"
+      },
       "retries": 0,
       "retryDelay": "1s"
     }
@@ -48,34 +63,34 @@
     },
     "yaml": {
       "environment": "staging",
-      "timeout": "30s",
+      "timeout": "2.5s",
       "followRedirects": false,
-      "maxRedirects": 10,
+      "maxRedirects": 4,
       "validateSSL": false,
       "proxy": "http://yaml-proxy.invalid:8080",
       "headers": {
         "Accept": "application/yaml",
         "X-From": "yaml"
       },
-      "retries": 0,
-      "retryDelay": "1s",
-      "parallel": false,
-      "concurrency": 5,
-      "bail": false
+      "retries": 3,
+      "retryDelay": "250ms",
+      "parallel": true,
+      "concurrency": 7,
+      "bail": true
     },
     "yaml+env": {
       "environment": "staging",
       "timeout": "7s",
       "followRedirects": false,
-      "maxRedirects": 10,
+      "maxRedirects": 4,
       "validateSSL": false,
       "proxy": "http://env-proxy.invalid:8080",
       "headers": {
         "Accept": "application/yaml",
         "X-From": "yaml"
       },
-      "retries": 0,
-      "retryDelay": "1s",
+      "retries": 3,
+      "retryDelay": "250ms",
       "parallel": false,
       "concurrency": 2,
       "bail": false
@@ -84,15 +99,15 @@
       "environment": "staging",
       "timeout": "9s",
       "followRedirects": false,
-      "maxRedirects": 10,
+      "maxRedirects": 4,
       "validateSSL": false,
       "proxy": "http://flag-proxy.invalid:8080",
       "headers": {
         "Accept": "application/yaml",
         "X-From": "yaml"
       },
-      "retries": 0,
-      "retryDelay": "1s",
+      "retries": 3,
+      "retryDelay": "250ms",
       "parallel": true,
       "concurrency": 3,
       "bail": true
@@ -108,29 +123,41 @@
       "retryDelay": "1s"
     },
     "yaml": {
-      "timeout": "30s",
+      "timeout": "2.5s",
       "followRedirects": false,
-      "maxRedirects": 10,
+      "maxRedirects": 4,
       "validateSSL": false,
       "proxy": "http://yaml-proxy.invalid:8080",
+      "headers": {
+        "Accept": "application/yaml",
+        "X-From": "yaml"
+      },
       "retries": 0,
       "retryDelay": "1s"
     },
     "yaml+env": {
-      "timeout": "30s",
+      "timeout": "7s",
       "followRedirects": false,
-      "maxRedirects": 10,
+      "maxRedirects": 4,
       "validateSSL": false,
       "proxy": "http://env-proxy.invalid:8080",
+      "headers": {
+        "Accept": "application/yaml",
+        "X-From": "yaml"
+      },
       "retries": 0,
       "retryDelay": "1s"
     },
     "yaml+env+flags": {
-      "timeout": "30s",
+      "timeout": "9s",
       "followRedirects": false,
-      "maxRedirects": 10,
+      "maxRedirects": 4,
       "validateSSL": false,
       "proxy": "http://flag-proxy.invalid:8080",
+      "headers": {
+        "Accept": "application/yaml",
+        "X-From": "yaml"
+      },
       "retries": 0,
       "retryDelay": "1s"
     }

@@ -28,17 +28,14 @@ func TestConfigSurfaces(t *testing.T) {
 				}
 			})
 
-			s.configMu.RLock()
-			env := s.config.Env
-			configEnvs := s.getConfigEnvsLocked()
-			s.configMu.RUnlock()
-			cfg := s.runnerConfig(env, configEnvs)
-			table["serve.execute"][sc.Name] = cfgsurface.FromRunner(cfg)
-			table["serve.run"][sc.Name] = cfgsurface.FromRunner(cfg)
+			cfg, _ := s.runSettings("")
+			run := cfgsurface.FromRunner(cfg)
+			table["serve.execute"][sc.Name] = run
+			table["serve.run"][sc.Name] = run
 
-			// Stress and contract build their clients with no options.
-			table["serve.stress"][sc.Name] = cfgsurface.Bare()
-			table["serve.contract"][sc.Name] = cfgsurface.Bare()
+			// Stress and contract build their clients from the same options.
+			table["serve.stress"][sc.Name] = cfgsurface.ClientOnly(run)
+			table["serve.contract"][sc.Name] = cfgsurface.ClientOnly(run)
 		})
 	}
 	cfgsurface.Check(t, filepath.Join("testdata", "config_surfaces.golden.json"), table)
