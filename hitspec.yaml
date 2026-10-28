@@ -1,0 +1,15 @@
+defaultEnvironment: dev
+timeout: 30000
+retries: 0
+followRedirects: true
+maxRedirects: 10
+validateSSL: true
+headers:
+  User-Agent: hitspec
+environments:
+  dev:
+    baseUrl: http://localhost:3000
+  staging:
+    baseUrl: https://staging.api.example.com
+  prod:
+    baseUrl: https://api.example.com

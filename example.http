@@ -1,0 +1,64 @@
+# hitspec example. Serve it with the built-in mock server, then run it:
+#   hitspec mock example.http --port 3000     (terminal 1)
+#   hitspec run example.http                  (terminal 2)
+# To test a real API instead, change baseUrl in hitspec.yaml.
+
+@baseUrl = {{baseUrl}}
+
+### Get health status
+# @name healthCheck
+# @description Check if the API is running
+# @tags smoke
+
+GET {{baseUrl}}/health
+
+>>>
+expect status 200
+expect body.status == "ok"
+<<<
+
+>>>mock
+{"status": "ok"}
+<<<
+
+### Create a resource
+# @name createResource
+# @tags crud
+
+POST {{baseUrl}}/resources
+Content-Type: application/json
+
+{
+  "name": "Test Resource",
+  "description": "Created by hitspec"
+}
+
+>>>
+expect status 201
+expect body.id exists
+expect body.name == "Test Resource"
+<<<
+
+>>>capture
+resourceId from body.id
+<<<
+
+>>>mock
+{"id": 1, "name": "Test Resource", "description": "Created by hitspec"}
+<<<
+
+### Get the created resource
+# @name getResource
+# @tags crud
+# @depends createResource
+
+GET {{baseUrl}}/resources/{{createResource.resourceId}}
+
+>>>
+expect status 200
+expect body.id == {{createResource.resourceId}}
+<<<
+
+>>>mock
+{"id": 1, "name": "Test Resource", "description": "Created by hitspec"}
+<<<
