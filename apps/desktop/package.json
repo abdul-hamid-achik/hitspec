@@ -40,11 +40,11 @@
     "dist:dir:test": "electron-builder --dir -c.directories.output=release-test -c.electronFuses.enableNodeCliInspectArguments=true -c.mac.identity=null"
   },
   "dependencies": {
-    "ws": "^8.22.0"
+    "ws": "^8.22.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.1",
-    "electron": "^44.9.0",
-    "electron-builder": "^26.15.3"
+    "@playwright/test": "^1.65.0",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
   }
 }
